@@ -3,6 +3,7 @@ import { promptAction } from '@kit.ArkUI';
 import { router } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { abilityAccessCtrl, bundleManager, common } from '@kit.AbilityKit';
+import { MapsInitializer } from '@amap/amap_lbs_map3d';
 import { ThemeCenter } from '../../../common/utils/ThemeCenter';
 import { DateUtil } from '../../../common/utils/DateUtil';
 import { TimelineDatePolicy } from '../../../common/utils/TimelineDatePolicy';
@@ -166,6 +167,20 @@ export struct AddItemDialog {
     return AppConfig.AMAP_SDK_API_KEY.trim().length > 0;
   }
 
+  private isMapNativeRuntimeReady(): boolean {
+    try {
+      const version = (MapsInitializer.getVersion() ?? '').trim();
+      if (version.length === 0) {
+        hilog.error(0x0000, 'AddItemDialog', '[MAP_NATIVE_GUARD] getVersion empty');
+        return false;
+      }
+      return true;
+    } catch (error) {
+      hilog.error(0x0000, 'AddItemDialog', `[MAP_NATIVE_GUARD] runtime unavailable, reason=${JSON.stringify(error)}`);
+      return false;
+    }
+  }
+
   // 核心逻辑：检查并申请定位权限 (包含弹窗 A 和 弹窗 B)
   private async checkAndRequestPermission(): Promise<boolean> {
     let atManager = abilityAccessCtrl.createAtManager();
@@ -305,6 +320,10 @@ export struct AddItemDialog {
             .onClick(async() => {
               if (!this.canUseMapPicker()) {
                 this.safeShowToast('地图能力未配置，可直接填写名称后保存');
+                return;
+              }
+              if (!this.isMapNativeRuntimeReady()) {
+                this.safeShowToast('地图组件未就绪，请先修复高德 native 依赖');
                 return;
               }
               // 🛡️ 新增权限拦截
