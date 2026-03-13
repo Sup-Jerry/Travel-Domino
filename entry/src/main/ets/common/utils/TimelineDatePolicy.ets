@@ -5,11 +5,11 @@ export class TimelineDatePolicy {
   private static readonly DAY_MS: number = 24 * 60 * 60 * 1000;
 
   public static resolveDayOffset(dynamicDayOffset?: number, dayOffset?: number): number {
-    if (dayOffset !== undefined && Number.isFinite(dayOffset)) {
-      return dayOffset;
-    }
     if (dynamicDayOffset !== undefined && Number.isFinite(dynamicDayOffset)) {
       return dynamicDayOffset;
+    }
+    if (dayOffset !== undefined && Number.isFinite(dayOffset)) {
+      return dayOffset;
     }
     return 0;
   }
