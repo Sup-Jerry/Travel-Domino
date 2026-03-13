@@ -53,6 +53,7 @@ interface CandidateScore {
 interface PlanCandidateCache {
   scheduleCount: number;
   pendingCount: number;
+  activeCount: number;
   withCoordinateCount: number;
   eligibleCount: number;
   candidates: EventEntity[];
@@ -92,6 +93,7 @@ export class ArrivalReminderEngine {
   private readonly planCandidateCache: Map<number, PlanCandidateCache> = new Map<number, PlanCandidateCache>();
   private activePlanSnapshot: Set<number> = new Set<number>();
   private lastFullResyncTs: number = 0;
+  private hasAnyActiveEvent: boolean = false;
 
   private readonly fenceRadiusMeters: number = 220;
   private readonly dwellWindowMs: number = 0;
@@ -139,6 +141,20 @@ export class ArrivalReminderEngine {
     return nowTs - lastTriggerTs >= cooldownMs;
   }
 
+  public static resolveCandidateTimeDelta(
+    cachedTimeDelta: number | undefined,
+    dynamicStartTime: number,
+    nowTs: number
+  ): number {
+    if (Number.isFinite(cachedTimeDelta) && (cachedTimeDelta as number) >= 0) {
+      return cachedTimeDelta as number;
+    }
+    if (dynamicStartTime > 0) {
+      return Math.abs(dynamicStartTime - nowTs);
+    }
+    return Number.MAX_SAFE_INTEGER;
+  }
+
   public static getInstance(): ArrivalReminderEngine {
     if (!ArrivalReminderEngine.instance) {
       ArrivalReminderEngine.instance = new ArrivalReminderEngine();
@@ -182,6 +198,7 @@ export class ArrivalReminderEngine {
     this.planCandidateCache.clear();
     this.activePlanSnapshot.clear();
     this.lastFullResyncTs = 0;
+    this.hasAnyActiveEvent = false;
 
     try {
       this.locationManager?.stopUpdatingLocation();
@@ -281,6 +298,7 @@ export class ArrivalReminderEngine {
 
       let scheduleCount = 0;
       let pendingCount = 0;
+      let activeCount = 0;
       let withCoordinateCount = 0;
       let eligibleCount = 0;
       const globalCandidates: EventEntity[] = [];
@@ -298,12 +316,16 @@ export class ArrivalReminderEngine {
         }
         scheduleCount += cache.scheduleCount;
         pendingCount += cache.pendingCount;
+        activeCount += cache.activeCount;
         withCoordinateCount += cache.withCoordinateCount;
         eligibleCount += cache.eligibleCount;
         for (let i = 0; i < cache.candidates.length; i++) {
           const event = cache.candidates[i];
-          const dynamicStart = event.dynamic_start_time > 0 ? event.dynamic_start_time : 0;
-          const timeDelta = dynamicStart > 0 ? Math.abs(dynamicStart - now) : Number.MAX_SAFE_INTEGER;
+          const timeDelta = ArrivalReminderEngine.resolveCandidateTimeDelta(
+            cache.timeDeltaByEventId.get(event.id),
+            event.dynamic_start_time,
+            now
+          );
           globalCandidates.push(event);
           nextPlanMap.set(event.id, planId);
           nextOrderMap.set(event.id, globalOrder);
@@ -314,6 +336,7 @@ export class ArrivalReminderEngine {
       }
 
       this.monitoredEvents = globalCandidates;
+      this.hasAnyActiveEvent = activeCount > 0;
       this.eventPlanIdMap.clear();
       this.eventOrderMap.clear();
       this.eventTimeDeltaMap.clear();
@@ -352,7 +375,7 @@ export class ArrivalReminderEngine {
       hilog.info(
         0x0000,
         TAG,
-        `[ARRIVAL][refresh_fences] reason=${reason}, schedule=${scheduleCount}, pending=${pendingCount}, withCoordinate=${withCoordinateCount}, eligible=${eligibleCount}, plansScanned=${plansScanned}, activePlans=${activePlanIdsForLoop.length}, refreshedPlans=${refreshPlanIds.length}, fullResync=${needFullResync}, rebuild=${needFenceRebuild}, snapshot=${canUseSnapshot}, dirty=${dirtyPlanIds.size}`
+        `[ARRIVAL][refresh_fences] reason=${reason}, schedule=${scheduleCount}, pending=${pendingCount}, active=${activeCount}, withCoordinate=${withCoordinateCount}, eligible=${eligibleCount}, plansScanned=${plansScanned}, activePlans=${activePlanIdsForLoop.length}, refreshedPlans=${refreshPlanIds.length}, fullResync=${needFullResync}, rebuild=${needFenceRebuild}, snapshot=${canUseSnapshot}, dirty=${dirtyPlanIds.size}`
       );
     } catch (error) {
       hilog.error(0x0000, TAG, `[ARRIVAL][refresh_fences_failed] reason=${JSON.stringify(error)}`);
@@ -372,6 +395,7 @@ export class ArrivalReminderEngine {
     this.geoFenceEnterTs.clear();
     this.directEnterTs.clear();
     this.fenceIdSnapshot.clear();
+    this.hasAnyActiveEvent = false;
     try {
       this.geoFenceClient?.removeGeoFence();
     } catch (_error) {
@@ -434,6 +458,7 @@ export class ArrivalReminderEngine {
   ): PlanCandidateCache {
     let scheduleCount = 0;
     let pendingCount = 0;
+    let activeCount = 0;
     let withCoordinateCount = 0;
     let eligibleCount = 0;
     const candidates: EventEntity[] = [];
@@ -446,6 +471,9 @@ export class ArrivalReminderEngine {
       }
       if (TimelineExecutionState.isStartable(event)) {
         pendingCount += 1;
+      }
+      if (TimelineExecutionState.isActive(event)) {
+        activeCount += 1;
       }
       if (TimelineExecutionState.isStartable(event) &&
         this.isValidCoordinate(event.latitude, event.longitude)) {
@@ -462,6 +490,7 @@ export class ArrivalReminderEngine {
     return {
       scheduleCount: scheduleCount,
       pendingCount: pendingCount,
+      activeCount: activeCount,
       withCoordinateCount: withCoordinateCount,
       eligibleCount: eligibleCount,
       candidates: candidates,
@@ -786,7 +815,13 @@ export class ArrivalReminderEngine {
 
   private publishSystemNotification(payload: ArrivalReminderPayload): void {
     const content = `已进入 ${payload.placeName} 附近（约${Math.max(1, payload.distanceMeters)}米），可立即开始行程`;
-    void NotificationGateway.updateScheduleNotification(`到达提醒：${payload.placeName}`, content);
+    void NotificationGateway.updateScheduleNotification(
+      `到达提醒：${payload.placeName}`,
+      content,
+      payload.planId,
+      payload.eventId,
+      true
+    );
   }
 
   private publishLiveActivityState(eventId: number, status: ArrivalLiveStatus): void {
@@ -821,7 +856,7 @@ export class ArrivalReminderEngine {
   }
 
   private hasActiveEvent(): boolean {
-    return this.monitoredEvents.some((event: EventEntity) => TimelineExecutionState.isActive(event));
+    return this.hasAnyActiveEvent;
   }
 
   private getEligibleEvents(): EventEntity[] {

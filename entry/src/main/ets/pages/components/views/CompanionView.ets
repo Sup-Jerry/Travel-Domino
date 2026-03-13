@@ -747,6 +747,29 @@ export struct CompanionView {
     return this.context.currentEvent.id === event.id;
   }
 
+  private showActiveConflictDialog(conflictName: string): void {
+    const safeName = (conflictName || '').trim().length > 0 ? conflictName : '其他地点';
+    this.getUIContext().showAlertDialog({
+      title: '无法开始打卡',
+      message: `当前已有进行中的地点【${safeName}】。\n请先结束该地点后再开始新的打卡。`,
+      autoCancel: true,
+      alignment: DialogAlignment.Center,
+      primaryButton: {
+        value: '我知道了',
+        action: () => {}
+      }
+    });
+  }
+
+  private async showGlobalActiveConflictDialog(excludeEventId: number): Promise<boolean> {
+    const conflict = await this.vm.getStartConflictInfo(excludeEventId);
+    if (!conflict) {
+      return false;
+    }
+    this.showActiveConflictDialog(conflict.name);
+    return true;
+  }
+
   private isCurrentEventPending(): boolean {
     return !!this.context.currentEvent && this.getEventState(this.context.currentEvent) === 'PENDING';
   }
@@ -765,10 +788,20 @@ export struct CompanionView {
     const now = Date.now();
     if (state === 'PENDING') {
       if (!this.canStartFocused(focused)) {
-        this.safeShowToast('请先结束当前进行中的任务');
+        const shown = await this.showGlobalActiveConflictDialog(focused.id);
+        if (!shown) {
+          this.safeShowToast('请先结束当前进行中的任务');
+        }
         return;
       }
-      await this.vm.updateActualTime(focused.id, 'actual_start_time', now);
+      const started = await this.vm.updateActualTime(focused.id, 'actual_start_time', now);
+      if (!started) {
+        const shown = await this.showGlobalActiveConflictDialog(focused.id);
+        if (!shown) {
+          this.safeShowToast('开始打卡失败，请稍后重试');
+        }
+        return;
+      }
       this.refreshContext();
       this.applyFocusById(focused.id, 'tap');
       this.enterImmersiveMode();
@@ -899,7 +932,14 @@ export struct CompanionView {
       return;
     }
 
-    await this.vm.updateActualTime(focused.id, 'actual_start_time', Date.now());
+    const started = await this.vm.updateActualTime(focused.id, 'actual_start_time', Date.now());
+    if (!started) {
+      const shown = await this.showGlobalActiveConflictDialog(focused.id);
+      if (!shown) {
+        this.safeShowToast('开始打卡失败，请稍后重试');
+      }
+      return;
+    }
     this.refreshContext();
     this.applyFocusById(focused.id, 'tap');
     this.enterImmersiveMode();

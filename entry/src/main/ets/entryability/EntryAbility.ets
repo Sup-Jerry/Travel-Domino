@@ -33,6 +33,12 @@ interface LaunchWantAgentInfo {
   wantAgentFlags: wantAgent.WantAgentFlags[];
 }
 
+interface NotificationNavPayload {
+  planId: number;
+  eventId: number;
+  forceCompanionMode: boolean;
+}
+
 export default class EntryAbility extends UIAbility {
   private currentThemeMode: ThemeMode = 'system';
   private static lastNotificationFingerprint: string = '';
@@ -65,7 +71,10 @@ export default class EntryAbility extends UIAbility {
     AppStorage.setOrCreate(AppStorageKeys.ARRIVAL_REMINDER_PAYLOAD, '');
     AppStorage.setOrCreate(AppStorageKeys.ARRIVAL_LIVE_ACTIVITY_SEQ, 0);
     AppStorage.setOrCreate(AppStorageKeys.ARRIVAL_LIVE_ACTIVITY_PAYLOAD, '');
+    AppStorage.setOrCreate(AppStorageKeys.NOTIFICATION_NAV_SEQ, 0);
+    AppStorage.setOrCreate(AppStorageKeys.NOTIFICATION_NAV_PAYLOAD, '');
     hilog.info(DOMAIN, TAG, '%{public}s', 'Ability onCreate');
+    this.handleNotificationLaunchWant(want);
 
     try {
       const appContext = this.context.getApplicationContext();
@@ -118,6 +127,10 @@ export default class EntryAbility extends UIAbility {
     hilog.info(DOMAIN, TAG, '%{public}s', 'Ability onDestroy');
   }
 
+  onNewWant(want: Want, launchParam: AbilityConstant.LaunchParam): void {
+    this.handleNotificationLaunchWant(want);
+  }
+
   onWindowStageCreate(windowStage: window.WindowStage): void {
     hilog.info(DOMAIN, TAG, '%{public}s', 'Ability onWindowStageCreate');
 
@@ -168,15 +181,24 @@ export default class EntryAbility extends UIAbility {
     });
   }
 
-  public static async updateScheduleNotification(title: string, content: string): Promise<void> {
-    const fingerprint = `${title}__${content}`;
+  public static async updateScheduleNotification(
+    title: string,
+    content: string,
+    targetPlanId?: number,
+    targetEventId?: number,
+    forceCompanionMode?: boolean
+  ): Promise<void> {
+    const routeFingerprint = (targetPlanId ?? 0) > 0
+      ? `${targetPlanId}:${targetEventId ?? -1}:${forceCompanionMode === true ? 1 : 0}`
+      : 'none';
+    const fingerprint = `${title}__${content}__${routeFingerprint}`;
     if (EntryAbility.lastNotificationFingerprint === fingerprint) {
       EntryAbility.lastNotificationTs = Date.now();
       hilog.info(DOMAIN, TAG, '[NOTIFY][dedupe_skip] same content, skip publish');
       return;
     }
     try {
-      const launchWantAgent = await EntryAbility.buildLaunchWantAgent();
+      const launchWantAgent = await EntryAbility.buildLaunchWantAgent(targetPlanId, targetEventId, forceCompanionMode);
       const request: notificationManager.NotificationRequest = {
         id: 1001,
         isOngoing: true,
@@ -200,7 +222,11 @@ export default class EntryAbility extends UIAbility {
     }
   }
 
-  private static async buildLaunchWantAgent(): Promise<WantAgent | null> {
+  private static async buildLaunchWantAgent(
+    targetPlanId?: number,
+    targetEventId?: number,
+    forceCompanionMode?: boolean
+  ): Promise<WantAgent | null> {
     try {
       const flag = bundleManager.BundleFlag.GET_BUNDLE_INFO_DEFAULT;
       const bundleInfo = bundleManager.getBundleInfoForSelfSync(flag);
@@ -208,6 +234,14 @@ export default class EntryAbility extends UIAbility {
         bundleName: bundleInfo.name,
         abilityName: 'EntryAbility'
       };
+      if ((targetPlanId ?? 0) > 0) {
+        const parameters: Record<string, Object> = {};
+        parameters['fromNotification'] = true;
+        parameters['targetPlanId'] = targetPlanId as number;
+        parameters['targetEventId'] = (targetEventId ?? -1) > 0 ? (targetEventId as number) : -1;
+        parameters['forceCompanionMode'] = forceCompanionMode === true;
+        launchWant.parameters = parameters;
+      }
       const op: LaunchWantAgentInfo = {
         wants: [launchWant],
         operationType: wantAgent.OperationType.START_ABILITY,
@@ -218,6 +252,36 @@ export default class EntryAbility extends UIAbility {
     } catch (error) {
       hilog.warn(DOMAIN, TAG, `buildLaunchWantAgent failed: ${JSON.stringify(error)}`);
       return null;
+    }
+  }
+
+  private handleNotificationLaunchWant(want: Want): void {
+    try {
+      const parameters = want.parameters as Record<string, Object> | undefined;
+      if (!parameters) {
+        return;
+      }
+      const fromNotification = parameters['fromNotification'] === true;
+      if (!fromNotification) {
+        return;
+      }
+      const planId = Number(parameters['targetPlanId']);
+      if (!Number.isFinite(planId) || planId <= 0) {
+        return;
+      }
+      const eventId = Number(parameters['targetEventId']);
+      const forceCompanionMode = parameters['forceCompanionMode'] === true;
+      const payload: NotificationNavPayload = {
+        planId: planId,
+        eventId: Number.isFinite(eventId) && eventId > 0 ? eventId : -1,
+        forceCompanionMode: forceCompanionMode
+      };
+      const nextSeq = (AppStorage.get<number>(AppStorageKeys.NOTIFICATION_NAV_SEQ) ?? 0) + 1;
+      AppStorage.setOrCreate(AppStorageKeys.NOTIFICATION_NAV_PAYLOAD, JSON.stringify(payload));
+      AppStorage.setOrCreate(AppStorageKeys.NOTIFICATION_NAV_SEQ, nextSeq);
+      hilog.info(DOMAIN, TAG, `[NOTIFY][tap_route] planId=${payload.planId}, eventId=${payload.eventId}, companion=${payload.forceCompanionMode}`);
+    } catch (error) {
+      hilog.warn(DOMAIN, TAG, `[NOTIFY][tap_route_failed] reason=${JSON.stringify(error)}`);
     }
   }
 }

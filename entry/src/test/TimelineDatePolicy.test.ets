@@ -45,7 +45,7 @@ export default function timelineDatePolicyTest() {
       ];
 
       const newEntity = buildEvent(3, 1, 1, '08:30');
-      const internalVm = vm as TimelineViewModelInternal;
+      const internalVm = vm as Object as TimelineViewModelInternal;
       internalVm.insertSmart(newEntity);
 
       expect(vm.events.length).assertEqual(3);

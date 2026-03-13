@@ -34,6 +34,7 @@ import { TimelineDatePolicy } from '../common/utils/TimelineDatePolicy';
 import { PageDraftRecovery } from '../common/utils/PageDraftRecovery';
 import { AppStorageKeys } from '../common/constants/AppStorageKeys';
 import { DomainConstants } from '../common/constants/DomainConstants';
+import { PlanDao } from '../model/entity/PlanDao';
 
 interface InitDialogData {
   name: string;
@@ -138,6 +139,54 @@ struct Index {
     }
   }
 
+  private async resolveConflictPlanName(planId: number): Promise<string> {
+    if (planId === this.currentPlanId) {
+      const localTitle = (this.planTitle || '').trim();
+      return localTitle.length > 0 ? localTitle : `计划 #${planId}`;
+    }
+    try {
+      const plan = await PlanDao.getPlanById(planId);
+      const title = (plan?.title || '').trim();
+      return title.length > 0 ? title : `计划 #${planId}`;
+    } catch (_error) {
+      return `计划 #${planId}`;
+    }
+  }
+
+  private async showActiveConflictDialog(conflictPlanId: number, conflictName: string): Promise<void> {
+    const planName = await this.resolveConflictPlanName(conflictPlanId);
+    const safeName = (conflictName || '').trim().length > 0 ? conflictName : '其他地点';
+    this.getUIContext().showAlertDialog({
+      title: '无法开始打卡',
+      message: `当前已有进行中的计划【${planName}】地点【${safeName}】。\n请先结束该地点后再开始新的打卡。`,
+      autoCancel: true,
+      alignment: DialogAlignment.Center,
+      primaryButton: {
+        value: '我知道了',
+        action: () => {}
+      }
+    });
+  }
+
+  private async tryStartEventWithConflictPrompt(eventId: number): Promise<boolean> {
+    const conflict = await this.vm.getStartConflictInfo(eventId);
+    if (conflict) {
+      await this.showActiveConflictDialog(conflict.planId, conflict.name);
+      return false;
+    }
+    const started = await this.vm.updateActualTime(eventId, 'actual_start_time', Date.now());
+    if (!started) {
+      const retryConflict = await this.vm.getStartConflictInfo(eventId);
+      if (retryConflict) {
+        await this.showActiveConflictDialog(retryConflict.planId, retryConflict.name);
+      } else {
+        this.safeShowToast('开始打卡失败，请稍后重试');
+      }
+      return false;
+    }
+    return true;
+  }
+
   private refreshUnsavedFlag(): void {
     this.hasUnsavedChanges = AppStorage.get<boolean>(this.scopedStorageKey(AppStorageKeys.HAS_UNSAVED_POSTPONE)) ?? false;
   }
@@ -187,9 +236,14 @@ struct Index {
             value: '立即开始',
             action: () => {
               this.isCompanionMode = true;
-              void this.vm.updateActualTime(payload.eventId, 'actual_start_time', Date.now());
               this.isArrivalDialogOpen = false;
-              this.arrivalCoordinator.acknowledge(payload.eventId, 'start');
+              void this.tryStartEventWithConflictPrompt(payload.eventId).then((started: boolean) => {
+                if (started) {
+                  this.arrivalCoordinator.acknowledge(payload.eventId, 'start');
+                } else {
+                  this.arrivalCoordinator.acknowledge(payload.eventId, 'open_page');
+                }
+              });
             }
           }
         });
@@ -1011,6 +1065,7 @@ struct Index {
       const planId = params['planId'] as number;
       const isNewPlan = (params['isNewPlan'] as boolean) === true;
       const autoStartFromReminder = (params['autoStartFromReminder'] as boolean) === true;
+      const forceCompanionMode = (params['forceCompanionMode'] as boolean) === true;
       const reminderEventId = Number(params['reminderEventId'] as number) || -1;
 
       this.currentPlanId = planId;
@@ -1020,7 +1075,9 @@ struct Index {
       void this.vm.loadData(planId).then(() => {
         if (autoStartFromReminder && reminderEventId > 0) {
           this.isCompanionMode = true;
-          void this.vm.updateActualTime(reminderEventId, 'actual_start_time', Date.now());
+          void this.tryStartEventWithConflictPrompt(reminderEventId);
+        } else if (forceCompanionMode) {
+          this.isCompanionMode = true;
         }
         this.startArrivalReminderEngine();
         this.consumeArrivalReminder();
