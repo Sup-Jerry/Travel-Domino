@@ -1,8 +1,10 @@
 ﻿import { EventEntity } from '../../../model/entity/EventEntity';
 import {
   CompanionContext,
-  PlaceCheckinRecord,
   PlaceCheckinSummary,
+  HistoryTimelineFilter,
+  HistoryTimelineItem,
+  HistoryTimelineSummary,
   TimelineViewModel
 } from '../../../viewmodel/TimelineViewModel';
 import { DateUtil } from '../../../common/utils/DateUtil';
@@ -20,12 +22,12 @@ type CompanionInteractionMode = 'immersive' | 'control' | 'both';
 type FocusSource = 'tap' | 'scroll' | 'init';
 type TimelineEventState = CompanionEventState;
 type CompanionFilterState = 'ALL' | TimelineEventState;
-type HistoryViewMode = 'list' | 'detail';
+type HistoryViewMode = 'timeline' | 'detail';
 
-interface HistoryPlaceItem {
-  placeName: string;
-  latestTs: number;
-  totalRecords: number;
+interface HistoryTimelineGroup {
+  key: string;
+  title: string;
+  items: HistoryTimelineItem[];
 }
 
 @Component
@@ -55,9 +57,12 @@ export struct CompanionView {
   @State immersiveDragOffsetY: number = 0;
 
   @State showHistoryPage: boolean = false;
+  @State historyTimelineSummary: HistoryTimelineSummary | null = null;
+  @State historyTimelineItems: HistoryTimelineItem[] = [];
+  @State historyTimelineFilter: HistoryTimelineFilter = 'all';
+  @State selectedHistoryTimelineItem: HistoryTimelineItem | null = null;
   @State historySummary: PlaceCheckinSummary | null = null;
-  @State historyViewMode: HistoryViewMode = 'list';
-  @State historyPlaces: HistoryPlaceItem[] = [];
+  @State historyViewMode: HistoryViewMode = 'timeline';
   @State selectedHistoryPlaceName: string = '';
   @State showSearchPage: boolean = false;
   @State showFilterPage: boolean = false;
@@ -97,8 +102,6 @@ export struct CompanionView {
   private cachedIndexById: Map<number, number> = new Map<number, number>();
   private cachedVisibleIndexById: Map<number, number> = new Map<number, number>();
   private cachedSearchTextById: Map<number, string> = new Map<number, string>();
-  private cachedHistoryVersion: number = -1;
-  private cachedHistoryPlaces: HistoryPlaceItem[] = [];
   private tapPriorityWindowMs: number = 220;
   private immersiveDistanceTrigger: number = 90;
   private immersiveVelocityTrigger: number = 0.65;
@@ -131,6 +134,13 @@ export struct CompanionView {
     this.companionSubMode = 'immersive';
     this.interactionMode = 'immersive';
     this.showHistoryPage = false;
+    this.historyViewMode = 'timeline';
+    this.historyTimelineSummary = null;
+    this.historyTimelineItems = [];
+    this.historyTimelineFilter = 'all';
+    this.selectedHistoryTimelineItem = null;
+    this.historySummary = null;
+    this.selectedHistoryPlaceName = '';
     this.showSearchPage = false;
     this.showFilterPage = false;
     this.searchKeyword = '';
@@ -842,42 +852,25 @@ export struct CompanionView {
     });
   }
 
-  private getHistoryPlaces(): HistoryPlaceItem[] {
-    const scheduleVersion = this.vm.getScheduleVersion();
-    if (this.cachedHistoryVersion === scheduleVersion) {
-      return [...this.cachedHistoryPlaces];
-    }
-    const summaries = this.vm.getAllPlaceCheckinSummaries();
-    const places = summaries.map((summary: PlaceCheckinSummary): HistoryPlaceItem => {
-      return {
-        placeName: summary.placeName,
-        latestTs: summary.lastEndTime > 0 ? summary.lastEndTime : 0,
-        totalRecords: summary.totalRecords
-      };
-    });
-    places.sort((a: HistoryPlaceItem, b: HistoryPlaceItem) => {
-      if (b.latestTs !== a.latestTs) {
-        return b.latestTs - a.latestTs;
-      }
-      return a.placeName.localeCompare(b.placeName);
-    });
-    this.cachedHistoryVersion = scheduleVersion;
-    this.cachedHistoryPlaces = [...places];
-    return places;
+  private loadHistoryTimelineData(): void {
+    this.historyTimelineSummary = this.vm.getCurrentPlanHistorySummary();
+    this.historyTimelineItems = this.vm.getCurrentPlanHistoryTimelineItems(10);
   }
 
   private openHistoryList(): void {
-    const places = this.getHistoryPlaces();
-    this.historyPlaces = places;
+    this.loadHistoryTimelineData();
+    this.historyTimelineFilter = 'all';
+    this.selectedHistoryTimelineItem = null;
     this.historySummary = null;
     this.selectedHistoryPlaceName = '';
-    this.historyViewMode = 'list';
+    this.historyViewMode = 'timeline';
     this.showHistoryPage = true;
   }
 
-  private openPlaceHistoryDetail(placeName: string): void {
-    this.historySummary = this.vm.getPlaceCheckinSummary(placeName);
-    this.selectedHistoryPlaceName = placeName;
+  private openHistoryDetailFromTimeline(item: HistoryTimelineItem): void {
+    this.selectedHistoryTimelineItem = item;
+    this.historySummary = this.vm.getPlaceCheckinSummary(item.placeName);
+    this.selectedHistoryPlaceName = item.placeName;
     this.historyViewMode = 'detail';
     this.showHistoryPage = true;
   }
@@ -1448,13 +1441,16 @@ export struct CompanionView {
 
   private closeHistoryPage(): void {
     this.showHistoryPage = false;
-    this.historyViewMode = 'list';
+    this.historyViewMode = 'timeline';
+    this.historyTimelineFilter = 'all';
+    this.selectedHistoryTimelineItem = null;
     this.selectedHistoryPlaceName = '';
     this.historySummary = null;
   }
 
-  private backToHistoryList(): void {
-    this.historyViewMode = 'list';
+  private backToHistoryTimeline(): void {
+    this.historyViewMode = 'timeline';
+    this.selectedHistoryTimelineItem = null;
     this.selectedHistoryPlaceName = '';
     this.historySummary = null;
   }
@@ -1471,20 +1467,6 @@ export struct CompanionView {
     return this.vm.getLatestEventForPlace(placeName);
   }
 
-  private getLatestRecord(summary: PlaceCheckinSummary): PlaceCheckinRecord | null {
-    if (!summary.records || summary.records.length === 0) {
-      return null;
-    }
-    return summary.records[0];
-  }
-
-  private getCurrentHistoryLatestRecord(): PlaceCheckinRecord | null {
-    if (!this.historySummary) {
-      return null;
-    }
-    return this.getLatestRecord(this.historySummary);
-  }
-
   private getCurrentHistoryLatestEvent(): EventEntity | null {
     if (!this.historySummary) {
       return null;
@@ -1492,36 +1474,252 @@ export struct CompanionView {
     return this.getLatestEventForPlace(this.historySummary.placeName);
   }
 
+  private getCurrentHistoryStatusText(): string {
+    const latestEvent = this.getCurrentHistoryLatestEvent();
+    if (!latestEvent) {
+      return '--';
+    }
+    if (TimelineExecutionState.isSkipped(latestEvent)) {
+      return '已跳过';
+    }
+    if (TimelineExecutionState.isActive(latestEvent)) {
+      return '进行中';
+    }
+    if (TimelineExecutionState.isCompleted(latestEvent)) {
+      return '已离开';
+    }
+    return '未开始';
+  }
+
   private getCurrentHistoryPlannedStartText(): string {
+    if (this.selectedHistoryTimelineItem && this.selectedHistoryTimelineItem.plannedStart > 0) {
+      return this.formatTs(this.selectedHistoryTimelineItem.plannedStart);
+    }
     const latestEvent = this.getCurrentHistoryLatestEvent();
     if (!latestEvent) {
       return '--:--';
+    }
+    if (latestEvent.dynamic_start_time > 0) {
+      return this.formatTs(latestEvent.dynamic_start_time);
     }
     return latestEvent.computed_time || latestEvent.fixed_start_time || '--:--';
   }
 
   private getCurrentHistoryActualStartText(): string {
-    const latestRecord = this.getCurrentHistoryLatestRecord();
-    if (!latestRecord) {
+    const latestEvent = this.getCurrentHistoryLatestEvent();
+    if (!latestEvent || latestEvent.actual_start_time <= 0) {
       return '--:--';
     }
-    return this.formatTs(latestRecord.actualStart);
+    return this.formatTs(latestEvent.actual_start_time);
   }
 
   private getCurrentHistoryActualEndText(): string {
-    const latestRecord = this.getCurrentHistoryLatestRecord();
-    if (!latestRecord) {
+    const latestEvent = this.getCurrentHistoryLatestEvent();
+    if (!latestEvent || latestEvent.actual_end_time <= 0) {
       return '--:--';
     }
-    return this.formatTs(latestRecord.actualEnd);
+    return this.formatTs(latestEvent.actual_end_time);
   }
 
   private getCurrentHistoryStayText(): string {
-    const latestRecord = this.getCurrentHistoryLatestRecord();
-    if (!latestRecord) {
+    const latestEvent = this.getCurrentHistoryLatestEvent();
+    if (!latestEvent || latestEvent.actual_start_time <= 0 || latestEvent.actual_end_time <= latestEvent.actual_start_time) {
       return '0 分钟';
     }
-    return `${latestRecord.stayMinutes} 分钟`;
+    const stayMinutes = Math.round((latestEvent.actual_end_time - latestEvent.actual_start_time) / 60000);
+    return `${stayMinutes} 分钟`;
+  }
+
+  private getCurrentHistoryDeviationText(): string {
+    const latestEvent = this.getCurrentHistoryLatestEvent();
+    if (!latestEvent || latestEvent.actual_start_time <= 0 || latestEvent.dynamic_start_time <= 0) {
+      return '--';
+    }
+    const delta = Math.round((latestEvent.actual_start_time - latestEvent.dynamic_start_time) / 60000);
+    if (delta > 0) {
+      return `晚到 ${delta} 分钟`;
+    }
+    if (delta < 0) {
+      return `早到 ${Math.abs(delta)} 分钟`;
+    }
+    return '准时';
+  }
+
+  private getCurrentHistoryNoteText(): string {
+    const latestEvent = this.getCurrentHistoryLatestEvent();
+    if (!latestEvent) {
+      return '--';
+    }
+    const note = (latestEvent.note || '').trim();
+    return note.length > 0 ? note : '--';
+  }
+
+  private applyHistoryTimelineFilter(filter: HistoryTimelineFilter): void {
+    this.historyTimelineFilter = filter;
+  }
+
+  private cycleHistoryTimelineFilter(): void {
+    if (this.historyTimelineFilter === 'all') {
+      this.historyTimelineFilter = 'completed';
+      return;
+    }
+    if (this.historyTimelineFilter === 'completed') {
+      this.historyTimelineFilter = 'skipped';
+      return;
+    }
+    if (this.historyTimelineFilter === 'skipped') {
+      this.historyTimelineFilter = 'abnormal';
+      return;
+    }
+    this.historyTimelineFilter = 'all';
+  }
+
+  private getHistoryTimelineFilterLabel(): string {
+    if (this.historyTimelineFilter === 'completed') {
+      return '只看完成';
+    }
+    if (this.historyTimelineFilter === 'skipped') {
+      return '只看跳过';
+    }
+    if (this.historyTimelineFilter === 'abnormal') {
+      return '只看异常';
+    }
+    return '全部';
+  }
+
+  private isTimelineItemVisible(item: HistoryTimelineItem): boolean {
+    if (this.historyTimelineFilter === 'all') {
+      return true;
+    }
+    if (this.historyTimelineFilter === 'completed') {
+      return item.actionType === 'ARRIVE' || item.actionType === 'LEAVE';
+    }
+    if (this.historyTimelineFilter === 'skipped') {
+      return item.actionType === 'SKIP';
+    }
+    return item.isAbnormal || item.actionType === 'SKIP';
+  }
+
+  private getFilteredHistoryTimelineItems(): HistoryTimelineItem[] {
+    return this.historyTimelineItems.filter((item: HistoryTimelineItem) => this.isTimelineItemVisible(item));
+  }
+
+  private getHistoryDayTitle(groupKey: string): string {
+    if (groupKey === '未定') {
+      return '未定';
+    }
+    const todayKey = DateUtil.formatLocalDate(Date.now());
+    if (groupKey === todayKey) {
+      return '今天';
+    }
+    const date = new Date(groupKey);
+    return DateUtil.formatDate(date, 'MM月dd日');
+  }
+
+  private getHistoryTimelineGroups(): HistoryTimelineGroup[] {
+    const source = this.getFilteredHistoryTimelineItems();
+    const grouped: Record<string, HistoryTimelineItem[]> = {};
+    source.forEach((item: HistoryTimelineItem) => {
+      const key = item.groupDateKey || '未定';
+      if (!grouped[key]) {
+        grouped[key] = [];
+      }
+      grouped[key].push(item);
+    });
+    const keys = Object.keys(grouped).sort((a: string, b: string) => a.localeCompare(b));
+    return keys.map((key: string): HistoryTimelineGroup => {
+      const items = grouped[key];
+      items.sort((a: HistoryTimelineItem, b: HistoryTimelineItem) => {
+        if (a.displayTs !== b.displayTs) {
+          return a.displayTs - b.displayTs;
+        }
+        return a.id - b.id;
+      });
+      return {
+        key: key,
+        title: this.getHistoryDayTitle(key),
+        items: items
+      };
+    });
+  }
+
+  private getTimelineActionText(item: HistoryTimelineItem): string {
+    if (item.actionType === 'ARRIVE') {
+      return `到达 ${item.placeName}`;
+    }
+    if (item.actionType === 'LEAVE') {
+      return `离开 ${item.placeName}`;
+    }
+    if (item.actionType === 'SKIP') {
+      return `跳过 ${item.placeName}`;
+    }
+    return `到达 ${item.placeName}`;
+  }
+
+  private getTimelineSkipReason(item: HistoryTimelineItem): string {
+    const note = (item.note || '').trim();
+    if (note.includes('时间不足')) {
+      return '时间不足';
+    }
+    return '手动跳过';
+  }
+
+  private getTimelineSubText(item: HistoryTimelineItem): string {
+    if (item.actionType === 'LEAVE') {
+      return `停留 ${item.stayMinutes} 分钟`;
+    }
+    if (item.actionType === 'SKIP') {
+      return `原因：${this.getTimelineSkipReason(item)}`;
+    }
+    if (item.actionType === 'ACTIVE') {
+      return '当前进行中';
+    }
+    if (item.deviationMinutes > 0) {
+      return `比计划晚 ${item.deviationMinutes} 分钟`;
+    }
+    if (item.deviationMinutes < 0) {
+      return `比计划早 ${Math.abs(item.deviationMinutes)} 分钟`;
+    }
+    return '与计划一致';
+  }
+
+  private getTimelineSubTextColor(item: HistoryTimelineItem): ResourceColor {
+    if (item.actionType === 'SKIP') {
+      return this.getThemePalette().statusSkipped;
+    }
+    if (item.actionType === 'ACTIVE') {
+      return this.getThemePalette().success;
+    }
+    if (item.isAbnormal) {
+      return this.getThemePalette().danger;
+    }
+    return this.getThemePalette().textSecondary;
+  }
+
+  private getTimelineCardBgColorByIndex(index: number): ResourceColor {
+    const palette: string[] = ['#EAF2FF', '#EAF7EE', '#F7F2EA', '#F8EEF2'];
+    const safeIndex = index >= 0 ? index : 0;
+    return palette[safeIndex % palette.length];
+  }
+
+  private getTimelineCardBgColor(item: HistoryTimelineItem): ResourceColor {
+    const visibleItems = this.getFilteredHistoryTimelineItems();
+    const placeColorIndex = new Map<string, number>();
+    let nextIndex = 0;
+    for (let i = 0; i < visibleItems.length; i++) {
+      const placeName = (visibleItems[i].placeName || '').trim();
+      if (!placeColorIndex.has(placeName)) {
+        placeColorIndex.set(placeName, nextIndex % 4);
+        nextIndex += 1;
+      }
+    }
+    const key = (item.placeName || '').trim();
+    const idx = placeColorIndex.get(key) ?? 0;
+    return this.getTimelineCardBgColorByIndex(idx);
+  }
+
+  private getTimelineDotColor(item: HistoryTimelineItem): ResourceColor {
+    return this.getThemePalette().primary;
   }
 
   @Builder
@@ -1529,17 +1727,24 @@ export struct CompanionView {
     if (this.showHistoryPage) {
       Column({ space: 12 }) {
         Row() {
-          Text(this.historyViewMode === 'list' ? '历史地点' : '地点历史')
+          Text(this.historyViewMode === 'timeline' ? '本次计划打卡历史' : '打卡详情')
             .fontSize(20)
             .fontWeight(FontWeight.Bold)
             .fontColor(this.getThemePalette().textPrimary);
           Blank();
-          if (this.historyViewMode === 'detail') {
+          if (this.historyViewMode === 'timeline') {
+            Text(`筛选 ${this.getHistoryTimelineFilterLabel()}`)
+              .fontSize(14)
+              .fontColor(this.getThemePalette().textSecondary)
+              .onClick(() => {
+                this.cycleHistoryTimelineFilter();
+              });
+          } else {
             Text('返回')
               .fontSize(14)
               .fontColor(this.getThemePalette().textSecondary)
               .onClick(() => {
-                this.backToHistoryList();
+                this.backToHistoryTimeline();
               });
           }
           Text('关闭')
@@ -1553,14 +1758,32 @@ export struct CompanionView {
         .width('100%')
         .padding({ top: this.safeTopInset + 8, bottom: 6 });
 
-        if (this.historyViewMode === 'list') {
-          if (this.historyPlaces.length === 0) {
+        if (this.historyViewMode === 'timeline') {
+          if (this.historyTimelineSummary) {
+            Column({ space: 6 }) {
+              Text(`计划：${this.historyTimelineSummary.planName}`)
+                .fontSize(15)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(this.getThemePalette().textPrimary)
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis });
+              Text(`已完成 ${this.historyTimelineSummary.completedCount} / 跳过 ${this.historyTimelineSummary.skippedCount} / 进行中 ${this.historyTimelineSummary.activeCount}`)
+                .fontSize(12)
+                .fontColor(this.getThemePalette().textSecondary);
+            }
+            .width('100%')
+            .padding(12)
+            .backgroundColor(this.getThemePalette().companionCardBg)
+            .borderRadius(12);
+          }
+
+          if (this.getHistoryTimelineGroups().length === 0) {
             Column({ space: 8 }) {
-              Text('暂无打卡历史')
+              Text('暂无打卡记录')
                 .fontSize(16)
                 .fontWeight(FontWeight.Medium)
                 .fontColor(this.getThemePalette().textSecondary);
-              Text('开始或结束一个地点后会生成历史记录。')
+              Text('开始或结束一个地点后会生成时间线记录。')
                 .fontSize(12)
                 .fontColor(this.getThemePalette().textTertiary);
             }
@@ -1569,42 +1792,101 @@ export struct CompanionView {
             .justifyContent(FlexAlign.Center)
             .alignItems(HorizontalAlign.Center);
           } else {
-            List({ space: 8 }) {
-              ForEach(this.historyPlaces, (item: HistoryPlaceItem) => {
+            List({ space: 10 }) {
+              ForEach(this.getHistoryTimelineGroups(), (group: HistoryTimelineGroup) => {
                 ListItem() {
-                  Row() {
-                    Column({ space: 4 }) {
-                      Text(item.placeName)
-                        .fontSize(16)
-                        .fontWeight(FontWeight.Bold)
-                        .fontColor(this.getThemePalette().textPrimary)
-                        .maxLines(1)
-                        .textOverflow({ overflow: TextOverflow.Ellipsis });
-                      Text(`记录 ${item.totalRecords} 条 | 最近 ${item.latestTs > 0 ? this.formatDateTime(item.latestTs) : '--:--'}`)
-                        .fontSize(12)
-                        .fontColor(this.getThemePalette().textSecondary)
-                        .maxLines(1)
-                        .textOverflow({ overflow: TextOverflow.Ellipsis });
-                    }
-                    .layoutWeight(1)
-                    .alignItems(HorizontalAlign.Start);
+                  Column({ space: 8 }) {
+                    Text(group.title)
+                      .fontSize(13)
+                      .fontWeight(FontWeight.Medium)
+                      .fontColor(this.getThemePalette().textSecondary);
 
-                    Text('>')
-                      .fontSize(14)
-                      .fontColor(this.getThemePalette().textTertiary);
+                    Column({ space: 8 }) {
+                      ForEach(group.items, (item: HistoryTimelineItem) => {
+                        Row({ space: 10 }) {
+                          Text(item.displayTs > 0 ? this.formatTs(item.displayTs) : '--:--')
+                            .fontSize(12)
+                            .fontColor(this.getThemePalette().textSecondary)
+                            .width(52);
+
+                          Text('●')
+                            .fontSize(14)
+                            .fontColor(this.getTimelineDotColor(item))
+                            .width(14);
+
+                          Column({ space: 4 }) {
+                            Text(this.getTimelineActionText(item))
+                              .fontSize(14)
+                              .fontWeight(FontWeight.Medium)
+                              .fontColor(this.getThemePalette().textPrimary)
+                              .maxLines(1)
+                              .textOverflow({ overflow: TextOverflow.Ellipsis });
+                            Text(this.getTimelineSubText(item))
+                              .fontSize(12)
+                              .fontColor(this.getTimelineSubTextColor(item))
+                              .maxLines(1)
+                              .textOverflow({ overflow: TextOverflow.Ellipsis });
+                          }
+                          .layoutWeight(1)
+                          .alignItems(HorizontalAlign.Start);
+                        }
+                        .width('100%')
+                        .padding({ left: 10, right: 10, top: 8, bottom: 8 })
+                        .backgroundColor(this.getTimelineCardBgColor(item))
+                        .borderRadius(10)
+                        .onClick(() => {
+                          this.openHistoryDetailFromTimeline(item);
+                        });
+                      }, (item: HistoryTimelineItem) => item.id.toString());
+                    }
+                    .width('100%');
                   }
                   .width('100%')
                   .padding({ left: 12, right: 12, top: 12, bottom: 12 })
                   .backgroundColor(this.getThemePalette().companionCardBg)
-                  .borderRadius(12)
-                  .onClick(() => {
-                    this.openPlaceHistoryDetail(item.placeName);
-                  });
+                  .borderRadius(12);
                 };
-              }, (item: HistoryPlaceItem) => item.placeName);
+              }, (group: HistoryTimelineGroup) => group.key);
             }
             .width('100%')
             .layoutWeight(1);
+
+            Row({ space: 8 }) {
+              Button('只看完成')
+                .type(ButtonType.Capsule)
+                .fontSize(12)
+                .fontColor(this.historyTimelineFilter === 'completed'
+                  ? this.getThemePalette().primary
+                  : this.getThemePalette().textSecondary)
+                .backgroundColor(this.getThemePalette().companionCardBg)
+                .layoutWeight(1)
+                .onClick(() => {
+                  this.applyHistoryTimelineFilter('completed');
+                });
+              Button('只看跳过')
+                .type(ButtonType.Capsule)
+                .fontSize(12)
+                .fontColor(this.historyTimelineFilter === 'skipped'
+                  ? this.getThemePalette().statusSkipped
+                  : this.getThemePalette().textSecondary)
+                .backgroundColor(this.getThemePalette().companionCardBg)
+                .layoutWeight(1)
+                .onClick(() => {
+                  this.applyHistoryTimelineFilter('skipped');
+                });
+              Button('只看异常')
+                .type(ButtonType.Capsule)
+                .fontSize(12)
+                .fontColor(this.historyTimelineFilter === 'abnormal'
+                  ? this.getThemePalette().danger
+                  : this.getThemePalette().textSecondary)
+                .backgroundColor(this.getThemePalette().companionCardBg)
+                .layoutWeight(1)
+                .onClick(() => {
+                  this.applyHistoryTimelineFilter('abnormal');
+                });
+            }
+            .width('100%');
           }
         } else if (this.historySummary) {
           Column({ space: 10 }) {
@@ -1615,85 +1897,48 @@ export struct CompanionView {
                 .fontColor(this.getThemePalette().textPrimary)
                 .maxLines(1)
                 .textOverflow({ overflow: TextOverflow.Ellipsis });
-              Text(this.getHistoryAddress(this.historySummary.placeName))
+              Text(`状态：${this.getCurrentHistoryStatusText()}`)
+                .fontSize(12)
+                .fontColor(this.getThemePalette().textSecondary);
+            }
+            .width('100%')
+            .padding(12)
+            .backgroundColor(this.getThemePalette().companionCardBg)
+            .borderRadius(12);
+
+            Column({ space: 6 }) {
+              Text(`计划开始：${this.getCurrentHistoryPlannedStartText()}`)
+                .fontSize(12)
+                .fontColor(this.getThemePalette().textSecondary);
+              Text(`实际到达：${this.getCurrentHistoryActualStartText()}`)
+                .fontSize(12)
+                .fontColor(this.getThemePalette().textSecondary);
+              Text(`实际离开：${this.getCurrentHistoryActualEndText()}`)
+                .fontSize(12)
+                .fontColor(this.getThemePalette().textSecondary);
+              Text(`实际停留：${this.getCurrentHistoryStayText()}`)
+                .fontSize(12)
+                .fontColor(this.getThemePalette().textSecondary);
+              Text(`执行偏差：${this.getCurrentHistoryDeviationText()}`)
+                .fontSize(12)
+                .fontColor(this.getThemePalette().textSecondary);
+            }
+            .width('100%')
+            .padding(12)
+            .backgroundColor(this.getThemePalette().companionCardBg)
+            .borderRadius(12);
+
+            Column({ space: 6 }) {
+              Text(`地址：${this.getHistoryAddress(this.historySummary.placeName)}`)
                 .fontSize(12)
                 .fontColor(this.getThemePalette().textSecondary)
                 .maxLines(2)
                 .textOverflow({ overflow: TextOverflow.Ellipsis });
-            }
-            .width('100%')
-            .padding(12)
-            .backgroundColor(this.getThemePalette().companionCardBg)
-            .borderRadius(12);
-
-            Column({ space: 6 }) {
-              Text('当前计划记录')
-                .fontSize(14)
-                .fontWeight(FontWeight.Bold)
-                .fontColor(this.getThemePalette().textPrimary);
-              Text(`计划开始：${this.getCurrentHistoryPlannedStartText()}`)
+              Text(`备注：${this.getCurrentHistoryNoteText()}`)
                 .fontSize(12)
-                .fontColor(this.getThemePalette().textSecondary);
-              Text(`实际开始：${this.getCurrentHistoryActualStartText()}`)
-                .fontSize(12)
-                .fontColor(this.getThemePalette().textSecondary);
-              Text(`实际结束：${this.getCurrentHistoryActualEndText()}`)
-                .fontSize(12)
-                .fontColor(this.getThemePalette().textSecondary);
-              Text(`停留：${this.getCurrentHistoryStayText()}`)
-                .fontSize(12)
-                .fontColor(this.getThemePalette().textSecondary);
-            }
-            .width('100%')
-            .padding(12)
-            .backgroundColor(this.getThemePalette().companionCardBg)
-            .borderRadius(12);
-
-            Column({ space: 6 }) {
-              Text('历史记录')
-                .fontSize(14)
-                .fontWeight(FontWeight.Bold)
-                .fontColor(this.getThemePalette().textPrimary);
-              List({ space: 6 }) {
-                ForEach(this.historySummary.records, (record: PlaceCheckinRecord) => {
-                  ListItem() {
-                    Row() {
-                      Text(this.formatDateTime(record.actualEnd > 0 ? record.actualEnd : record.actualStart))
-                        .fontSize(12)
-                        .fontColor(this.getThemePalette().textSecondary)
-                        .layoutWeight(1);
-                      Text(record.status === EventEntity.STATE_SKIPPED ? '已跳过' : `停留 ${record.stayMinutes} 分钟`)
-                        .fontSize(12)
-                        .fontColor(record.status === EventEntity.STATE_SKIPPED
-                          ? this.getThemePalette().statusSkipped
-                          : this.getThemePalette().statusCompleted);
-                    }
-                    .width('100%')
-                    .padding({ left: 8, right: 8, top: 6, bottom: 6 })
-                    .backgroundColor(this.getThemePalette().cardBgSoft)
-                    .borderRadius(8);
-                  };
-                });
-              }
-              .width('100%')
-              .constraintSize({ maxHeight: '38%' });
-            }
-            .width('100%')
-            .padding(12)
-            .backgroundColor(this.getThemePalette().companionCardBg)
-            .borderRadius(12);
-
-            Column({ space: 6 }) {
-              Text('汇总')
-                .fontSize(14)
-                .fontWeight(FontWeight.Bold)
-                .fontColor(this.getThemePalette().textPrimary);
-              Text(`平均停留：${this.historySummary.avgStayMinutes} 分钟`)
-                .fontSize(12)
-                .fontColor(this.getThemePalette().textSecondary);
-              Text(`最近到访：${this.historySummary.lastEndTime > 0 ? this.formatDateTime(this.historySummary.lastEndTime) : '--:--'}`)
-                .fontSize(12)
-                .fontColor(this.getThemePalette().textSecondary);
+                .fontColor(this.getThemePalette().textSecondary)
+                .maxLines(2)
+                .textOverflow({ overflow: TextOverflow.Ellipsis });
             }
             .width('100%')
             .padding(12)
@@ -1976,6 +2221,8 @@ export struct CompanionView {
   }
   // endregion
 }
+
+
 
 
 
