@@ -1,4 +1,4 @@
-import { promptAction } from '@kit.ArkUI';
+﻿import { promptAction } from '@kit.ArkUI';
 import { PlanJsonImportCancelToken } from '../../../common/utils/PlanJsonTransferService';
 
 @CustomDialog
@@ -10,10 +10,17 @@ export struct PlanJsonImportDialog {
   @State importing: boolean = false;
   private importCancelToken: PlanJsonImportCancelToken | null = null;
 
+  private safeShowToast(message: string): void {
+    try {
+      promptAction.openToast({ message: message });
+    } catch (_error) {
+    }
+  }
+
   private async doImport(): Promise<void> {
     const raw = this.inputJson.trim();
     if (!raw) {
-      promptAction.showToast({ message: '请先粘贴 JSON 内容' });
+      this.safeShowToast('请先粘贴 JSON 内容');
       return;
     }
     this.importCancelToken = new PlanJsonImportCancelToken();
@@ -89,3 +96,4 @@ export struct PlanJsonImportDialog {
     .width('92%')
   }
 }
+

@@ -4,7 +4,7 @@ import { window } from '@kit.ArkUI';
 import { RdbHelper } from '../common/utils/RdbHelper';
 import { notificationManager } from '@kit.NotificationKit';
 import notification from '@ohos.notification';
-import wantAgent, { WantAgent } from '@ohos.wantAgent';
+import wantAgent, { WantAgent } from '@ohos.app.ability.wantAgent';
 import { PreferenceManager } from '../common/utils/PreferenceManager';
 import { TrafficEngine } from '../model/logic/TrafficEngine';
 import { bundleManager } from '@kit.AbilityKit';
@@ -60,6 +60,7 @@ export default class EntryAbility extends UIAbility {
     AppStorage.setOrCreate(AppStorageKeys.GLOBAL_TIME_DISPLAY_MODE, 0);
     AppStorage.setOrCreate(AppStorageKeys.PLANNING_TIME_DISPLAY_MODE, 0);
     AppStorage.setOrCreate(AppStorageKeys.COMPANION_TIME_DISPLAY_MODE, 0);
+    AppStorage.setOrCreate('lastAddItemMode', 0);
     AppStorage.setOrCreate(AppStorageKeys.ARRIVAL_REMINDER_SEQ, 0);
     AppStorage.setOrCreate(AppStorageKeys.ARRIVAL_REMINDER_PAYLOAD, '');
     AppStorage.setOrCreate(AppStorageKeys.ARRIVAL_LIVE_ACTIVITY_SEQ, 0);
@@ -174,24 +175,29 @@ export default class EntryAbility extends UIAbility {
       hilog.info(DOMAIN, TAG, '[NOTIFY][dedupe_skip] same content, skip publish');
       return;
     }
-    const launchWantAgent = await EntryAbility.buildLaunchWantAgent();
-    const request: notificationManager.NotificationRequest = {
-      id: 1001,
-      isOngoing: true,
-      isUnremovable: true,
-      tapDismissed: false,
-      content: {
-        notificationContentType: notificationManager.ContentType.NOTIFICATION_CONTENT_BASIC_TEXT,
-        normal: { title: title, text: content }
-      },
-      slotType: notificationManager.SlotType.OTHER_TYPES as number as notification.SlotType
-    };
-    if (launchWantAgent) {
-      request.wantAgent = launchWantAgent;
+    try {
+      const launchWantAgent = await EntryAbility.buildLaunchWantAgent();
+      const request: notificationManager.NotificationRequest = {
+        id: 1001,
+        isOngoing: true,
+        isUnremovable: true,
+        tapDismissed: false,
+        content: {
+          notificationContentType: notificationManager.ContentType.NOTIFICATION_CONTENT_BASIC_TEXT,
+          normal: { title: title, text: content }
+        },
+        slotType: notificationManager.SlotType.OTHER_TYPES as number as notification.SlotType
+      };
+      if (launchWantAgent) {
+        request.wantAgent = launchWantAgent;
+      }
+      await notificationManager.publish(request);
+      EntryAbility.lastNotificationFingerprint = fingerprint;
+      EntryAbility.lastNotificationTs = Date.now();
+    } catch (error) {
+      hilog.error(DOMAIN, TAG, `updateScheduleNotification failed: ${JSON.stringify(error)}`);
+      throw new Error(`publish notification failed: ${JSON.stringify(error)}`);
     }
-    await notificationManager.publish(request);
-    EntryAbility.lastNotificationFingerprint = fingerprint;
-    EntryAbility.lastNotificationTs = Date.now();
   }
 
   private static async buildLaunchWantAgent(): Promise<WantAgent | null> {

@@ -149,7 +149,7 @@ struct ArchivePage {
               .backgroundColor(this.getThemePalette().cardBg)
               .borderRadius(12)
               .onClick(() => {
-                router.pushUrl({
+                this.getUIContext().getRouter().pushUrl({
                   url: 'pages/Index',
                   params: { planId: item.id, title: item.title }
                 });
@@ -184,6 +184,7 @@ struct ArchivePage {
     .backgroundColor(this.getThemePalette().pageBg);
   }
 }
+
 
 
 

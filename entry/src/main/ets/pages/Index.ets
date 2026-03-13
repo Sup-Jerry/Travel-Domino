@@ -130,6 +130,14 @@ struct Index {
     return 'unknown_error';
   }
 
+  private safeShowToast(message: string): void {
+    try {
+      promptAction.openToast({ message: message });
+    } catch (error) {
+      hilog.warn(0x0000, 'Index', `[TOAST_FAIL] ${this.sanitizeError(error as Object)}`);
+    }
+  }
+
   private refreshUnsavedFlag(): void {
     this.hasUnsavedChanges = AppStorage.get<boolean>(this.scopedStorageKey(AppStorageKeys.HAS_UNSAVED_POSTPONE)) ?? false;
   }
@@ -162,7 +170,7 @@ struct Index {
       events: this.vm.events,
       onShow: (payload: ArrivalReminderPayload): void => {
         this.isArrivalDialogOpen = true;
-        AlertDialog.show({
+        this.getUIContext().showAlertDialog({
           title: '到达提醒',
           message: `你已到达【${payload.placeName}】附近（约${Math.max(1, payload.distanceMeters)}米）`,
           autoCancel: false,
@@ -217,7 +225,7 @@ struct Index {
         if (this.pendingItem) {
           // 延迟一会儿弹出，避免弹窗冲突
           setTimeout(() => {
-            DatePickerDialog.show({
+            this.getUIContext().showDatePickerDialog({
               start: new Date(this.vm.planStartDate),
               end: new Date("2100-12-31"),
               selected: new Date(this.vm.planStartDate),
@@ -245,7 +253,7 @@ struct Index {
                     this.vm.addNewItem(this.pendingItem.name, this.pendingItem.duration, true, this.pendingItem.fixedTime, newOffset, -1, false, this.pendingItem.note);
                   }
                   this.pendingItem = null;
-                  promptAction.showToast({ message: "已更新日期并移至日程" });
+                  this.safeShowToast("已更新日期并移至日程");
                 }
               },
               onCancel: () => {
@@ -270,7 +278,7 @@ struct Index {
             this.pendingItem.note
           );
           this.pendingItem = null;
-          promptAction.showToast({ message: "已移至暂存池" });
+          this.safeShowToast("已移至暂存池");
         }
       },
 
@@ -288,7 +296,7 @@ struct Index {
             this.pendingItem.note
           );
           this.pendingItem = null;
-          promptAction.showToast({ message: "计划出发日期已更新" });
+          this.safeShowToast("计划出发日期已更新");
         }
       },
 
@@ -346,9 +354,9 @@ struct Index {
         lng: recovery.restored.lng
       });
     } else if (recovery.reason === 'temp_invalid') {
-      promptAction.showToast({ message: '草稿已损坏，已自动清理。' });
+      this.safeShowToast('草稿已损坏，已自动清理。');
     } else if (recovery.reason === 'picked_invalid') {
-      promptAction.showToast({ message: '地图选点缓存损坏，已自动清理。' });
+      this.safeShowToast('地图选点缓存损坏，已自动清理。');
     }
 
     this.consumeArrivalReminder();
@@ -362,10 +370,10 @@ struct Index {
       onConfirm: async (text: string) => {
         try {
           await this.vm.generateByAi(text); // 调用 VM 方法
-          promptAction.showToast({ message: 'AI 生成成功，已加入暂存池！' });
+          this.safeShowToast('AI 生成成功，已加入暂存池！');
           this.aiDialogController.close();
         } catch {
-          promptAction.showToast({ message: '生成失败' });
+          this.safeShowToast('生成失败');
           this.aiDialogController.close();
         }
       }
@@ -515,7 +523,7 @@ struct Index {
     selectedIds: number[], mode: CompressionMode, saveCallback: (t?: string) => void, onBack: () => void) {
     const remain = plan.remainingGapMinutes ?? 0;
     const suggested = plan.suggestedTime || targetTime;
-    AlertDialog.show({
+    this.getUIContext().showAlertDialog({
       title: '⛔ 压缩后仍冲突',
       message: `已按所选范围压缩，但仍有 ${remain} 分钟冲突。\n建议最早开始时间：${suggested}\n\n请扩大压缩范围或改为向后顺延。`,
       primaryButton: {
@@ -540,7 +548,7 @@ struct Index {
     onBack: () => void, presetSelectedIds: number[] = [], presetMode: CompressionMode = 'RATIO') {
     const context = this.vm.buildCompressionSelectionContext(index, targetTime);
     if (!context) {
-      promptAction.showToast({ message: '当前上下文无法计算压缩方案，请稍后重试' });
+      this.safeShowToast('当前上下文无法计算压缩方案，请稍后重试');
       return;
     }
     if (context.neededGapMinutes <= 0) {
@@ -871,7 +879,7 @@ struct Index {
 
   private openSingleDateFilterPicker(): void {
     setTimeout(() => {
-      DatePickerDialog.show({
+      this.getUIContext().showDatePickerDialog({
         start: new Date(this.vm.planStartDate || new Date()),
         end: new Date(DomainConstants.DATE_PICKER_MAX),
         selected: new Date(this.vm.planStartDate || new Date()),
@@ -887,7 +895,7 @@ struct Index {
 
   private openRangeDateFilterPicker(): void {
     setTimeout(() => {
-      DatePickerDialog.show({
+      this.getUIContext().showDatePickerDialog({
         start: new Date(this.vm.planStartDate || new Date()),
         end: new Date(DomainConstants.DATE_PICKER_MAX),
         selected: new Date(this.vm.planStartDate || new Date()),
@@ -904,7 +912,7 @@ struct Index {
   }
 
   private openRangeEndDatePicker(startDate: Date): void {
-    DatePickerDialog.show({
+    this.getUIContext().showDatePickerDialog({
       start: startDate,
       end: new Date(DomainConstants.DATE_PICKER_MAX),
       selected: startDate,
@@ -924,7 +932,7 @@ struct Index {
 
   // [新增] 提取日期选择逻辑
   openDatePicker() {
-    DatePickerDialog.show({
+    this.getUIContext().showDatePickerDialog({
       start: new Date(DomainConstants.DATE_PICKER_MIN),
       end: new Date(DomainConstants.DATE_PICKER_MAX),
       selected: new Date(this.vm.planStartDate || new Date()),
@@ -952,7 +960,7 @@ struct Index {
           setTimeout(() => {
             // 这里原来的代码是直接写 DatePicker 逻辑，或者调用封装好的 openDatePicker
             // 如果你没封装 openDatePicker，直接把 DatePicker 代码拷过来也行
-            DatePickerDialog.show({
+            this.getUIContext().showDatePickerDialog({
               start: new Date(DomainConstants.DATE_PICKER_MIN),
               end: new Date(DomainConstants.DATE_PICKER_MAX),
               selected: new Date(this.vm.planStartDate || new Date()),
@@ -998,7 +1006,7 @@ struct Index {
   }
 
   aboutToAppear() {
-    const params = router.getParams() as Record<string, Object>;
+    const params = this.getUIContext().getRouter().getParams() as Record<string, Object>;
     if (params && params['planId']) {
       const planId = params['planId'] as number;
       const isNewPlan = (params['isNewPlan'] as boolean) === true;
@@ -1054,7 +1062,7 @@ struct Index {
     .backgroundColor('#D32F2F') // 深红色
     .onClick(() => {
       // ✅ [修改] 增加二次确认弹窗
-      AlertDialog.show({
+      this.getUIContext().showAlertDialog({
         title: '确认删除',
         message: `确定要删除 "${item.name}" 吗？\n删除后无法恢复。`, // 如果有回收站逻辑可改为"移入回收站"
         autoCancel: true,
@@ -1134,7 +1142,7 @@ struct Index {
           .padding({ left: 10, right: 10, top: 6, bottom: 6 })
           .borderRadius(8)
           .onClick(() => {
-            void NavigationHelper.backOrFallbackToPlanList();
+            void NavigationHelper.backOrFallbackToPlanList(this.getUIContext());
           })
 
           Column() {
@@ -1166,7 +1174,7 @@ struct Index {
           //   .fontSize(12).height(28).backgroundColor('#4CAF50').margin({ right: 8 })
           //        .onClick(() => {
           //   this.vm.testAllCommute();
-          //      promptAction.showToast({ message: '同步高德实时路况中...' });
+          //      promptAction.openToast({ message: '同步高德实时路况中...' });
           //     })
 
 
@@ -1179,7 +1187,7 @@ struct Index {
           .onClick(() => {
             hilog.info(0x0000, 'Index', '[DUAL_MODE_ACCEPT][mode_switch][click_enter]');
             if (this.vm.isArchived) {
-              promptAction.showToast({ message: '归档计划不可进入伴游' });
+              this.safeShowToast('归档计划不可进入伴游');
               return;
             }
             this.isCompanionMode = true;
@@ -1341,14 +1349,14 @@ struct Index {
           },
           onAi: () => {
             if (this.vm.isArchived) {
-              promptAction.showToast({ message: '归档计划不可操作' });
+              this.safeShowToast('归档计划不可操作');
               return;
             }
             this.aiDialogController.open();
           },
           onAdd: () => {
             if (this.vm.isArchived) {
-              promptAction.showToast({ message: '归档计划不可操作' });
+              this.safeShowToast('归档计划不可操作');
               return;
             }
             this.editingItemId = -1;
@@ -1423,6 +1431,8 @@ struct Index {
     }
 
 }
+
+
 
 
 

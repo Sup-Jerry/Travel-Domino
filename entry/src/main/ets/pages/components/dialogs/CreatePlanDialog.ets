@@ -57,7 +57,7 @@ export struct CreatePlanDialog {
       .margin({ bottom: 20 })
       .onClick(() => {
         // [Phase 2] 弹出日期选择器
-        DatePickerDialog.show({
+        this.getUIContext().showDatePickerDialog({
           start: new Date(DomainConstants.DATE_PICKER_MIN),
           end: new Date(DomainConstants.DATE_PICKER_MAX),
           selected: this.selectedDate,
@@ -103,3 +103,4 @@ export struct CreatePlanDialog {
     .borderRadius(16)
   }
 }
+

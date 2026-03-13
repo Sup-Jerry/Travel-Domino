@@ -43,6 +43,14 @@ export struct EventItemView {
     return ThemeCenter.getPalette(this.effectiveTheme);
   }
 
+  private safeShowToast(message: string): void {
+    try {
+      promptAction.openToast({ message: message });
+    } catch (error) {
+      hilog.warn(0x0000, 'EventItemView', `[TOAST_FAIL] reason=${JSON.stringify(error)}`);
+    }
+  }
+
 
 
 
@@ -355,7 +363,7 @@ export struct EventItemView {
           .width('60%').justifyContent(FlexAlign.Center).backgroundColor(this.getPalette().cardBgSoft)
           .border({ width: 1, color: this.getPalette().warning, radius: 16 }).padding({ top: 10, bottom: 10 })
           .onClick(() => {
-            AlertDialog.show({
+            this.getUIContext().showAlertDialog({
               title: '步行距离过长',
               message: '当前两地直线距离超过 5 公里，步行可能耗时数小时。是否切换为更快捷的交通工具？',
               buttons: [
@@ -393,7 +401,7 @@ export struct EventItemView {
           .width('60%').justifyContent(FlexAlign.Center).backgroundColor(this.getPalette().cardBgSoft)
           .border({ width: 1, color: this.getPalette().danger, radius: 16 }).padding({ top: 10, bottom: 10 })
           .onClick(() => {
-            AlertDialog.show({
+            this.getUIContext().showAlertDialog({
               title: '暂无公交',
               message: '未能查询到合适的公交/地铁路线，建议切换为打车或驾车。',
               primaryButton: {
@@ -510,7 +518,7 @@ export struct EventItemView {
           .onClick(() => {
             const minutes = Number.parseInt(this.tempCommuteVal, 10);
             if (!Number.isFinite(minutes) || minutes <= 0) {
-              promptAction.showToast({ message: '请输入正整数分钟数' });
+              this.safeShowToast('请输入正整数分钟数');
               return;
             }
             this.onManualTravelInput(minutes);
@@ -746,6 +754,8 @@ export struct EventItemView {
     }
   }
 }
+
+
 
 
 

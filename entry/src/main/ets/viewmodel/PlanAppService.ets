@@ -158,27 +158,48 @@ export class PlanAppService {
   }
 
   public async isNotificationEnabled(): Promise<boolean> {
-    return notificationManager.isNotificationEnabled();
+    try {
+      return notificationManager.isNotificationEnabled();
+    } catch (error) {
+      hilog.warn(0x0000, 'PlanAppService', `[ARRIVAL][notify_enabled_check_failed] reason=${JSON.stringify(error)}`);
+      return false;
+    }
   }
 
   public async requestEnableNotification(hostContext: common.UIAbilityContext): Promise<void> {
-    await notificationManager.requestEnableNotification(hostContext);
+    try {
+      await notificationManager.requestEnableNotification(hostContext);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : JSON.stringify(error);
+      hilog.warn(0x0000, 'PlanAppService', `[ARRIVAL][notify_request_failed] reason=${reason}`);
+      throw new Error(reason);
+    }
   }
 
   public async isLocationPermissionGranted(): Promise<boolean> {
-    const atManager = abilityAccessCtrl.createAtManager();
-    const bundleInfo = await bundleManager.getBundleInfoForSelf(bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_APPLICATION);
-    const tokenID = bundleInfo.appInfo.accessTokenId;
-    const checkStatus = await atManager.checkAccessToken(tokenID, 'ohos.permission.LOCATION');
-    return checkStatus === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED;
+    try {
+      const atManager = abilityAccessCtrl.createAtManager();
+      const bundleInfo = await bundleManager.getBundleInfoForSelf(bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_APPLICATION);
+      const tokenID = bundleInfo.appInfo.accessTokenId;
+      const checkStatus = await atManager.checkAccessToken(tokenID, 'ohos.permission.LOCATION');
+      return checkStatus === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED;
+    } catch (error) {
+      hilog.warn(0x0000, 'PlanAppService', `[ARRIVAL][location_check_failed] reason=${JSON.stringify(error)}`);
+      return false;
+    }
   }
 
   public async requestLocationPermissions(hostContext: common.UIAbilityContext): Promise<boolean> {
-    const atManager = abilityAccessCtrl.createAtManager();
-    const results = await atManager.requestPermissionsFromUser(hostContext, [
-      'ohos.permission.LOCATION',
-      'ohos.permission.APPROXIMATELY_LOCATION'
-    ]);
-    return results.authResults.some((result: number) => result === 0);
+    try {
+      const atManager = abilityAccessCtrl.createAtManager();
+      const results = await atManager.requestPermissionsFromUser(hostContext, [
+        'ohos.permission.LOCATION',
+        'ohos.permission.APPROXIMATELY_LOCATION'
+      ]);
+      return results.authResults.some((result: number) => result === 0);
+    } catch (error) {
+      hilog.warn(0x0000, 'PlanAppService', `[ARRIVAL][location_request_failed] reason=${JSON.stringify(error)}`);
+      return false;
+    }
   }
 }

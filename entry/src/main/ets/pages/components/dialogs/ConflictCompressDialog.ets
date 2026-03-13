@@ -26,6 +26,17 @@ export struct ConflictCompressDialog {
   @State selectedIds: Set<number> = new Set();
   @State previewPlan: CompressionPlan | null = null;
 
+  private safeShowToast(message: string, duration?: number): void {
+    try {
+      if (typeof duration === 'number') {
+        promptAction.openToast({ message: message, duration: duration });
+      } else {
+        promptAction.openToast({ message: message });
+      }
+    } catch (_error) {
+    }
+  }
+
   aboutToAppear() {
     this.mode = this.initialMode;
     this.context = this.vm.buildCompressionSelectionContext(this.targetIndex, this.targetTime);
@@ -272,7 +283,7 @@ export struct ConflictCompressDialog {
             .backgroundColor($r('app.color.card_bg'))
             .onClick(() => {
               if (this.selectedIds.size === 0) {
-                promptAction.showToast({ message: '请先选择至少一个可压缩地点', duration: 2000 });
+                this.safeShowToast('请先选择至少一个可压缩地点', 2000);
                 return;
               }
               this.controller.close();
@@ -291,6 +302,7 @@ export struct ConflictCompressDialog {
     .borderRadius(16)
   }
 }
+
 
 
 

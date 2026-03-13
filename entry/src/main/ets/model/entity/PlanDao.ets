@@ -56,20 +56,25 @@ export class PlanDao {
     const rdbStore = RdbHelper.getInstance().getRdbStore();
     if (!rdbStore) return -1;
 
-    const valueBucket: ValuesBucket = {};
-    valueBucket[PlanEntity.NAME] = title;
-    valueBucket[PlanEntity.CREATED_AT] = new Date().getTime();
+    try {
+      const valueBucket: ValuesBucket = {};
+      valueBucket[PlanEntity.NAME] = title;
+      valueBucket[PlanEntity.CREATED_AT] = new Date().getTime();
 
-    // 鉁?[Phase 2] 浣跨敤鐢ㄦ埛閫夋嫨鐨勬棩鏈?
-    valueBucket[PlanEntity.START_DATE] = startDate;
+      // 鉁?[Phase 2] 浣跨敤鐢ㄦ埛閫夋嫨鐨勬棩鏈?
+      valueBucket[PlanEntity.START_DATE] = startDate;
 
-    valueBucket[PlanEntity.STATUS] = 0; // 瑙勫垝涓?
-    valueBucket[PlanEntity.DEL_FLAG] = 0; // 鏈垹闄?
-    valueBucket[PlanEntity.ENABLE_AUTO_AMAP_ROUTE] = 1;
+      valueBucket[PlanEntity.STATUS] = 0; // 瑙勫垝涓?
+      valueBucket[PlanEntity.DEL_FLAG] = 0; // 鏈垹闄?
+      valueBucket[PlanEntity.ENABLE_AUTO_AMAP_ROUTE] = 1;
 
-    const rowId = await rdbStore.insert(PlanEntity.TABLE_NAME, valueBucket);
-    PlanDao.markPlanDirty(rowId);
-    return rowId;
+      const rowId = await rdbStore.insert(PlanEntity.TABLE_NAME, valueBucket);
+      PlanDao.markPlanDirty(rowId);
+      return rowId;
+    } catch (err) {
+      console.error(`[PlanDao] createPlan failed: ${JSON.stringify(err)}`);
+      return -1;
+    }
   }
 
   /**
@@ -80,28 +85,34 @@ export class PlanDao {
     const rdbStore = RdbHelper.getInstance().getRdbStore();
     if (!rdbStore) return undefined;
 
-    let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
-    predicates.equalTo(PlanEntity.ID, id);
-
-    let resultSet = await rdbStore.query(predicates);
-    let result: PlanItem | undefined = undefined;
     try {
-    if (resultSet.goToFirstRow()) {
-      result = {
-        id: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.ID)),
-        title: resultSet.getString(resultSet.getColumnIndex(PlanEntity.NAME)),
-        createdAt: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.CREATED_AT)),
-        // [鍏抽敭] 鑾峰彇 startDate
-        startDate: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.START_DATE)),
-        status: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.STATUS)),
-        delFlag: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.DEL_FLAG)),
-        enableAutoAmapRoute: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.ENABLE_AUTO_AMAP_ROUTE))
+      let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
+      predicates.equalTo(PlanEntity.ID, id);
 
-      };
+      let resultSet = await rdbStore.query(predicates);
+      let result: PlanItem | undefined = undefined;
+      try {
+        if (resultSet.goToFirstRow()) {
+          result = {
+            id: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.ID)),
+            title: resultSet.getString(resultSet.getColumnIndex(PlanEntity.NAME)),
+            createdAt: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.CREATED_AT)),
+            // [鍏抽敭] 鑾峰彇 startDate
+            startDate: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.START_DATE)),
+            status: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.STATUS)),
+            delFlag: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.DEL_FLAG)),
+            enableAutoAmapRoute: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.ENABLE_AUTO_AMAP_ROUTE))
+          };
+        }
+      } finally {
+        resultSet.close();
+      }
+      return result;
+    } catch (err) {
+      console.error(`[PlanDao] getPlanById failed: ${JSON.stringify(err)}`);
+      return undefined;
     }
-    } finally {resultSet.close();
-    return result;
-  }}
+  }
 
   /**
    * [渚ц竟鏍忓姛鑳絔 鑾峰彇鍥炴敹绔欒鍒?(del_flag = 1)
@@ -110,12 +121,17 @@ export class PlanDao {
     const rdbStore = RdbHelper.getInstance().getRdbStore();
     if (!rdbStore) return [];
 
-    let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
-    predicates.equalTo(PlanEntity.DEL_FLAG, 1); // 鏌ュ凡鍒犻櫎
-    predicates.orderByDesc(PlanEntity.DELETE_TIME); // 鎸夊垹闄ゆ椂闂村€掑簭
+    try {
+      let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
+      predicates.equalTo(PlanEntity.DEL_FLAG, 1); // 鏌ュ凡鍒犻櫎
+      predicates.orderByDesc(PlanEntity.DELETE_TIME); // 鎸夊垹闄ゆ椂闂村€掑簭
 
-    let resultSet = await rdbStore.query(predicates);
-    return PlanDao.parseResultSet(resultSet);
+      let resultSet = await rdbStore.query(predicates);
+      return PlanDao.parseResultSet(resultSet);
+    } catch (err) {
+      console.error(`[PlanDao] getTrashPlans failed: ${JSON.stringify(err)}`);
+      return [];
+    }
   }
 
   /**
@@ -125,13 +141,18 @@ export class PlanDao {
     const rdbStore = RdbHelper.getInstance().getRdbStore();
     if (!rdbStore) return [];
 
-    let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
-    predicates.equalTo(PlanEntity.DEL_FLAG, 0);
-    predicates.equalTo(PlanEntity.STATUS, 2); // 鏌ュ綊妗ｇ姸鎬?
-    predicates.orderByDesc(PlanEntity.CREATED_AT);
+    try {
+      let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
+      predicates.equalTo(PlanEntity.DEL_FLAG, 0);
+      predicates.equalTo(PlanEntity.STATUS, 2); // 鏌ュ綊妗ｇ姸鎬?
+      predicates.orderByDesc(PlanEntity.CREATED_AT);
 
-    let resultSet = await rdbStore.query(predicates);
-    return PlanDao.parseResultSet(resultSet);
+      let resultSet = await rdbStore.query(predicates);
+      return PlanDao.parseResultSet(resultSet);
+    } catch (err) {
+      console.error(`[PlanDao] getArchivedPlans failed: ${JSON.stringify(err)}`);
+      return [];
+    }
   }
 
   /**
@@ -141,15 +162,23 @@ export class PlanDao {
     const rdbStore = RdbHelper.getInstance().getRdbStore();
     if (!rdbStore) return;
 
-    const valueBucket: ValuesBucket = {};
-    valueBucket[PlanEntity.DEL_FLAG] = 0; // 鎭㈠姝ｅ父
-    valueBucket[PlanEntity.DELETE_TIME] = 0;
+    try {
+      const valueBucket: ValuesBucket = {};
+      valueBucket[PlanEntity.DEL_FLAG] = 0; // 鎭㈠姝ｅ父
+      valueBucket[PlanEntity.DELETE_TIME] = 0;
 
-    let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
-    predicates.equalTo(PlanEntity.ID, id);
+      let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
+      predicates.equalTo(PlanEntity.ID, id);
 
-    await rdbStore.update(valueBucket, predicates);
-    PlanDao.markPlanDirty(id);
+      await rdbStore.update(valueBucket, predicates);
+      PlanDao.markPlanDirty(id);
+    } catch (err) {
+      console.error(`[PlanDao] restorePlan failed: ${JSON.stringify(err)}`);
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new Error(`restore_plan_failed:${JSON.stringify(err)}`);
+    }
   }
 
   /**
@@ -187,21 +216,29 @@ export class PlanDao {
   private static parseResultSet(resultSet: relationalStore.ResultSet): PlanItem[] {
     let resultList: PlanItem[] = [];
     try {
-    while (resultSet.goToNextRow()) {
-      resultList.push({
-        id: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.ID)),
-        title: resultSet.getString(resultSet.getColumnIndex(PlanEntity.NAME)),
-        createdAt: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.CREATED_AT)),
-        startDate: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.START_DATE)),
-        status: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.STATUS)),
-        delFlag: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.DEL_FLAG)),
-        deleteTime: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.DELETE_TIME)),
-        enableAutoAmapRoute: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.ENABLE_AUTO_AMAP_ROUTE))
-      });
+      while (resultSet.goToNextRow()) {
+        resultList.push({
+          id: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.ID)),
+          title: resultSet.getString(resultSet.getColumnIndex(PlanEntity.NAME)),
+          createdAt: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.CREATED_AT)),
+          startDate: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.START_DATE)),
+          status: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.STATUS)),
+          delFlag: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.DEL_FLAG)),
+          deleteTime: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.DELETE_TIME)),
+          enableAutoAmapRoute: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.ENABLE_AUTO_AMAP_ROUTE))
+        });
+      }
+    } catch (err) {
+      console.error(`[PlanDao] parseResultSet failed: ${JSON.stringify(err)}`);
+      resultList = [];
+    } finally {
+      try {
+        resultSet.close();
+      } catch (_closeErr) {
+      }
     }
-    } finally {resultSet.close();
     return resultList;
-  }}
+  }
 
   /**
    * [Phase 2 鏂板] 鏇存柊璁″垝鐘舵€?
@@ -211,14 +248,22 @@ export class PlanDao {
     const rdbStore = RdbHelper.getInstance().getRdbStore();
     if (!rdbStore) return;
 
-    const valueBucket: ValuesBucket = {};
-    valueBucket[PlanEntity.STATUS] = status;
+    try {
+      const valueBucket: ValuesBucket = {};
+      valueBucket[PlanEntity.STATUS] = status;
 
-    let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
-    predicates.equalTo(PlanEntity.ID, id);
+      let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
+      predicates.equalTo(PlanEntity.ID, id);
 
-    await rdbStore.update(valueBucket, predicates);
-    PlanDao.markPlanDirty(id);
+      await rdbStore.update(valueBucket, predicates);
+      PlanDao.markPlanDirty(id);
+    } catch (err) {
+      console.error(`[PlanDao] updatePlanStatus failed: ${JSON.stringify(err)}`);
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new Error(`update_plan_status_failed:${JSON.stringify(err)}`);
+    }
   }
 
   /**
@@ -228,15 +273,20 @@ export class PlanDao {
     const rdbStore = RdbHelper.getInstance().getRdbStore();
     if (!rdbStore) return [];
 
-    let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
-    // 鍙煡璇㈡湭鍒犻櫎鐨?
-    predicates.equalTo(PlanEntity.DEL_FLAG, 0);
-    predicates.orderByDesc(PlanEntity.CREATED_AT);
+    try {
+      let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
+      // 鍙煡璇㈡湭鍒犻櫎鐨?
+      predicates.equalTo(PlanEntity.DEL_FLAG, 0);
+      predicates.orderByDesc(PlanEntity.CREATED_AT);
 
-    let resultSet = await rdbStore.query(predicates);
+      let resultSet = await rdbStore.query(predicates);
 
-    // 鉁?[淇敼] 鐩存帴璋冪敤 parseResultSet 澶嶇敤閫昏緫锛屼唬鐮佹洿绮剧畝
-    return PlanDao.parseResultSet(resultSet);
+      // 鉁?[淇敼] 鐩存帴璋冪敤 parseResultSet 澶嶇敤閫昏緫锛屼唬鐮佹洿绮剧畝
+      return PlanDao.parseResultSet(resultSet);
+    } catch (err) {
+      console.error(`[PlanDao] getPlanList failed: ${JSON.stringify(err)}`);
+      return [];
+    }
   }
 
   /**
@@ -247,45 +297,60 @@ export class PlanDao {
     const rdbStore = RdbHelper.getInstance().getRdbStore();
     if (!rdbStore) return [];
 
-    let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
-    predicates.equalTo(PlanEntity.DEL_FLAG, 0); // 鍙兘鎼滄湭鍒犻櫎鐨?
-    predicates.like(PlanEntity.NAME, `%${keyword}%`); // 妯＄硦鍖归厤
-    predicates.orderByDesc(PlanEntity.CREATED_AT);
+    try {
+      let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
+      predicates.equalTo(PlanEntity.DEL_FLAG, 0); // 鍙兘鎼滄湭鍒犻櫎鐨?
+      predicates.like(PlanEntity.NAME, `%${keyword}%`); // 妯＄硦鍖归厤
+      predicates.orderByDesc(PlanEntity.CREATED_AT);
 
-    let resultSet = await rdbStore.query(predicates);
-    return PlanDao.parseResultSet(resultSet);
+      let resultSet = await rdbStore.query(predicates);
+      return PlanDao.parseResultSet(resultSet);
+    } catch (err) {
+      console.error(`[PlanDao] searchPlans failed: ${JSON.stringify(err)}`);
+      return [];
+    }
   }
 
   public static async searchTrashPlans(keyword: string): Promise<PlanItem[]> {
     const rdbStore = RdbHelper.getInstance().getRdbStore();
     if (!rdbStore) return [];
 
-    let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
-    predicates.equalTo(PlanEntity.DEL_FLAG, 1);
-    predicates.like(PlanEntity.NAME, `%${keyword}%`);
-    predicates.orderByDesc(PlanEntity.DELETE_TIME);
+    try {
+      let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
+      predicates.equalTo(PlanEntity.DEL_FLAG, 1);
+      predicates.like(PlanEntity.NAME, `%${keyword}%`);
+      predicates.orderByDesc(PlanEntity.DELETE_TIME);
 
-    let resultSet = await rdbStore.query(predicates);
-    return PlanDao.parseResultSet(resultSet);
+      let resultSet = await rdbStore.query(predicates);
+      return PlanDao.parseResultSet(resultSet);
+    } catch (err) {
+      console.error(`[PlanDao] searchTrashPlans failed: ${JSON.stringify(err)}`);
+      return [];
+    }
   }
 
   public static async searchAllPlansPaged(keyword: string, offset: number, limit: number): Promise<PlanItem[]> {
     const rdbStore = RdbHelper.getInstance().getRdbStore();
     if (!rdbStore) return [];
 
-    const page = PlanDao.normalizePage(offset, limit);
-    const trimmed = (keyword || '').trim();
+    try {
+      const page = PlanDao.normalizePage(offset, limit);
+      const trimmed = (keyword || '').trim();
 
-    let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
-    if (trimmed.length > 0) {
-      predicates.like(PlanEntity.NAME, `%${trimmed}%`);
+      let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
+      if (trimmed.length > 0) {
+        predicates.like(PlanEntity.NAME, `%${trimmed}%`);
+      }
+      predicates.orderByDesc(PlanEntity.CREATED_AT);
+      predicates.limitAs(page.limit);
+      predicates.offsetAs(page.offset);
+
+      let resultSet = await rdbStore.query(predicates);
+      return PlanDao.parseResultSet(resultSet);
+    } catch (err) {
+      console.error(`[PlanDao] searchAllPlansPaged failed: ${JSON.stringify(err)}`);
+      return [];
     }
-    predicates.orderByDesc(PlanEntity.CREATED_AT);
-    predicates.limitAs(page.limit);
-    predicates.offsetAs(page.offset);
-
-    let resultSet = await rdbStore.query(predicates);
-    return PlanDao.parseResultSet(resultSet);
   }
 
   /**
@@ -295,15 +360,23 @@ export class PlanDao {
     const rdbStore = RdbHelper.getInstance().getRdbStore();
     if (!rdbStore) return;
 
-    const valueBucket: ValuesBucket = {};
-    valueBucket[PlanEntity.DEL_FLAG] = 1; // 鏍囪涓哄垹闄?
-    valueBucket[PlanEntity.DELETE_TIME] = new Date().getTime(); // 璁板綍鍒犻櫎鏃堕棿
+    try {
+      const valueBucket: ValuesBucket = {};
+      valueBucket[PlanEntity.DEL_FLAG] = 1; // 鏍囪涓哄垹闄?
+      valueBucket[PlanEntity.DELETE_TIME] = new Date().getTime(); // 璁板綍鍒犻櫎鏃堕棿
 
-    let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
-    predicates.equalTo(PlanEntity.ID, id);
+      let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
+      predicates.equalTo(PlanEntity.ID, id);
 
-    await rdbStore.update(valueBucket, predicates);
-    PlanDao.markPlanDirty(id);
+      await rdbStore.update(valueBucket, predicates);
+      PlanDao.markPlanDirty(id);
+    } catch (err) {
+      console.error(`[PlanDao] softDeletePlan failed: ${JSON.stringify(err)}`);
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new Error(`soft_delete_plan_failed:${JSON.stringify(err)}`);
+    }
   }
 
   /**
@@ -313,14 +386,22 @@ export class PlanDao {
     const rdbStore = RdbHelper.getInstance().getRdbStore();
     if (!rdbStore) return;
 
-    const valueBucket: ValuesBucket = {};
-    valueBucket[PlanEntity.START_DATE] = date;
+    try {
+      const valueBucket: ValuesBucket = {};
+      valueBucket[PlanEntity.START_DATE] = date;
 
-    let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
-    predicates.equalTo(PlanEntity.ID, id);
+      let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
+      predicates.equalTo(PlanEntity.ID, id);
 
-    await rdbStore.update(valueBucket, predicates);
-    PlanDao.markPlanDirty(id);
+      await rdbStore.update(valueBucket, predicates);
+      PlanDao.markPlanDirty(id);
+    } catch (err) {
+      console.error(`[PlanDao] updateStartDate failed: ${JSON.stringify(err)}`);
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new Error(`update_start_date_failed:${JSON.stringify(err)}`);
+    }
   }
   /**
    * [Priority 2 鏂板] 鏇存柊璁″垝鍚嶇О
@@ -329,28 +410,44 @@ export class PlanDao {
     const rdbStore = RdbHelper.getInstance().getRdbStore();
     if (!rdbStore) return;
 
-    const valueBucket: ValuesBucket = {};
-    valueBucket[PlanEntity.NAME] = name;
+    try {
+      const valueBucket: ValuesBucket = {};
+      valueBucket[PlanEntity.NAME] = name;
 
-    let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
-    predicates.equalTo(PlanEntity.ID, id);
+      let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
+      predicates.equalTo(PlanEntity.ID, id);
 
-    await rdbStore.update(valueBucket, predicates);
-    PlanDao.markPlanDirty(id);
+      await rdbStore.update(valueBucket, predicates);
+      PlanDao.markPlanDirty(id);
+    } catch (err) {
+      console.error(`[PlanDao] updatePlanName failed: ${JSON.stringify(err)}`);
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new Error(`update_plan_name_failed:${JSON.stringify(err)}`);
+    }
   }
 
   public static async updateAutoAmapRoute(id: number, enabled: boolean): Promise<void> {
     const rdbStore = RdbHelper.getInstance().getRdbStore();
     if (!rdbStore) return;
 
-    const valueBucket: ValuesBucket = {};
-    valueBucket[PlanEntity.ENABLE_AUTO_AMAP_ROUTE] = enabled ? 1 : 0;
+    try {
+      const valueBucket: ValuesBucket = {};
+      valueBucket[PlanEntity.ENABLE_AUTO_AMAP_ROUTE] = enabled ? 1 : 0;
 
-    let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
-    predicates.equalTo(PlanEntity.ID, id);
+      let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
+      predicates.equalTo(PlanEntity.ID, id);
 
-    await rdbStore.update(valueBucket, predicates);
-    PlanDao.markPlanDirty(id);
+      await rdbStore.update(valueBucket, predicates);
+      PlanDao.markPlanDirty(id);
+    } catch (err) {
+      console.error(`[PlanDao] updateAutoAmapRoute failed: ${JSON.stringify(err)}`);
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new Error(`update_auto_amap_route_failed:${JSON.stringify(err)}`);
+    }
   }
   // --- 鍦?PlanDao 绫诲唴閮ㄦ坊鍔?---
 

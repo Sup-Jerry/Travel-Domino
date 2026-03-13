@@ -166,14 +166,18 @@ struct PlanSearchPage {
 
   private openPlan(item: PlanItem): void {
     hilog.info(0x0000, TAG, `[PLAN_SEARCH][select] planId=${item.id}, title=${item.title}`);
-    router.pushUrl({
-      url: 'pages/Index',
-      params: {
-        planId: item.id,
-        title: item.title,
-        isNewPlan: false
-      }
-    });
+    try {
+      this.getUIContext().getRouter().pushUrl({
+        url: 'pages/Index',
+        params: {
+          planId: item.id,
+          title: item.title,
+          isNewPlan: false
+        }
+      });
+    } catch (error) {
+      hilog.warn(0x0000, TAG, `[PLAN_SEARCH][open_failed] planId=${item.id}, reason=${JSON.stringify(error)}`);
+    }
   }
 
   @Builder
@@ -318,6 +322,7 @@ struct PlanSearchPage {
     .backgroundColor(this.getThemePalette().pageBg);
   }
 }
+
 
 
 

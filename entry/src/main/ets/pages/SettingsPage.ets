@@ -121,6 +121,14 @@ struct SettingsPage {
     return ThemeCenter.getPalette(this.effectiveTheme);
   }
 
+  private safeShowToast(message: string): void {
+    try {
+      promptAction.openToast({ message: message });
+    } catch (error) {
+      hilog.warn(0x0000, TAG, `[TOAST_FAIL] reason=${JSON.stringify(error)}`);
+    }
+  }
+
   private getThemeModeText(): string {
     if (this.themeMode === 'dark') {
       return '深色';
@@ -132,7 +140,7 @@ struct SettingsPage {
   }
 
   private showThemeModeDialog(): void {
-    AlertDialog.show({
+    this.getUIContext().showAlertDialog({
       title: '主题模式',
       message: '选择应用主题模式',
       buttons: [
@@ -164,10 +172,10 @@ struct SettingsPage {
     const pref = PreferenceManager.getInstance();
     await pref.setThemeMode(mode);
     this.themeMode = mode;
-    const context = getContext(this) as common.Context;
+    const context = this.getUIContext().getHostContext() as common.Context;
     const effective = ThemeCenter.applyThemeMode(context, mode);
     this.effectiveTheme = effective;
-    promptAction.showToast({ message: `主题已切换为${this.getThemeModeText()}` });
+    this.safeShowToast(`主题已切换为${this.getThemeModeText()}`);
   }
 
   aboutToAppear(): void {
@@ -180,9 +188,7 @@ struct SettingsPage {
       await this.reloadSettingsState();
     } catch (error) {
       console.error(`SettingsPage load failed: ${JSON.stringify(error)}`);
-      promptAction.showToast({
-        message: '设置加载失败，已使用默认值'
-      });
+      this.safeShowToast('设置加载失败，已使用默认值');
     } finally {
       this.loading = false;
     }
@@ -198,14 +204,10 @@ struct SettingsPage {
 
       this.enableAmapRouteApi = await pref.isAmapRouteApiEnabled();
 
-      promptAction.showToast({
-        message: this.enableAmapRouteApi ? '已开启高德路线 API' : '已关闭高德路线 API'
-      });
+      this.safeShowToast(this.enableAmapRouteApi ? '已开启高德路线 API' : '已关闭高德路线 API');
     } catch (error) {
       this.enableAmapRouteApi = oldValue;
-      promptAction.showToast({
-        message: '高德路线 API 设置失败'
-      });
+      this.safeShowToast('高德路线 API 设置失败');
     }
   }
 
@@ -223,14 +225,10 @@ struct SettingsPage {
       );
       this.showArchiveTip = hideArchiveTip !== true;
 
-      promptAction.showToast({
-        message: this.showArchiveTip ? '已开启归档提示弹窗' : '已关闭归档提示弹窗'
-      });
+      this.safeShowToast(this.showArchiveTip ? '已开启归档提示弹窗' : '已关闭归档提示弹窗');
     } catch (error) {
       this.showArchiveTip = oldValue;
-      promptAction.showToast({
-        message: '归档提示弹窗设置失败'
-      });
+      this.safeShowToast('归档提示弹窗设置失败');
     }
   }
 
@@ -248,14 +246,10 @@ struct SettingsPage {
       );
       this.showDeleteTip = hideDeleteTip !== true;
 
-      promptAction.showToast({
-        message: this.showDeleteTip ? '已开启删除提示弹窗' : '已关闭删除提示弹窗'
-      });
+      this.safeShowToast(this.showDeleteTip ? '已开启删除提示弹窗' : '已关闭删除提示弹窗');
     } catch (error) {
       this.showDeleteTip = oldValue;
-      promptAction.showToast({
-        message: '删除提示弹窗设置失败'
-      });
+      this.safeShowToast('删除提示弹窗设置失败');
     }
   }
 
@@ -277,16 +271,12 @@ struct SettingsPage {
       this.minEventDurationInput = `${stored}`;
       AppStorage.setOrCreate(AppStorageKeys.MIN_EVENT_DURATION, stored);
       hilog.info(0x0000, TAG, `[SETTING_UI][min_duration_saved] value=${stored}`);
-      promptAction.showToast({
-        message: `已设置最小时长 ${stored} 分钟`
-      });
+      this.safeShowToast(`已设置最小时长 ${stored} 分钟`);
     } catch (error) {
       this.minEventDuration = oldValue;
       this.minEventDurationInput = `${oldValue}`;
       hilog.warn(0x0000, TAG, `[SETTING_UI][min_duration_save_failed] reason=${JSON.stringify(error)}`);
-      promptAction.showToast({
-        message: '最小时长保存失败'
-      });
+      this.safeShowToast('最小时长保存失败');
     }
   }
 
@@ -297,14 +287,10 @@ struct SettingsPage {
       const pref = PreferenceManager.getInstance();
       await pref.setIdleGapDetectionEnabled(value);
       this.enableIdleGapDetection = await pref.getIdleGapDetectionEnabled();
-      promptAction.showToast({
-        message: this.enableIdleGapDetection ? '已开启空闲时间检测' : '已关闭空闲时间检测'
-      });
+      this.safeShowToast(this.enableIdleGapDetection ? '已开启空闲时间检测' : '已关闭空闲时间检测');
     } catch (error) {
       this.enableIdleGapDetection = oldValue;
-      promptAction.showToast({
-        message: '空闲时间检测开关保存失败'
-      });
+      this.safeShowToast('空闲时间检测开关保存失败');
     }
   }
 
@@ -322,15 +308,11 @@ struct SettingsPage {
       const stored = await pref.getIdleGapTriggerMinutes();
       this.idleGapTriggerMinutes = stored;
       this.idleGapTriggerInput = `${stored}`;
-      promptAction.showToast({
-        message: `空闲检测触发阈值已设置为 ${stored} 分钟`
-      });
+      this.safeShowToast(`空闲检测触发阈值已设置为 ${stored} 分钟`);
     } catch (error) {
       this.idleGapTriggerMinutes = oldValue;
       this.idleGapTriggerInput = `${oldValue}`;
-      promptAction.showToast({
-        message: '空闲检测触发阈值保存失败'
-      });
+      this.safeShowToast('空闲检测触发阈值保存失败');
     }
   }
 
@@ -343,20 +325,16 @@ struct SettingsPage {
 
       await this.reloadSettingsState();
 
-      promptAction.showToast({
-        message: '已恢复所有提示弹窗'
-      });
+      this.safeShowToast('已恢复所有提示弹窗');
     } catch (error) {
-      promptAction.showToast({
-        message: '恢复提示弹窗失败'
-      });
+      this.safeShowToast('恢复提示弹窗失败');
     }
   }
 
   private async reloadSettingsState(): Promise<void> {
     const pref = PreferenceManager.getInstance();
     this.themeMode = ThemeCenter.normalizeThemeMode(await pref.getThemeMode());
-    const context = getContext(this) as common.Context;
+    const context = this.getUIContext().getHostContext() as common.Context;
     this.effectiveTheme = ThemeCenter.applyThemeMode(context, this.themeMode);
 
     this.enableAmapRouteApi = await pref.isAmapRouteApiEnabled();
@@ -637,6 +615,8 @@ struct SettingsPage {
     .backgroundColor(this.getThemePalette().pageBg);
   }
 }
+
+
 
 
 

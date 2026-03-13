@@ -6,18 +6,25 @@ export struct PlanJsonExportDialog {
   controller: CustomDialogController;
   jsonText: string = '';
 
+  private safeShowToast(message: string): void {
+    try {
+      promptAction.openToast({ message: message });
+    } catch (_error) {
+    }
+  }
+
   private async copyJson(): Promise<void> {
     if (!this.jsonText || this.jsonText.length <= 0) {
-      promptAction.showToast({ message: '没有可复制的内容' });
+      this.safeShowToast('没有可复制的内容');
       return;
     }
     try {
-      const data = pasteboard.createPlainTextData(this.jsonText);
+      const data = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, this.jsonText);
       const board = pasteboard.getSystemPasteboard();
       await board.setData(data);
-      promptAction.showToast({ message: 'JSON 已复制到剪贴板' });
+      this.safeShowToast('JSON 已复制到剪贴板');
     } catch (_error) {
-      promptAction.showToast({ message: '复制失败，请手动长按复制' });
+      this.safeShowToast('复制失败，请手动长按复制');
     }
   }
 
@@ -66,6 +73,7 @@ export struct PlanJsonExportDialog {
     .width('92%')
   }
 }
+
 
 
 

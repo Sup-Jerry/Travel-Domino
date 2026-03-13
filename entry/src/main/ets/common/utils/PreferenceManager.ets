@@ -95,9 +95,15 @@ export class PreferenceManager {
       throw new Error(msg);
     }
 
-    await this.pref.put(key, value);
-    await this.pref.flush();
-    hilog.info(0x0000, TAG, `Preference saved, key_len=${key.length}, value_type=${typeof value}`);
+    try {
+      await this.pref.put(key, value);
+      await this.pref.flush();
+      hilog.info(0x0000, TAG, `Preference saved, key_len=${key.length}, value_type=${typeof value}`);
+    } catch (error) {
+      const reason = this.sanitizeError(error);
+      hilog.error(0x0000, TAG, `Preference save failed, key_len=${key.length}, reason=${reason}`);
+      throw new Error(`Preference save failed: ${reason}`);
+    }
   }
 
   public async getValue(key: string, defaultValue: preferences.ValueType): Promise<preferences.ValueType> {
@@ -107,9 +113,15 @@ export class PreferenceManager {
       throw new Error(msg);
     }
 
-    const value = await this.pref.get(key, defaultValue);
-    hilog.info(0x0000, TAG, `Preference loaded, key_len=${key.length}, value_type=${typeof value}`);
-    return value;
+    try {
+      const value = await this.pref.get(key, defaultValue);
+      hilog.info(0x0000, TAG, `Preference loaded, key_len=${key.length}, value_type=${typeof value}`);
+      return value;
+    } catch (error) {
+      const reason = this.sanitizeError(error);
+      hilog.error(0x0000, TAG, `Preference load failed, key_len=${key.length}, reason=${reason}`);
+      throw new Error(`Preference load failed: ${reason}`);
+    }
   }
 
   // 新增：读取高德路线 API 开关

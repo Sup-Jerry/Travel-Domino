@@ -19,6 +19,17 @@ export struct GapResolutionDialog {
   @State gapList: EventEntity[] = [];
   @State candidates: EventEntity[] = [];
 
+  private safeShowToast(message: string, duration?: number): void {
+    try {
+      if (typeof duration === 'number') {
+        promptAction.openToast({ message: message, duration: duration });
+      } else {
+        promptAction.openToast({ message: message });
+      }
+    } catch (_error) {
+    }
+  }
+
   aboutToAppear() {
     this.refreshGaps();
   }
@@ -481,7 +492,7 @@ export struct GapResolutionDialog {
                 }
 
                 if (this.selectedIds.size === 0) {
-                  promptAction.showToast({ message: '请先选择要分配时间的地点', duration: 2000 });
+                  this.safeShowToast('请先选择要分配时间的地点', 2000);
                   return;
                 }
 
@@ -493,15 +504,12 @@ export struct GapResolutionDialog {
                 );
 
                 if (!this.hasPositiveAllocation(map)) {
-                  promptAction.showToast({
-                    message: '所选地点后续行程过紧，当前无法分配时间',
-                    duration: 2200
-                  });
+                  this.safeShowToast('所选地点后续行程过紧，当前无法分配时间', 2200);
                   return;
                 }
 
                 await this.vm.applyDistribution(map);
-                promptAction.showToast({ message: '时间分配成功', duration: 2000 });
+                this.safeShowToast('时间分配成功', 2000);
 
                 this.refreshGaps();
                 if (this.gapList.length === 0) {
@@ -523,6 +531,7 @@ export struct GapResolutionDialog {
     .constraintSize({ maxHeight: '80%' })
   }
 }
+
 
 
 

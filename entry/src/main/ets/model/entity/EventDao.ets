@@ -50,16 +50,21 @@ export class EventDao {
     if (!rdbStore || eventId <= 0) {
       return -1;
     }
-    let predicates = new relationalStore.RdbPredicates(EventEntity.TABLE_NAME);
-    predicates.equalTo(EventEntity.ID, eventId);
-    const resultSet = await rdbStore.query(predicates);
     try {
-      if (!resultSet.goToFirstRow()) {
-        return -1;
+      let predicates = new relationalStore.RdbPredicates(EventEntity.TABLE_NAME);
+      predicates.equalTo(EventEntity.ID, eventId);
+      const resultSet = await rdbStore.query(predicates);
+      try {
+        if (!resultSet.goToFirstRow()) {
+          return -1;
+        }
+        return resultSet.getLong(resultSet.getColumnIndex(EventEntity.PLAN_ID));
+      } finally {
+        resultSet.close();
       }
-      return resultSet.getLong(resultSet.getColumnIndex(EventEntity.PLAN_ID));
-    } finally {
-      resultSet.close();
+    } catch (err) {
+      hilog.warn(0x0000, TAG, `[resolvePlanIdByEventId] failed eventId=${eventId}, err=${JSON.stringify(err)}`);
+      return -1;
     }
   }
 
@@ -87,8 +92,9 @@ export class EventDao {
     const rdbStore = RdbHelper.getInstance().getRdbStore();
     if (!rdbStore) return -1;
 
-    const valueBucket: ValuesBucket = {};
-    valueBucket[EventEntity.PLAN_ID] = planId;
+    try {
+      const valueBucket: ValuesBucket = {};
+      valueBucket[EventEntity.PLAN_ID] = planId;
 
     // 鍘熸湁瀛楁...
     valueBucket[EventEntity.NAME] = item.name;
@@ -118,9 +124,13 @@ export class EventDao {
     valueBucket[EventEntity.ACTUAL_END_TIME] = item.actualEndTime || 0;
     valueBucket[EventEntity.COMPLETION_STATUS] = item.completionStatus || 0;
 
-    const rowId = await rdbStore.insert(EventEntity.TABLE_NAME, valueBucket);
-    EventDao.markPlanDirty(planId);
-    return rowId;
+      const rowId = await rdbStore.insert(EventEntity.TABLE_NAME, valueBucket);
+      EventDao.markPlanDirty(planId);
+      return rowId;
+    } catch (err) {
+      hilog.error(0x0000, TAG, `[insertEvent] failed planId=${planId}, err=${JSON.stringify(err)}`);
+      return -1;
+    }
   }
 
   /**
@@ -258,56 +268,59 @@ export class EventDao {
     const rdbStore = RdbHelper.getInstance().getRdbStore();
     if (!rdbStore) return [];
 
-    let predicates = new relationalStore.RdbPredicates(EventEntity.TABLE_NAME);
-    predicates.equalTo(EventEntity.PLAN_ID, planId);
-    predicates.equalTo(EventEntity.DEL_FLAG, 0); // [鏂板] 鍙煡鏈垹闄ょ殑
-    predicates.orderByAsc(EventEntity.DAY_OFFSET);
-    predicates.orderByAsc(EventEntity.SORT_ORDER);
-
-    let resultSet = await rdbStore.query(predicates);
-    let resultList: TravelPlanItem[] = [];
-
-
     try {
+      let predicates = new relationalStore.RdbPredicates(EventEntity.TABLE_NAME);
+      predicates.equalTo(EventEntity.PLAN_ID, planId);
+      predicates.equalTo(EventEntity.DEL_FLAG, 0); // [鏂板] 鍙煡鏈垹闄ょ殑
+      predicates.orderByAsc(EventEntity.DAY_OFFSET);
+      predicates.orderByAsc(EventEntity.SORT_ORDER);
+      let resultSet = await rdbStore.query(predicates);
+      let resultList: TravelPlanItem[] = [];
 
-    while (resultSet.goToNextRow()) {
-      const rawLock = resultSet.getLong(resultSet.getColumnIndex(EventEntity.LOCK_STATUS));
-      const lockStatus = rawLock >= 1 ? 1 : 0;
+      try {
+        while (resultSet.goToNextRow()) {
+          const rawLock = resultSet.getLong(resultSet.getColumnIndex(EventEntity.LOCK_STATUS));
+          const lockStatus = rawLock >= 1 ? 1 : 0;
 
-      resultList.push({
-        id: resultSet.getLong(resultSet.getColumnIndex(EventEntity.ID)),
-        name: resultSet.getString(resultSet.getColumnIndex(EventEntity.NAME)),
-        note: resultSet.getString(resultSet.getColumnIndex(EventEntity.NOTE)),
-        travelMode: resultSet.getLong(resultSet.getColumnIndex(EventEntity.TRAVEL_MODE)),
-        type: (lockStatus > 0) ? 'ANCHOR' : 'FLOW',
-        lockStatus: lockStatus,
-        itemType: resultSet.getLong(resultSet.getColumnIndex(EventEntity.TYPE)),
-        priority: resultSet.getLong(resultSet.getColumnIndex(EventEntity.PRIORITY)),
-        duration: resultSet.getLong(resultSet.getColumnIndex(EventEntity.DURATION)),
-        preTravelMinutes: resultSet.getLong(resultSet.getColumnIndex(EventEntity.PRE_TRAVEL_MINUTES)),
-        isTravelManual: resultSet.getLong(resultSet.getColumnIndex(EventEntity.IS_TRAVEL_MANUAL)),
+          resultList.push({
+            id: resultSet.getLong(resultSet.getColumnIndex(EventEntity.ID)),
+            name: resultSet.getString(resultSet.getColumnIndex(EventEntity.NAME)),
+            note: resultSet.getString(resultSet.getColumnIndex(EventEntity.NOTE)),
+            travelMode: resultSet.getLong(resultSet.getColumnIndex(EventEntity.TRAVEL_MODE)),
+            type: (lockStatus > 0) ? 'ANCHOR' : 'FLOW',
+            lockStatus: lockStatus,
+            itemType: resultSet.getLong(resultSet.getColumnIndex(EventEntity.TYPE)),
+            priority: resultSet.getLong(resultSet.getColumnIndex(EventEntity.PRIORITY)),
+            duration: resultSet.getLong(resultSet.getColumnIndex(EventEntity.DURATION)),
+            preTravelMinutes: resultSet.getLong(resultSet.getColumnIndex(EventEntity.PRE_TRAVEL_MINUTES)),
+            isTravelManual: resultSet.getLong(resultSet.getColumnIndex(EventEntity.IS_TRAVEL_MANUAL)),
 
-        fixedStartTime: resultSet.getString(resultSet.getColumnIndex(EventEntity.FIXED_START_TIME)),
-        dayOffset: resultSet.getLong(resultSet.getColumnIndex(EventEntity.DAY_OFFSET)),
-        status: resultSet.getLong(resultSet.getColumnIndex(EventEntity.STATUS)),
-        sortOrder: resultSet.getLong(resultSet.getColumnIndex(EventEntity.SORT_ORDER)),
-        latitude: resultSet.getDouble(resultSet.getColumnIndex(EventEntity.LATITUDE)),
-        longitude: resultSet.getDouble(resultSet.getColumnIndex(EventEntity.LONGITUDE)),
-        source: resultSet.getLong(resultSet.getColumnIndex(EventEntity.SOURCE)),
+            fixedStartTime: resultSet.getString(resultSet.getColumnIndex(EventEntity.FIXED_START_TIME)),
+            dayOffset: resultSet.getLong(resultSet.getColumnIndex(EventEntity.DAY_OFFSET)),
+            status: resultSet.getLong(resultSet.getColumnIndex(EventEntity.STATUS)),
+            sortOrder: resultSet.getLong(resultSet.getColumnIndex(EventEntity.SORT_ORDER)),
+            latitude: resultSet.getDouble(resultSet.getColumnIndex(EventEntity.LATITUDE)),
+            longitude: resultSet.getDouble(resultSet.getColumnIndex(EventEntity.LONGITUDE)),
+            source: resultSet.getLong(resultSet.getColumnIndex(EventEntity.SOURCE)),
 
-        // --- [Round 3 琛ュ叏] ---
-        address: resultSet.getString(resultSet.getColumnIndex(EventEntity.ADDRESS)),
-        aiReasoning: resultSet.getString(resultSet.getColumnIndex(EventEntity.AI_REASONING)),
-        groupId: resultSet.getLong(resultSet.getColumnIndex(EventEntity.GROUP_ID)),
-        delFlag: resultSet.getLong(resultSet.getColumnIndex(EventEntity.DEL_FLAG)),
-        actualStartTime: resultSet.getLong(resultSet.getColumnIndex(EventEntity.ACTUAL_START_TIME)),
-        actualEndTime: resultSet.getLong(resultSet.getColumnIndex(EventEntity.ACTUAL_END_TIME)),
-        completionStatus: resultSet.getLong(resultSet.getColumnIndex(EventEntity.COMPLETION_STATUS))
-      });
+            // --- [Round 3 琛ュ叏] ---
+            address: resultSet.getString(resultSet.getColumnIndex(EventEntity.ADDRESS)),
+            aiReasoning: resultSet.getString(resultSet.getColumnIndex(EventEntity.AI_REASONING)),
+            groupId: resultSet.getLong(resultSet.getColumnIndex(EventEntity.GROUP_ID)),
+            delFlag: resultSet.getLong(resultSet.getColumnIndex(EventEntity.DEL_FLAG)),
+            actualStartTime: resultSet.getLong(resultSet.getColumnIndex(EventEntity.ACTUAL_START_TIME)),
+            actualEndTime: resultSet.getLong(resultSet.getColumnIndex(EventEntity.ACTUAL_END_TIME)),
+            completionStatus: resultSet.getLong(resultSet.getColumnIndex(EventEntity.COMPLETION_STATUS))
+          });
+        }
+      } finally {
+        resultSet.close();
+      }
+      return resultList;
+    } catch (err) {
+      hilog.error(0x0000, TAG, `[getAllEvents] failed planId=${planId}, err=${JSON.stringify(err)}`);
+      return [];
     }
-    } finally {  resultSet.close();
-    return resultList;
-  }
   }
 
   public static async updateDayOffset(id: number, dayOffset: number) {
@@ -354,7 +367,10 @@ export class EventDao {
       }
     } catch (err) {
       hilog.error(0x0000, TAG, `Batch update failed: ${JSON.stringify(err)}`);
-      rdbStore.rollBack();
+      try {
+        rdbStore.rollBack();
+      } catch (_rollbackErr) {
+      }
     }
   }
 
@@ -365,16 +381,24 @@ export class EventDao {
     const rdbStore = RdbHelper.getInstance().getRdbStore();
     if (!rdbStore) return;
 
-    const bucket: ValuesBucket = {};
-    bucket[column] = value as number | string | boolean;
+    try {
+      const bucket: ValuesBucket = {};
+      bucket[column] = value as number | string | boolean;
 
-    let predicates = new relationalStore.RdbPredicates(EventEntity.TABLE_NAME);
-    predicates.equalTo(EventEntity.ID, id);
+      let predicates = new relationalStore.RdbPredicates(EventEntity.TABLE_NAME);
+      predicates.equalTo(EventEntity.ID, id);
 
-    await rdbStore.update(bucket, predicates);
-    const resolvedPlanId = planIdHint > 0 ? planIdHint : await EventDao.resolvePlanIdByEventId(id);
-    if (resolvedPlanId > 0) {
-      EventDao.markPlanDirty(resolvedPlanId);
+      await rdbStore.update(bucket, predicates);
+      const resolvedPlanId = planIdHint > 0 ? planIdHint : await EventDao.resolvePlanIdByEventId(id);
+      if (resolvedPlanId > 0) {
+        EventDao.markPlanDirty(resolvedPlanId);
+      }
+    } catch (err) {
+      hilog.error(0x0000, TAG, `[updateSingleField] failed id=${id}, column=${column}, err=${JSON.stringify(err)}`);
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new Error(`[updateSingleField] failed id=${id}, column=${column}`);
     }
   }
 
@@ -382,19 +406,27 @@ export class EventDao {
     const rdbStore = RdbHelper.getInstance().getRdbStore();
     if (!rdbStore || updates.length === 0) return;
 
-    const bucket: ValuesBucket = {};
-    for (let i = 0; i < updates.length; i++) {
-      const pair = updates[i];
-      bucket[pair.column] = pair.value;
-    }
+    try {
+      const bucket: ValuesBucket = {};
+      for (let i = 0; i < updates.length; i++) {
+        const pair = updates[i];
+        bucket[pair.column] = pair.value;
+      }
 
-    let predicates = new relationalStore.RdbPredicates(EventEntity.TABLE_NAME);
-    predicates.equalTo(EventEntity.ID, id);
+      let predicates = new relationalStore.RdbPredicates(EventEntity.TABLE_NAME);
+      predicates.equalTo(EventEntity.ID, id);
 
-    await rdbStore.update(bucket, predicates);
-    const resolvedPlanId = planIdHint > 0 ? planIdHint : await EventDao.resolvePlanIdByEventId(id);
-    if (resolvedPlanId > 0) {
-      EventDao.markPlanDirty(resolvedPlanId);
+      await rdbStore.update(bucket, predicates);
+      const resolvedPlanId = planIdHint > 0 ? planIdHint : await EventDao.resolvePlanIdByEventId(id);
+      if (resolvedPlanId > 0) {
+        EventDao.markPlanDirty(resolvedPlanId);
+      }
+    } catch (err) {
+      hilog.error(0x0000, TAG, `[updateFields] failed id=${id}, err=${JSON.stringify(err)}`);
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new Error(`[updateFields] failed id=${id}`);
     }
   }
 
@@ -535,24 +567,31 @@ export class EventDao {
   public static async hardDeleteEvent(id: number): Promise<void> {
     const rdbStore = RdbHelper.getInstance().getRdbStore();
     if (!rdbStore) return;
-
-    let queryPredicates = new relationalStore.RdbPredicates(EventEntity.TABLE_NAME);
-    queryPredicates.equalTo(EventEntity.ID, id);
-    const resultSet = await rdbStore.query(queryPredicates);
-    let planId = 0;
     try {
-      if (resultSet.goToFirstRow()) {
-        planId = resultSet.getLong(resultSet.getColumnIndex(EventEntity.PLAN_ID));
+      let queryPredicates = new relationalStore.RdbPredicates(EventEntity.TABLE_NAME);
+      queryPredicates.equalTo(EventEntity.ID, id);
+      const resultSet = await rdbStore.query(queryPredicates);
+      let planId = 0;
+      try {
+        if (resultSet.goToFirstRow()) {
+          planId = resultSet.getLong(resultSet.getColumnIndex(EventEntity.PLAN_ID));
+        }
+      } finally {
+        resultSet.close();
       }
-    } finally {
-      resultSet.close();
-    }
 
-    let deletePredicates = new relationalStore.RdbPredicates(EventEntity.TABLE_NAME);
-    deletePredicates.equalTo(EventEntity.ID, id);
-    await rdbStore.delete(deletePredicates);
-    if (planId > 0) {
-      EventDao.markPlanDirty(planId);
+      let deletePredicates = new relationalStore.RdbPredicates(EventEntity.TABLE_NAME);
+      deletePredicates.equalTo(EventEntity.ID, id);
+      await rdbStore.delete(deletePredicates);
+      if (planId > 0) {
+        EventDao.markPlanDirty(planId);
+      }
+    } catch (err) {
+      hilog.error(0x0000, TAG, `[hardDeleteEvent] failed id=${id}, err=${JSON.stringify(err)}`);
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new Error(`[hardDeleteEvent] failed id=${id}`);
     }
   }
 }

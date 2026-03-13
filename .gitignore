@@ -12,3 +12,12 @@
 /.appanalyzer
 entry/src/main/ets/common/utils/AppConfig.ets
 entry/.hvigor/
+.tmp/
+.tmp_*.log
+.tmp_*/
+*.tmp.log
+build_debug.log
+buildarkts_debug.log
+buildarkts_fail.log
+buildarkts_run.log
+.app-size-prune-report-*.json

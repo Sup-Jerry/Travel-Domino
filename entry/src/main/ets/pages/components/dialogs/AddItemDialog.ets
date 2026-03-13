@@ -8,9 +8,6 @@ import { DateUtil } from '../../../common/utils/DateUtil';
 import { TimelineDatePolicy } from '../../../common/utils/TimelineDatePolicy';
 import { AppConfig } from '../../../common/utils/AppConfig';
 
-// 确保在 struct 外部定义
-PersistentStorage.PersistProp('lastAddItemMode', 0);
-
 interface PickedLocationData {
   lat: number;
   lng: number;
@@ -93,6 +90,14 @@ export struct AddItemDialog {
     return ThemeCenter.getPalette(this.effectiveTheme);
   }
 
+  private safeShowToast(message: string): void {
+    try {
+      promptAction.openToast({ message: message });
+    } catch (error) {
+      hilog.warn(0x0000, 'AddItemDialog', `[TOAST_FAIL] reason=${JSON.stringify(error)}`);
+    }
+  }
+
   aboutToAppear() {
     this.latitude = this.initLat; // ✅ 读入坐标
     this.longitude = this.initLng; // ✅ 读入坐标
@@ -165,20 +170,25 @@ export struct AddItemDialog {
   private async checkAndRequestPermission(): Promise<boolean> {
     let atManager = abilityAccessCtrl.createAtManager();
     let tokenID: number = 0;
+    try {
+      // 获取应用的 AppTokenId
+      const bundleInfo = await bundleManager.getBundleInfoForSelf(bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_APPLICATION);
+      tokenID = bundleInfo.appInfo.accessTokenId;
 
-    // 获取应用的 AppTokenId
-    const bundleInfo = await bundleManager.getBundleInfoForSelf(bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_APPLICATION);
-    tokenID = bundleInfo.appInfo.accessTokenId;
-
-    // 检查是否已经授权
-    let checkStatus = await atManager.checkAccessToken(tokenID, 'ohos.permission.LOCATION');
-    if (checkStatus === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED) {
-      return true;
+      // 检查是否已经授权
+      let checkStatus = await atManager.checkAccessToken(tokenID, 'ohos.permission.LOCATION');
+      if (checkStatus === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED) {
+        return true;
+      }
+    } catch (error) {
+      hilog.warn(0x0000, 'AddItemDialog', `[PERMISSION_CHECK_FAIL] reason=${JSON.stringify(error)}`);
+      this.safeShowToast('权限检查失败，请稍后再试');
+      return false;
     }
 
     // --- 弹窗 A: 应用级解释说明 (使用系统简单弹窗) ---
     return new Promise((resolve) => {
-      AlertDialog.show({
+      this.getUIContext().showAlertDialog({
         title: '定位权限申请',
         message: '为了能够自动定位到您当前位置，方便您快速选点，我们需要申请定位权限。',
         primaryButton: {
@@ -189,7 +199,7 @@ export struct AddItemDialog {
           value: '去授权',
           action: async () => {
             // --- 弹窗 B: 系统级官方授权窗 ---
-            let context = getContext(this) as common.UIAbilityContext;
+            let context = this.getUIContext().getHostContext() as common.UIAbilityContext;
             let results = await atManager.requestPermissionsFromUser(context, [
               'ohos.permission.LOCATION',
               'ohos.permission.APPROXIMATELY_LOCATION'
@@ -199,7 +209,7 @@ export struct AddItemDialog {
             if (results.authResults[0] === 0) {
               resolve(true);
             } else {
-              promptAction.showToast({ message: '未获得定位权限，地图将无法自动定位' });
+              this.safeShowToast('未获得定位权限，地图将无法自动定位');
               resolve(true); // 即使失败也让进地图，只是地图会停在默认位置
             }
           }
@@ -221,7 +231,7 @@ export struct AddItemDialog {
           .layoutWeight(1)
           .height(32)
           .onClick(() => {
-            animateTo({ duration: 300, curve: Curve.EaseInOut }, () => {
+            this.getUIContext().animateTo({ duration: 300, curve: Curve.EaseInOut }, () => {
               this.mode = 0;
             })
           })
@@ -234,7 +244,7 @@ export struct AddItemDialog {
           .layoutWeight(1)
           .height(32)
           .onClick(() => {
-            animateTo({ duration: 300, curve: Curve.EaseInOut }, () => {
+            this.getUIContext().animateTo({ duration: 300, curve: Curve.EaseInOut }, () => {
               this.mode = 1;
             })
           })
@@ -294,7 +304,7 @@ export struct AddItemDialog {
             .height(48)
             .onClick(async() => {
               if (!this.canUseMapPicker()) {
-                promptAction.showToast({ message: '地图能力未配置，可直接填写名称后保存' });
+                this.safeShowToast('地图能力未配置，可直接填写名称后保存');
                 return;
               }
               // 🛡️ 新增权限拦截
@@ -327,7 +337,7 @@ export struct AddItemDialog {
               this.controller.close();
 
               // 3. 跳转到地图页
-              router.pushUrl({
+              this.getUIContext().getRouter().pushUrl({
                 url: 'pages/MapPickerPage',
                 params: new MapPickerRouteParams(routeLat, routeLng, this.storageScopePlanId, centerSource, '')
               });
@@ -388,7 +398,7 @@ export struct AddItemDialog {
               const endRange = new Date(this.planStartDate || new Date());
               endRange.setFullYear(endRange.getFullYear() + 1);
 
-              DatePickerDialog.show({
+              this.getUIContext().showDatePickerDialog({
                 start: startRange,
                 end: endRange,
                 selected: this.startTime,
@@ -421,7 +431,7 @@ export struct AddItemDialog {
           .alignItems(HorizontalAlign.Start)
           .layoutWeight(1)
           .onClick(() => { // 🔴 修复点3：点击事件移到 Column，更容易点中
-            TimePickerDialog.show({
+            this.getUIContext().showTimePickerDialog({
               selected: this.startTime,
               useMilitaryTime: true,
               onAccept: (value: TimePickerResult) => {
@@ -464,7 +474,7 @@ export struct AddItemDialog {
           .alignItems(HorizontalAlign.End)
           .layoutWeight(1)
           .onClick(() => { // 🔴 修复点3：点击事件移到 Column
-            TimePickerDialog.show({
+            this.getUIContext().showTimePickerDialog({
               selected: this.endTime,
               useMilitaryTime: true,
               onAccept: (value) => {
@@ -571,7 +581,7 @@ export struct AddItemDialog {
               );
               this.controller.close();
             } else {
-              promptAction.showToast({ message: '地点名称不能为空' });
+              this.safeShowToast('地点名称不能为空');
             }
           })
       }
@@ -589,6 +599,8 @@ export struct AddItemDialog {
     .width('95%')
   }
 }
+
+
 
 
 
