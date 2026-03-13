@@ -974,7 +974,7 @@ export class TimelineViewModel {
   }
 
   private generateGroups() {
-    this.groupedEvents = [];
+    const nextGroups: DateGroup[] = [];
     const planBaseDayMs = TimelineDatePolicy.toDayStartMs(this.planStartDate > 0 ? this.planStartDate : Date.now());
 
     const scheduleEvents = this.events
@@ -1033,7 +1033,7 @@ export class TimelineViewModel {
           `[DAY_SHIFT_FIX][group_anchor] mode=offset_only, dayOffset=${renderDayOffset}, header=${headerStr}, eventId=${item.id}, eventName=${item.name}, dynamicStart=${item.dynamic_start_time}, actualStart=${item.actual_start_time}`
         );
 
-        this.groupedEvents.push(currentGroup);
+        nextGroups.push(currentGroup);
         lastDayOffset = renderDayOffset;
       }
 
@@ -1041,6 +1041,7 @@ export class TimelineViewModel {
         currentGroup.events.push(item);
       }
     });
+    this.groupedEvents = nextGroups;
   }
 
 

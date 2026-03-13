@@ -47,7 +47,7 @@ export struct AddItemDialog {
   controller: CustomDialogController;
   onConfirm: (name: string, duration: number, isSchedule: boolean, fixedTime?: string, dayOffset?: number,
     preTravel?: number, isHardLock?: boolean, note?: string, isMustVisit?: boolean, lat?: number,
-    lng?: number) => void = () => {
+    lng?: number) => Promise<void> = async () => {
   };
   @StorageProp('defaultDuration') globalDefaultDuration: number = 60;
   @State showTip: boolean = false;
@@ -570,16 +570,21 @@ export struct AddItemDialog {
               );
 
 
-              this.onConfirm(
-                this.name, this.duration, this.mode === 1,
-                this.mode === 1 ? fixedTimeStr : undefined,
-                this.mode === 1 ? finalDayOffset : 0,
-                this.mode === 1 ? this.preTravel : 0,
-                this.mode === 1 ? this.isAnchor : false,
-                this.note, this.isMustVisit,
-                finalLat, finalLng
-              );
-              this.controller.close();
+              try {
+                await this.onConfirm(
+                  this.name, this.duration, this.mode === 1,
+                  this.mode === 1 ? fixedTimeStr : undefined,
+                  this.mode === 1 ? finalDayOffset : 0,
+                  this.mode === 1 ? this.preTravel : 0,
+                  this.mode === 1 ? this.isAnchor : false,
+                  this.note, this.isMustVisit,
+                  finalLat, finalLng
+                );
+                this.controller.close();
+              } catch (error) {
+                hilog.error(0x0000, 'AddItemDialog', `[DIALOG_SAVE_FAIL] reason=${JSON.stringify(error)}`);
+                this.safeShowToast('保存失败，请重试');
+              }
             } else {
               this.safeShowToast('地点名称不能为空');
             }

@@ -1299,10 +1299,11 @@ struct Index {
                     actionAreaDistance: 60
                   }
                 })
-              })
+              }, (item: EventEntity) => `${item.id}_${item.sort_order}_${item.status}`)
             }
             .divider({ strokeWidth: 0 }) // 组内分割线 (可选)
-          })
+          }, (group: import('../viewmodel/TimelineViewModel').DateGroup) =>
+            `${group.dayOffset}_${group.actualDateMs}_${group.events.length}`)
 
           if (!this.vm.isArchived && this.vm.getSortedGaps().length > 0) {
             ListItem() {
