@@ -1,6 +1,12 @@
 import { NotificationGateway } from '../../common/utils/NotificationGateway';
 
-type NotifyDispatcher = (title: string, content: string) => Promise<void>;
+type NotifyDispatcher = (
+  title: string,
+  content: string,
+  targetPlanId?: number,
+  targetEventId?: number,
+  forceCompanionMode?: boolean
+) => Promise<void>;
 
 export class ReminderFacade {
   private static dispatcherForTest: NotifyDispatcher | null = null;
@@ -9,10 +15,22 @@ export class ReminderFacade {
     ReminderFacade.dispatcherForTest = dispatcher;
   }
 
-  public async updateScheduleNotification(title: string, content: string): Promise<void> {
+  public async updateScheduleNotification(
+    title: string,
+    content: string,
+    targetPlanId?: number,
+    targetEventId?: number,
+    forceCompanionMode?: boolean
+  ): Promise<void> {
     if (ReminderFacade.dispatcherForTest) {
-      return ReminderFacade.dispatcherForTest(title, content);
+      return ReminderFacade.dispatcherForTest(title, content, targetPlanId, targetEventId, forceCompanionMode);
     }
-    return NotificationGateway.updateScheduleNotification(title, content);
+    return NotificationGateway.updateScheduleNotification(
+      title,
+      content,
+      targetPlanId,
+      targetEventId,
+      forceCompanionMode
+    );
   }
 }

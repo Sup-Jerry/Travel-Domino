@@ -1,6 +1,6 @@
 ﻿// 文件路径: ets/viewmodel/TimelineViewModel.ets
 import { TravelPlanItem } from '../model/interface/IStandardEvent';
-import { EventDao, EventFieldUpdate } from '../model/entity/EventDao';
+import { ActiveEventSnapshot, EventDao, EventFieldUpdate } from '../model/entity/EventDao';
 import { EventEntity } from '../model/entity/EventEntity'; // 引入 Entity
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { DateUtil } from '../common/utils/DateUtil';
@@ -141,6 +141,13 @@ export interface CompanionContext {
   nextEvent: EventEntity | null;
   hint: ReflowHint | null;
   actions: CompanionActions;
+}
+
+export interface StartConflictInfo {
+  eventId: number;
+  planId: number;
+  name: string;
+  actualStartTime: number;
 }
 
 const TAG = 'TimelineViewModel';
@@ -2316,7 +2323,13 @@ export class TimelineViewModel {
       const nextIdx = this.getOrderedScheduleIndexById(active.id, schedule) + 1;
       const next = (nextIdx > 0 && nextIdx < schedule.length) ? schedule[nextIdx] : null;
       const nextTip = next ? `下个地点：${next.name}` : '今日行程即将结束';
-      void this.reminderFacade.updateScheduleNotification(`正在：${active.name}`, nextTip);
+      void this.reminderFacade.updateScheduleNotification(
+        `正在：${active.name}`,
+        nextTip,
+        this.planId,
+        active.id,
+        true
+      );
     }
 
     hilog.info(
@@ -2334,16 +2347,16 @@ export class TimelineViewModel {
   /**
    *
    */
-  public async updateActualTime(id: number, field: 'actual_start_time' | 'actual_end_time', timestamp: number): Promise<void> {
+  public async updateActualTime(id: number, field: 'actual_start_time' | 'actual_end_time', timestamp: number): Promise<boolean> {
     if (this.isArchived) {
-      return;
+      return false;
     }
     if (this.actualTimeMutationInFlight) {
       hilog.warn(0x0000, TAG, `[DUAL_MODE_ACCEPT][actual_time][blocked] reason=mutation_in_flight, id=${id}, field=${field}`);
-      return;
+      return false;
     }
     const target = this.events.find(e => e.id === id);
-    if (!target) return;
+    if (!target) return false;
 
     if (field === 'actual_start_time' && timestamp > 0) {
       if (this.hasPrecheckActiveConflict(id)) {
@@ -2352,7 +2365,16 @@ export class TimelineViewModel {
           TAG,
           `[DUAL_MODE_ACCEPT][actual_time][blocked] reason=active_exists_precheck, id=${id}, name=${target.name}, ts=${timestamp}`
         );
-        return;
+        return false;
+      }
+      const globalConflict = await this.getStartConflictInfo(id);
+      if (globalConflict) {
+        hilog.warn(
+          0x0000,
+          TAG,
+          `[DUAL_MODE_ACCEPT][actual_time][blocked] reason=active_exists_global, id=${id}, name=${target.name}, conflictEventId=${globalConflict.eventId}, conflictPlanId=${globalConflict.planId}`
+        );
+        return false;
       }
     }
 
@@ -2370,13 +2392,13 @@ export class TimelineViewModel {
           TAG,
           `[DUAL_MODE_ACCEPT][actual_time][blocked] reason=non_pending_start, id=${id}, name=${target.name}, status=${target.completion_status}, ts=${timestamp}`
         );
-        return;
+        return false;
       }
 
       try {
         const applied = await this.applyActualTimeMutation(target, id, field, timestamp);
         if (!applied) {
-          return;
+          return false;
         }
       } catch (error) {
         hilog.error(
@@ -2384,12 +2406,26 @@ export class TimelineViewModel {
           TAG,
           `[DUAL_MODE_ACCEPT][actual_time][rollback] id=${id}, name=${target.name}, field=${field}, reason=${JSON.stringify(error)}`
         );
-        return;
+        return false;
       }
       await this.postActualTimeMutationEffects(id, target, field, beforeNextTs, beforeNextName);
+      return true;
     } finally {
       this.actualTimeMutationInFlight = false;
     }
+  }
+
+  public async getStartConflictInfo(excludeEventId: number): Promise<StartConflictInfo | null> {
+    const active: ActiveEventSnapshot | null = await EventDao.findGlobalActiveEvent(excludeEventId);
+    if (!active) {
+      return null;
+    }
+    return {
+      eventId: active.eventId,
+      planId: active.planId,
+      name: active.name,
+      actualStartTime: active.actualStartTime
+    };
   }
 
   private async reloadGlobalRouteApiSwitch(): Promise<void> {

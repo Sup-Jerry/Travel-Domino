@@ -24,6 +24,29 @@ interface PlanPageWindow {
 export class PlanDao {
   private static dirtyPlanIds: Set<number> = new Set<number>();
 
+  private static async clearActiveRuntimeEventsForPlan(
+    rdbStore: relationalStore.RdbStore,
+    planId: number
+  ): Promise<void> {
+    const runtimeReset: ValuesBucket = {};
+    runtimeReset[EventEntity.ACTUAL_START_TIME] = 0;
+    runtimeReset[EventEntity.ACTUAL_END_TIME] = 0;
+    runtimeReset[EventEntity.COMPLETION_STATUS] = EventEntity.STATE_PENDING;
+
+    const predicates = new relationalStore.RdbPredicates(EventEntity.TABLE_NAME);
+    predicates.equalTo(EventEntity.PLAN_ID, planId)
+      .and()
+      .equalTo(EventEntity.STATUS, 1)
+      .and()
+      .equalTo(EventEntity.COMPLETION_STATUS, EventEntity.STATE_PENDING)
+      .and()
+      .greaterThan(EventEntity.ACTUAL_START_TIME, 0)
+      .and()
+      .lessThanOrEqualTo(EventEntity.ACTUAL_END_TIME, 0);
+
+    await rdbStore.update(runtimeReset, predicates);
+  }
+
   private static normalizePage(offset: number, limit: number): PlanPageWindow {
     const safeOffset = Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0;
     let safeLimit = Number.isFinite(limit) ? Math.floor(limit) : 40;
@@ -249,6 +272,7 @@ export class PlanDao {
     if (!rdbStore) return;
 
     try {
+      rdbStore.beginTransaction();
       const valueBucket: ValuesBucket = {};
       valueBucket[PlanEntity.STATUS] = status;
 
@@ -256,8 +280,16 @@ export class PlanDao {
       predicates.equalTo(PlanEntity.ID, id);
 
       await rdbStore.update(valueBucket, predicates);
+      if (status === 2) {
+        await PlanDao.clearActiveRuntimeEventsForPlan(rdbStore, id);
+      }
+      rdbStore.commit();
       PlanDao.markPlanDirty(id);
     } catch (err) {
+      try {
+        rdbStore.rollBack();
+      } catch (_rollbackErr) {
+      }
       console.error(`[PlanDao] updatePlanStatus failed: ${JSON.stringify(err)}`);
       if (err instanceof Error) {
         throw err;
@@ -361,6 +393,7 @@ export class PlanDao {
     if (!rdbStore) return;
 
     try {
+      rdbStore.beginTransaction();
       const valueBucket: ValuesBucket = {};
       valueBucket[PlanEntity.DEL_FLAG] = 1; // 鏍囪涓哄垹闄?
       valueBucket[PlanEntity.DELETE_TIME] = new Date().getTime(); // 璁板綍鍒犻櫎鏃堕棿
@@ -369,8 +402,14 @@ export class PlanDao {
       predicates.equalTo(PlanEntity.ID, id);
 
       await rdbStore.update(valueBucket, predicates);
+      await PlanDao.clearActiveRuntimeEventsForPlan(rdbStore, id);
+      rdbStore.commit();
       PlanDao.markPlanDirty(id);
     } catch (err) {
+      try {
+        rdbStore.rollBack();
+      } catch (_rollbackErr) {
+      }
       console.error(`[PlanDao] softDeletePlan failed: ${JSON.stringify(err)}`);
       if (err instanceof Error) {
         throw err;

@@ -3,6 +3,7 @@
 import { relationalStore, ValuesBucket } from '@kit.ArkData';
 import { RdbHelper } from '../../common/utils/RdbHelper';
 import { EventEntity } from './EventEntity';
+import { PlanEntity } from './PlanEntity';
 import { TravelPlanItem } from '../interface/IStandardEvent';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
@@ -28,6 +29,13 @@ export interface RuntimeTransitionResult {
   startTime: number;
   endTime: number;
   completionStatus: number;
+}
+
+export interface ActiveEventSnapshot {
+  eventId: number;
+  planId: number;
+  name: string;
+  actualStartTime: number;
 }
 
 export class EventDao {
@@ -82,6 +90,29 @@ export class EventDao {
       return '';
     }
     return name.length > limit ? `${name.slice(0, limit)}...` : name;
+  }
+
+  private static async isPlanUsableForRuntime(rdbStore: relationalStore.RdbStore, planId: number): Promise<boolean> {
+    if (!Number.isFinite(planId) || planId <= 0) {
+      return false;
+    }
+    try {
+      const predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
+      predicates.equalTo(PlanEntity.ID, planId);
+      const resultSet = await rdbStore.query(predicates);
+      try {
+        if (!resultSet.goToFirstRow()) {
+          return false;
+        }
+        const delFlag = resultSet.getLong(resultSet.getColumnIndex(PlanEntity.DEL_FLAG));
+        const status = resultSet.getLong(resultSet.getColumnIndex(PlanEntity.STATUS));
+        return delFlag !== 1 && status !== 2;
+      } finally {
+        resultSet.close();
+      }
+    } catch (_err) {
+      return false;
+    }
   }
 
   /**
@@ -472,19 +503,31 @@ export class EventDao {
         }
 
         let activePredicates = new relationalStore.RdbPredicates(EventEntity.TABLE_NAME);
-        activePredicates.equalTo(EventEntity.PLAN_ID, input.planId)
-          .and()
-          .equalTo(EventEntity.STATUS, 1)
+        activePredicates.equalTo(EventEntity.STATUS, 1)
           .and()
           .equalTo(EventEntity.COMPLETION_STATUS, EventEntity.STATE_PENDING)
           .and()
-          .greaterThan(EventEntity.ACTUAL_START_TIME, 0);
+          .greaterThan(EventEntity.ACTUAL_START_TIME, 0)
+          .and()
+          .lessThanOrEqualTo(EventEntity.ACTUAL_END_TIME, 0)
+          .and()
+          .equalTo(EventEntity.DEL_FLAG, 0);
         const activeSet = await rdbStore.query(activePredicates);
         let hasOtherActive = false;
+        const planUsableCache: Map<number, boolean> = new Map<number, boolean>();
         try {
           while (activeSet.goToNextRow()) {
             const activeId = activeSet.getLong(activeSet.getColumnIndex(EventEntity.ID));
+            const activePlanId = activeSet.getLong(activeSet.getColumnIndex(EventEntity.PLAN_ID));
             if (activeId !== input.eventId) {
+              let planUsable = planUsableCache.get(activePlanId);
+              if (planUsable === undefined) {
+                planUsable = await EventDao.isPlanUsableForRuntime(rdbStore, activePlanId);
+                planUsableCache.set(activePlanId, planUsable);
+              }
+              if (!planUsable) {
+                continue;
+              }
               hasOtherActive = true;
               break;
             }
@@ -550,6 +593,57 @@ export class EventDao {
       }
       hilog.error(0x0000, TAG, `[RUNTIME_TRANSITION][failed] plan=${input.planId}, event=${input.eventId}, transition=${input.transition}, reason=${JSON.stringify(err)}`);
       return { ok: false, reason: 'exception', startTime: currentStart, endTime: currentEnd, completionStatus: currentStatus };
+    }
+  }
+
+  public static async findGlobalActiveEvent(excludeEventId: number = -1): Promise<ActiveEventSnapshot | null> {
+    const rdbStore = RdbHelper.getInstance().getRdbStore();
+    if (!rdbStore) {
+      return null;
+    }
+    try {
+      const predicates = new relationalStore.RdbPredicates(EventEntity.TABLE_NAME);
+      predicates.equalTo(EventEntity.STATUS, 1)
+        .and()
+        .equalTo(EventEntity.COMPLETION_STATUS, EventEntity.STATE_PENDING)
+        .and()
+        .greaterThan(EventEntity.ACTUAL_START_TIME, 0)
+        .and()
+        .lessThanOrEqualTo(EventEntity.ACTUAL_END_TIME, 0)
+        .and()
+        .equalTo(EventEntity.DEL_FLAG, 0)
+        .orderByDesc(EventEntity.ACTUAL_START_TIME);
+      const resultSet = await rdbStore.query(predicates);
+      const planUsableCache: Map<number, boolean> = new Map<number, boolean>();
+      try {
+        while (resultSet.goToNextRow()) {
+          const eventId = resultSet.getLong(resultSet.getColumnIndex(EventEntity.ID));
+          if (excludeEventId > 0 && eventId === excludeEventId) {
+            continue;
+          }
+          const planId = resultSet.getLong(resultSet.getColumnIndex(EventEntity.PLAN_ID));
+          let planUsable = planUsableCache.get(planId);
+          if (planUsable === undefined) {
+            planUsable = await EventDao.isPlanUsableForRuntime(rdbStore, planId);
+            planUsableCache.set(planId, planUsable);
+          }
+          if (!planUsable) {
+            continue;
+          }
+          return {
+            eventId: eventId,
+            planId: planId,
+            name: resultSet.getString(resultSet.getColumnIndex(EventEntity.NAME)),
+            actualStartTime: resultSet.getLong(resultSet.getColumnIndex(EventEntity.ACTUAL_START_TIME))
+          };
+        }
+      } finally {
+        resultSet.close();
+      }
+      return null;
+    } catch (err) {
+      hilog.warn(0x0000, TAG, `[findGlobalActiveEvent] failed excludeEventId=${excludeEventId}, err=${JSON.stringify(err)}`);
+      return null;
     }
   }
   /**

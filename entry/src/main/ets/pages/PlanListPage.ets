@@ -16,6 +16,13 @@ import { TimelineViewModel } from '../viewmodel/TimelineViewModel';
 import { PlanAppService } from '../viewmodel/PlanAppService';
 import { DateUtil } from '../common/utils/DateUtil';
 import { AppTexts } from '../common/constants/AppTexts';
+import { AppStorageKeys } from '../common/constants/AppStorageKeys';
+
+interface NotificationNavPayload {
+  planId: number;
+  eventId: number;
+  forceCompanionMode: boolean;
+}
 
 @Entry
 @Component
@@ -23,6 +30,7 @@ struct PlanListPage {
   @State planList: PlanItem[] = [];
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
   @StorageLink('ArrivalReminderSeq') @Watch('onArrivalReminderSignal') arrivalReminderSeq: number = 0;
+  @StorageLink('NotificationNavSeq') @Watch('onNotificationNavSignal') notificationNavSeq: number = 0;
   @State exportJsonText: string = '';
   @State isArrivalDialogOpen: boolean = false;
   private arrivalVm: TimelineViewModel = new TimelineViewModel();
@@ -70,11 +78,16 @@ struct PlanListPage {
     void this.loadPlans();
     this.startGlobalArrivalEngine();
     this.consumeArrivalReminderOnHome();
+    this.consumeNotificationNavRoute();
     void this.ensureArrivalPermissionPromptOnFirstEntry();
   }
 
   onArrivalReminderSignal(): void {
     this.consumeArrivalReminderOnHome();
+  }
+
+  onNotificationNavSignal(): void {
+    this.consumeNotificationNavRoute();
   }
 
   aboutToDisappear() {
@@ -115,7 +128,7 @@ struct PlanListPage {
             value: '开始打卡',
             action: () => {
               this.isArrivalDialogOpen = false;
-              this.arrivalCoordinator.acknowledge(payload.eventId, 'start');
+              this.arrivalCoordinator.acknowledge(payload.eventId, 'open_page');
               this.getUIContext().getRouter().pushUrl({
                 url: 'pages/Index',
                 params: {
@@ -131,6 +144,42 @@ struct PlanListPage {
         });
       }
     });
+  }
+
+  private consumeNotificationNavRoute(): void {
+    const raw = AppStorage.get<string>(AppStorageKeys.NOTIFICATION_NAV_PAYLOAD) ?? '';
+    if (!raw || raw.length <= 0) {
+      return;
+    }
+    let payload: NotificationNavPayload | null = null;
+    try {
+      payload = JSON.parse(raw) as NotificationNavPayload;
+    } catch (_error) {
+      AppStorage.setOrCreate(AppStorageKeys.NOTIFICATION_NAV_PAYLOAD, '');
+      return;
+    }
+    if (!payload || !Number.isFinite(payload.planId) || payload.planId <= 0) {
+      AppStorage.setOrCreate(AppStorageKeys.NOTIFICATION_NAV_PAYLOAD, '');
+      return;
+    }
+    const navPayload = payload;
+    const plan = this.planList.find((item: PlanItem) => item.id === navPayload.planId);
+    const title = plan ? plan.title : '行程详情';
+    AppStorage.setOrCreate(AppStorageKeys.NOTIFICATION_NAV_PAYLOAD, '');
+    try {
+      this.getUIContext().getRouter().pushUrl({
+        url: 'pages/Index',
+        params: {
+          planId: navPayload.planId,
+          title: title,
+          isNewPlan: false,
+          reminderEventId: navPayload.eventId > 0 ? navPayload.eventId : -1,
+          forceCompanionMode: navPayload.forceCompanionMode === true
+        }
+      });
+    } catch (error) {
+      hilog.warn(0x0000, 'PlanListPage', `[NOTIFY][tap_route_failed] reason=${JSON.stringify(error)}`);
+    }
   }
 
   private async ensureArrivalPermissionPromptOnFirstEntry(): Promise<void> {
