@@ -10,6 +10,7 @@ import mapServiceImplTest from './MapServiceImpl.test';
 import arrivalReminderEngineTest from './ArrivalReminderEngine.test';
 import scheduleOrchestratorTest from './ScheduleOrchestrator.test';
 import reminderFacadeTest from './ReminderFacade.test';
+import timelineDatePolicyTest from './TimelineDatePolicy.test';
 export default function testsuite() {
   localUnitTest();
   automatedTest();
@@ -23,4 +24,5 @@ export default function testsuite() {
   arrivalReminderEngineTest();
   scheduleOrchestratorTest();
   reminderFacadeTest();
+  timelineDatePolicyTest();
 }

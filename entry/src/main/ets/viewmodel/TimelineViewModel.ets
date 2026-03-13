@@ -842,15 +842,15 @@ export class TimelineViewModel {
       }
     });
 
-    if (!hasFieldChanged && !hasDayOffsetChanged) {
+    this.calculateRealtimeSchedule();
+    // 结构层变化（新增进日程/暂存转日程/重排）即使求解字段不变，也要立即刷新分组列表。
+    this.generateGroups();
+    this.markScheduleChanged();
+    if (hasFieldChanged || hasDayOffsetChanged) {
+      this.events = [...this.events];
       return;
     }
-
-    this.calculateRealtimeSchedule();
-    if (hasDayOffsetChanged) {
-      this.generateGroups();
-      this.markScheduleChanged();
-    }
+    // 字段不变时仍触发一次可观察数组替换，确保页面立即重绘。
     this.events = [...this.events];
   }
 
@@ -2947,13 +2947,16 @@ export class TimelineViewModel {
         continue;
       }
 
-      if (curr.day_offset > newEntity.day_offset) {
+      const currDayOffset = TimelineDatePolicy.resolveEventDayOffset(curr);
+      const targetDayOffset = TimelineDatePolicy.resolveEventDayOffset(newEntity);
+
+      if (currDayOffset > targetDayOffset) {
         insertIndex = i;
         break;
       }
 
       // 只比较同一天的日程
-      if (curr.day_offset === newEntity.day_offset) {
+      if (currDayOffset === targetDayOffset) {
 
         // 获取当前项的比较时间 (优先用固定时间，没有则用推算时间)
         const currTimeStr = curr.fixed_start_time || curr.computed_time || '23:59';
