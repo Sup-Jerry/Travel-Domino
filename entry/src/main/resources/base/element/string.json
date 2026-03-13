@@ -1,0 +1,20 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "module description"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "description"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "travel domino"
+    },
+    {
+      "name": "location_reason",
+      "value": "我们需要您的位置权限，以便为您在地图上展示当前所在位置，并提供准确的周边搜索与路线规划服务。"
+    }
+  ]
+}

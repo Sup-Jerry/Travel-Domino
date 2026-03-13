@@ -1,0 +1,171 @@
+﻿// 路径: ets/common/utils/PreferenceManager.ets
+import { preferences } from '@kit.ArkData';
+import { common } from '@kit.AbilityKit';
+import { hilog } from '@kit.PerformanceAnalysisKit';
+
+const TAG = 'PreferenceManager';
+
+export class PreferenceManager {
+  private static instance: PreferenceManager;
+  private pref: preferences.Preferences | null = null;
+  private readonly STORE_NAME = 'TravelDominoPrefs';
+
+  static readonly KEY_SKIP_PLAN_DELETE_CONFIRM = 'skip_plan_delete_confirm';
+  static readonly KEY_HIDE_SOFT_DELETE_TIP = 'hideSoftDeleteTip';
+  static readonly KEY_HIDE_ARCHIVE_TIP = 'hideArchiveTip';
+  static readonly KEY_MIN_EVENT_DURATION = 'minEventDuration';
+  static readonly KEY_THEME_MODE = 'themeMode';
+  static readonly KEY_IDLE_GAP_DETECTION_ENABLED = 'idleGapDetectionEnabled';
+  static readonly KEY_IDLE_GAP_TRIGGER_MINUTES = 'idleGapTriggerMinutes';
+  static readonly KEY_ARRIVAL_NOTIFY_PROMPTED = 'arrivalNotifyPrompted';
+  static readonly KEY_ARRIVAL_LOCATION_PROMPTED = 'arrivalLocationPrompted';
+
+  // 新增：是否允许调用高德路线 API
+  static readonly KEY_ENABLE_AMAP_ROUTE_API = 'enableAmapRouteApi';
+
+  private constructor() {}
+
+  public static normalizeAmapRouteApiEnabled(raw: preferences.ValueType): boolean {
+    return raw === true;
+  }
+
+  public static normalizeMinEventDuration(raw: preferences.ValueType): number {
+    let duration = Number(raw);
+    if (!Number.isFinite(duration)) {
+      duration = 30;
+    }
+    duration = Math.floor(duration);
+    if (duration < 1) {
+      duration = 1;
+    } else if (duration > 720) {
+      duration = 720;
+    }
+    return duration;
+  }
+
+  public static normalizeThemeMode(raw: preferences.ValueType): string {
+    const text = typeof raw === 'string' ? raw : 'system';
+    if (text === 'light' || text === 'dark' || text === 'system') {
+      return text;
+    }
+    return 'system';
+  }
+
+  public static normalizeIdleGapTriggerMinutes(raw: preferences.ValueType): number {
+    let safe = Number(raw);
+    if (!Number.isFinite(safe)) {
+      safe = 45;
+    }
+    safe = Math.floor(safe);
+    if (safe < 1) {
+      safe = 1;
+    } else if (safe > 720) {
+      safe = 720;
+    }
+    return safe;
+  }
+
+  private sanitizeError(error: Object): string {
+    if (error instanceof Error && typeof error.message === 'string' && error.message.length > 0) {
+      return error.message;
+    }
+    return 'unknown_error';
+  }
+
+  public static getInstance(): PreferenceManager {
+    if (!PreferenceManager.instance) {
+      PreferenceManager.instance = new PreferenceManager();
+    }
+    return PreferenceManager.instance;
+  }
+
+  public async init(context: common.Context): Promise<void> {
+    try {
+      this.pref = await preferences.getPreferences(context, this.STORE_NAME);
+      hilog.info(0x0000, TAG, 'Preferences initialized.');
+    } catch (err) {
+      hilog.error(0x0000, TAG, `Failed to get preferences: ${this.sanitizeError(err)}`);
+    }
+  }
+
+  public async setValue(key: string, value: preferences.ValueType): Promise<void> {
+    if (!this.pref) {
+      const msg = `Preferences 未初始化，无法写入 key=${key}`;
+      hilog.error(0x0000, TAG, msg);
+      throw new Error(msg);
+    }
+
+    await this.pref.put(key, value);
+    await this.pref.flush();
+    hilog.info(0x0000, TAG, `Preference saved, key_len=${key.length}, value_type=${typeof value}`);
+  }
+
+  public async getValue(key: string, defaultValue: preferences.ValueType): Promise<preferences.ValueType> {
+    if (!this.pref) {
+      const msg = `Preferences 未初始化，无法读取 key=${key}`;
+      hilog.error(0x0000, TAG, msg);
+      throw new Error(msg);
+    }
+
+    const value = await this.pref.get(key, defaultValue);
+    hilog.info(0x0000, TAG, `Preference loaded, key_len=${key.length}, value_type=${typeof value}`);
+    return value;
+  }
+
+  // 新增：读取高德路线 API 开关
+  public async isAmapRouteApiEnabled(): Promise<boolean> {
+    const value = await this.getValue(PreferenceManager.KEY_ENABLE_AMAP_ROUTE_API, false);
+    const enabled = PreferenceManager.normalizeAmapRouteApiEnabled(value);
+    hilog.info(0x0000, TAG, `Amap route api enabled = ${JSON.stringify(enabled)}`);
+    return enabled;
+  }
+
+  // 新增：设置高德路线 API 开关
+  public async setAmapRouteApiEnabled(enabled: boolean): Promise<void> {
+    hilog.info(0x0000, TAG, `Try save amap route api enabled = ${JSON.stringify(enabled)}`);
+    await this.setValue(PreferenceManager.KEY_ENABLE_AMAP_ROUTE_API, enabled);
+  }
+  public async getMinEventDuration(): Promise<number> {
+    const value = await this.getValue(PreferenceManager.KEY_MIN_EVENT_DURATION, 30);
+    return PreferenceManager.normalizeMinEventDuration(value);
+  }
+
+  public async setMinEventDuration(duration: number): Promise<void> {
+    const safe = PreferenceManager.normalizeMinEventDuration(duration);
+    await this.setValue(PreferenceManager.KEY_MIN_EVENT_DURATION, safe);
+  }
+
+  public async getThemeMode(): Promise<string> {
+    const value = await this.getValue(PreferenceManager.KEY_THEME_MODE, 'system');
+    return PreferenceManager.normalizeThemeMode(value);
+  }
+
+  public async setThemeMode(mode: string): Promise<void> {
+    const normalized = mode === 'light' || mode === 'dark' || mode === 'system' ? mode : 'system';
+    await this.setValue(PreferenceManager.KEY_THEME_MODE, normalized);
+  }
+
+  private sanitizeIdleGapTriggerMinutes(raw: number): number {
+    return PreferenceManager.normalizeIdleGapTriggerMinutes(raw);
+  }
+
+  public async getIdleGapDetectionEnabled(): Promise<boolean> {
+    const value = await this.getValue(PreferenceManager.KEY_IDLE_GAP_DETECTION_ENABLED, true);
+    return value === true;
+  }
+
+  public async setIdleGapDetectionEnabled(enabled: boolean): Promise<void> {
+    await this.setValue(PreferenceManager.KEY_IDLE_GAP_DETECTION_ENABLED, enabled);
+  }
+
+  public async getIdleGapTriggerMinutes(): Promise<number> {
+    const value = await this.getValue(PreferenceManager.KEY_IDLE_GAP_TRIGGER_MINUTES, 45);
+    return this.sanitizeIdleGapTriggerMinutes(Number(value));
+  }
+
+  public async setIdleGapTriggerMinutes(minutes: number): Promise<void> {
+    const safe = this.sanitizeIdleGapTriggerMinutes(minutes);
+    await this.setValue(PreferenceManager.KEY_IDLE_GAP_TRIGGER_MINUTES, safe);
+  }
+}
+
