@@ -1,0 +1,12 @@
+{
+  "src": [
+    "pages/Index",
+    "pages/PlanListPage",
+    "pages/PlanSearchPage",
+    "pages/MapPickerPage",
+    "pages/SettingsPage",
+    "pages/TrashPage",
+    "pages/ArchivePage"
+
+  ]
+}

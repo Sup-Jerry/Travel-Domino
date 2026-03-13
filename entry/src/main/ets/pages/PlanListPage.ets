@@ -1,0 +1,482 @@
+﻿import { PlanItem } from '../model/entity/PlanDao';
+import { CreatePlanDialog } from './components/dialogs/CreatePlanDialog';
+import { TipDialog } from './components/dialogs/TipDialog';
+import { PlanJsonExportDialog } from './components/dialogs/PlanJsonExportDialog';
+import { PlanJsonImportDialog } from './components/dialogs/PlanJsonImportDialog';
+import { promptAction, router } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
+import { PreferenceManager } from '../common/utils/PreferenceManager';
+import { GlobalBottomNavBar } from './components/views/BottomNavBar';
+import { ThemeCenter } from '../common/utils/ThemeCenter';
+import { hilog } from '@kit.PerformanceAnalysisKit';
+import { PlanJsonImportCancelToken, PlanJsonTransferService } from '../common/utils/PlanJsonTransferService';
+import { ArrivalReminderPayload } from '../common/utils/ArrivalReminderEngine';
+import { ArrivalReminderCoordinator } from '../common/utils/ArrivalReminderCoordinator';
+import { TimelineViewModel } from '../viewmodel/TimelineViewModel';
+import { PlanAppService } from '../viewmodel/PlanAppService';
+import { DateUtil } from '../common/utils/DateUtil';
+import { AppTexts } from '../common/constants/AppTexts';
+
+@Entry
+@Component
+struct PlanListPage {
+  @State planList: PlanItem[] = [];
+  @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
+  @StorageLink('ArrivalReminderSeq') @Watch('onArrivalReminderSignal') arrivalReminderSeq: number = 0;
+  @State exportJsonText: string = '';
+  @State isArrivalDialogOpen: boolean = false;
+  private arrivalVm: TimelineViewModel = new TimelineViewModel();
+  private readonly planService: PlanAppService = PlanAppService.getInstance();
+  private readonly arrivalCoordinator: ArrivalReminderCoordinator = ArrivalReminderCoordinator.getInstance();
+
+  private getThemePalette() {
+    return ThemeCenter.getPalette(this.effectiveTheme);
+  }
+
+  createDialogController: CustomDialogController = new CustomDialogController({
+    builder: CreatePlanDialog({
+      onCreatePlan: async (title: string, startDate: number): Promise<number> => {
+        return this.planService.createPlan(title, startDate);
+      },
+      onPlanCreated: (planId: number, title: string) => {
+        void this.loadPlans();
+        router.pushUrl({
+          url: 'pages/Index',
+          params: {
+            planId: planId,
+            title: title,
+            isNewPlan: true
+          }
+        });
+      }
+    }),
+    alignment: DialogAlignment.Bottom,
+    offset: { dx: 0, dy: -20 }
+  });
+
+  tipDialogController: CustomDialogController | null = null;
+  exportJsonDialogController: CustomDialogController | null = null;
+  importJsonDialogController: CustomDialogController | null = null;
+
+  onPageShow() {
+    void this.loadPlans();
+    this.startGlobalArrivalEngine();
+    this.consumeArrivalReminderOnHome();
+    void this.ensureArrivalPermissionPromptOnFirstEntry();
+  }
+
+  onArrivalReminderSignal(): void {
+    this.consumeArrivalReminderOnHome();
+  }
+
+  aboutToDisappear() {
+    this.planService.stopArrivalEngine();
+  }
+
+  private startGlobalArrivalEngine(): void {
+    try {
+      const hostContext = this.getUIContext().getHostContext() as Context;
+      this.planService.startArrivalEngine(0, this.arrivalVm, hostContext);
+    } catch (error) {
+      hilog.warn(0x0000, 'PlanListPage', `[ARRIVAL][home_engine_start_failed] reason=${JSON.stringify(error)}`);
+    }
+  }
+
+  private consumeArrivalReminderOnHome(): void {
+    this.arrivalCoordinator.consumeOnHome({
+      isDialogOpen: this.isArrivalDialogOpen,
+      resolvePlanTitle: (planId: number): string => {
+        const plan = this.planList.find((item: PlanItem) => item.id === planId);
+        return plan ? plan.title : '行程详情';
+      },
+      onShow: (payload: ArrivalReminderPayload, title: string): void => {
+        this.isArrivalDialogOpen = true;
+        AlertDialog.show({
+          title: '到达提醒',
+          message: `你已到达【${payload.placeName}】附近（约${Math.max(1, payload.distanceMeters)}米）\n来自计划：${title}`,
+          autoCancel: false,
+          alignment: DialogAlignment.Center,
+          primaryButton: {
+            value: '稍后',
+            action: () => {
+              this.isArrivalDialogOpen = false;
+              this.arrivalCoordinator.acknowledge(payload.eventId, 'dismiss');
+            }
+          },
+          secondaryButton: {
+            value: '开始打卡',
+            action: () => {
+              this.isArrivalDialogOpen = false;
+              this.arrivalCoordinator.acknowledge(payload.eventId, 'start');
+              router.pushUrl({
+                url: 'pages/Index',
+                params: {
+                  planId: payload.planId,
+                  title: title,
+                  isNewPlan: false,
+                  autoStartFromReminder: true,
+                  reminderEventId: payload.eventId
+                }
+              });
+            }
+          }
+        });
+      }
+    });
+  }
+
+  private async ensureArrivalPermissionPromptOnFirstEntry(): Promise<void> {
+    try {
+      const hostContext = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      const promptState = await this.planService.getArrivalPromptState(hostContext);
+      if (!promptState.notifyPrompted) {
+        await this.planService.markNotifyPrompted(hostContext);
+        await this.ensureNotificationPermissionPrompt(hostContext);
+      }
+      if (!promptState.locationPrompted) {
+        await this.planService.markLocationPrompted(hostContext);
+        await this.ensureLocationPermissionPrompt(hostContext);
+      }
+    } catch (error) {
+      hilog.warn(0x0000, 'PlanListPage', `[ARRIVAL][first_entry_prompt_failed] reason=${JSON.stringify(error)}`);
+    }
+  }
+
+  private async ensureNotificationPermissionPrompt(hostContext: common.UIAbilityContext): Promise<void> {
+    try {
+      const enabled = await this.planService.isNotificationEnabled();
+      if (enabled) {
+        return;
+      }
+    } catch (error) {
+      hilog.warn(0x0000, 'PlanListPage', `[ARRIVAL][notify_enabled_check_failed] reason=${JSON.stringify(error)}`);
+      return;
+    }
+
+    AlertDialog.show({
+      title: '开启系统通知',
+      message: '到达提醒依赖系统通知。检测到当前通知未开启，是否现在去开启？',
+      autoCancel: true,
+      alignment: DialogAlignment.Center,
+      primaryButton: {
+        value: '稍后',
+        action: () => {}
+      },
+      secondaryButton: {
+        value: '去开启',
+        action: () => {
+          this.planService.requestEnableNotification(hostContext).then(() => {
+            promptAction.showToast({ message: '已发起通知授权请求' });
+          }).catch((error: Error) => {
+            const reason = error.message || JSON.stringify(error);
+            hilog.warn(0x0000, 'PlanListPage', `[ARRIVAL][notify_request_failed] reason=${reason}`);
+            promptAction.showToast({ message: '拉起通知授权失败，请在系统设置中手动开启' });
+          });
+        }
+      }
+    });
+  }
+
+  private async ensureLocationPermissionPrompt(hostContext: common.UIAbilityContext): Promise<void> {
+    try {
+      const granted = await this.planService.isLocationPermissionGranted();
+      if (granted) {
+        return;
+      }
+    } catch (error) {
+      hilog.warn(0x0000, 'PlanListPage', `[ARRIVAL][location_check_failed] reason=${JSON.stringify(error)}`);
+      return;
+    }
+
+    AlertDialog.show({
+      title: '开启定位权限',
+      message: '到达提醒依赖实时定位。检测到当前定位权限未开启，是否现在去授权？',
+      autoCancel: true,
+      alignment: DialogAlignment.Center,
+      primaryButton: {
+        value: '稍后',
+        action: () => {}
+      },
+      secondaryButton: {
+        value: '去授权',
+        action: async () => {
+          try {
+            const granted = await this.planService.requestLocationPermissions(hostContext);
+            if (granted) {
+              promptAction.showToast({ message: '定位权限已授权' });
+            } else {
+              promptAction.showToast({ message: '未获得定位权限，到达提醒可能无法触发' });
+            }
+          } catch (error) {
+            const reason = JSON.stringify(error);
+            hilog.warn(0x0000, 'PlanListPage', `[ARRIVAL][location_request_failed] reason=${reason}`);
+            promptAction.showToast({ message: '定位授权失败，请到系统设置手动开启' });
+          }
+        }
+      }
+    });
+  }
+
+  private openExportDialog(): void {
+    this.exportJsonDialogController = new CustomDialogController({
+      builder: PlanJsonExportDialog({
+        jsonText: this.exportJsonText
+      }),
+      alignment: DialogAlignment.Center
+    });
+    this.exportJsonDialogController.open();
+  }
+
+  private openImportDialog(): void {
+    this.importJsonDialogController = new CustomDialogController({
+      builder: PlanJsonImportDialog({
+        onImport: async (jsonText: string, cancelToken: PlanJsonImportCancelToken): Promise<void> => {
+          await this.importPlanFromJson(jsonText, cancelToken);
+        }
+      }),
+      alignment: DialogAlignment.Center
+    });
+    this.importJsonDialogController.open();
+  }
+
+  private async exportPlanAsJson(item: PlanItem): Promise<void> {
+    try {
+      const json = await PlanJsonTransferService.exportPlanToJson(item.id);
+      this.exportJsonText = json;
+      this.openExportDialog();
+    } catch (error) {
+      hilog.warn(0x0000, 'PlanListPage', `[PLAN_JSON][export_failed] planId=${item.id}, reason=${JSON.stringify(error)}`);
+      promptAction.showToast({ message: '导出失败，请稍后重试' });
+    }
+  }
+
+  private async importPlanFromJson(jsonText: string, cancelToken: PlanJsonImportCancelToken): Promise<void> {
+    try {
+      const newPlanId = await PlanJsonTransferService.importPlanFromJson(jsonText, cancelToken);
+      await this.loadPlans();
+      promptAction.showToast({ message: `导入成功（新计划ID: ${newPlanId}）` });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : JSON.stringify(error);
+      hilog.warn(0x0000, 'PlanListPage', `[PLAN_JSON][import_failed] reason=${reason}`);
+      if (reason.includes('import_cancelled')) {
+        promptAction.showToast({ message: '已取消导入' });
+        return;
+      }
+      promptAction.showToast({ message: '导入失败：数据格式不合法或内容超限' });
+    }
+  }
+
+  async loadPlans() {
+    this.planList = await this.planService.loadVisiblePlans();
+  }
+
+  async handleArchive(item: PlanItem) {
+    const isSkip = await PreferenceManager.getInstance().getValue(PreferenceManager.KEY_HIDE_ARCHIVE_TIP, false);
+    if (isSkip) {
+      this.executeArchive(item.id);
+    } else {
+      this.tipDialogController = new CustomDialogController({
+        builder: TipDialog({
+          title: '归档说明',
+          message: '归档后的计划将变为“只读模式”，不可再修改，但可以随时查看。\n\n您可以在归档箱中将其重新激活。',
+          storageKey: PreferenceManager.KEY_HIDE_ARCHIVE_TIP,
+          onConfirm: (): Promise<void> => this.executeArchive(item.id)
+        }),
+        alignment: DialogAlignment.Center
+      });
+      this.tipDialogController.open();
+    }
+  }
+
+  async executeArchive(planId: number) {
+    await this.planService.archivePlan(planId);
+    void this.loadPlans();
+  }
+
+  async handleSoftDelete(item: PlanItem) {
+    const isSkip = await PreferenceManager.getInstance().getValue(PreferenceManager.KEY_HIDE_SOFT_DELETE_TIP, false);
+    if (isSkip) {
+      this.executeSoftDelete(item.id);
+    } else {
+      this.tipDialogController = new CustomDialogController({
+        builder: TipDialog({
+          title: '移入回收站',
+          message: AppTexts.SOFT_DELETE_RECYCLE_TIP,
+          storageKey: PreferenceManager.KEY_HIDE_SOFT_DELETE_TIP,
+          onConfirm: (): Promise<void> => this.executeSoftDelete(item.id)
+        }),
+        alignment: DialogAlignment.Center
+      });
+      this.tipDialogController.open();
+    }
+  }
+
+  async executeSoftDelete(planId: number) {
+    await this.planService.softDeletePlan(planId);
+    void this.loadPlans();
+  }
+
+  handleHardDelete(item: PlanItem) {
+    AlertDialog.show({
+      title: '⚠️ 彻底删除',
+      message: '此操作将【永久销毁】该计划及其所有数据，无法恢复！\n\n确定要继续吗？',
+      autoCancel: true,
+      alignment: DialogAlignment.Center,
+      primaryButton: {
+        value: '我再想想',
+        action: () => {
+        }
+      },
+      secondaryButton: {
+        value: '彻底删除',
+        fontColor: '#D32F2F',
+        action: async () => {
+          await this.planService.hardDeletePlan(item.id);
+          void this.loadPlans();
+        }
+      }
+    });
+  }
+
+  @Builder
+  PlanSwipeMenu(item: PlanItem) {
+    Row() {
+      Button('导出')
+        .type(ButtonType.Normal)
+        .backgroundColor('#2196F3')
+        .width(70)
+        .height('100%')
+        .onClick(() => {
+          void this.exportPlanAsJson(item);
+        });
+
+      Button('归档')
+        .type(ButtonType.Normal)
+        .backgroundColor('#FF9800')
+        .width(70)
+        .height('100%')
+        .onClick(() => {
+          this.handleArchive(item);
+        });
+
+      Button('删除')
+        .type(ButtonType.Normal)
+        .backgroundColor('#F44336')
+        .width(70)
+        .height('100%')
+        .onClick(() => {
+          this.handleSoftDelete(item);
+        });
+    }
+    .height('100%');
+  }
+
+  build() {
+    Stack({ alignContent: Alignment.Bottom }) {
+      Column() {
+        Row() {
+          Text('所有计划')
+            .fontSize(24)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.getThemePalette().textPrimary)
+            .margin({ top: 12 });
+
+          Blank();
+
+          Button('导入JSON')
+            .fontSize(12)
+            .height(30)
+            .backgroundColor('#007DFF')
+            .fontColor(Color.White)
+            .onClick(() => {
+              this.openImportDialog();
+            });
+        }
+        .width('100%')
+        .padding({ left: 16, top: 10, bottom: 10, right: 16 })
+        .backgroundColor(this.getThemePalette().cardBg);
+
+        List({ space: 12 }) {
+          ForEach(this.planList, (item: PlanItem) => {
+            ListItem() {
+              Row() {
+                Column() {
+                  Row() {
+                    Text(item.title)
+                      .fontSize(18)
+                      .fontWeight(FontWeight.Medium)
+                      .fontColor(this.getThemePalette().textPrimary)
+                      .maxLines(1)
+                      .textOverflow({ overflow: TextOverflow.Ellipsis })
+                      .layoutWeight(1);
+                  }.width('100%');
+
+                  Text(`出发日期: ${DateUtil.formatPlanDate(item.startDate)}`)
+                    .fontSize(12).fontColor(this.getThemePalette().primary).margin({ top: 4 });
+
+                  Text(`创建于: ${DateUtil.formatLocalDate(item.createdAt)}`)
+                    .fontSize(10)
+                    .fontColor(this.getThemePalette().textTertiary)
+                    .margin({ top: 2 });
+                }
+                .alignItems(HorizontalAlign.Start).layoutWeight(1);
+
+                Blank();
+
+                Text('进入 >')
+                  .fontSize(14)
+                  .fontColor(this.getThemePalette().textSecondary)
+                  .margin({ left: 8 });
+              }
+              .width('100%')
+              .padding(16)
+              .backgroundColor(this.getThemePalette().cardBg)
+              .borderRadius(12)
+              .onClick(() => {
+                router.pushUrl({
+                  url: 'pages/Index',
+                  params: {
+                    planId: item.id,
+                    title: item.title,
+                    isNewPlan: false
+                  }
+                });
+              });
+            }
+            .swipeAction({
+              end: {
+                builder: () => {
+                  this.PlanSwipeMenu(item);
+                },
+                actionAreaDistance: 210
+              }
+            });
+          });
+          ListItem().height(12);
+        }
+        .layoutWeight(1)
+        .padding({ top: 16, left: 16, right: 16, bottom: 90 });
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor(this.getThemePalette().pageBg);
+
+      GlobalBottomNavBar({
+        currentTab: 'home',
+        showCenterFab: true,
+        onCenterFabTap: () => {
+          this.createDialogController.open();
+        }
+      })
+        .zIndex(9);
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(this.getThemePalette().pageBg);
+  }
+}
+
+
+
+
+

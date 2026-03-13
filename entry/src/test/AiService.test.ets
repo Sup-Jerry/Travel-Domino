@@ -1,0 +1,34 @@
+import { describe, it, expect } from '@ohos/hypium';
+import { AiService } from '../main/ets/common/utils/AiService';
+
+export default function aiServiceTest() {
+  describe('aiServiceTest', () => {
+    it('parse_should_accept_markdown_wrapped_json', 0, () => {
+      const content = '```json\n[{"name":"景点A","duration":90,"ai_reasoning":"推荐","type":0}]\n```';
+      const items = AiService.parseItemsForTest(content);
+      expect(items.length).assertEqual(1);
+      expect(items[0].name).assertEqual('景点A');
+      expect(items[0].duration).assertEqual(90);
+    });
+
+    it('parse_should_fail_on_truncated_json', 0, () => {
+      let message = '';
+      try {
+        AiService.parseItemsForTest('[{"name":"A","duration":30');
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message).assertEqual('AI 返回内容不是合法 JSON');
+    });
+
+    it('parse_model_response_should_fail_when_choices_empty', 0, () => {
+      let message = '';
+      try {
+        AiService.parseModelResponseForTest('{"choices":[]}');
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message).assertEqual('AI 响应格式为空');
+    });
+  });
+}
