@@ -1,4 +1,5 @@
 import { ConfigurationConstant, common } from '@kit.AbilityKit';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type EffectiveTheme = 'light' | 'dark';
@@ -81,6 +82,8 @@ const DARK_THEME: ThemePalette = {
 };
 
 export class ThemeCenter {
+  private static readonly LOG_DOMAIN = 0x0000;
+  private static readonly LOG_TAG = 'ThemeCenter';
   static readonly STORAGE_THEME_MODE = 'ThemeMode';
   static readonly STORAGE_EFFECTIVE_THEME = 'EffectiveTheme';
 
@@ -120,12 +123,29 @@ export class ThemeCenter {
 
   static applyThemeMode(context: common.Context, mode: ThemeMode): EffectiveTheme {
     const appContext = context.getApplicationContext();
-    if (mode === 'dark') {
-      appContext.setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_DARK);
-    } else if (mode === 'light') {
-      appContext.setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_LIGHT);
-    } else {
-      appContext.setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET);
+    try {
+      if (mode === 'dark') {
+        appContext.setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_DARK);
+      } else if (mode === 'light') {
+        appContext.setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_LIGHT);
+      } else {
+        appContext.setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET);
+      }
+    } catch (error) {
+      hilog.error(
+        ThemeCenter.LOG_DOMAIN,
+        ThemeCenter.LOG_TAG,
+        `setColorMode failed, fallback to system. error=${JSON.stringify(error)}`
+      );
+      try {
+        appContext.setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET);
+      } catch (fallbackError) {
+        hilog.error(
+          ThemeCenter.LOG_DOMAIN,
+          ThemeCenter.LOG_TAG,
+          `setColorMode fallback failed: ${JSON.stringify(fallbackError)}`
+        );
+      }
     }
 
     const colorMode = ThemeCenter.readColorModeFromContext(context);

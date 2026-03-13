@@ -1,4 +1,4 @@
-import { TravelPlanItem } from '../../../model/interface/IStandardEvent';
+﻿import { TravelPlanItem } from '../../../model/interface/IStandardEvent';
 import { ThemeCenter } from '../../../common/utils/ThemeCenter';
 
 @Component
@@ -44,7 +44,7 @@ export struct BacklogView {
       .width('100%')
       .padding({ bottom: this.isExpanded ? 12 : 0 })
       .onClick(() => {
-        animateTo({ duration: 300, curve: Curve.FastOutSlowIn }, () => {
+        this.getUIContext().animateTo({ duration: 300, curve: Curve.FastOutSlowIn }, () => {
           this.onToggleExpand();
         });
       })
@@ -111,3 +111,4 @@ export struct BacklogView {
     .clip(true)
   }
 }
+

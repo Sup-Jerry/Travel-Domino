@@ -112,6 +112,14 @@ export struct CompanionView {
   // endregion
 
   // region methods
+  private safeShowToast(message: string): void {
+    try {
+      promptAction.openToast({ message: message });
+    } catch (error) {
+      hilog.warn(0x0000, 'CompanionView', `[TOAST_FAIL] reason=${JSON.stringify(error)}`);
+    }
+  }
+
   aboutToAppear() {
     this.focusedEventId = -1;
     this.focusedIndex = -1;
@@ -234,10 +242,10 @@ export struct CompanionView {
       const safeLeftPx = Math.max(sysArea.leftRect.width, cutoutLeftPx);
       const safeRightPx = Math.max(sysArea.rightRect.width, cutoutRightPx);
 
-      this.safeTopInset = px2vp(safeTopPx);
-      this.safeBottomInset = px2vp(safeBottomPx);
-      this.safeLeftInset = px2vp(safeLeftPx);
-      this.safeRightInset = px2vp(safeRightPx);
+      this.safeTopInset = this.getUIContext().px2vp(safeTopPx);
+      this.safeBottomInset = this.getUIContext().px2vp(safeBottomPx);
+      this.safeLeftInset = this.getUIContext().px2vp(safeLeftPx);
+      this.safeRightInset = this.getUIContext().px2vp(safeRightPx);
     } catch (_err) {
       this.safeTopInset = 0;
       this.safeBottomInset = 0;
@@ -348,7 +356,7 @@ export struct CompanionView {
     this.showFilterPage = false;
     this.ensureFocusVisible();
     const visibleCount = this.cachedVisibleScheduledEvents.length;
-    promptAction.showToast({ message: `筛选：${this.getFilterLabel(this.companionFilterState)}（${visibleCount}）` });
+    this.safeShowToast(`筛选：${this.getFilterLabel(this.companionFilterState)}（${visibleCount}）`);
     hilog.info(0x0000, 'CompanionView', `[COMPANION_FILTER][apply] state=${this.companionFilterState}, count=${visibleCount}`);
   }
 
@@ -561,7 +569,7 @@ export struct CompanionView {
     this.isCardSwitching = true;
     this.cardSwitchProgress = 0;
 
-    animateTo({ duration: 240, curve: Curve.EaseInOut }, () => {
+    this.getUIContext().animateTo({ duration: 240, curve: Curve.EaseInOut }, () => {
       this.cardSwitchProgress = 1;
     });
 
@@ -747,7 +755,7 @@ export struct CompanionView {
     const now = Date.now();
     if (state === 'PENDING') {
       if (!this.canStartFocused(focused)) {
-        promptAction.showToast({ message: '请先结束当前进行中的任务' });
+        this.safeShowToast('请先结束当前进行中的任务');
         return;
       }
       await this.vm.updateActualTime(focused.id, 'actual_start_time', now);
@@ -759,7 +767,7 @@ export struct CompanionView {
 
     if (state === 'ACTIVE') {
       if (!this.canEndFocused(focused)) {
-        promptAction.showToast({ message: '仅当前进行中的任务可结束' });
+        this.safeShowToast('仅当前进行中的任务可结束');
         return;
       }
       await this.vm.updateActualTime(focused.id, 'actual_end_time', now);
@@ -773,7 +781,7 @@ export struct CompanionView {
       return;
     }
     if (this.getEventState(focused) !== 'PENDING') {
-      promptAction.showToast({ message: '仅“未开始”任务可跳过' });
+      this.safeShowToast('仅“未开始”任务可跳过');
       return;
     }
     await this.vm.skipEvent(focused);
@@ -807,16 +815,16 @@ export struct CompanionView {
   private startNavigation(target?: EventEntity): void {
     const event = target || this.getFocusedEvent() || this.context.currentEvent || this.context.nextEvent;
     if (!event) {
-      promptAction.showToast({ message: '暂无可导航目的地' });
+      this.safeShowToast('暂无可导航目的地');
       return;
     }
 
     if (!event.latitude || !event.longitude || (event.latitude === 0 && event.longitude === 0)) {
-      promptAction.showToast({ message: `[${event.name}] 缺少有效坐标` });
+      this.safeShowToast(`[${event.name}] 缺少有效坐标`);
       return;
     }
 
-    const uiContext = getContext(this) as common.UIAbilityContext;
+    const uiContext = this.getUIContext().getHostContext() as common.UIAbilityContext;
     const wantParam: Record<string, Object> = {};
     wantParam['sceneType'] = Number(1);
     wantParam['destinationName'] = String(event.name);
@@ -825,12 +833,12 @@ export struct CompanionView {
 
     const callback: common.AbilityStartCallback = {
       onError: () => {
-        promptAction.showToast({ message: '拉起导航失败' });
+        this.safeShowToast('拉起导航失败');
       }
     };
 
     uiContext.startAbilityByType('navigation', wantParam, callback).catch((error: BusinessError) => {
-      promptAction.showToast({ message: `当前设备不支持系统导航（${error.code}）` });
+      this.safeShowToast(`当前设备不支持系统导航（${error.code}）`);
     });
   }
 
@@ -875,7 +883,7 @@ export struct CompanionView {
   }
 
   private handleFocusedAdjust(): void {
-    promptAction.showToast({ message: '该地点暂不支持修正入口' });
+    this.safeShowToast('该地点暂不支持修正入口');
   }
 
   private async handleFocusedReopen(): Promise<void> {
@@ -884,17 +892,17 @@ export struct CompanionView {
       return;
     }
     if (this.getEventState(focused) !== 'SKIPPED') {
-      promptAction.showToast({ message: '仅“已跳过”任务可重新开始' });
+      this.safeShowToast('仅“已跳过”任务可重新开始');
       return;
     }
     if (this.hasOtherActiveEvent(focused.id)) {
-      promptAction.showToast({ message: '请先结束当前进行中的任务' });
+      this.safeShowToast('请先结束当前进行中的任务');
       return;
     }
 
     const reopened = await this.vm.reopenSkippedEvent(focused.id);
     if (!reopened) {
-      promptAction.showToast({ message: '重新开始失败' });
+      this.safeShowToast('重新开始失败');
       return;
     }
 
@@ -911,7 +919,7 @@ export struct CompanionView {
     this.refreshContext();
     this.immersiveDragOffsetY = 0;
     this.interactionMode = 'both';
-    animateTo({ duration: 250, curve: Curve.EaseInOut }, () => {
+    this.getUIContext().animateTo({ duration: 250, curve: Curve.EaseInOut }, () => {
       this.companionSubMode = 'control';
     });
     setTimeout(() => {
@@ -926,7 +934,7 @@ export struct CompanionView {
     this.refreshContext();
     this.immersiveDragOffsetY = 0;
     this.interactionMode = 'both';
-    animateTo({ duration: 240, curve: Curve.EaseInOut }, () => {
+    this.getUIContext().animateTo({ duration: 240, curve: Curve.EaseInOut }, () => {
       this.companionSubMode = 'immersive';
       this.showHistoryPage = false;
       this.showSearchPage = false;
@@ -973,7 +981,7 @@ export struct CompanionView {
     if (this.immersiveDragOffsetY === 0) {
       return;
     }
-    animateTo({ duration: 220, curve: Curve.Friction }, () => {
+    this.getUIContext().animateTo({ duration: 220, curve: Curve.Friction }, () => {
       this.immersiveDragOffsetY = 0;
     });
   }
@@ -1261,7 +1269,7 @@ export struct CompanionView {
             .backgroundColor(this.getThemePalette().cardBgSoft)
             .fontColor(this.getThemePalette().textTertiary)
             .onClick(() => {
-              promptAction.showToast({ message: '已跳过任务不可再次跳过' });
+              this.safeShowToast('已跳过任务不可再次跳过');
             });
         } else {
           Button('结束')
@@ -1968,6 +1976,8 @@ export struct CompanionView {
   }
   // endregion
 }
+
+
 
 
 

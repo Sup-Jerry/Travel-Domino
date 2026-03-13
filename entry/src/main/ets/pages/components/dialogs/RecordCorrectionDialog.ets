@@ -42,7 +42,7 @@ export struct RecordCorrectionDialog {
           .fontSize(16).fontWeight(FontWeight.Medium).fontColor($r('app.color.text_secondary'))
           .padding(8).backgroundColor('#F0F8FF').borderRadius(8)
           .onClick(() => {
-            TimePickerDialog.show({
+            this.getUIContext().showTimePickerDialog({
               selected: this.startTime,
               useMilitaryTime: true,
               onAccept: (val) => {
@@ -63,7 +63,7 @@ export struct RecordCorrectionDialog {
 
           .padding(8).backgroundColor('#F0F8FF').borderRadius(8)
           .onClick(() => {
-            TimePickerDialog.show({
+            this.getUIContext().showTimePickerDialog({
               selected: this.endTime,
               useMilitaryTime: true,
               onAccept: (val) => {
@@ -97,6 +97,7 @@ export struct RecordCorrectionDialog {
     .padding(24).backgroundColor($r('app.color.card_bg')).borderRadius(16).width('90%')
   }
 }
+
 
 
 

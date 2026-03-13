@@ -26,10 +26,10 @@ export struct AppSideBar {
 
   private async safeReplaceUrl(url: string): Promise<void> {
     try {
-      await router.replaceUrl(this.createRouteOptions(url));
+      await this.getUIContext().getRouter().replaceUrl(this.createRouteOptions(url));
     } catch (error) {
       hilog.warn(0x0000, 'AppSideBar', `[SIDEBAR][route_failed] to=${url}, reason=${JSON.stringify(error)}`);
-      promptAction.showToast({ message: '页面跳转失败，请重试' });
+      promptAction.openToast({ message: '页面跳转失败，请重试' });
     }
   }
 
@@ -97,6 +97,8 @@ export struct AppSideBar {
     .padding({ left: 20 });
   }
 }
+
+
 
 
 

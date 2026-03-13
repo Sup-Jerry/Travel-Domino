@@ -107,7 +107,7 @@ export class MapServiceImpl implements IMapService {
   private reportRouteApiFailure(message: string): void {
     console.error(`[MapService] ${message}`);
     try {
-      promptAction.showToast({ message });
+      promptAction.openToast({ message });
     } catch (e) {
       console.error(`[MapService] Toast 显示失败: ${this.sanitizeError(e)}`);
     }
@@ -441,6 +441,7 @@ export class MapServiceImpl implements IMapService {
   async getLocationInfo(keyword: string): Promise<LocationInfo[]> { return []; }
   async calculateCommute(from: string, to: string): Promise<number> { return 30; }
 }
+
 
 
 

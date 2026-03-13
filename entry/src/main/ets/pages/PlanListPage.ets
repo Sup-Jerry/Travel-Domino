@@ -33,6 +33,14 @@ struct PlanListPage {
     return ThemeCenter.getPalette(this.effectiveTheme);
   }
 
+  private safeShowToast(message: string): void {
+    try {
+      promptAction.openToast({ message: message });
+    } catch (error) {
+      hilog.warn(0x0000, 'PlanListPage', `[TOAST_FAIL] reason=${JSON.stringify(error)}`);
+    }
+  }
+
   createDialogController: CustomDialogController = new CustomDialogController({
     builder: CreatePlanDialog({
       onCreatePlan: async (title: string, startDate: number): Promise<number> => {
@@ -40,7 +48,7 @@ struct PlanListPage {
       },
       onPlanCreated: (planId: number, title: string) => {
         void this.loadPlans();
-        router.pushUrl({
+        this.getUIContext().getRouter().pushUrl({
           url: 'pages/Index',
           params: {
             planId: planId,
@@ -91,7 +99,7 @@ struct PlanListPage {
       },
       onShow: (payload: ArrivalReminderPayload, title: string): void => {
         this.isArrivalDialogOpen = true;
-        AlertDialog.show({
+        this.getUIContext().showAlertDialog({
           title: '到达提醒',
           message: `你已到达【${payload.placeName}】附近（约${Math.max(1, payload.distanceMeters)}米）\n来自计划：${title}`,
           autoCancel: false,
@@ -108,7 +116,7 @@ struct PlanListPage {
             action: () => {
               this.isArrivalDialogOpen = false;
               this.arrivalCoordinator.acknowledge(payload.eventId, 'start');
-              router.pushUrl({
+              this.getUIContext().getRouter().pushUrl({
                 url: 'pages/Index',
                 params: {
                   planId: payload.planId,
@@ -153,7 +161,7 @@ struct PlanListPage {
       return;
     }
 
-    AlertDialog.show({
+    this.getUIContext().showAlertDialog({
       title: '开启系统通知',
       message: '到达提醒依赖系统通知。检测到当前通知未开启，是否现在去开启？',
       autoCancel: true,
@@ -166,11 +174,11 @@ struct PlanListPage {
         value: '去开启',
         action: () => {
           this.planService.requestEnableNotification(hostContext).then(() => {
-            promptAction.showToast({ message: '已发起通知授权请求' });
+            this.safeShowToast('已发起通知授权请求');
           }).catch((error: Error) => {
             const reason = error.message || JSON.stringify(error);
             hilog.warn(0x0000, 'PlanListPage', `[ARRIVAL][notify_request_failed] reason=${reason}`);
-            promptAction.showToast({ message: '拉起通知授权失败，请在系统设置中手动开启' });
+            this.safeShowToast('拉起通知授权失败，请在系统设置中手动开启');
           });
         }
       }
@@ -188,7 +196,7 @@ struct PlanListPage {
       return;
     }
 
-    AlertDialog.show({
+    this.getUIContext().showAlertDialog({
       title: '开启定位权限',
       message: '到达提醒依赖实时定位。检测到当前定位权限未开启，是否现在去授权？',
       autoCancel: true,
@@ -203,14 +211,14 @@ struct PlanListPage {
           try {
             const granted = await this.planService.requestLocationPermissions(hostContext);
             if (granted) {
-              promptAction.showToast({ message: '定位权限已授权' });
+              this.safeShowToast('定位权限已授权');
             } else {
-              promptAction.showToast({ message: '未获得定位权限，到达提醒可能无法触发' });
+              this.safeShowToast('未获得定位权限，到达提醒可能无法触发');
             }
           } catch (error) {
             const reason = JSON.stringify(error);
             hilog.warn(0x0000, 'PlanListPage', `[ARRIVAL][location_request_failed] reason=${reason}`);
-            promptAction.showToast({ message: '定位授权失败，请到系统设置手动开启' });
+            this.safeShowToast('定位授权失败，请到系统设置手动开启');
           }
         }
       }
@@ -246,7 +254,7 @@ struct PlanListPage {
       this.openExportDialog();
     } catch (error) {
       hilog.warn(0x0000, 'PlanListPage', `[PLAN_JSON][export_failed] planId=${item.id}, reason=${JSON.stringify(error)}`);
-      promptAction.showToast({ message: '导出失败，请稍后重试' });
+      this.safeShowToast('导出失败，请稍后重试');
     }
   }
 
@@ -254,15 +262,15 @@ struct PlanListPage {
     try {
       const newPlanId = await PlanJsonTransferService.importPlanFromJson(jsonText, cancelToken);
       await this.loadPlans();
-      promptAction.showToast({ message: `导入成功（新计划ID: ${newPlanId}）` });
+      this.safeShowToast(`导入成功（新计划ID: ${newPlanId}）`);
     } catch (error) {
       const reason = error instanceof Error ? error.message : JSON.stringify(error);
       hilog.warn(0x0000, 'PlanListPage', `[PLAN_JSON][import_failed] reason=${reason}`);
       if (reason.includes('import_cancelled')) {
-        promptAction.showToast({ message: '已取消导入' });
+        this.safeShowToast('已取消导入');
         return;
       }
-      promptAction.showToast({ message: '导入失败：数据格式不合法或内容超限' });
+      this.safeShowToast('导入失败：数据格式不合法或内容超限');
     }
   }
 
@@ -317,7 +325,7 @@ struct PlanListPage {
   }
 
   handleHardDelete(item: PlanItem) {
-    AlertDialog.show({
+    this.getUIContext().showAlertDialog({
       title: '⚠️ 彻底删除',
       message: '此操作将【永久销毁】该计划及其所有数据，无法恢复！\n\n确定要继续吗？',
       autoCancel: true,
@@ -433,7 +441,7 @@ struct PlanListPage {
               .backgroundColor(this.getThemePalette().cardBg)
               .borderRadius(12)
               .onClick(() => {
-                router.pushUrl({
+                this.getUIContext().getRouter().pushUrl({
                   url: 'pages/Index',
                   params: {
                     planId: item.id,
@@ -475,6 +483,8 @@ struct PlanListPage {
     .backgroundColor(this.getThemePalette().pageBg);
   }
 }
+
+
 
 
 

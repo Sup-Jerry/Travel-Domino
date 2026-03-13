@@ -8,6 +8,8 @@ import aiServiceTest from './AiService.test';
 import preferenceManagerTest from './PreferenceManager.test';
 import mapServiceImplTest from './MapServiceImpl.test';
 import arrivalReminderEngineTest from './ArrivalReminderEngine.test';
+import scheduleOrchestratorTest from './ScheduleOrchestrator.test';
+import reminderFacadeTest from './ReminderFacade.test';
 export default function testsuite() {
   localUnitTest();
   automatedTest();
@@ -19,4 +21,6 @@ export default function testsuite() {
   preferenceManagerTest();
   mapServiceImplTest();
   arrivalReminderEngineTest();
+  scheduleOrchestratorTest();
+  reminderFacadeTest();
 }

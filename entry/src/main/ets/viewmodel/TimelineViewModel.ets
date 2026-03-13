@@ -2,16 +2,16 @@
 import { TravelPlanItem } from '../model/interface/IStandardEvent';
 import { EventDao, EventFieldUpdate } from '../model/entity/EventDao';
 import { EventEntity } from '../model/entity/EventEntity'; // 引入 Entity
-import { TimeConstraintSolver } from '../model/logic/TimeConstraintSolver';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { DateUtil } from '../common/utils/DateUtil';
 import { TimelineDatePolicy } from '../common/utils/TimelineDatePolicy';
 import { TimelineExecutionState } from '../common/utils/TimelineExecutionState';
-import { PlanDao } from '../model/entity/PlanDao'; // [修改 1] 新增导入 PlanDao
 import { AiService } from '../common/utils/AiService'; // 记得导入
 import { PreferenceManager } from '../common/utils/PreferenceManager';
-import { NotificationGateway } from '../common/utils/NotificationGateway';
 import { AppStorageKeys } from '../common/constants/AppStorageKeys';
+import { ScheduleOrchestrator } from './internal/ScheduleOrchestrator';
+import { PlanPersistenceFacade } from './internal/PlanPersistenceFacade';
+import { ReminderFacade } from './internal/ReminderFacade';
 
 export interface DateGroup {
   dateHeader: string;
@@ -176,6 +176,9 @@ export class TimelineViewModel {
   private actualTimeMutationInFlight: boolean = false;
   private hasUnsavedPostponeStorageKey: string = AppStorageKeys.HAS_UNSAVED_POSTPONE;
   private minEventDurationLimit: number = 30;
+  private readonly scheduleOrchestrator: ScheduleOrchestrator = new ScheduleOrchestrator();
+  private readonly persistence: PlanPersistenceFacade = new PlanPersistenceFacade();
+  private readonly reminderFacade: ReminderFacade = new ReminderFacade();
   @Track private idleGapDetectionEnabled: boolean = true;
   @Track private idleGapTriggerMinutes: number = 45;
 
@@ -220,7 +223,7 @@ export class TimelineViewModel {
     if (!target || target.id <= 0 || this.planId <= 0) {
       return false;
     }
-    const result = await EventDao.applyRuntimeTransition({
+    const result = await this.persistence.applyRuntimeTransition({
       planId: this.planId,
       eventId: target.id,
       transition: transition,
@@ -278,14 +281,9 @@ export class TimelineViewModel {
   public async loadData(planId: number): Promise<void> {
     this.planId = planId;
     try {
-      const results = await Promise.all([
-        PlanDao.getPlanById(planId),
-        EventDao.getAllEvents(this.planId)
-      ]);
-
-      const plan = results[0] as import('../model/entity/PlanDao').PlanItem | undefined;
-      const rawEvents = results[1] as import('../model/interface/IStandardEvent').TravelPlanItem[];
-
+      const snapshot = await this.persistence.getPlanAndEvents(planId);
+      const plan = snapshot.plan;
+      const rawEvents = snapshot.events;
 
       if (plan) {
         if (plan.startDate) {
@@ -817,7 +815,7 @@ export class TimelineViewModel {
     const effectiveGlobalStart = DateUtil.isValidTimeString(globalStartCandidate) ? globalStartCandidate : '08:00';
     const startFromEventId = this.resolveScheduleAnchorEventId(safeStartIndex);
 
-    const calculated = TimeConstraintSolver.calculateTimeline(
+    const calculated = this.scheduleOrchestrator.calculate(
       inputList,
       effectiveGlobalStart,
       this.planStartDate,
@@ -871,7 +869,7 @@ export class TimelineViewModel {
       TAG,
       `[SHIFT_VM][recalculate_input] globalStart=${this.globalStartTime}, effectiveStart=${effectiveGlobalStart}, planStartDate=${this.planStartDate}, total=${inputList.length}`
     );
-    const calculated = TimeConstraintSolver.calculateTimeline(
+    const calculated = this.scheduleOrchestrator.calculate(
       inputList,
       effectiveGlobalStart,
       this.planStartDate,
@@ -914,7 +912,7 @@ export class TimelineViewModel {
     const globalStartCandidate = DateUtil.extractPureTime(this.globalStartTime) || this.globalStartTime;
     const effectiveGlobalStart = DateUtil.isValidTimeString(globalStartCandidate) ? globalStartCandidate : '08:00';
 
-    const calculated = TimeConstraintSolver.calculateTimeline(
+    const calculated = this.scheduleOrchestrator.calculate(
       inputList,
       effectiveGlobalStart,
       this.planStartDate,
@@ -1190,7 +1188,7 @@ export class TimelineViewModel {
     const globalStartCandidate = DateUtil.extractPureTime(this.globalStartTime) || this.globalStartTime;
     const effectiveGlobalStart = DateUtil.isValidTimeString(globalStartCandidate) ? globalStartCandidate : '08:00';
 
-    const calculated = TimeConstraintSolver.calculateTimeline(
+    const calculated = this.scheduleOrchestrator.calculate(
       this.events.map(e => e.toInterface()),
       effectiveGlobalStart,
       normalizedTimestamp,
@@ -1267,7 +1265,7 @@ export class TimelineViewModel {
     );
 
     if (this.planId !== -1) {
-      await PlanDao.updateStartDate(this.planId, normalizedTimestamp);
+      await this.persistence.updatePlanStartDate(this.planId, normalizedTimestamp);
     }
 
     // 仅计划基准日期变更时，无需重新求解整条时间链；刷新绝对时间与分组即可
@@ -1292,7 +1290,7 @@ export class TimelineViewModel {
     }
 
 
-    await PlanDao.updatePlanName(this.planId, newName);
+    await this.persistence.updatePlanName(this.planId, newName);
 
 
 
@@ -1311,7 +1309,7 @@ export class TimelineViewModel {
       });
     }
     if (this.planId !== -1) {
-      await PlanDao.updateAutoAmapRoute(this.planId, enabled);
+      await this.persistence.updateAutoAmapRoute(this.planId, enabled);
     }
     if (previousEnabled !== enabled || hasLocalFieldChanged) {
       this.recalculateFromIndex(0);
@@ -2286,7 +2284,7 @@ export class TimelineViewModel {
       const nextIdx = this.getOrderedScheduleIndexById(active.id, schedule) + 1;
       const next = (nextIdx > 0 && nextIdx < schedule.length) ? schedule[nextIdx] : null;
       const nextTip = next ? `下个地点：${next.name}` : '今日行程即将结束';
-      void NotificationGateway.updateScheduleNotification(`正在：${active.name}`, nextTip);
+      void this.reminderFacade.updateScheduleNotification(`正在：${active.name}`, nextTip);
     }
 
     hilog.info(
@@ -2982,6 +2980,7 @@ export class TimelineViewModel {
     });
   }
 }
+
 
 
 

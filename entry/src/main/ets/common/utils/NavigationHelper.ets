@@ -1,15 +1,29 @@
-// 文件路径: ets/common/utils/NavigationHelper.ets
+﻿// 文件路径: ets/common/utils/NavigationHelper.ets
 
 import { common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
-import { promptAction, router } from '@kit.ArkUI';
+import { UIContext } from '@ohos.arkui.UIContext';
 
 interface RouterPageOptions {
   url: string;
   params?: Object;
 }
 
+interface ToastOptions {
+  message: string;
+}
+
 export class NavigationHelper {
+  private static safeShowToast(uiContext: UIContext | undefined, message: string): void {
+    try {
+      if (uiContext) {
+        const options: ToastOptions = { message: message };
+        void uiContext.getPromptAction().openToast(options);
+      }
+    } catch (error) {
+      console.error(`showToast failed: ${JSON.stringify(error)}`);
+    }
+  }
 
   /**
    * 拉起系统导航面板 (策略B: 端水大师)
@@ -31,7 +45,7 @@ export class NavigationHelper {
     let abilityStartCallback: common.AbilityStartCallback = {
       onError: (code: number, name: string, message: string) => {
         console.error(`导航面板拉起失败: code ${code}, name: ${name}, message: ${message}`);
-        promptAction.showToast({ message: '拉起导航失败，请检查是否安装地图应用' });
+        NavigationHelper.safeShowToast(undefined, '拉起导航失败，请检查是否安装地图应用');
       }
     };
 
@@ -42,14 +56,15 @@ export class NavigationHelper {
       })
       .catch((err: BusinessError) => {
         console.error(`startAbilityByType 失败, 错误: ${JSON.stringify(err)}`);
-        promptAction.showToast({ message: '当前设备不支持系统级导航面板' });
+        NavigationHelper.safeShowToast(undefined, '当前设备不支持系统级导航面板');
       });
   }
 
-  public static async backOrFallbackToPlanList(params?: Object): Promise<void> {
-    const stackLength = Number(router.getLength());
+  public static async backOrFallbackToPlanList(uiContext: UIContext, params?: Object): Promise<void> {
+    const routerProxy = uiContext.getRouter();
+    const stackLength = Number(routerProxy.getLength());
     if (Number.isFinite(stackLength) && stackLength > 1) {
-      router.back();
+      routerProxy.back();
       return;
     }
 
@@ -59,14 +74,15 @@ export class NavigationHelper {
     }
 
     try {
-      await router.replaceUrl(fallbackOptions);
+      await routerProxy.replaceUrl(fallbackOptions);
     } catch (_replaceError) {
       try {
-        await router.pushUrl(fallbackOptions);
-        promptAction.showToast({ message: '无上级页面，已返回计划列表' });
+        await routerProxy.pushUrl(fallbackOptions);
+        NavigationHelper.safeShowToast(uiContext, '无上级页面，已返回计划列表');
       } catch (_pushError) {
-        promptAction.showToast({ message: '返回失败，请手动回到计划列表' });
+        NavigationHelper.safeShowToast(uiContext, '返回失败，请手动回到计划列表');
       }
     }
   }
 }
+

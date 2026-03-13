@@ -67,6 +67,13 @@ struct MapPickerPage {
     return ThemeCenter.getPalette(this.effectiveTheme);
   }
 
+  private safeShowToast(message: string): void {
+    try {
+      promptAction.openToast({ message: message });
+    } catch (_error) {
+    }
+  }
+
   private isValidCoordinate(lat: number, lng: number): boolean {
     return Number.isFinite(lat) &&
       Number.isFinite(lng) &&
@@ -77,8 +84,8 @@ struct MapPickerPage {
 
   // ✅ 修复 2：所有函数必须显式声明返回类型 (void)，解决 arkts-no-implicit-return-types
   aboutToAppear(): void {
-    this.uiContext = getContext(this) as common.UIAbilityContext;
-    const params = router.getParams() as MapPickerRouteParams;
+    this.uiContext = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    const params = this.getUIContext().getRouter().getParams() as MapPickerRouteParams;
     if (params) {
       const routeLat = params.lat ?? 0;
       const routeLng = params.lng ?? 0;
@@ -277,7 +284,7 @@ struct MapPickerPage {
 
   confirmSelection(): void {
     if (this.currentLat === 0) {
-      promptAction.showToast({ message: '请选择有效位置' });
+      this.safeShowToast('请选择有效位置');
       return;
     }
 
@@ -289,7 +296,7 @@ struct MapPickerPage {
     // 转化为字符串传出
     const key = this.storageScopePlanId > 0 ? `pickedLocationStr_${this.storageScopePlanId}` : 'pickedLocationStr';
     AppStorage.setOrCreate(key, JSON.stringify(resultObj));
-    router.back();
+    this.getUIContext().getRouter().back();
   }
 
   build() {
@@ -318,7 +325,7 @@ struct MapPickerPage {
           .fontColor(this.getThemePalette().textPrimary)
           .border({ width: 1, color: this.getThemePalette().border })
           .shadow({ radius: 8, color: this.effectiveTheme === 'dark' ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.1)' })
-          .onClick(() => router.back())
+          .onClick(() => this.getUIContext().getRouter().back())
 
         TextInput({ text: this.searchKeyword, placeholder: '搜索地点（例如：东京塔）' })
           .layoutWeight(1)
@@ -464,6 +471,8 @@ struct MapPickerPage {
     .height('100%')
   }
 }
+
+
 
 
 

@@ -1,0 +1,3 @@
+# Third-party AMap package metadata warnings (not emitted by repo code).
+# Keep this broad enough to match wrapped/truncated terminal lines.
+Property 'sourceMapsPath' not found in '@a

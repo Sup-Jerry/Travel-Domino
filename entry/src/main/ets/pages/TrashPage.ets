@@ -44,7 +44,7 @@ struct TrashPage {
   }
 
   handleHardDelete(item: PlanItem) {
-    AlertDialog.show({
+    this.getUIContext().showAlertDialog({
       title: '⚠️ 彻底删除',
       message: '此操作将【永久销毁】该计划及其所有数据，无法恢复！\n\n确定要继续吗？',
       autoCancel: true,
@@ -168,6 +168,7 @@ struct TrashPage {
     .backgroundColor(this.getThemePalette().pageBg);
   }
 }
+
 
 
 

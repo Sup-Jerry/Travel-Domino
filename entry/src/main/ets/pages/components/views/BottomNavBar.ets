@@ -81,10 +81,14 @@ export struct GlobalBottomNavBar {
 
   private async safeReplaceUrl(options: RouterUrlOptions, routeLabel: string): Promise<void> {
     try {
-      await router.replaceUrl(options);
+      await this.getUIContext().getRouter().replaceUrl(options);
     } catch (error) {
       hilog.warn(0x0000, NAV_TAG, `[BOTTOM_NAV][route_failed] to=${routeLabel}, reason=${JSON.stringify(error)}`);
-      promptAction.showToast({ message: '页面跳转失败，请重试' });
+      try {
+        promptAction.openToast({ message: '页面跳转失败，请重试' });
+      } catch (toastError) {
+        hilog.warn(0x0000, NAV_TAG, `[BOTTOM_NAV][toast_failed] reason=${JSON.stringify(toastError)}`);
+      }
     }
   }
 
@@ -136,7 +140,7 @@ export struct GlobalBottomNavBar {
     if (this.pressedTab === next) {
       return;
     }
-    animateTo({ duration: pressed ? 70 : 130, curve: pressed ? Curve.Sharp : Curve.Friction }, () => {
+    this.getUIContext().animateTo({ duration: pressed ? 70 : 130, curve: pressed ? Curve.Sharp : Curve.Friction }, () => {
       this.pressedTab = next;
     });
   }
@@ -161,7 +165,7 @@ export struct GlobalBottomNavBar {
       return;
     }
     this.navLocked = true;
-    animateTo({ duration: 160, curve: Curve.Friction }, () => {
+    this.getUIContext().animateTo({ duration: 160, curve: Curve.Friction }, () => {
       this.transitionTab = tab;
     });
     setTimeout(() => {
@@ -247,13 +251,13 @@ export struct GlobalBottomNavBar {
         .opacity(this.fabPressed ? 0.9 : 1)
         .onTouch((event: TouchEvent) => {
           if (event.type === TouchType.Down) {
-            animateTo({ duration: 70, curve: Curve.Sharp }, () => {
+            this.getUIContext().animateTo({ duration: 70, curve: Curve.Sharp }, () => {
               this.fabPressed = true;
             });
             return;
           }
           if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
-            animateTo({ duration: 130, curve: Curve.Friction }, () => {
+            this.getUIContext().animateTo({ duration: 130, curve: Curve.Friction }, () => {
               this.fabPressed = false;
             });
           }
@@ -378,6 +382,8 @@ export struct CompanionBottomActionBar {
     .border({ width: { top: 1 }, color: this.getPalette().border });
   }
 }
+
+
 
 
 

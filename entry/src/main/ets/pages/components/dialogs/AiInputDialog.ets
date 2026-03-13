@@ -64,7 +64,7 @@ export struct AiInputDialog {
                 this.onConfirm(this.inputText);
                 // 注意：不立即关闭，等待外部处理（例如成功后再关闭）
               } else {
-                promptAction.showToast({ message: '请输入需求' });
+                promptAction.openToast({ message: '请输入需求' });
               }
             })
             .width('40%')
@@ -80,6 +80,7 @@ export struct AiInputDialog {
     .width('90%')
   }
 }
+
 
 
 
