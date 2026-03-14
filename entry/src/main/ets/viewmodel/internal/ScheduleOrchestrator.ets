@@ -1,4 +1,4 @@
-import { TimeConstraintSolver, TimelineCalculateOptions } from '../../model/logic/TimeConstraintSolver';
+import { TimeConstraintSolver, TimelineCalculateOptions } from '../../domain/solver/TimeConstraintSolver';
 import { TravelPlanItem } from '../../model/interface/IStandardEvent';
 
 export class ScheduleOrchestrator {

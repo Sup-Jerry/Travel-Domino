@@ -6,7 +6,7 @@ import { abilityAccessCtrl, bundleManager, common } from '@kit.AbilityKit';
 import { MapsInitializer } from '@amap/amap_lbs_map3d';
 import { ThemeCenter } from '../../../common/utils/ThemeCenter';
 import { DateUtil } from '../../../common/utils/DateUtil';
-import { TimelineDatePolicy } from '../../../common/utils/TimelineDatePolicy';
+import { TimelineDatePolicy } from '../../../domain/policy/TimelineDatePolicy';
 import { AppConfig } from '../../../common/utils/AppConfig';
 
 interface PickedLocationData {

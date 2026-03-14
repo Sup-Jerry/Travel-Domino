@@ -1,7 +1,7 @@
 import { EventEntity } from '../../model/entity/EventEntity';
 import { ArrivalReminderAction, ArrivalReminderEngine, ArrivalReminderPayload } from './ArrivalReminderEngine';
-import { ArrivalReminderStore } from './arrival/ArrivalReminderStore';
-import { TimelineExecutionState } from './TimelineExecutionState';
+import { ArrivalReminderStore } from '../../common/utils/arrival/ArrivalReminderStore';
+import { TimelineExecutionState } from '../../domain/policy/TimelineExecutionState';
 
 export interface HomeArrivalConsumeInput {
   isDialogOpen: boolean;

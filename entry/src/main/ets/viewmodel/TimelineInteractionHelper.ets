@@ -3,8 +3,8 @@ import { TimelineViewModel } from './TimelineViewModel';
 import { EventEntity } from '../model/entity/EventEntity';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { DateUtil } from '../common/utils/DateUtil';
-import { TimelineDatePolicy } from '../common/utils/TimelineDatePolicy';
-import { TimelineExecutionState } from '../common/utils/TimelineExecutionState';
+import { TimelineDatePolicy } from '../domain/policy/TimelineDatePolicy';
+import { TimelineExecutionState } from '../domain/policy/TimelineExecutionState';
 
 /**
  * 涓撻棬澶勭悊 UI 浜や簰閫昏緫鐨勮緟鍔╃被

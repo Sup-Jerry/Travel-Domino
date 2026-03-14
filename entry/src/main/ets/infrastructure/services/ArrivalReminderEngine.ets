@@ -17,11 +17,11 @@ import {
   IAMapLocationListener
 } from '@amap/amap_lbs_location';
 import geoLocationManager from '@ohos.geoLocationManager';
-import { ArrivalLiveActivityBridge, ArrivalLiveStatus } from './ArrivalLiveActivityBridge';
-import { ArrivalReminderStore } from './arrival/ArrivalReminderStore';
-import { TimelineExecutionState } from './TimelineExecutionState';
-import { TimelineDatePolicy } from './TimelineDatePolicy';
-import { NotificationGateway } from './NotificationGateway';
+import { ArrivalLiveActivityBridge, ArrivalLiveStatus } from '../../common/utils/ArrivalLiveActivityBridge';
+import { ArrivalReminderStore } from '../../common/utils/arrival/ArrivalReminderStore';
+import { TimelineExecutionState } from '../../domain/policy/TimelineExecutionState';
+import { TimelineDatePolicy } from '../../domain/policy/TimelineDatePolicy';
+import { NotificationGateway } from '../../common/utils/NotificationGateway';
 
 const TAG = 'ArrivalReminderEngine';
 
