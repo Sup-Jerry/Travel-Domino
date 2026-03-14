@@ -3,7 +3,7 @@ import { abilityAccessCtrl, bundleManager, common } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { PlanDao, PlanItem } from '../model/entity/PlanDao';
 import { PreferenceManager } from '../common/utils/PreferenceManager';
-import { ArrivalReminderEngine } from '../common/utils/ArrivalReminderEngine';
+import { ArrivalReminderEngine } from '../infrastructure/services/ArrivalReminderEngine';
 import { TimelineViewModel } from './TimelineViewModel';
 
 export interface ArrivalPromptState {

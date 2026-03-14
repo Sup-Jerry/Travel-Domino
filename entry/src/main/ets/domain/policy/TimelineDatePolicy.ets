@@ -1,5 +1,5 @@
 import { EventEntity } from '../../model/entity/EventEntity';
-import { DateUtil } from './DateUtil';
+import { DateUtil } from '../../common/utils/DateUtil';
 
 export class TimelineDatePolicy {
   private static readonly DAY_MS: number = 24 * 60 * 60 * 1000;

@@ -15,7 +15,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { CompanionBottomActionBar } from './BottomNavBar';
 import { ThemeCenter } from '../../../common/utils/ThemeCenter';
 import { CompanionEventState, CompanionPresentationHelper } from './CompanionPresentationHelper';
-import { TimelineExecutionState } from '../../../common/utils/TimelineExecutionState';
+import { TimelineExecutionState } from '../../../domain/policy/TimelineExecutionState';
 
 type CompanionSubMode = 'immersive' | 'control';
 type CompanionInteractionMode = 'immersive' | 'control' | 'both';

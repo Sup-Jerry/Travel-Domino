@@ -6,7 +6,7 @@ import { notificationManager } from '@kit.NotificationKit';
 import notification from '@ohos.notification';
 import wantAgent, { WantAgent } from '@ohos.app.ability.wantAgent';
 import { PreferenceManager } from '../common/utils/PreferenceManager';
-import { TrafficEngine } from '../model/logic/TrafficEngine';
+import { TrafficEngine } from '../infrastructure/services/TrafficEngine';
 import { bundleManager } from '@kit.AbilityKit';
 import { AMap, MapsInitializer, MapView, MapViewManager } from '@amap/amap_lbs_map3d';
 import {

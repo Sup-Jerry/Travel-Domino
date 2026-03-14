@@ -140,7 +140,7 @@ export class AiService {
         'Authorization': `Bearer ${AppConfig.AI_API_KEY}`
       } as GeneratedObjectLiteralInterface_1),
       extraData: ({
-        model: 'DeepSeek-V3.1',
+        model: 'DeepSeek-V3.2',
         max_tokens: 2000,
         messages: [
           ({ role: 'system', content: systemPrompt } as GeneratedObjectLiteralInterface_2),

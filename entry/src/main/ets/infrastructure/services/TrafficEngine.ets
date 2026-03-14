@@ -1,8 +1,8 @@
-﻿// path: model/logic/TrafficEngine.ets
+﻿// path: infrastructure/services/TrafficEngine.ets
 import { common } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { IMapService, LocationInfo, DriveStrategy } from '../interface/IMapService';
-import { MapServiceImpl } from '../acl/MapServiceImpl';
+import { IMapService, LocationInfo, DriveStrategy } from '../../model/interface/IMapService';
+import { MapServiceImpl } from '../../model/acl/MapServiceImpl';
 import { DomainConstants } from '../../common/constants/DomainConstants';
 
 const TAG = 'TrafficEngine';

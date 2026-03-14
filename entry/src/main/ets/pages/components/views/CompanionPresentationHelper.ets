@@ -1,6 +1,6 @@
 import { EventEntity } from '../../../model/entity/EventEntity';
 import { DateUtil } from '../../../common/utils/DateUtil';
-import { TimelineExecutionState } from '../../../common/utils/TimelineExecutionState';
+import { TimelineExecutionState } from '../../../domain/policy/TimelineExecutionState';
 
 export type CompanionEventState = 'PENDING' | 'ACTIVE' | 'COMPLETED' | 'SKIPPED';
 

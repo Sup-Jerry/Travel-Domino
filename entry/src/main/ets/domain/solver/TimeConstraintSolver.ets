@@ -1,8 +1,8 @@
-﻿// 路径: ets/model/logic/TimeConstraintSolver.ets
-import { LocationInfo } from '../interface/IMapService';
+﻿// 路径: ets/domain/solver/TimeConstraintSolver.ets
+import { LocationInfo } from '../../model/interface/IMapService';
 import { DateUtil } from '../../common/utils/DateUtil';
-import { TravelPlanItem } from '../interface/IStandardEvent';
-import { TrafficEngine } from './TrafficEngine';
+import { TravelPlanItem } from '../../model/interface/IStandardEvent';
+import { TrafficEngine } from '../../infrastructure/services/TrafficEngine';
 import hilog from '@ohos.hilog';
 
 export interface TimelineCalculateOptions {

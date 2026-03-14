@@ -4,14 +4,17 @@ import { ActiveEventSnapshot, EventDao, EventFieldUpdate } from '../model/entity
 import { EventEntity } from '../model/entity/EventEntity'; // 引入 Entity
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { DateUtil } from '../common/utils/DateUtil';
-import { TimelineDatePolicy } from '../common/utils/TimelineDatePolicy';
-import { TimelineExecutionState } from '../common/utils/TimelineExecutionState';
+import { TimelineDatePolicy } from '../domain/policy/TimelineDatePolicy';
+import { TimelineExecutionState } from '../domain/policy/TimelineExecutionState';
 import { AiService } from '../common/utils/AiService'; // 记得导入
 import { PreferenceManager } from '../common/utils/PreferenceManager';
 import { AppStorageKeys } from '../common/constants/AppStorageKeys';
 import { ScheduleOrchestrator } from './internal/ScheduleOrchestrator';
 import { PlanPersistenceFacade } from './internal/PlanPersistenceFacade';
 import { ReminderFacade } from './internal/ReminderFacade';
+import { ConflictDetector } from '../domain/timeline/ConflictDetector';
+import { CompressionEngine } from '../domain/timeline/CompressionEngine';
+import { HistoryManager } from '../domain/timeline/HistoryManager';
 
 export interface DateGroup {
   dateHeader: string;
@@ -1209,15 +1212,6 @@ export class TimelineViewModel {
 
     this.recalculateFromEventId(id);
   }
-  private parseConflictMinutes(conflictMsg: string): number {
-    const match = conflictMsg ? conflictMsg.match(/(\d+)/) : null;
-    if (!match || match.length < 2) {
-      return 0;
-    }
-
-    const parsed = Number.parseInt(match[1], 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-  }
 
   public previewPlanDateShift(newDateTimestamp: number): PlanDateShiftPreview {
     const nextDate = new Date(newDateTimestamp);
@@ -1238,52 +1232,28 @@ export class TimelineViewModel {
       }
     );
 
-    for (let index = 0; index < this.events.length; index++) {
-      const sourceItem = this.events[index];
-      const resultItem = calculated[index];
-      if (!sourceItem || !resultItem) {
-        continue;
-      }
+    const result = ConflictDetector.checkConflicts(this.events, calculated);
 
-      if (sourceItem.status !== 1 || sourceItem.lock_status !== 1) {
-        continue;
-      }
-
-      if (!resultItem.isConflict) {
-        continue;
-      }
-
-      const gapMinutes = (resultItem.gapMinutes && resultItem.gapMinutes > 0)
-        ? resultItem.gapMinutes
-        : this.parseConflictMinutes(resultItem.conflictMsg || '');
-
+    if (result.hasConflict) {
       hilog.warn(
         0x0000,
         TAG,
-        `[SHIFT_VM][preview_conflict] targetDate=${normalizedTimestamp}, eventId=${sourceItem.id}, eventName=${sourceItem.name}, gapMinutes=${gapMinutes}, msg=${resultItem.conflictMsg || ''}`
+        `[SHIFT_VM][preview_conflict] targetDate=${normalizedTimestamp}, eventId=${result.conflictItemId}, eventName=${result.conflictItemName}, gapMinutes=${result.gapMinutes}, msg=${result.conflictMsg}`
       );
-
-      return {
-        hasRigidConflict: true,
-        conflictItemId: sourceItem.id,
-        conflictItemName: sourceItem.name,
-        gapMinutes: gapMinutes,
-        conflictMsg: resultItem.conflictMsg || ''
-      };
+    } else {
+      hilog.info(
+        0x0000,
+        TAG,
+        `[SHIFT_VM][preview_ok] targetDate=${normalizedTimestamp}, eventCount=${this.events.length}`
+      );
     }
 
-    hilog.info(
-      0x0000,
-      TAG,
-      `[SHIFT_VM][preview_ok] targetDate=${normalizedTimestamp}, eventCount=${this.events.length}`
-    );
-
     return {
-      hasRigidConflict: false,
-      conflictItemId: -1,
-      conflictItemName: '',
-      gapMinutes: 0,
-      conflictMsg: ''
+      hasRigidConflict: result.hasConflict,
+      conflictItemId: result.conflictItemId,
+      conflictItemName: result.conflictItemName,
+      gapMinutes: result.gapMinutes,
+      conflictMsg: result.conflictMsg
     };
   }
   /**
@@ -2565,28 +2535,7 @@ export class TimelineViewModel {
 
   public getCurrentPlanHistorySummary(): HistoryTimelineSummary {
     const schedule = this.getOrderedScheduleEvents();
-    let completedCount = 0;
-    let skippedCount = 0;
-    let activeCount = 0;
-    for (let i = 0; i < schedule.length; i++) {
-      const event = schedule[i];
-      if (!TimelineExecutionState.isScheduled(event)) {
-        continue;
-      }
-      if (TimelineExecutionState.isCompleted(event)) {
-        completedCount += 1;
-      } else if (TimelineExecutionState.isSkipped(event)) {
-        skippedCount += 1;
-      } else if (TimelineExecutionState.isActive(event)) {
-        activeCount += 1;
-      }
-    }
-    return {
-      planName: (this.planName || '').trim().length > 0 ? this.planName : `计划 #${this.planId}`,
-      completedCount: completedCount,
-      skippedCount: skippedCount,
-      activeCount: activeCount
-    };
+    return HistoryManager.generateSummary(schedule, this.planName, this.planId);
   }
 
   public getCurrentPlanHistoryTimelineItems(abnormalThresholdMinutes: number = 10): HistoryTimelineItem[] {

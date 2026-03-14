@@ -1,4 +1,4 @@
-import { ArrivalReminderPayload } from '../ArrivalReminderEngine';
+import { ArrivalReminderPayload } from '../../../infrastructure/services/ArrivalReminderEngine';
 
 export class ArrivalReminderStore {
   public static readonly ARRIVAL_REMINDER_SEQ_KEY = 'ArrivalReminderSeq';
