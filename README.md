@@ -92,6 +92,46 @@ E:\Travel12.19
 - 修改时间/冲突逻辑时，优先补充对应测试。
 - 与地图、AI 相关的失败路径要显式处理（超时、空结果、鉴权失败）。
 
+## 项目展示
+
+> 图片来源：`C:\Users\Reaper\Pictures\travel`，已整理并提交到 `docs/showcase/`。
+
+![showcase-01](docs/showcase/showcase-01.jpg)
+![showcase-02](docs/showcase/showcase-02.jpg)
+![showcase-03](docs/showcase/showcase-03.jpg)
+![showcase-04](docs/showcase/showcase-04.jpg)
+![showcase-05](docs/showcase/showcase-05.jpg)
+![showcase-06](docs/showcase/showcase-06.jpg)
+![showcase-07](docs/showcase/showcase-07.jpg)
+![showcase-08](docs/showcase/showcase-08.jpg)
+![showcase-09](docs/showcase/showcase-09.jpg)
+![showcase-10](docs/showcase/showcase-10.jpg)
+![showcase-11](docs/showcase/showcase-11.jpg)
+![showcase-12](docs/showcase/showcase-12.jpg)
+![showcase-13](docs/showcase/showcase-13.jpg)
+![showcase-14](docs/showcase/showcase-14.jpg)
+![showcase-15](docs/showcase/showcase-15.jpg)
+![showcase-16](docs/showcase/showcase-16.jpg)
+![showcase-17](docs/showcase/showcase-17.jpg)
+![showcase-18](docs/showcase/showcase-18.jpg)
+![showcase-19](docs/showcase/showcase-19.jpg)
+![showcase-20](docs/showcase/showcase-20.jpg)
+![showcase-21](docs/showcase/showcase-21.jpg)
+![showcase-22](docs/showcase/showcase-22.jpg)
+![showcase-23](docs/showcase/showcase-23.jpg)
+![showcase-24](docs/showcase/showcase-24.jpg)
+![showcase-25](docs/showcase/showcase-25.jpg)
+![showcase-26](docs/showcase/showcase-26.jpg)
+![showcase-27](docs/showcase/showcase-27.jpg)
+![showcase-28](docs/showcase/showcase-28.jpg)
+![showcase-29](docs/showcase/showcase-29.jpg)
+![showcase-30](docs/showcase/showcase-30.jpg)
+![showcase-31](docs/showcase/showcase-31.jpg)
+![showcase-32](docs/showcase/showcase-32.jpg)
+![showcase-33](docs/showcase/showcase-33.jpg)
+![showcase-34](docs/showcase/showcase-34.jpg)
+![showcase-35](docs/showcase/showcase-35.jpg)
+
 ## License
 
 当前仓库未声明开源许可证；如需开源，请先补充 `LICENSE`。
