@@ -1,5 +1,5 @@
 ﻿import { promptAction } from '@kit.ArkUI';
-import { PlanJsonImportCancelToken } from '../../../common/utils/PlanJsonTransferService';
+import { PlanJsonImportCancelToken } from '../../../infrastructure/services/PlanImportExportService';
 
 @CustomDialog
 export struct PlanJsonImportDialog {

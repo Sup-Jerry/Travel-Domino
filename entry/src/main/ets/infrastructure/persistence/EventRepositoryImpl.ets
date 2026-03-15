@@ -668,5 +668,9 @@ export class EventRepositoryImpl {
   }
 }
 
-
-
+export type {
+  EventFieldUpdate,
+  RuntimeTransitionInput,
+  RuntimeTransitionResult,
+  ActiveEventSnapshot
+} from '../../domain/ports/IEventRepository';

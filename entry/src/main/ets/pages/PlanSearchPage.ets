@@ -1,4 +1,4 @@
-﻿import { PlanDao, PlanItem } from '../model/entity/PlanDao';
+﻿import { PlanRepositoryImpl, PlanItem } from '../infrastructure/persistence/PlanRepositoryImpl';
 import { router } from '@kit.ArkUI';
 import { GlobalBottomNavBar } from './components/views/BottomNavBar';
 import { hilog } from '@kit.PerformanceAnalysisKit';
@@ -100,7 +100,7 @@ struct PlanSearchPage {
     this.hasMore = false;
 
     try {
-      const list = await PlanDao.searchAllPlansPaged(keyword, 0, this.pageSize);
+      const list = await PlanRepositoryImpl.searchAllPlansPaged(keyword, 0, this.pageSize);
 
       if (token !== this.queryToken) {
         return;
@@ -137,7 +137,7 @@ struct PlanSearchPage {
     const keyword = this.currentKeyword;
     this.loadingMore = true;
     try {
-      const more = await PlanDao.searchAllPlansPaged(keyword, this.currentOffset, this.pageSize);
+      const more = await PlanRepositoryImpl.searchAllPlansPaged(keyword, this.currentOffset, this.pageSize);
       if (token !== this.queryToken) {
         return;
       }

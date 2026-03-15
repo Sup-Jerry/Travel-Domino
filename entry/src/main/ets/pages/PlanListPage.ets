@@ -1,4 +1,4 @@
-﻿import { PlanItem } from '../model/entity/PlanDao';
+﻿import { PlanItem } from '../infrastructure/persistence/PlanRepositoryImpl';
 import { CreatePlanDialog } from './components/dialogs/CreatePlanDialog';
 import { TipDialog } from './components/dialogs/TipDialog';
 import { PlanJsonExportDialog } from './components/dialogs/PlanJsonExportDialog';
@@ -9,7 +9,7 @@ import { PreferenceManager } from '../common/utils/PreferenceManager';
 import { GlobalBottomNavBar } from './components/views/BottomNavBar';
 import { ThemeCenter } from '../common/utils/ThemeCenter';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { PlanJsonImportCancelToken, PlanJsonTransferService } from '../common/utils/PlanJsonTransferService';
+import { PlanJsonImportCancelToken, PlanImportExportService } from '../infrastructure/services/PlanImportExportService';
 import { ArrivalReminderPayload } from '../infrastructure/services/ArrivalReminderEngine';
 import { ArrivalReminderCoordinator } from '../infrastructure/services/ArrivalReminderCoordinator';
 import { TimelineViewModel } from '../viewmodel/TimelineViewModel';
@@ -298,7 +298,7 @@ struct PlanListPage {
 
   private async exportPlanAsJson(item: PlanItem): Promise<void> {
     try {
-      const json = await PlanJsonTransferService.exportPlanToJson(item.id);
+      const json = await PlanImportExportService.exportPlanToJson(item.id);
       this.exportJsonText = json;
       this.openExportDialog();
     } catch (error) {
@@ -309,7 +309,7 @@ struct PlanListPage {
 
   private async importPlanFromJson(jsonText: string, cancelToken: PlanJsonImportCancelToken): Promise<void> {
     try {
-      const newPlanId = await PlanJsonTransferService.importPlanFromJson(jsonText, cancelToken);
+      const newPlanId = await PlanImportExportService.importPlanFromJson(jsonText, cancelToken);
       await this.loadPlans();
       this.safeShowToast(`导入成功（新计划ID: ${newPlanId}）`);
     } catch (error) {
