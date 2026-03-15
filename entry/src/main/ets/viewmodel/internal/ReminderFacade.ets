@@ -1,4 +1,4 @@
-import { NotificationGateway } from '../../common/utils/NotificationGateway';
+import { NotificationGateway } from '../../infrastructure/adapters/NotificationGateway';
 
 type NotifyDispatcher = (
   title: string,

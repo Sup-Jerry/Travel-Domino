@@ -21,7 +21,7 @@ import { ArrivalLiveActivityBridge, ArrivalLiveStatus } from '../../common/utils
 import { ArrivalReminderStore } from '../../common/utils/arrival/ArrivalReminderStore';
 import { TimelineExecutionState } from '../../domain/policy/TimelineExecutionState';
 import { TimelineDatePolicy } from '../../domain/policy/TimelineDatePolicy';
-import { NotificationGateway } from '../../common/utils/NotificationGateway';
+import { NotificationGateway } from '../adapters/NotificationGateway';
 
 const TAG = 'ArrivalReminderEngine';
 
