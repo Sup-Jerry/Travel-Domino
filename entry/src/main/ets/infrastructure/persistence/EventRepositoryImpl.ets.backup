@@ -1,0 +1,48 @@
+// @deprecated 使用 IEventRepository 替代
+// 此文件将在阶段5删除
+import { EventRepositoryImpl } from '../../infrastructure/persistence/EventRepositoryImpl';
+import { TravelPlanItem } from '../interface/IStandardEvent';
+import type {
+  EventFieldUpdate,
+  RuntimeTransitionType,
+  RuntimeTransitionInput,
+  RuntimeTransitionResult,
+  ActiveEventSnapshot
+} from '../../domain/ports/IEventRepository';
+
+export const EventDao = {
+  insertEvent: (planId: number, item: TravelPlanItem): Promise<number> =>
+    EventRepositoryImpl.insertEvent(planId, item),
+  saveAllEvents: (planId: number, events: TravelPlanItem[]): Promise<void> =>
+    EventRepositoryImpl.saveAllEvents(planId, events),
+  getAllEvents: (planId: number): Promise<TravelPlanItem[]> =>
+    EventRepositoryImpl.getAllEvents(planId),
+  updateDayOffset: (id: number, dayOffset: number): Promise<void> =>
+    EventRepositoryImpl.updateDayOffset(id, dayOffset),
+  updateTimelineConsistency: (events: TravelPlanItem[], planIdHint: number = -1): Promise<void> =>
+    EventRepositoryImpl.updateTimelineConsistency(events, planIdHint),
+  updateSingleField: (id: number, column: string, value: Object, planIdHint: number = -1): Promise<void> =>
+    EventRepositoryImpl.updateSingleField(id, column, value, planIdHint),
+  updateFields: (id: number, updates: EventFieldUpdate[], planIdHint: number = -1): Promise<void> =>
+    EventRepositoryImpl.updateFields(id, updates, planIdHint),
+  applyRuntimeTransition: (input: RuntimeTransitionInput): Promise<RuntimeTransitionResult> =>
+    EventRepositoryImpl.applyRuntimeTransition(input),
+  findGlobalActiveEvent: (excludeEventId: number = -1): Promise<ActiveEventSnapshot | null> =>
+    EventRepositoryImpl.findGlobalActiveEvent(excludeEventId),
+  softDeleteEvent: (id: number): Promise<void> =>
+    EventRepositoryImpl.softDeleteEvent(id),
+  hardDeleteEvent: (id: number): Promise<void> =>
+    EventRepositoryImpl.hardDeleteEvent(id),
+  markPlanDirty: (planId: number): void =>
+    EventRepositoryImpl.markPlanDirty(planId),
+  consumeDirtyPlanIds: (): number[] =>
+    EventRepositoryImpl.consumeDirtyPlanIds()
+};
+
+export type {
+  EventFieldUpdate,
+  RuntimeTransitionType,
+  RuntimeTransitionInput,
+  RuntimeTransitionResult,
+  ActiveEventSnapshot
+};
