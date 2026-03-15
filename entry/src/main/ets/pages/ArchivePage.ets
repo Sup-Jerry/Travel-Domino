@@ -1,4 +1,4 @@
-﻿import { PlanItem } from '../model/entity/PlanDao';
+﻿import { PlanItem } from '../infrastructure/persistence/PlanRepositoryImpl';
 import { router } from '@kit.ArkUI';
 import { PreferenceManager } from '../common/utils/PreferenceManager';
 import { TipDialog } from './components/dialogs/TipDialog';

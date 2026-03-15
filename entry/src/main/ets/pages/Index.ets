@@ -34,7 +34,7 @@ import { TimelineDatePolicy } from '../domain/policy/TimelineDatePolicy';
 import { PageDraftRecovery } from '../common/utils/PageDraftRecovery';
 import { AppStorageKeys } from '../common/constants/AppStorageKeys';
 import { DomainConstants } from '../common/constants/DomainConstants';
-import { PlanDao } from '../model/entity/PlanDao';
+import { PlanRepositoryImpl } from '../infrastructure/persistence/PlanRepositoryImpl';
 
 interface InitDialogData {
   name: string;
@@ -145,7 +145,7 @@ struct Index {
       return localTitle.length > 0 ? localTitle : `计划 #${planId}`;
     }
     try {
-      const plan = await PlanDao.getPlanById(planId);
+      const plan = await PlanRepositoryImpl.getPlanById(planId);
       const title = (plan?.title || '').trim();
       return title.length > 0 ? title : `计划 #${planId}`;
     } catch (_error) {

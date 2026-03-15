@@ -1,4 +1,4 @@
-﻿import { PlanItem } from '../model/entity/PlanDao';
+﻿import { PlanItem } from '../infrastructure/persistence/PlanRepositoryImpl';
 import { GlobalBottomNavBar } from './components/views/BottomNavBar';
 import { ThemeCenter } from '../common/utils/ThemeCenter';
 import { DateUtil } from '../common/utils/DateUtil';

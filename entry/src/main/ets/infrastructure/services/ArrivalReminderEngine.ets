@@ -1,8 +1,8 @@
 ﻿import { hilog } from '@kit.PerformanceAnalysisKit';
 import { EventEntity } from '../../model/entity/EventEntity';
 import { TimelineViewModel } from '../../viewmodel/TimelineViewModel';
-import { PlanDao, PlanItem } from '../../model/entity/PlanDao';
-import { EventDao } from '../../model/entity/EventDao';
+import { PlanRepositoryImpl, PlanItem } from '../persistence/PlanRepositoryImpl';
+import { EventRepositoryImpl } from '../persistence/EventRepositoryImpl';
 import type { TravelPlanItem } from '../../model/interface/IStandardEvent';
 import {
   AMapLocation,
@@ -219,11 +219,11 @@ export class ArrivalReminderEngine {
     try {
       const now = Date.now();
       const dirtyPlanIds: Set<number> = new Set<number>();
-      const eventDirty = EventDao.consumeDirtyPlanIds();
+      const eventDirty = EventRepositoryImpl.consumeDirtyPlanIds();
       for (let i = 0; i < eventDirty.length; i++) {
         dirtyPlanIds.add(eventDirty[i]);
       }
-      const planDirty = PlanDao.consumeDirtyPlanIds();
+      const planDirty = PlanRepositoryImpl.consumeDirtyPlanIds();
       for (let i = 0; i < planDirty.length; i++) {
         dirtyPlanIds.add(planDirty[i]);
       }
@@ -238,7 +238,7 @@ export class ArrivalReminderEngine {
           await this.applyDirtyPlansToActiveSnapshot(activePlanIdSet, dirtyPlanIds);
         }
       } else {
-        const plans = await PlanDao.getPlanList();
+        const plans: PlanItem[] = await PlanRepositoryImpl.getPlanList();
         plansScanned = plans.length;
         for (let i = 0; i < plans.length; i++) {
           if (this.isPlanActiveForReminder(plans[i])) {
@@ -267,7 +267,7 @@ export class ArrivalReminderEngine {
         const planMap: Map<number, PlanItem> = new Map<number, PlanItem>();
         const activePlanIds = activePlanIdsForLoop;
         if (activePlanIds.length > 0) {
-          const activePlanRows = await Promise.all(activePlanIds.map((planId: number) => PlanDao.getPlanById(planId)));
+          const activePlanRows: (PlanItem | undefined)[] = await Promise.all(activePlanIds.map((planId: number): Promise<PlanItem | undefined> => PlanRepositoryImpl.getPlanById(planId)));
           for (let i = 0; i < activePlanRows.length; i++) {
             const plan = activePlanRows[i];
             if (!plan || !this.isPlanActiveForReminder(plan)) {
@@ -276,7 +276,7 @@ export class ArrivalReminderEngine {
             planMap.set(plan.id, plan);
           }
         }
-        const refreshedEvents = await Promise.all(refreshPlanIds.map((planId: number) => EventDao.getAllEvents(planId)));
+        const refreshedEvents = await Promise.all(refreshPlanIds.map((planId: number) => EventRepositoryImpl.getAllEvents(planId)));
         for (let i = 0; i < refreshPlanIds.length; i++) {
           const planId = refreshPlanIds[i];
           const plan = planMap.get(planId);
@@ -426,7 +426,7 @@ export class ArrivalReminderEngine {
       return;
     }
     const dirtyIds = Array.from(dirtyPlanIds.values());
-    const dirtyPlans = await Promise.all(dirtyIds.map((planId: number) => PlanDao.getPlanById(planId)));
+    const dirtyPlans: (PlanItem | undefined)[] = await Promise.all(dirtyIds.map((planId: number): Promise<PlanItem | undefined> => PlanRepositoryImpl.getPlanById(planId)));
     for (let i = 0; i < dirtyIds.length; i++) {
       const planId = dirtyIds[i];
       const plan = dirtyPlans[i];

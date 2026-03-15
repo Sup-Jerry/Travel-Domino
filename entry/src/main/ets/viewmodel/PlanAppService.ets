@@ -1,7 +1,7 @@
 import { notificationManager } from '@kit.NotificationKit';
 import { abilityAccessCtrl, bundleManager, common } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { PlanDao, PlanItem } from '../model/entity/PlanDao';
+import { PlanRepositoryImpl, PlanItem } from '../infrastructure/persistence/PlanRepositoryImpl';
 import { PreferenceManager } from '../common/utils/PreferenceManager';
 import { ArrivalReminderEngine } from '../infrastructure/services/ArrivalReminderEngine';
 import { TimelineViewModel } from './TimelineViewModel';
@@ -25,39 +25,39 @@ export interface PlanRepository {
 
 class DaoPlanRepository implements PlanRepository {
   public async createPlan(title: string, startDate: number): Promise<number> {
-    return PlanDao.createPlan(title, startDate);
+    return PlanRepositoryImpl.createPlan(title, startDate);
   }
 
   public async purgeOldTrash(): Promise<number> {
-    return PlanDao.purgeOldTrash();
+    return PlanRepositoryImpl.purgeOldTrash();
   }
 
   public async getPlanList(): Promise<PlanItem[]> {
-    return PlanDao.getPlanList();
+    return PlanRepositoryImpl.getPlanList();
   }
 
   public async getArchivedPlans(): Promise<PlanItem[]> {
-    return PlanDao.getArchivedPlans();
+    return PlanRepositoryImpl.getArchivedPlans();
   }
 
   public async getTrashPlans(): Promise<PlanItem[]> {
-    return PlanDao.getTrashPlans();
+    return PlanRepositoryImpl.getTrashPlans();
   }
 
   public async updatePlanStatus(id: number, status: number): Promise<void> {
-    await PlanDao.updatePlanStatus(id, status);
+    await PlanRepositoryImpl.updatePlanStatus(id, status);
   }
 
   public async softDeletePlan(id: number): Promise<void> {
-    await PlanDao.softDeletePlan(id);
+    await PlanRepositoryImpl.softDeletePlan(id);
   }
 
   public async restorePlan(id: number): Promise<void> {
-    await PlanDao.restorePlan(id);
+    await PlanRepositoryImpl.restorePlan(id);
   }
 
   public async hardDeletePlan(id: number): Promise<void> {
-    await PlanDao.hardDeletePlan(id);
+    await PlanRepositoryImpl.hardDeletePlan(id);
   }
 }
 

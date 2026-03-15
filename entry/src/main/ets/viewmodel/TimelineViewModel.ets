@@ -1,12 +1,13 @@
 ﻿// 文件路径: ets/viewmodel/TimelineViewModel.ets
 import { TravelPlanItem } from '../model/interface/IStandardEvent';
-import { ActiveEventSnapshot, EventDao, EventFieldUpdate } from '../model/entity/EventDao';
+import { ActiveEventSnapshot, EventFieldUpdate } from '../infrastructure/persistence/EventRepositoryImpl';
+import { EventRepositoryImpl } from '../infrastructure/persistence/EventRepositoryImpl';
 import { EventEntity } from '../model/entity/EventEntity'; // 引入 Entity
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { DateUtil } from '../common/utils/DateUtil';
 import { TimelineDatePolicy } from '../domain/policy/TimelineDatePolicy';
 import { TimelineExecutionState } from '../domain/policy/TimelineExecutionState';
-import { AiService } from '../common/utils/AiService'; // 记得导入
+import { AiService } from '../infrastructure/services/AiService';
 import { PreferenceManager } from '../common/utils/PreferenceManager';
 import { AppStorageKeys } from '../common/constants/AppStorageKeys';
 import { ScheduleOrchestrator } from './internal/ScheduleOrchestrator';
@@ -371,8 +372,8 @@ export class TimelineViewModel {
     item.is_travel_manual = 1;
 
     if (item.id) {
-      EventDao.updateSingleField(item.id, EventEntity.PRE_TRAVEL_MINUTES, safeMinutes, this.planId);
-      EventDao.updateSingleField(item.id, EventEntity.IS_TRAVEL_MANUAL, 1, this.planId);
+      EventRepositoryImpl.updateSingleField(item.id, EventEntity.PRE_TRAVEL_MINUTES, safeMinutes, this.planId);
+      EventRepositoryImpl.updateSingleField(item.id, EventEntity.IS_TRAVEL_MANUAL, 1, this.planId);
     }
 
     this.recalculateFromEventId(item.id);
@@ -386,8 +387,8 @@ export class TimelineViewModel {
     item.duration = newDuration;
     this.recalculateFromEventId(item.id);
     if (item.id) {
-      EventDao.updateSingleField(item.id, 'duration', newDuration, this.planId);
-      void EventDao.updateTimelineConsistency(this.events.map(e => e.toInterface()), this.planId);
+      EventRepositoryImpl.updateSingleField(item.id, 'duration', newDuration, this.planId);
+      void EventRepositoryImpl.updateTimelineConsistency(this.events.map(e => e.toInterface()), this.planId);
     }
   }
 
@@ -431,7 +432,7 @@ export class TimelineViewModel {
       order += 100;
     });
 
-    await EventDao.updateTimelineConsistency(swappedEvents.map(e => e.toInterface()), this.planId);
+    await EventRepositoryImpl.updateTimelineConsistency(swappedEvents.map(e => e.toInterface()), this.planId);
     this.events = swappedEvents;
     const recalculateStartIndex = Math.max(Math.min(index, targetIndex) - 1, 0);
     this.recalculateFromIndex(recalculateStartIndex);
@@ -479,7 +480,7 @@ export class TimelineViewModel {
       target.fixed_start_time = newTimeStr;
       this.recalculateFromEventId(target.id);
       if (target.id) {
-        EventDao.updateSingleField(target.id, 'fixed_start_time', newTimeStr, this.planId);
+        EventRepositoryImpl.updateSingleField(target.id, 'fixed_start_time', newTimeStr, this.planId);
       }
     }
   }
@@ -521,7 +522,7 @@ export class TimelineViewModel {
       longitude: lng || 0
     };
 
-    const newId = await EventDao.insertEvent(this.planId, newItemInterface);
+    const newId = await EventRepositoryImpl.insertEvent(this.planId, newItemInterface);
     newItemInterface.id = newId;
 
     const newEntity = EventEntity.fromInterface(newItemInterface, this.planId);
@@ -545,7 +546,7 @@ export class TimelineViewModel {
     const idPreview = payload.map(item => item.id || -1).slice(0, 20).join(',');
     const idSuffix = payload.length > 20 ? `...(+${payload.length - 20})` : '';
     hilog.info(0x0000, TAG, `[ID_FIX][VM_SAVE_TRIGGER] planId=${this.planId} count=${payload.length} ids=[${idPreview}]${idSuffix}`);
-    await EventDao.saveAllEvents(this.planId, payload);
+    await EventRepositoryImpl.saveAllEvents(this.planId, payload);
   }
 
   // TimelineViewModel.ets 内部修改/替换原有冲突处理方法
@@ -628,10 +629,10 @@ export class TimelineViewModel {
 
 
     if (item.id) {
-      import('../model/entity/EventDao').then(m => {
-        m.EventDao.updateSingleField(item.id, EventEntity.TRAVEL_MODE, newMode, this.planId);
-        m.EventDao.updateSingleField(item.id, EventEntity.IS_TRAVEL_MANUAL, 0, this.planId);
-        m.EventDao.updateSingleField(item.id, EventEntity.PRE_TRAVEL_MINUTES, item.pre_travel_min, this.planId);
+      import('../infrastructure/persistence/EventRepositoryImpl').then(m => {
+        m.EventRepositoryImpl.updateSingleField(item.id, EventEntity.TRAVEL_MODE, newMode, this.planId);
+        m.EventRepositoryImpl.updateSingleField(item.id, EventEntity.IS_TRAVEL_MANUAL, 0, this.planId);
+        m.EventRepositoryImpl.updateSingleField(item.id, EventEntity.PRE_TRAVEL_MINUTES, item.pre_travel_min, this.planId);
       });
     }
 
@@ -725,7 +726,7 @@ export class TimelineViewModel {
       { column: EventEntity.PRE_TRAVEL_MINUTES, value: minutes },
       { column: EventEntity.IS_TRAVEL_MANUAL, value: 0 }
     ];
-    void EventDao.updateFields(entity.id, updates, this.planId);
+    void EventRepositoryImpl.updateFields(entity.id, updates, this.planId);
   }
 
   private applyCalculatedResult(entity: EventEntity, resultItem: SolverCalculatedItem | undefined): ApplyResultFlags {
@@ -1099,7 +1100,7 @@ export class TimelineViewModel {
 
 
     if (item.id) {
-      await EventDao.hardDeleteEvent(item.id);
+      await EventRepositoryImpl.hardDeleteEvent(item.id);
     }
 
     // 3. 触发刷新
@@ -1183,7 +1184,7 @@ export class TimelineViewModel {
       if (lng !== undefined && lng !== 0) {
         updates.push({ column: 'longitude', value: lng });
       }
-      await EventDao.updateFields(target.id, updates, this.planId);
+      await EventRepositoryImpl.updateFields(target.id, updates, this.planId);
       hilog.info(0x0000, TAG, `[节点3B: 准备更新入库] -> 地点: ${name}(ID:${id}), lat: ${lat}, lng: ${lng}`);
     }
 
@@ -1201,7 +1202,7 @@ export class TimelineViewModel {
         TAG,
         `[DAY_SHIFT_FIX][reinsert_done] id=${id}, name=${name}, reason=status_or_time_or_day_offset, newIndex=${this.events.indexOf(target)}, orderAfter=${this.buildScheduleOrderSnapshot()}`
       );
-      await EventDao.updateTimelineConsistency(this.events.map(e => e.toInterface()), this.planId);
+      await EventRepositoryImpl.updateTimelineConsistency(this.events.map(e => e.toInterface()), this.planId);
     } else if (dayOffsetChanged) {
       hilog.info(
         0x0000,
@@ -1705,7 +1706,7 @@ export class TimelineViewModel {
       }
 
       if (item.id) {
-        EventDao.updateSingleField(item.id, 'duration', change.newVal, this.planId);
+        EventRepositoryImpl.updateSingleField(item.id, 'duration', change.newVal, this.planId);
       }
     });
 
@@ -1757,7 +1758,7 @@ export class TimelineViewModel {
         };
 
         // 入库
-        const newId = await EventDao.insertEvent(this.planId, newItemInterface);
+        const newId = await EventRepositoryImpl.insertEvent(this.planId, newItemInterface);
         newItemInterface.id = newId;
 
 
@@ -2002,7 +2003,7 @@ export class TimelineViewModel {
 
 
       if (item.id) {
-        EventDao.updateSingleField(item.id, 'duration', item.duration, this.planId);
+        EventRepositoryImpl.updateSingleField(item.id, 'duration', item.duration, this.planId);
       }
     });
 
@@ -2258,7 +2259,7 @@ export class TimelineViewModel {
         const started = await this.applyRuntimeTransition(target, 'START', timestamp);
         return started;
       }
-      await EventDao.updateFields(id, [{ column: field, value: timestamp }], this.planId);
+      await EventRepositoryImpl.updateFields(id, [{ column: field, value: timestamp }], this.planId);
       target.actual_start_time = timestamp;
       return true;
     } else {
@@ -2386,7 +2387,7 @@ export class TimelineViewModel {
   }
 
   public async getStartConflictInfo(excludeEventId: number): Promise<StartConflictInfo | null> {
-    const active: ActiveEventSnapshot | null = await EventDao.findGlobalActiveEvent(excludeEventId);
+    const active: ActiveEventSnapshot | null = await EventRepositoryImpl.findGlobalActiveEvent(excludeEventId);
     if (!active) {
       return null;
     }
@@ -2900,7 +2901,7 @@ export class TimelineViewModel {
           startIndex = idx;
         }
         item.duration += addMin;
-        await EventDao.updateSingleField(item.id, 'duration', item.duration, this.planId);
+        await EventRepositoryImpl.updateSingleField(item.id, 'duration', item.duration, this.planId);
       }
     }
     if (startIndex < this.events.length) {
