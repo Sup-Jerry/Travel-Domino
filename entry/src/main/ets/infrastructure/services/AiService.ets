@@ -1,8 +1,8 @@
-﻿// 文件路径: ets/common/utils/AiService.ets
+﻿// 文件路径: ets/infrastructure/services/AiService.ets
 import { http } from '@kit.NetworkKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { AppConfig } from './AppConfig';
-import { HttpRequestHelper } from './HttpRequestHelper';
+import { AppConfig } from '../../common/utils/AppConfig';
+import { HttpRequestHelper } from '../adapters/HttpRequestHelper';
 
 export interface AiRawItem {
   name: string;

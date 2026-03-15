@@ -1,8 +1,8 @@
-﻿// 文件路径: ets/common/utils/AmapService.ets
+﻿// 文件路径: ets/infrastructure/services/AmapService.ets
 import { http } from '@kit.NetworkKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { AppConfig } from './AppConfig';
-import { HttpRequestHelper } from './HttpRequestHelper';
+import { AppConfig } from '../../common/utils/AppConfig';
+import { HttpRequestHelper } from '../adapters/HttpRequestHelper';
 import { PoiSearch, PoiQuery, PoiSearchBound, LatLonPoint, PoiResult, PoiItem } from '@amap/amap_lbs_search';
 import { common } from '@kit.AbilityKit';
 
