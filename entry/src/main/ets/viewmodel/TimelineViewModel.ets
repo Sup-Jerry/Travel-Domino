@@ -17,6 +17,7 @@ import { ConflictDetector } from '../domain/timeline/ConflictDetector';
 import { CompressionEngine } from '../domain/timeline/CompressionEngine';
 import { HistoryManager } from '../domain/timeline/HistoryManager';
 import { TimelineGroupingService, DateGroup, PlaceCheckinSummary, PlaceCheckinRecord } from '../domain/timeline/services/TimelineGroupingService';
+import { TimelineCalculationService } from '../domain/timeline/services/TimelineCalculationService';
 
 // 重新导出类型以保持向后兼容
 export { DateGroup, PlaceCheckinSummary, PlaceCheckinRecord };
@@ -147,7 +148,7 @@ interface GeneratedTypeLiteralInterface_6 {
   newVal: number;
 }
 
-interface SolverCalculatedItem {
+export interface SolverCalculatedItem {
   isConflict?: boolean;
   conflictMsg?: string;
   computedStartTime?: string;
@@ -160,7 +161,7 @@ interface SolverCalculatedItem {
   dayOffset?: number;
 }
 
-interface ApplyResultFlags {
+export interface ApplyResultFlags {
   changed: boolean;
   dayOffsetChanged: boolean;
 }
@@ -828,150 +829,88 @@ export class TimelineViewModel {
 
   public recalculateFromIndex(startIndex: number): void {
     const safeStartIndex = startIndex < 0 ? 0 : startIndex;
-    const inputList = this.events.map(e => e.toInterface());
-    const globalStartCandidate = DateUtil.extractPureTime(this.globalStartTime) || this.globalStartTime;
-    const effectiveGlobalStart = DateUtil.isValidTimeString(globalStartCandidate) ? globalStartCandidate : '08:00';
     const startFromEventId = this.resolveScheduleAnchorEventId(safeStartIndex);
 
-    const calculated = this.scheduleOrchestrator.calculate(
-      inputList,
-      effectiveGlobalStart,
+    const result = TimelineCalculationService.recalculateFromIndex(
+      this.events,
+      safeStartIndex,
+      this.globalStartTime,
       this.planStartDate,
+      this.scheduleOrchestrator,
       {
         autoRouteEnabled: this.isAutoRouteEnabled(),
         idleGapDetectionEnabled: this.idleGapDetectionEnabled,
         idleGapTriggerMinutes: this.idleGapTriggerMinutes,
         startFromEventId: startFromEventId
-      }
+      },
+      (entity: EventEntity, calculated: SolverCalculatedItem | undefined): ApplyResultFlags => this.applyCalculatedResult(entity, calculated)
     );
 
-    let hasFieldChanged = false;
-    let hasDayOffsetChanged = false;
-    this.events.forEach((entity: EventEntity, index: number) => {
-      if (index < safeStartIndex) {
-        return;
-      }
-      const flags = this.applyCalculatedResult(entity, calculated[index] as SolverCalculatedItem | undefined);
-      if (flags.changed) {
-        hasFieldChanged = true;
-      }
-      if (flags.dayOffsetChanged) {
-        hasDayOffsetChanged = true;
-      }
-    });
-
     this.calculateRealtimeSchedule();
-    // 结构层变化（新增进日程/暂存转日程/重排）即使求解字段不变，也要立即刷新分组列表。
     this.generateGroups();
     this.markScheduleChanged();
-    if (hasFieldChanged || hasDayOffsetChanged) {
+    if (result.hasFieldChanged || result.hasDayOffsetChanged) {
       this.events = [...this.events];
       return;
     }
-    // 字段不变时仍触发一次可观察数组替换，确保页面立即重绘。
     this.events = [...this.events];
   }
 
   public recalculate(): void {
-    // 1. 准备输入
-    const inputList = this.events.map(e => e.toInterface());
-    const globalStartCandidate = DateUtil.extractPureTime(this.globalStartTime) || this.globalStartTime;
-    const effectiveGlobalStart = DateUtil.isValidTimeString(globalStartCandidate) ? globalStartCandidate : '08:00';
-
     if (!this.hasLoggedLifecycleDetach) {
       hilog.info(0x0000, TAG, '[LIFECYCLE_GUARD] recalculate uses context-free solver path.');
       this.hasLoggedLifecycleDetach = true;
     }
+    const globalStartCandidate = DateUtil.extractPureTime(this.globalStartTime) || this.globalStartTime;
+    const effectiveGlobalStart = DateUtil.isValidTimeString(globalStartCandidate) ? globalStartCandidate : '08:00';
     hilog.info(
       0x0000,
       TAG,
-      `[SHIFT_VM][recalculate_input] globalStart=${this.globalStartTime}, effectiveStart=${effectiveGlobalStart}, planStartDate=${this.planStartDate}, total=${inputList.length}`
+      `[SHIFT_VM][recalculate_input] globalStart=${this.globalStartTime}, effectiveStart=${effectiveGlobalStart}, planStartDate=${this.planStartDate}, total=${this.events.length}`
     );
-    const calculated = this.scheduleOrchestrator.calculate(
-      inputList,
-      effectiveGlobalStart,
+
+    const result = TimelineCalculationService.recalculate(
+      this.events,
+      this.globalStartTime,
       this.planStartDate,
+      this.scheduleOrchestrator,
       {
         autoRouteEnabled: this.isAutoRouteEnabled(),
         idleGapDetectionEnabled: this.idleGapDetectionEnabled,
         idleGapTriggerMinutes: this.idleGapTriggerMinutes
-      }
+      },
+      (entity: EventEntity, calculated: SolverCalculatedItem | undefined): ApplyResultFlags => this.applyCalculatedResult(entity, calculated)
     );
 
-
-    let hasFieldChanged = false;
-    let hasDayOffsetChanged = false;
-    this.events.forEach((entity, index) => {
-      const flags = this.applyCalculatedResult(entity, calculated[index] as SolverCalculatedItem | undefined);
-      if (flags.changed) {
-        hasFieldChanged = true;
-      }
-      if (flags.dayOffsetChanged) {
-        hasDayOffsetChanged = true;
-      }
-    });
-
-    // 4. 先更新预测字段，确保分组可使用最新 dynamic_start_time 作为现实锚点
     this.calculateRealtimeSchedule();
-
-    // 5. 重新生成 Day 分组
     this.generateGroups();
-
-    // 6. 刷新 UI
     this.markScheduleChanged();
-    if (hasFieldChanged || hasDayOffsetChanged) {
+    if (result.hasFieldChanged || result.hasDayOffsetChanged) {
       this.events = [...this.events];
     }
     this.logTimelineSnapshot('recalculate');
   }
 
   public recalculateTrafficOnly(): void {
-    const inputList = this.events.map(e => e.toInterface());
-    const globalStartCandidate = DateUtil.extractPureTime(this.globalStartTime) || this.globalStartTime;
-    const effectiveGlobalStart = DateUtil.isValidTimeString(globalStartCandidate) ? globalStartCandidate : '08:00';
-
-    const calculated = this.scheduleOrchestrator.calculate(
-      inputList,
-      effectiveGlobalStart,
+    const result = TimelineCalculationService.recalculateTrafficOnly(
+      this.events,
+      this.globalStartTime,
       this.planStartDate,
+      this.scheduleOrchestrator,
       {
         autoRouteEnabled: this.isAutoRouteEnabled(),
         idleGapDetectionEnabled: this.idleGapDetectionEnabled,
         idleGapTriggerMinutes: this.idleGapTriggerMinutes
-      }
+      },
+      (entity, minutes) => this.persistAutoPreTravel(entity, minutes)
     );
 
-    let hasChanged = false;
-    let hasDayOffsetChanged = false;
-    this.events.forEach((entity, index) => {
-      const resultItem = calculated[index];
-      if (!resultItem) {
-        return;
-      }
-
-      if (resultItem.preTravelMinutes !== undefined && entity.pre_travel_min !== resultItem.preTravelMinutes) {
-        entity.pre_travel_min = resultItem.preTravelMinutes;
-        this.persistAutoPreTravel(entity, resultItem.preTravelMinutes);
-        hasChanged = true;
-      }
-      if (resultItem.computedStartTime && entity.computed_time !== resultItem.computedStartTime) {
-        entity.computed_time = resultItem.computedStartTime;
-        hasChanged = true;
-      }
-      const dynamicDayOffset = resultItem.dynamicDayOffset ?? resultItem.dayOffset ?? entity.day_offset;
-      if (entity.dynamic_day_offset !== dynamicDayOffset) {
-        entity.dynamic_day_offset = dynamicDayOffset;
-        hasChanged = true;
-        hasDayOffsetChanged = true;
-      }
-    });
-
-    if (!hasChanged) {
+    if (!result.hasFieldChanged) {
       return;
     }
 
     this.calculateRealtimeSchedule();
-    if (hasDayOffsetChanged) {
+    if (result.hasDayOffsetChanged) {
       this.generateGroups();
       this.markScheduleChanged();
     }
