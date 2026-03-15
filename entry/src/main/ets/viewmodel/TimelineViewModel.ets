@@ -16,14 +16,10 @@ import { ReminderFacade } from './internal/ReminderFacade';
 import { ConflictDetector } from '../domain/timeline/ConflictDetector';
 import { CompressionEngine } from '../domain/timeline/CompressionEngine';
 import { HistoryManager } from '../domain/timeline/HistoryManager';
+import { TimelineGroupingService, DateGroup, PlaceCheckinSummary, PlaceCheckinRecord } from '../domain/timeline/services/TimelineGroupingService';
 
-export interface DateGroup {
-  dateHeader: string;
-  dayIndex: number;
-  dayOffset: number;
-  actualDateMs: number;
-  events: EventEntity[];
-}
+// 重新导出类型以保持向后兼容
+export { DateGroup, PlaceCheckinSummary, PlaceCheckinRecord };
 
 interface GeneratedTypeLiteralInterface_7 {
   index: number;
@@ -72,26 +68,6 @@ export interface PlanDateShiftPreview {
   conflictItemName: string;
   gapMinutes: number;
   conflictMsg: string;
-}
-
-export interface PlaceCheckinRecord {
-  id: number;
-  name: string;
-  dayOffset: number;
-  status: number;
-  actualStart: number;
-  actualEnd: number;
-  stayMinutes: number;
-}
-
-export interface PlaceCheckinSummary {
-  placeName: string;
-  totalRecords: number;
-  completedRecords: number;
-  skippedRecords: number;
-  avgStayMinutes: number;
-  lastEndTime: number;
-  records: PlaceCheckinRecord[];
 }
 
 export type HistoryTimelineFilter = 'all' | 'completed' | 'skipped' | 'abnormal';
@@ -1016,74 +992,13 @@ export class TimelineViewModel {
   }
 
   private generateGroups() {
-    const nextGroups: DateGroup[] = [];
-    const planBaseDayMs = TimelineDatePolicy.toDayStartMs(this.planStartDate > 0 ? this.planStartDate : Date.now());
-
-    const scheduleEvents = this.events
-      .filter(e => e.status === 1)
-      .sort((a, b) => {
-        const dayOffsetA = this.getEffectiveDayOffset(a);
-        const dayOffsetB = this.getEffectiveDayOffset(b);
-        if (dayOffsetA !== dayOffsetB) {
-          return dayOffsetA - dayOffsetB;
-        }
-        return a.sort_order - b.sort_order;
-      });
-
-    if (scheduleEvents.length === 0) {
-      return;
-    }
-
-    let currentGroup: DateGroup | null = null;
-    let lastDayOffset = Number.MIN_SAFE_INTEGER;
-    let visibleDayIndex = 0;
-
-    scheduleEvents.forEach((item) => {
-      const renderDayOffset = TimelineDatePolicy.resolveEventDayOffset(item);
-      // 单一基准：分组键与日期头都严格使用 dynamic_day_offset，
-      // 避免长时长或伴游预测导致的“组键与日期头锚点不一致”。
-      const itemDateMs = TimelineDatePolicy.dayOffsetToDayStartMs(planBaseDayMs, renderDayOffset);
-
-
-      if (this.filterStart > 0 && (itemDateMs < this.filterStart || itemDateMs > this.filterEnd)) {
-        return;
-      }
-
-      // 新日期组：只对“实际存在的日期组”做连续编号
-      if (renderDayOffset !== lastDayOffset) {
-        const groupDate = new Date(itemDateMs);
-
-        visibleDayIndex += 1;
-
-        const dateStr = DateUtil.formatDate(groupDate, "MM月dd日");
-        let headerStr = `Day ${visibleDayIndex} (${dateStr})`;
-
-        if (renderDayOffset < 0) {
-          headerStr = `待定/冲突 (${renderDayOffset}天前)`;
-        }
-
-        currentGroup = {
-          dateHeader: headerStr,
-          dayIndex: visibleDayIndex,
-          dayOffset: renderDayOffset,
-          actualDateMs: itemDateMs,
-          events: []
-        };
-        hilog.info(
-          0x0000,
-          TAG,
-          `[DAY_SHIFT_FIX][group_anchor] mode=offset_only, dayOffset=${renderDayOffset}, header=${headerStr}, eventId=${item.id}, eventName=${item.name}, dynamicStart=${item.dynamic_start_time}, actualStart=${item.actual_start_time}`
-        );
-
-        nextGroups.push(currentGroup);
-        lastDayOffset = renderDayOffset;
-      }
-
-      if (currentGroup) {
-        currentGroup.events.push(item);
-      }
-    });
-    this.groupedEvents = nextGroups;
+    this.groupedEvents = TimelineGroupingService.generateGroups(
+      this.events,
+      this.planStartDate,
+      this.filterStart,
+      this.filterEnd,
+      (event) => this.getEffectiveDayOffset(event)
+    );
   }
 
 
@@ -2435,24 +2350,7 @@ export class TimelineViewModel {
   }
 
   public getOrderedScheduleEvents(): EventEntity[] {
-    const schedule = this.events.filter((event: EventEntity) => event.status === 1);
-    const stableIndex = new Map<number, number>();
-    schedule.forEach((event: EventEntity, index: number) => {
-      stableIndex.set(event.id, index);
-    });
-    const ordered = schedule.slice();
-    ordered.sort((a: EventEntity, b: EventEntity) => {
-      const dayA = TimelineDatePolicy.resolveEventDayOffset(a);
-      const dayB = TimelineDatePolicy.resolveEventDayOffset(b);
-      if (dayA !== dayB) {
-        return dayA - dayB;
-      }
-      if (a.sort_order !== b.sort_order) {
-        return a.sort_order - b.sort_order;
-      }
-      return (stableIndex.get(a.id) ?? 0) - (stableIndex.get(b.id) ?? 0);
-    });
-    return ordered;
+    return TimelineGroupingService.getOrderedScheduleEvents(this.events);
   }
 
   private getOrderedScheduleIndexById(eventId: number, schedule?: EventEntity[]): number {
@@ -2460,30 +2358,8 @@ export class TimelineViewModel {
     return source.findIndex((event: EventEntity) => event.id === eventId);
   }
 
-  private normalizePlaceKey(placeName: string): string {
-    return placeName.trim().toLowerCase();
-  }
-
   public getEventsByPlaceName(placeName: string): EventEntity[] {
-    const key = this.normalizePlaceKey(placeName);
-    if (key.length === 0) {
-      return [];
-    }
-    const items = this.events.filter((event: EventEntity) =>
-      this.normalizePlaceKey(event.name || '') === key
-    );
-    items.sort((a: EventEntity, b: EventEntity) => {
-      const dayA = TimelineDatePolicy.resolveEventDayOffset(a);
-      const dayB = TimelineDatePolicy.resolveEventDayOffset(b);
-      if (dayA !== dayB) {
-        return dayA - dayB;
-      }
-      if (a.sort_order !== b.sort_order) {
-        return a.sort_order - b.sort_order;
-      }
-      return a.id - b.id;
-    });
-    return items;
+    return TimelineGroupingService.getEventsByPlaceName(this.events, placeName);
   }
 
   public getPlaceAddress(placeName: string): string {
@@ -2515,23 +2391,7 @@ export class TimelineViewModel {
   }
 
   public getAllPlaceCheckinSummaries(): PlaceCheckinSummary[] {
-    const summaries: PlaceCheckinSummary[] = [];
-    const uniquePlaceNames = new Set<string>();
-    for (let i = 0; i < this.events.length; i++) {
-      const rawName = (this.events[i].name || '').trim();
-      if (rawName.length === 0) {
-        continue;
-      }
-      uniquePlaceNames.add(rawName);
-    }
-    const names = Array.from(uniquePlaceNames.values());
-    for (let i = 0; i < names.length; i++) {
-      const summary = this.getPlaceCheckinSummary(names[i]);
-      if (summary.totalRecords > 0) {
-        summaries.push(summary);
-      }
-    }
-    return summaries;
+    return TimelineGroupingService.getAllPlaceCheckinSummaries(this.events);
   }
 
   public getCurrentPlanHistorySummary(): HistoryTimelineSummary {
@@ -2910,63 +2770,7 @@ export class TimelineViewModel {
   }
 
   public getPlaceCheckinSummary(placeName: string): PlaceCheckinSummary {
-    const samePlaceEvents = this.getEventsByPlaceName(placeName);
-    const records: PlaceCheckinRecord[] = [];
-    let completedCount = 0;
-    let skippedCount = 0;
-    let totalStay = 0;
-    let lastEnd = 0;
-    for (let i = 0; i < samePlaceEvents.length; i++) {
-      const e = samePlaceEvents[i];
-      if (e.actual_start_time <= 0 && e.actual_end_time <= 0 && e.completion_status === EventEntity.STATE_PENDING) {
-        continue;
-      }
-      const stayMs = (e.actual_start_time > 0 && e.actual_end_time > e.actual_start_time)
-        ? (e.actual_end_time - e.actual_start_time)
-        : 0;
-      const stayMinutes = stayMs > 0 ? Math.round(stayMs / 60000) : 0;
-      if (e.completion_status === EventEntity.STATE_COMPLETED) {
-        completedCount += 1;
-        totalStay += stayMinutes;
-        if (e.actual_end_time > lastEnd) {
-          lastEnd = e.actual_end_time;
-        }
-      } else if (e.completion_status === EventEntity.STATE_SKIPPED) {
-        skippedCount += 1;
-      }
-      records.push({
-        id: e.id,
-        name: e.name,
-        dayOffset: e.day_offset,
-        status: e.completion_status,
-        actualStart: e.actual_start_time,
-        actualEnd: e.actual_end_time,
-        stayMinutes: stayMinutes
-      });
-    }
-    records.sort((a, b) => {
-      const ta = a.actualEnd > 0 ? a.actualEnd : a.actualStart;
-      const tb = b.actualEnd > 0 ? b.actualEnd : b.actualStart;
-      return tb - ta;
-    });
-    const avgStay = completedCount > 0 ? Math.round(totalStay / completedCount) : 0;
-
-    const summary: PlaceCheckinSummary = {
-      placeName: placeName,
-      totalRecords: records.length,
-      completedRecords: completedCount,
-      skippedRecords: skippedCount,
-      avgStayMinutes: avgStay,
-      lastEndTime: lastEnd,
-      records: records
-    };
-
-    hilog.info(
-      0x0000,
-      TAG,
-      `[CHECKIN_HISTORY][summary] place=${placeName}, total=${summary.totalRecords}, completed=${summary.completedRecords}, skipped=${summary.skippedRecords}, avgStay=${summary.avgStayMinutes}, lastEnd=${summary.lastEndTime}`
-    );
-    return summary;
+    return TimelineGroupingService.getPlaceCheckinSummary(this.events, placeName);
   }
 
   public getCompanionContext(nowTs: number = Date.now()): CompanionContext {
