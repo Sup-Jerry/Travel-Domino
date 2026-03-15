@@ -13,7 +13,7 @@ import {
   OnCameraChangeListener,
   MapView
 } from '@amap/amap_lbs_map3d';
-import { AmapService, PoiSearchItem } from '../common/utils/AmapService';
+import { AmapService, PoiSearchItem } from '../infrastructure/services/AmapService';
 
 import { MyLocationStyle  } from '@amap/amap_lbs_map3d';
 import { ThemeCenter } from '../common/utils/ThemeCenter';

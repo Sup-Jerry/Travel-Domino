@@ -11,7 +11,7 @@ import ArrayList from '@ohos.util.ArrayList';
 import { common } from '@kit.AbilityKit';
 import { promptAction } from '@kit.ArkUI';
 import { PreferenceManager } from '../../common/utils/PreferenceManager';
-import { AmapService, GeoCoordinate } from '../../common/utils/AmapService';
+import { AmapService, GeoCoordinate } from '../../infrastructure/services/AmapService';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
 import {
