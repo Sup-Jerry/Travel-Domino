@@ -1178,15 +1178,7 @@ export class TimelineViewModel {
    *
    */
   public isDateConflict(targetDateMs: number): boolean {
-    if (this.planStartDate <= 0) {
-      return false;
-    }
-
-
-    const targetDay = new Date(targetDateMs).setHours(0, 0, 0, 0);
-    const planDay = new Date(this.planStartDate).setHours(0, 0, 0, 0);
-
-    return targetDay < planDay;
+    return TimelineConflictResolver.isDateConflict(targetDateMs, this.planStartDate);
   }
 
 

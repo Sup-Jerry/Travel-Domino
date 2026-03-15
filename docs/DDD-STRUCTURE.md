@@ -23,6 +23,10 @@ entry/src/main/ets/
 │   │   └── PlanSerializer.ets
 │   ├── policy/                # 业务策略
 │   └── timeline/              # 时间线领域服务
+│       └── services/
+│           ├── TimelineGroupingService.ets
+│           ├── TimelineCalculationService.ets
+│           └── TimelineConflictResolver.ets
 │
 ├── infrastructure/            # 基础设施层（技术实现）
 │   ├── persistence/           # 数据持久化
@@ -73,6 +77,9 @@ entry/src/main/ets/
 **示例**：
 - `domain/ports/IEventRepository.ets` - 事件仓储接口
 - `domain/serializers/PlanSerializer.ets` - 计划序列化逻辑
+- `domain/timeline/services/TimelineGroupingService.ets` - 时间线分组服务
+- `domain/timeline/services/TimelineCalculationService.ets` - 时间线计算服务
+- `domain/timeline/services/TimelineConflictResolver.ets` - 冲突解决服务
 
 ### Infrastructure层（基础设施层）
 
@@ -140,6 +147,13 @@ Presentation → Application → Domain ← Infrastructure
 - 迁移`HttpRequestHelper`到`infrastructure/adapters/`
 - 迁移`NotificationGateway`到`infrastructure/adapters/`
 
+### 阶段3：拆分TimelineViewModel（部分完成）✅
+- 提取`TimelineGroupingService` - 分组展示逻辑（5个方法）
+- 提取`TimelineCalculationService` - 时间线计算逻辑（3个方法）
+- 提取`TimelineConflictResolver` - 冲突解决逻辑（2个方法）
+- TimelineViewModel从3193行减少到2919行（减少274行，8.6%）
+- 详见：[Timeline服务文档](./TIMELINE-SERVICES.md)
+
 ### 阶段4：拆分PlanJsonTransferService ✅
 - 创建`PlanSerializer`（Domain层）- 纯序列化逻辑
 - 创建`PlanImportExportService`（Infrastructure层）- 数据库操作
@@ -152,10 +166,10 @@ Presentation → Application → Domain ← Infrastructure
 
 ## 待完成工作
 
-### 阶段3：拆分TimelineViewModel（暂缓）
-- TimelineViewModel当前3192行，复杂度高
-- 计划拆分为5个领域服务
-- 需要更详细的设计和测试
+### 进一步优化TimelineViewModel（可选）
+- TimelineViewModel当前2919行，已达到可维护水平
+- 剩余方法深度耦合私有方法和状态管理
+- 建议：保持现状或等待更大规模架构重构
 
 ## 最佳实践
 

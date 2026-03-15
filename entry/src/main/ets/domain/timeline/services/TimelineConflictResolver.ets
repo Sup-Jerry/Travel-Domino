@@ -4,6 +4,17 @@ import { DateUtil } from '../../../common/utils/DateUtil';
 import { EventRepositoryImpl } from '../../../infrastructure/persistence/EventRepositoryImpl';
 
 export class TimelineConflictResolver {
+  static isDateConflict(targetDateMs: number, planStartDate: number): boolean {
+    if (planStartDate <= 0) {
+      return false;
+    }
+
+    const targetDay = new Date(targetDateMs).setHours(0, 0, 0, 0);
+    const planDay = new Date(planStartDate).setHours(0, 0, 0, 0);
+
+    return targetDay < planDay;
+  }
+
   static async fixConflict(
     events: EventEntity[],
     itemId: number,
