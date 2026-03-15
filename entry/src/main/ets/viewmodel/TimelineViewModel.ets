@@ -18,6 +18,7 @@ import { CompressionEngine } from '../domain/timeline/CompressionEngine';
 import { HistoryManager } from '../domain/timeline/HistoryManager';
 import { TimelineGroupingService, DateGroup, PlaceCheckinSummary, PlaceCheckinRecord } from '../domain/timeline/services/TimelineGroupingService';
 import { TimelineCalculationService } from '../domain/timeline/services/TimelineCalculationService';
+import { TimelineConflictResolver } from '../domain/timeline/services/TimelineConflictResolver';
 
 // 重新导出类型以保持向后兼容
 export { DateGroup, PlaceCheckinSummary, PlaceCheckinRecord };
@@ -445,20 +446,10 @@ export class TimelineViewModel {
     }
   }
 
-  public fixConflict(item: TravelPlanItem | EventEntity, shiftMinutes: number) {
-    const target = this.events.find(e => e.id === item.id);
-    if (target && target.fixed_start_time) {
-      const currentMin = DateUtil.timeToMinutes(target.fixed_start_time);
-      const newMin = currentMin + shiftMinutes;
-      const h = Math.floor(newMin / 60) % 24;
-      const m = newMin % 60;
-      const newTimeStr = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-
-      target.fixed_start_time = newTimeStr;
-      this.recalculateFromEventId(target.id);
-      if (target.id) {
-        EventRepositoryImpl.updateSingleField(target.id, 'fixed_start_time', newTimeStr, this.planId);
-      }
+  public async fixConflict(item: TravelPlanItem | EventEntity, shiftMinutes: number) {
+    const updated = await TimelineConflictResolver.fixConflict(this.events, item.id || 0, shiftMinutes, this.planId);
+    if (updated) {
+      this.recalculateFromEventId(item.id || 0);
     }
   }
 
