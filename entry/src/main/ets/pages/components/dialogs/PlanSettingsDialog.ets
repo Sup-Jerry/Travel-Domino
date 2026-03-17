@@ -9,9 +9,30 @@ export struct PlanSettingsDialog {
   onReschedule: () => void = () => {};
   onAutoRouteChange: (enabled: boolean) => void = () => {};
   autoRouteEnabled: boolean = true;
+  currentStrategyMode: number = 0;
+  onStrategyChange: (mode: number) => void = (mode: number) => {};
+  hasAiHistory: boolean = false;
+  onRegenerateWithStrategy: (mode: number) => void = (mode: number) => {};
+  @State selectedStrategy: number = 0;
 
   private getPalette() {
     return ThemeCenter.getPalette(this.effectiveTheme);
+  }
+
+  aboutToAppear() {
+    this.selectedStrategy = this.currentStrategyMode;
+  }
+
+  private getStrategyName(mode: number): string {
+    if (mode === 1) return '⚡ 特种兵';
+    if (mode === 2) return '☕ 休闲';
+    return '✨ 默认';
+  }
+
+  private getStrategyDesc(mode: number): string {
+    if (mode === 1) return '高密度景点覆盖，适合体力充沛的旅行者';
+    if (mode === 2) return '低密度慢节奏，适合放松度假';
+    return 'AI智能推荐，平衡节奏';
   }
 
   build() {
@@ -122,6 +143,112 @@ export struct PlanSettingsDialog {
       }
       .width('100%')
       .padding({ top: 12, bottom: 12 });
+
+      Divider().color(this.getPalette().divider).margin({ top: 8, bottom: 8 });
+
+      Row() {
+        Text('[S]')
+          .fontSize(18)
+          .fontColor(this.getPalette().primary)
+          .margin({ right: 16 });
+
+        Column() {
+          Text('旅行策略')
+            .fontSize(16)
+            .fontColor(this.getPalette().textPrimary)
+            .fontWeight(FontWeight.Medium);
+          Text(this.getStrategyDesc(this.selectedStrategy))
+            .fontSize(12)
+            .fontColor(this.getPalette().textSecondary)
+            .margin({ top: 4 })
+            .maxLines(2);
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start);
+      }
+      .width('100%')
+      .padding({ top: 12, bottom: 8 });
+
+      Row() {
+        Button() { Text('✨ 默认').fontSize(14) }
+          .height(36)
+          .backgroundColor(this.selectedStrategy === 0 ? this.getPalette().primary : this.getPalette().cardBgSoft)
+          .fontColor(this.selectedStrategy === 0 ? Color.White : this.getPalette().textPrimary)
+          .borderRadius(8)
+          .layoutWeight(1)
+          .onClick(() => {
+            if (this.selectedStrategy !== 0) {
+              this.selectedStrategy = 0;
+              this.onStrategyChange(0);
+            }
+          })
+          .gesture(
+            LongPressGesture({ repeat: false })
+              .onAction(() => {
+                if (this.hasAiHistory && this.selectedStrategy !== 0) {
+                  this.onRegenerateWithStrategy(0);
+                  this.controller.close();
+                }
+              })
+          )
+
+        Button() { Text('⚡ 特种兵').fontSize(14) }
+          .height(36)
+          .backgroundColor(this.selectedStrategy === 1 ? this.getPalette().primary : this.getPalette().cardBgSoft)
+          .fontColor(this.selectedStrategy === 1 ? Color.White : this.getPalette().textPrimary)
+          .borderRadius(8)
+          .layoutWeight(1)
+          .margin({ left: 8 })
+          .onClick(() => {
+            if (this.selectedStrategy !== 1) {
+              this.selectedStrategy = 1;
+              this.onStrategyChange(1);
+            }
+          })
+          .gesture(
+            LongPressGesture({ repeat: false })
+              .onAction(() => {
+                if (this.hasAiHistory && this.selectedStrategy !== 1) {
+                  this.onRegenerateWithStrategy(1);
+                  this.controller.close();
+                }
+              })
+          )
+
+        Button() { Text('☕ 休闲').fontSize(14) }
+          .height(36)
+          .backgroundColor(this.selectedStrategy === 2 ? this.getPalette().primary : this.getPalette().cardBgSoft)
+          .fontColor(this.selectedStrategy === 2 ? Color.White : this.getPalette().textPrimary)
+          .borderRadius(8)
+          .layoutWeight(1)
+          .margin({ left: 8 })
+          .onClick(() => {
+            if (this.selectedStrategy !== 2) {
+              this.selectedStrategy = 2;
+              this.onStrategyChange(2);
+            }
+          })
+          .gesture(
+            LongPressGesture({ repeat: false })
+              .onAction(() => {
+                if (this.hasAiHistory && this.selectedStrategy !== 2) {
+                  this.onRegenerateWithStrategy(2);
+                  this.controller.close();
+                }
+              })
+          )
+      }
+      .width('100%')
+      .padding({ bottom: 12 })
+
+      if (this.hasAiHistory) {
+        Text('💡 长按策略按钮可直接切换并重新生成')
+          .fontSize(11)
+          .fontColor(this.getPalette().textTertiary)
+          .width('100%')
+          .textAlign(TextAlign.Center)
+          .margin({ top: 8 })
+      }
 
       Button('取消')
         .type(ButtonType.Normal)

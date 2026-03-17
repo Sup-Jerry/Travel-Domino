@@ -47,3 +47,25 @@ When user explicitly names a skill, or task clearly matches its description, use
 - Progressive read: open `SKILL.md` first, then only load referenced files as needed.
 - If a skill path is missing/unreadable, state it briefly and continue with best fallback.
 - Explicitly disabled in this repo: `yt-dlp`.
+
+## Local Skills Auto-Loading (AWS Code Compatible)
+Since AWS Code cannot invoke skills via Skill tool, use Read tool to load and follow skill instructions:
+
+**Project Local Skills Path**: `E:\Travel12.19\skills\`
+
+**Auto-loading triggers**:
+1. **travel-domino-dev** - MUST read `skills/travel-domino-dev/SKILL.md` when:
+   - Any code modification task (bug fix, feature, refactor, UI change)
+   - Follow Pre-Code Alignment Gate strictly before coding
+
+2. **skill-evolution-manager** - MUST read `skills/skill-evolution-manager/SKILL.md` when:
+   - User requests retrospective/review ("复盘", "总结", "回顾")
+   - After completing complex multi-step tasks
+
+3. **skill-manager** - Read `skills/skill-manager/SKILL.md` when:
+   - User asks to manage/update/list skills
+
+4. **app-size-pruner** - Read `skills/app-size-pruner/SKILL.md` when:
+   - User asks to optimize app size or analyze HAP size
+
+**Execution**: After reading skill file, strictly follow all rules and workflows defined within.

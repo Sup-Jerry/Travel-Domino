@@ -666,6 +666,15 @@ export class EventRepositoryImpl {
       throw new Error(`[hardDeleteEvent] failed id=${id}`);
     }
   }
+
+  public static async deleteEventsBySource(planId: number, source: number): Promise<void> {
+    const rdbStore = RdbHelper.getInstance().getRdbStore();
+    if (!rdbStore) return;
+    const predicates = new relationalStore.RdbPredicates(EventEntity.TABLE_NAME);
+    predicates.equalTo(EventEntity.PLAN_ID, planId).and().equalTo(EventEntity.SOURCE, source);
+    await rdbStore.delete(predicates);
+    EventRepositoryImpl.markPlanDirty(planId);
+  }
 }
 
 export type {
