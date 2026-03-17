@@ -160,6 +160,8 @@ export interface SolverCalculatedItem {
   transitWarning?: boolean;
   dynamicDayOffset?: number;
   dayOffset?: number;
+  dynamicStartTime?: number;
+  dynamicEndTime?: number;
 }
 
 export interface ApplyResultFlags {
@@ -199,6 +201,7 @@ export class TimelineViewModel {
   private readonly reminderFacade: ReminderFacade = new ReminderFacade();
   @Track private idleGapDetectionEnabled: boolean = true;
   @Track private idleGapTriggerMinutes: number = 45;
+  private currentStrategyMode: number = 0;
 
   /**
    *
@@ -426,10 +429,26 @@ export class TimelineViewModel {
       const scheduleItems = this.events.filter(e => e.status === 1);
       const maxSort = scheduleItems.reduce((max, cur) => cur.sort_order > max ? cur.sort_order : max, 0);
       target.sort_order = maxSort + 100;
+
+      // 清除暂存池可能携带的时间字段，让recalculate重新计算
+      target.fixed_start_time = '';
+      target.computed_time = '';
+      target.dynamic_start_time = 0;
+      target.dynamic_end_time = 0;
+
       if (this.shouldAutoRouteForItem(target)) {
         target.pre_travel_min = -1;
       }
+
+      // 关键修复：按sort_order排序后再重算
+      // 日程表地点(status=1)在前，暂存池(status=0)在后
+      this.events.sort((a, b) => {
+        if (a.status !== b.status) return b.status - a.status; // 降序：1在前，0在后
+        return a.sort_order - b.sort_order;
+      });
+
       this.recalculateFromEventId(target.id);
+
       this.save();
     }
   }
@@ -670,7 +689,18 @@ export class TimelineViewModel {
     if (index < 0) {
       return 0;
     }
-    return index > 0 ? index - 1 : 0;
+
+    // 找到该地点之前的最后一个日程表地点
+    let prevScheduleIndex = -1;
+    for (let i = index - 1; i >= 0; i--) {
+      if (this.events[i].status === 1) {
+        prevScheduleIndex = i;
+        break;
+      }
+    }
+
+    const startIndex = prevScheduleIndex >= 0 ? prevScheduleIndex : 0;
+    return startIndex;
   }
 
   private shouldPersistAutoPreTravel(entity: EventEntity, minutes: number): boolean {
@@ -758,6 +788,29 @@ export class TimelineViewModel {
           `[DAY_SHIFT_FIX][solver_reconcile] id=${entity.id}, name=${entity.name}, base=${entity.day_offset}, dynamic=${dynamicDayOffset}`
         );
       }
+
+      if (resultItem.dynamicStartTime !== undefined && entity.dynamic_start_time !== resultItem.dynamicStartTime) {
+        entity.dynamic_start_time = resultItem.dynamicStartTime;
+        changed = true;
+      }
+      if (resultItem.dynamicEndTime !== undefined && entity.dynamic_end_time !== resultItem.dynamicEndTime) {
+        entity.dynamic_end_time = resultItem.dynamicEndTime;
+        changed = true;
+      }
+
+      // 对于非锁定地点，同步computed_time到fixed_start_time
+      if (entity.lock_status === 0 && resultItem.computedStartTime) {
+        // 提取纯时间部分（去掉日期前缀）
+        const timeOnly = resultItem.computedStartTime.includes(' ')
+          ? resultItem.computedStartTime.split(' ').pop() || resultItem.computedStartTime
+          : resultItem.computedStartTime;
+
+        if (entity.fixed_start_time !== timeOnly) {
+          entity.fixed_start_time = timeOnly;
+          changed = true;
+        }
+      }
+
       return {
         changed: changed,
         dayOffsetChanged: dayOffsetChanged
@@ -1555,19 +1608,25 @@ export class TimelineViewModel {
   /**
    * [新增] AI 智能生成入口
    */
-  public async generateByAi(userPrompt: string) {
+  public async generateByAi(userPrompt: string, strategyMode: number = 0) {
     try {
-      // 1. 调用云端服务
-      const aiItems = await AiService.generateItinerary(userPrompt);
+      this.currentStrategyMode = strategyMode;
+
+      const aiItems = await AiService.generateItineraryWithStrategy({
+        userPrompt: userPrompt,
+        strategyMode: strategyMode
+      });
 
       if (!aiItems || aiItems.length === 0) {
         return;
       }
 
-
+      // 保存AI上下文到数据库
+      const explanation = this.buildStrategyExplanation(strategyMode);
+      await this.persistence.saveAiContext(this.planId, userPrompt, explanation);
+      await this.persistence.updateStrategyMode(this.planId, strategyMode);
 
       for (const item of aiItems) {
-
         const newItemInterface: import('../model/interface/IStandardEvent').TravelPlanItem = {
           name: item.name,
           duration: item.duration,
@@ -1578,47 +1637,93 @@ export class TimelineViewModel {
           lockStatus: 0,
           fixedStartTime: undefined,
           dayOffset: 0,
-
           itemType: item.type,
           priority: 1,
           isTravelManual: 0,
-
-
           source: 1,
-
           aiReasoning: item.ai_reasoning || 'AI 智能推荐',
-
           delFlag: 0,
           groupId: 0,
           address: '',
           travelMode: 2
         };
 
-        // 入库
         const newId = await EventRepositoryImpl.insertEvent(this.planId, newItemInterface);
         newItemInterface.id = newId;
-
 
         const newEntity = EventEntity.fromInterface(newItemInterface, this.planId);
         this.events.push(newEntity);
       }
 
-      // AI 结果默认进入 Backlog，不影响已排程链路；仅刷新列表并失效缓存
       this.markScheduleChanged();
       this.events = [...this.events];
 
     } catch (error) {
       console.error(TAG, 'AI Generation Failed');
 
-      // 🔧 [修复] 只能抛出 Error 类型
       if (error instanceof Error) {
         throw error;
       } else {
-
         throw new Error(JSON.stringify(error));
       }
     }
+  }
 
+  private buildStrategyExplanation(mode: number): string {
+    if (mode === 1) return '已采用特种兵模式：高密度景点覆盖';
+    if (mode === 2) return '已采用休闲模式：低密度慢节奏';
+    return 'AI智能推荐';
+  }
+
+  public getStrategyMode(): number {
+    return this.currentStrategyMode;
+  }
+
+  public hasAiHistory(): boolean {
+    return this.events.some(e => e.source === 1);
+  }
+
+  public async updateStrategyMode(mode: number): Promise<void> {
+    this.currentStrategyMode = mode;
+    await this.persistence.updateStrategyMode(this.planId, mode);
+  }
+
+  public async regenerateByCurrentStrategy(): Promise<void> {
+    hilog.info(0x0000, 'TimelineViewModel', '[regenerateByCurrentStrategy] 开始重新规划');
+    const snapshot = await this.persistence.getPlanAndEvents(this.planId);
+    if (!snapshot.plan || !snapshot.plan.lastAiPrompt) {
+      hilog.error(0x0000, 'TimelineViewModel', '[regenerateByCurrentStrategy] 未找到上次生成记录');
+      throw new Error('未找到上次生成记录');
+    }
+    hilog.info(0x0000, 'TimelineViewModel', `[regenerateByCurrentStrategy] lastAiPrompt: ${snapshot.plan.lastAiPrompt}, strategyMode: ${this.currentStrategyMode}`);
+    const beforeCount = this.events.filter(e => e.source === 1).length;
+    hilog.info(0x0000, 'TimelineViewModel', `[regenerateByCurrentStrategy] 删除前AI事件数量: ${beforeCount}`);
+    await EventRepositoryImpl.deleteEventsBySource(this.planId, 1);
+    this.events = this.events.filter(e => e.source !== 1);
+    hilog.info(0x0000, 'TimelineViewModel', `[regenerateByCurrentStrategy] 删除后事件总数: ${this.events.length}`);
+    try {
+      await this.generateByAi(snapshot.plan.lastAiPrompt, this.currentStrategyMode);
+      hilog.info(0x0000, 'TimelineViewModel', '[regenerateByCurrentStrategy] 重新生成完成');
+    } catch (error) {
+      hilog.error(0x0000, 'TimelineViewModel', `[regenerateByCurrentStrategy] 生成失败: ${JSON.stringify(error)}`);
+      if (error instanceof Error) {
+        throw error;
+      } else {
+        throw new Error(`生成失败: ${JSON.stringify(error)}`);
+      }
+    }
+  }
+
+  public async changeStrategyAndRegenerate(mode: number): Promise<void> {
+    const snapshot = await this.persistence.getPlanAndEvents(this.planId);
+    if (!snapshot.plan || !snapshot.plan.lastAiPrompt) {
+      throw new Error('未找到上次生成记录');
+    }
+    this.currentStrategyMode = mode;
+    await this.persistence.updateStrategyMode(this.planId, mode);
+    await EventRepositoryImpl.deleteEventsBySource(this.planId, 1);
+    this.events = this.events.filter(e => e.source !== 1);
+    await this.generateByAi(snapshot.plan.lastAiPrompt, mode);
   }
 
 
