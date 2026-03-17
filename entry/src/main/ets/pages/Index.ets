@@ -74,6 +74,7 @@ struct Index {
   @State gapItem: EventEntity | null = null; // 用于传给弹窗
   @State isCompanionMode: boolean = false;
   @State hasUnsavedChanges: boolean = false;
+  @State strategyMode: number = 0;
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
   @StorageLink('TrafficDataUpdated') @Watch('onTrafficSignal') trafficSignal: number = 0;
   @StorageLink('ArrivalReminderSeq') @Watch('onArrivalReminderSignal') arrivalReminderSeq: number = 0;
@@ -421,13 +422,26 @@ struct Index {
 
   aiDialogController: CustomDialogController = new CustomDialogController({
     builder: AiInputDialog({
-      onConfirm: async (text: string) => {
+      hasAiHistory: this.vm.hasAiHistory(),
+      onConfirm: async (text: string, strategy: number) => {
         try {
-          await this.vm.generateByAi(text); // 调用 VM 方法
+          await this.vm.generateByAi(text, strategy);
           this.safeShowToast('AI 生成成功，已加入暂存池！');
           this.aiDialogController.close();
         } catch {
           this.safeShowToast('生成失败');
+          this.aiDialogController.close();
+        }
+      },
+      onRegenerate: async () => {
+        try {
+          await this.vm.regenerateByCurrentStrategy();
+          this.safeShowToast('重新生成成功');
+          this.aiDialogController.close();
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : '重新生成失败';
+          console.error('[Index] AI重新规划失败:', JSON.stringify(error));
+          this.safeShowToast(msg);
           this.aiDialogController.close();
         }
       }
@@ -1006,14 +1020,13 @@ struct Index {
     this.settingsDialogController = new CustomDialogController({
       builder: PlanSettingsDialog({
         autoRouteEnabled: this.vm.enableAutoAmapRoute,
+        currentStrategyMode: this.vm.getStrategyMode(),
+        hasAiHistory: this.vm.hasAiHistory(),
         onRename: () => {
-          // 稍微延迟一点点，让上一个弹窗动画收起再弹下一个，体验更丝滑
           setTimeout((): void => this.openRenameDialog(), 100);
         },
         onReschedule: () => {
           setTimeout(() => {
-            // 这里原来的代码是直接写 DatePicker 逻辑，或者调用封装好的 openDatePicker
-            // 如果你没封装 openDatePicker，直接把 DatePicker 代码拷过来也行
             this.getUIContext().showDatePickerDialog({
               start: new Date(DomainConstants.DATE_PICKER_MIN),
               end: new Date(DomainConstants.DATE_PICKER_MAX),
@@ -1029,6 +1042,25 @@ struct Index {
         },
         onAutoRouteChange: (enabled: boolean) => {
           this.vm.updatePlanAutoAmapRoute(enabled);
+        },
+        onStrategyChange: async (mode: number) => {
+          try {
+            await this.vm.updateStrategyMode(mode);
+            const modeName = mode === 1 ? '特种兵' : mode === 2 ? '休闲' : '默认';
+            this.safeShowToast(`已切换为${modeName}模式`);
+          } catch (error) {
+            this.safeShowToast('策略更新失败');
+          }
+        },
+        onRegenerateWithStrategy: async (mode: number) => {
+          try {
+            await this.vm.changeStrategyAndRegenerate(mode);
+            const modeName = mode === 1 ? '特种兵' : mode === 2 ? '休闲' : '默认';
+            this.safeShowToast(`已切换为${modeName}模式并重新生成`);
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : '重新生成失败';
+            this.safeShowToast(msg);
+          }
         }
       }),
       alignment: DialogAlignment.Bottom, // 底部弹出
@@ -1073,6 +1105,7 @@ struct Index {
       this.refreshUnsavedFlag();
       this.planTitle = params['title'] as string || '行程详情';
       void this.vm.loadData(planId).then(() => {
+        this.strategyMode = this.vm.getStrategyMode();
         if (autoStartFromReminder && reminderEventId > 0) {
           this.isCompanionMode = true;
           void this.tryStartEventWithConflictPrompt(reminderEventId);
@@ -1213,6 +1246,18 @@ struct Index {
               .textOverflow({ overflow: TextOverflow.Ellipsis }) // 兜底省略
               .textAlign(TextAlign.Center)
 
+            if (this.strategyMode === 1) {
+              Text('🚀 特种兵模式')
+                .fontSize(11)
+                .fontColor('#FF6B35')
+                .margin({ top: 2 })
+            } else if (this.strategyMode === 2) {
+              Text('🌴 休闲模式')
+                .fontSize(11)
+                .fontColor('#4CAF50')
+                .margin({ top: 2 })
+            }
+
             Text('点击修改日期')
               .fontSize(10)
               .fontColor(this.getThemePalette().textTertiary)
@@ -1269,7 +1314,32 @@ struct Index {
 
           onMoveToSchedule: (item) => {
             const suggestedDay = this.findLeastBusyDay();
-            const smartTime = '09:00';
+
+            // 计算建议时间：日程表最后一个地点的结束时间
+            const scheduleItems = this.vm.events
+              .filter(e => e.status === 1)
+              .sort((a, b) => a.sort_order - b.sort_order);
+
+            let smartTime = '09:00';
+            if (scheduleItems.length > 0) {
+              const lastItem = scheduleItems[scheduleItems.length - 1];
+              if (lastItem.dynamic_end_time > 0) {
+                const endDate = new Date(lastItem.dynamic_end_time);
+                smartTime = `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`;
+              } else if (lastItem.computed_time) {
+                // 从computed_time提取时间并加上持续时间
+                const timeStr = lastItem.computed_time.includes(' ')
+                  ? lastItem.computed_time.split(' ').pop()
+                  : lastItem.computed_time;
+                if (timeStr) {
+                  const parts = timeStr.split(':');
+                  const h = Number(parts[0]);
+                  const m = Number(parts[1]);
+                  const endMinutes = h * 60 + m + (lastItem.duration || 60);
+                  smartTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
+                }
+              }
+            }
 
             this.editingItemId = item.id ?? -1;
             this.openDialog({
