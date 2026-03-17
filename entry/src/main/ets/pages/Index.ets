@@ -1323,11 +1323,8 @@ struct Index {
             let smartTime = '09:00';
             if (scheduleItems.length > 0) {
               const lastItem = scheduleItems[scheduleItems.length - 1];
-              if (lastItem.dynamic_end_time > 0) {
-                const endDate = new Date(lastItem.dynamic_end_time);
-                smartTime = `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`;
-              } else if (lastItem.computed_time) {
-                // 从computed_time提取时间并加上持续时间
+              // 优先使用computed_time（Solver计算结果，更可靠）
+              if (lastItem.computed_time) {
                 const timeStr = lastItem.computed_time.includes(' ')
                   ? lastItem.computed_time.split(' ').pop()
                   : lastItem.computed_time;
@@ -1338,6 +1335,11 @@ struct Index {
                   const endMinutes = h * 60 + m + (lastItem.duration || 60);
                   smartTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
                 }
+              }
+              // 降级使用dynamic_end_time
+              else if (lastItem.dynamic_end_time > 0) {
+                const endDate = new Date(lastItem.dynamic_end_time);
+                smartTime = `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`;
               }
             }
 

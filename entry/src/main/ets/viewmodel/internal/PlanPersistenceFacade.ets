@@ -59,4 +59,12 @@ export class PlanPersistenceFacade {
   public async updateAutoAmapRoute(planId: number, enabled: boolean): Promise<void> {
     await PlanRepositoryImpl.updateAutoAmapRoute(planId, enabled);
   }
+
+  public async updateStrategyMode(planId: number, mode: number): Promise<void> {
+    await PlanRepositoryImpl.updateStrategyMode(planId, mode);
+  }
+
+  public async saveAiContext(planId: number, prompt: string, explanation: string): Promise<void> {
+    await PlanRepositoryImpl.saveAiContext(planId, prompt, explanation);
+  }
 }

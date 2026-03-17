@@ -9,6 +9,10 @@ export interface PlanItem {
   delFlag?: number;
   deleteTime?: number;
   enableAutoAmapRoute?: number;
+  strategyMode?: number;
+  strategyVersion?: number;
+  lastAiPrompt?: string;
+  lastStrategyExplanation?: string;
 }
 
 export interface IPlanRepository {
@@ -30,4 +34,6 @@ export interface IPlanRepository {
   purgeOldTrash(): Promise<number>;
   markPlanDirty(planId: number): void;
   consumeDirtyPlanIds(): number[];
+  updateStrategyMode(id: number, mode: number): Promise<void>;
+  saveAiContext(id: number, prompt: string, explanation: string): Promise<void>;
 }

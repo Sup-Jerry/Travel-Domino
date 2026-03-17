@@ -202,6 +202,7 @@ export class TimelineViewModel {
   @Track private idleGapDetectionEnabled: boolean = true;
   @Track private idleGapTriggerMinutes: number = 45;
   private currentStrategyMode: number = 0;
+  private isRegenerating: boolean = false;  // AI重新生成锁
 
   /**
    *
@@ -1638,7 +1639,7 @@ export class TimelineViewModel {
           fixedStartTime: undefined,
           dayOffset: 0,
           itemType: item.type,
-          priority: 1,
+          priority: item.type === 1 ? 0 : 1,  // 美食=普通(0), 景点/住宿=必去(1)
           isTravelManual: 0,
           source: 1,
           aiReasoning: item.ai_reasoning || 'AI 智能推荐',
@@ -1689,41 +1690,85 @@ export class TimelineViewModel {
   }
 
   public async regenerateByCurrentStrategy(): Promise<void> {
-    hilog.info(0x0000, 'TimelineViewModel', '[regenerateByCurrentStrategy] 开始重新规划');
+    // 防重复请求
+    if (this.isRegenerating) {
+      hilog.warn(0x0000, 'TimelineViewModel', '[AI重新生成] 正在生成中，忽略重复请求');
+      return;
+    }
+
     const snapshot = await this.persistence.getPlanAndEvents(this.planId);
     if (!snapshot.plan || !snapshot.plan.lastAiPrompt) {
-      hilog.error(0x0000, 'TimelineViewModel', '[regenerateByCurrentStrategy] 未找到上次生成记录');
       throw new Error('未找到上次生成记录');
     }
-    hilog.info(0x0000, 'TimelineViewModel', `[regenerateByCurrentStrategy] lastAiPrompt: ${snapshot.plan.lastAiPrompt}, strategyMode: ${this.currentStrategyMode}`);
-    const beforeCount = this.events.filter(e => e.source === 1).length;
-    hilog.info(0x0000, 'TimelineViewModel', `[regenerateByCurrentStrategy] 删除前AI事件数量: ${beforeCount}`);
-    await EventRepositoryImpl.deleteEventsBySource(this.planId, 1);
-    this.events = this.events.filter(e => e.source !== 1);
-    hilog.info(0x0000, 'TimelineViewModel', `[regenerateByCurrentStrategy] 删除后事件总数: ${this.events.length}`);
+
+    this.isRegenerating = true;
+    const oldAiEvents = this.events.filter(e => e.source === 1);
+    hilog.info(0x0000, 'TimelineViewModel', `[AI重新生成] 开始，旧事件数: ${oldAiEvents.length}`);
+
     try {
+      // 先生成新数据
       await this.generateByAi(snapshot.plan.lastAiPrompt, this.currentStrategyMode);
-      hilog.info(0x0000, 'TimelineViewModel', '[regenerateByCurrentStrategy] 重新生成完成');
+
+      // 成功后删除旧数据
+      await EventRepositoryImpl.deleteEventsBySource(this.planId, 1);
+
+      // 从内存中移除旧事件
+      const newAiEvents = this.events.filter(e =>
+        e.source === 1 && !oldAiEvents.some(old => old.id === e.id)
+      );
+      this.events = this.events.filter(e =>
+        e.source !== 1 || newAiEvents.some(n => n.id === e.id)
+      );
+      hilog.info(0x0000, 'TimelineViewModel', `[AI重新生成] 成功，新事件数: ${newAiEvents.length}`);
     } catch (error) {
-      hilog.error(0x0000, 'TimelineViewModel', `[regenerateByCurrentStrategy] 生成失败: ${JSON.stringify(error)}`);
-      if (error instanceof Error) {
-        throw error;
-      } else {
-        throw new Error(`生成失败: ${JSON.stringify(error)}`);
-      }
+      // 失败时保留旧数据
+      hilog.error(0x0000, 'TimelineViewModel', `[AI重新生成] 失败，保留旧数据`);
+      throw error instanceof Error ? error : new Error('生成失败');
+    } finally {
+      this.isRegenerating = false;
     }
   }
 
   public async changeStrategyAndRegenerate(mode: number): Promise<void> {
+    // 防重复请求
+    if (this.isRegenerating) {
+      hilog.warn(0x0000, 'TimelineViewModel', '[切换策略] 正在生成中，忽略重复请求');
+      return;
+    }
+
     const snapshot = await this.persistence.getPlanAndEvents(this.planId);
     if (!snapshot.plan || !snapshot.plan.lastAiPrompt) {
       throw new Error('未找到上次生成记录');
     }
-    this.currentStrategyMode = mode;
-    await this.persistence.updateStrategyMode(this.planId, mode);
-    await EventRepositoryImpl.deleteEventsBySource(this.planId, 1);
-    this.events = this.events.filter(e => e.source !== 1);
-    await this.generateByAi(snapshot.plan.lastAiPrompt, mode);
+
+    this.isRegenerating = true;
+    const oldAiEvents = this.events.filter(e => e.source === 1);
+    hilog.info(0x0000, 'TimelineViewModel', `[切换策略] 模式${mode}，旧事件数: ${oldAiEvents.length}`);
+
+    try {
+      // 先生成新数据
+      this.currentStrategyMode = mode;
+      await this.persistence.updateStrategyMode(this.planId, mode);
+      await this.generateByAi(snapshot.plan.lastAiPrompt, mode);
+
+      // 成功后删除旧数据
+      await EventRepositoryImpl.deleteEventsBySource(this.planId, 1);
+
+      // 从内存中移除旧事件
+      const newAiEvents = this.events.filter(e =>
+        e.source === 1 && !oldAiEvents.some(old => old.id === e.id)
+      );
+      this.events = this.events.filter(e =>
+        e.source !== 1 || newAiEvents.some(n => n.id === e.id)
+      );
+      hilog.info(0x0000, 'TimelineViewModel', `[切换策略] 成功，新事件数: ${newAiEvents.length}`);
+    } catch (error) {
+      // 失败时保留旧数据
+      hilog.error(0x0000, 'TimelineViewModel', `[切换策略] 失败，保留旧数据`);
+      throw error instanceof Error ? error : new Error('生成失败');
+    } finally {
+      this.isRegenerating = false;
+    }
   }
 
 

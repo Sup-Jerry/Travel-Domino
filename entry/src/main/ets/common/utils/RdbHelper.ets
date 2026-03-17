@@ -102,6 +102,24 @@ export class RdbHelper {
               hilog.info(0x0000, TAG, 'Database upgraded to version 4 with route control fields.');
             }
 
+            if (this.rdbStore.version < 5) {
+              const addStrategyColumns = [
+                `ALTER TABLE ${PlanEntity.TABLE_NAME} ADD COLUMN ${PlanEntity.STRATEGY_MODE} INTEGER DEFAULT 0`,
+                `ALTER TABLE ${PlanEntity.TABLE_NAME} ADD COLUMN ${PlanEntity.STRATEGY_VERSION} INTEGER DEFAULT 1`,
+                `ALTER TABLE ${PlanEntity.TABLE_NAME} ADD COLUMN ${PlanEntity.LAST_AI_PROMPT} TEXT`,
+                `ALTER TABLE ${PlanEntity.TABLE_NAME} ADD COLUMN ${PlanEntity.LAST_STRATEGY_EXPLANATION} TEXT`
+              ];
+              for (const sql of addStrategyColumns) {
+                try {
+                  await this.rdbStore.executeSql(sql);
+                } catch (e) {
+                  hilog.warn(0x0000, TAG, `Column might already exist: ${JSON.stringify(e)}`);
+                }
+              }
+              this.rdbStore.version = 5;
+              hilog.info(0x0000, TAG, 'Database upgraded to version 5 with strategy fields.');
+            }
+
             hilog.info(0x0000, TAG, 'Succeeded in creating tables: plans & events');
             resolve();
           } catch (sqlErr) {

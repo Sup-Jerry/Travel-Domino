@@ -14,6 +14,9 @@ export interface PlanItem {
   delFlag?: number;
   deleteTime?: number; // [淇敼鐐?1] 鏂板 deleteTime 瀛楁
   enableAutoAmapRoute?: number;
+  strategyMode?: number;
+  lastAiPrompt?: string;
+  lastStrategyExplanation?: string;
 }
 
 interface PlanPageWindow {
@@ -124,7 +127,10 @@ export class PlanRepositoryImpl {
             startDate: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.START_DATE)),
             status: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.STATUS)),
             delFlag: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.DEL_FLAG)),
-            enableAutoAmapRoute: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.ENABLE_AUTO_AMAP_ROUTE))
+            enableAutoAmapRoute: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.ENABLE_AUTO_AMAP_ROUTE)),
+            strategyMode: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.STRATEGY_MODE)),
+            lastAiPrompt: resultSet.getString(resultSet.getColumnIndex(PlanEntity.LAST_AI_PROMPT)),
+            lastStrategyExplanation: resultSet.getString(resultSet.getColumnIndex(PlanEntity.LAST_STRATEGY_EXPLANATION))
           };
         }
       } finally {
@@ -548,6 +554,39 @@ export class PlanRepositoryImpl {
       console.error(`[PlanDao] Purge error: ${JSON.stringify(err)}`);
       return 0;
     }
+  }
+
+  public static async updateStrategyMode(id: number, mode: number): Promise<void> {
+    const rdbStore = RdbHelper.getInstance().getRdbStore();
+    if (!rdbStore) return;
+
+    const valueBucket: ValuesBucket = {};
+    valueBucket[PlanEntity.STRATEGY_MODE] = mode;
+    valueBucket[PlanEntity.STRATEGY_VERSION] = 1;
+
+    const predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
+    predicates.equalTo(PlanEntity.ID, id);
+
+    await rdbStore.update(valueBucket, predicates);
+    PlanRepositoryImpl.markPlanDirty(id);
+  }
+
+  public static async saveAiContext(
+    id: number,
+    prompt: string,
+    explanation: string
+  ): Promise<void> {
+    const rdbStore = RdbHelper.getInstance().getRdbStore();
+    if (!rdbStore) return;
+
+    const valueBucket: ValuesBucket = {};
+    valueBucket[PlanEntity.LAST_AI_PROMPT] = prompt;
+    valueBucket[PlanEntity.LAST_STRATEGY_EXPLANATION] = explanation;
+
+    const predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
+    predicates.equalTo(PlanEntity.ID, id);
+
+    await rdbStore.update(valueBucket, predicates);
   }
 }
 

@@ -47,6 +47,12 @@ export class PlanEntity {
   static readonly COVER_COLOR = 'cover_color'; // [预留] 计划封面的主题色
   static readonly CREATED_AT = 'created_at';   // 创建时间，用于默认排序
 
+  // ==================== AI策略系统 ====================
+  static readonly STRATEGY_MODE = 'strategy_mode';
+  static readonly STRATEGY_VERSION = 'strategy_version';
+  static readonly LAST_AI_PROMPT = 'last_ai_prompt';
+  static readonly LAST_STRATEGY_EXPLANATION = 'last_strategy_explanation';
+
   // ==================== 建表语句 ====================
   static readonly SQL_CREATE_TABLE = `
     CREATE TABLE IF NOT EXISTS ${PlanEntity.TABLE_NAME} (
@@ -59,7 +65,11 @@ export class PlanEntity {
       ${PlanEntity.COVER_COLOR} TEXT,
       ${PlanEntity.LAST_EXPORT_TIME} INTEGER DEFAULT 0,
       ${PlanEntity.ENABLE_AUTO_AMAP_ROUTE} INTEGER DEFAULT 1,
-      ${PlanEntity.CREATED_AT} INTEGER NOT NULL
+      ${PlanEntity.CREATED_AT} INTEGER NOT NULL,
+      ${PlanEntity.STRATEGY_MODE} INTEGER DEFAULT 0,
+      ${PlanEntity.STRATEGY_VERSION} INTEGER DEFAULT 1,
+      ${PlanEntity.LAST_AI_PROMPT} TEXT,
+      ${PlanEntity.LAST_STRATEGY_EXPLANATION} TEXT
     )
   `;
 }

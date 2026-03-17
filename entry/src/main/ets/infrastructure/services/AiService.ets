@@ -11,6 +11,11 @@ export interface AiRawItem {
   type: number;
 }
 
+export interface AiGenerateRequest {
+  userPrompt: string;
+  strategyMode?: number;
+}
+
 interface MessageContent {
   role: string;
   content: string;
@@ -161,5 +166,85 @@ export class AiService {
       const rethrowMessage = error instanceof Error ? error.message : 'AI 请求失败';
       throw new Error(rethrowMessage);
     }
+  }
+
+  static async generateItineraryWithStrategy(
+    request: AiGenerateRequest
+  ): Promise<AiRawItem[]> {
+    AppConfig.validateAiConfig();
+
+    const mode = request.strategyMode || 0;
+    const strategyFragment = AiService.buildStrategyFragment(mode);
+
+    const systemPrompt = `
+你是一个专业的行程规划助手。请根据用户需求生成行程列表。
+${strategyFragment}
+【输出规则】
+1. 必须返回纯 JSON 数组，严禁包含 Markdown 格式。
+2. 数组对象字段：
+   - "name": (String) 名称
+   - "duration": (Number) 分钟数
+   - "ai_reasoning": (String) 推荐理由
+   - "type": (Number) 0=景点, 1=美食, 2=住宿
+  `.trim();
+
+    const options: http.HttpRequestOptions = {
+      method: http.RequestMethod.POST,
+      header: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${AppConfig.AI_API_KEY}`
+      },
+      extraData: {
+        model: 'DeepSeek-V3.2',
+        max_tokens: 2000,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: request.userPrompt }
+        ],
+        stream: false
+      },
+      expectDataType: http.HttpDataType.STRING,
+      readTimeout: 30000
+    };
+
+    try {
+      const response = await HttpRequestHelper.request(
+        'AiService',
+        'generateItineraryWithStrategy',
+        AppConfig.AI_API_URL,
+        options
+      );
+
+      if (response.responseCode !== 200) {
+        throw new Error('网络请求失败');
+      }
+
+      const resultStr = typeof response.result === 'string'
+        ? response.result
+        : JSON.stringify(response.result);
+      return AiService.parseModelResponseForTest(resultStr);
+    } catch (error) {
+      const rethrowMessage = error instanceof Error ? error.message : 'AI 请求失败';
+      throw new Error(rethrowMessage);
+    }
+  }
+
+  private static buildStrategyFragment(mode: number): string {
+    if (mode === 1) {
+      return `
+【策略：特种兵模式】
+- 每日安排 6-8 个景点
+- 单次移动时间可接受 45 分钟内
+- 行程紧凑，留白时间约 10%
+- 优先覆盖更多景点`.trim();
+    } else if (mode === 2) {
+      return `
+【策略：休闲模式】
+- 每日安排 2-4 个景点
+- 单次移动时间控制在 30 分钟内
+- 行程宽松，留白时间约 40%
+- 避免频繁折返`.trim();
+    }
+    return '';
   }
 }

@@ -7,11 +7,11 @@
         "material": {
           "certpath": "C:\\Users\\Reaper\\.ohos\\config\\default_Travel12.19_8okEyJNwmJgVpIkO597yQZLjadA8cxrIFG95S8r22wg=.cer",
           "keyAlias": "debugKey",
-          "keyPassword": "0000001B40904EA79A96037A808525BBFDC54FD4429E82B2917987630B6D95B1C51E4590D3637B137DB1FD",
+          "keyPassword": "0000001B97A905972980318AE8F2511FEA0B7BDD1C9ACCD93207EDDCFF78A8551658897F02260F68F80E47",
           "profile": "C:\\Users\\Reaper\\.ohos\\config\\default_Travel12.19_8okEyJNwmJgVpIkO597yQZLjadA8cxrIFG95S8r22wg=.p7b",
           "signAlg": "SHA256withECDSA",
           "storeFile": "C:\\Users\\Reaper\\.ohos\\config\\default_Travel12.19_8okEyJNwmJgVpIkO597yQZLjadA8cxrIFG95S8r22wg=.p12",
-          "storePassword": "0000001B20021F6756597780E71EA3C426E2B1E2C58F878B430B5F47F9DD18C21248A6E538A69F79459A60"
+          "storePassword": "0000001B03C8180348C1BF7D2DECAD3A4599AC23ED7E56034A0612F7D9B2725ED7B0D82F05E846804F4411"
         }
       }
     ],
