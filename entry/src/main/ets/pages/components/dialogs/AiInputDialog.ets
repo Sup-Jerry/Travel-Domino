@@ -45,30 +45,31 @@ export struct AiInputDialog {
   }
 
   @Builder
-  buildDimensionRow(label: string, options: string[], values: number[], current: number, onChange: (val: number) => void) {
+  buildDimensionRow(label: string, options: string[], values: number[], getCurrent: () => number, onChange: (val: number) => void) {
     Row() {
-      Text(label).fontSize(14).fontColor(this.getPalette().textSecondary).width(50)
+      Text(label).fontSize(14).fontColor(this.getPalette().textSecondary).width(60)
       ForEach(options, (opt: string, idx: number) => {
         Button(opt)
-          .height(28)
+          .height(36)
           .fontSize(13)
-          .backgroundColor(current === values[idx] ? this.getPalette().primary : this.getPalette().cardBgSoft)
-          .fontColor(current === values[idx] ? Color.White : this.getPalette().textPrimary)
+          .backgroundColor(getCurrent() === values[idx] ? this.getPalette().primary : this.getPalette().cardBgSoft)
+          .fontColor(getCurrent() === values[idx] ? Color.White : this.getPalette().textPrimary)
           .borderRadius(6)
-          .margin({ left: idx === 0 ? 8 : 6 })
+          .margin({ left: 8 })
           .padding({ left: 12, right: 12 })
           .onClick(() => onChange(values[idx]))
-      })
+      }, (opt: string, idx: number) => `${label}-${idx}`)
     }.width('100%').margin({ top: 8 })
   }
 
   build() {
-    Column() {
-      Text('AI 灵感助手 ✨')
-        .fontSize(20)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(this.getPalette().textPrimary)
-        .margin({ bottom: 16, top: 8 })
+    Scroll() {
+      Column() {
+        Text('AI 灵感助手 ✨')
+          .fontSize(20)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(this.getPalette().textPrimary)
+          .margin({ bottom: 16, top: 8 })
 
       TextArea({ placeholder: '例如：帮我规划一个西安两日游，想看兵马俑和吃面...' })
         .height(120)
@@ -86,52 +87,58 @@ export struct AiInputDialog {
           .fontColor(this.getPalette().textSecondary)
           .margin({ right: 12 })
 
-        Button() {
+        Scroll() {
           Row() {
-            Text('✨ 默认').fontSize(14)
-          }
-        }
-        .height(32)
-        .backgroundColor(this.selectedStrategy === 0 ? this.getPalette().primary : this.getPalette().cardBgSoft)
-        .fontColor(this.selectedStrategy === 0 ? Color.White : this.getPalette().textPrimary)
-        .borderRadius(8)
-        .onClick(() => { this.selectedStrategy = 0; })
+            Button() {
+              Row() {
+                Text('✨ 默认').fontSize(14)
+              }
+            }
+            .height(36)
+            .backgroundColor(this.selectedStrategy === 0 ? this.getPalette().primary : this.getPalette().cardBgSoft)
+            .fontColor(this.selectedStrategy === 0 ? Color.White : this.getPalette().textPrimary)
+            .borderRadius(8)
+            .onClick(() => { this.selectedStrategy = 0; })
 
-        Button() {
-          Row() {
-            Text('⚡ 特种兵').fontSize(14)
-          }
-        }
-        .height(32)
-        .backgroundColor(this.selectedStrategy === 1 ? this.getPalette().primary : this.getPalette().cardBgSoft)
-        .fontColor(this.selectedStrategy === 1 ? Color.White : this.getPalette().textPrimary)
-        .borderRadius(8)
-        .margin({ left: 8 })
-        .onClick(() => { this.selectedStrategy = 1; })
+            Button() {
+              Row() {
+                Text('⚡ 特种兵').fontSize(14)
+              }
+            }
+            .height(36)
+            .backgroundColor(this.selectedStrategy === 1 ? this.getPalette().primary : this.getPalette().cardBgSoft)
+            .fontColor(this.selectedStrategy === 1 ? Color.White : this.getPalette().textPrimary)
+            .borderRadius(8)
+            .margin({ left: 8 })
+            .onClick(() => { this.selectedStrategy = 1; })
 
-        Button() {
-          Row() {
-            Text('☕ 休闲').fontSize(14)
-          }
-        }
-        .height(32)
-        .backgroundColor(this.selectedStrategy === 2 ? this.getPalette().primary : this.getPalette().cardBgSoft)
-        .fontColor(this.selectedStrategy === 2 ? Color.White : this.getPalette().textPrimary)
-        .borderRadius(8)
-        .margin({ left: 8 })
-        .onClick(() => { this.selectedStrategy = 2; this.useCustomStrategy = false; })
+            Button() {
+              Row() {
+                Text('☕ 休闲').fontSize(14)
+              }
+            }
+            .height(36)
+            .backgroundColor(this.selectedStrategy === 2 ? this.getPalette().primary : this.getPalette().cardBgSoft)
+            .fontColor(this.selectedStrategy === 2 ? Color.White : this.getPalette().textPrimary)
+            .borderRadius(8)
+            .margin({ left: 8 })
+            .onClick(() => { this.selectedStrategy = 2; this.useCustomStrategy = false; })
 
-        Button() {
-          Row() {
-            Text('🎨 自定义').fontSize(14)
+            Button() {
+              Row() {
+                Text('🎨 自定义').fontSize(14)
+              }
+            }
+            .height(36)
+            .backgroundColor(this.useCustomStrategy ? this.getPalette().primary : this.getPalette().cardBgSoft)
+            .fontColor(this.useCustomStrategy ? Color.White : this.getPalette().textPrimary)
+            .borderRadius(8)
+            .margin({ left: 8 })
+            .onClick(() => { this.useCustomStrategy = true; })
           }
         }
-        .height(32)
-        .backgroundColor(this.useCustomStrategy ? this.getPalette().primary : this.getPalette().cardBgSoft)
-        .fontColor(this.useCustomStrategy ? Color.White : this.getPalette().textPrimary)
-        .borderRadius(8)
-        .margin({ left: 8 })
-        .onClick(() => { this.useCustomStrategy = true; })
+        .scrollable(ScrollDirection.Horizontal)
+        .scrollBar(BarState.Off)
       }
       .width('100%')
       .margin({ top: 16 })
@@ -155,17 +162,105 @@ export struct AiInputDialog {
 
       if (this.useCustomStrategy) {
         Column() {
-          this.buildDimensionRow('密度', ['低', '中', '高'], [0, 1, 2], this.customStrategy.density, (val) => {
-            this.customStrategy.density = val;
+          this.buildDimensionRow('密度', ['低', '中', '高'], [0, 1, 2], () => this.customStrategy.density, (val) => {
+            this.customStrategy = {
+              density: val,
+              pace: this.customStrategy.pace,
+              preference: this.customStrategy.preference,
+              energy: this.customStrategy.energy
+            };
           })
-          this.buildDimensionRow('节奏', ['松弛', '平衡', '紧凑'], [0, 1, 2], this.customStrategy.pace, (val) => {
-            this.customStrategy.pace = val;
+          this.buildDimensionRow('节奏', ['松弛', '平衡', '紧凑'], [0, 1, 2], () => this.customStrategy.pace, (val) => {
+            this.customStrategy = {
+              density: this.customStrategy.density,
+              pace: val,
+              preference: this.customStrategy.preference,
+              energy: this.customStrategy.energy
+            };
           })
-          this.buildDimensionRow('偏好', ['均衡', '景点', '美食', '文化', '夜景'], [0, 1, 2, 3, 4], this.customStrategy.preference, (val) => {
-            this.customStrategy.preference = val;
-          })
-          this.buildDimensionRow('体力', ['低', '中', '高'], [0, 1, 2], this.customStrategy.energy, (val) => {
-            this.customStrategy.energy = val;
+
+          // 偏好行 - 分2行显示
+          Column() {
+            Row() {
+              Text('偏好').fontSize(14).fontColor(this.getPalette().textSecondary).width(60)
+              Button('均衡')
+                .height(36).fontSize(13)
+                .backgroundColor(this.customStrategy.preference === 0 ? this.getPalette().primary : this.getPalette().cardBgSoft)
+                .fontColor(this.customStrategy.preference === 0 ? Color.White : this.getPalette().textPrimary)
+                .borderRadius(6).margin({ left: 8 }).padding({ left: 12, right: 12 })
+                .onClick(() => {
+                  this.customStrategy = {
+                    density: this.customStrategy.density,
+                    pace: this.customStrategy.pace,
+                    preference: 0,
+                    energy: this.customStrategy.energy
+                  };
+                })
+              Button('景点')
+                .height(36).fontSize(13)
+                .backgroundColor(this.customStrategy.preference === 1 ? this.getPalette().primary : this.getPalette().cardBgSoft)
+                .fontColor(this.customStrategy.preference === 1 ? Color.White : this.getPalette().textPrimary)
+                .borderRadius(6).margin({ left: 8 }).padding({ left: 12, right: 12 })
+                .onClick(() => {
+                  this.customStrategy = {
+                    density: this.customStrategy.density,
+                    pace: this.customStrategy.pace,
+                    preference: 1,
+                    energy: this.customStrategy.energy
+                  };
+                })
+              Button('美食')
+                .height(36).fontSize(13)
+                .backgroundColor(this.customStrategy.preference === 2 ? this.getPalette().primary : this.getPalette().cardBgSoft)
+                .fontColor(this.customStrategy.preference === 2 ? Color.White : this.getPalette().textPrimary)
+                .borderRadius(6).margin({ left: 8 }).padding({ left: 12, right: 12 })
+                .onClick(() => {
+                  this.customStrategy = {
+                    density: this.customStrategy.density,
+                    pace: this.customStrategy.pace,
+                    preference: 2,
+                    energy: this.customStrategy.energy
+                  };
+                })
+            }.width('100%')
+
+            Row() {
+              Button('文化')
+                .height(36).fontSize(13)
+                .backgroundColor(this.customStrategy.preference === 3 ? this.getPalette().primary : this.getPalette().cardBgSoft)
+                .fontColor(this.customStrategy.preference === 3 ? Color.White : this.getPalette().textPrimary)
+                .borderRadius(6).padding({ left: 12, right: 12 })
+                .onClick(() => {
+                  this.customStrategy = {
+                    density: this.customStrategy.density,
+                    pace: this.customStrategy.pace,
+                    preference: 3,
+                    energy: this.customStrategy.energy
+                  };
+                })
+              Button('夜景')
+                .height(36).fontSize(13)
+                .backgroundColor(this.customStrategy.preference === 4 ? this.getPalette().primary : this.getPalette().cardBgSoft)
+                .fontColor(this.customStrategy.preference === 4 ? Color.White : this.getPalette().textPrimary)
+                .borderRadius(6).margin({ left: 8 }).padding({ left: 12, right: 12 })
+                .onClick(() => {
+                  this.customStrategy = {
+                    density: this.customStrategy.density,
+                    pace: this.customStrategy.pace,
+                    preference: 4,
+                    energy: this.customStrategy.energy
+                  };
+                })
+            }.width('100%').margin({ top: 8, left: 68 })
+          }.width('100%').margin({ top: 8 })
+
+          this.buildDimensionRow('体力', ['低', '中', '高'], [0, 1, 2], () => this.customStrategy.energy, (val) => {
+            this.customStrategy = {
+              density: this.customStrategy.density,
+              pace: this.customStrategy.pace,
+              preference: this.customStrategy.preference,
+              energy: val
+            };
           })
         }
         .width('100%')
@@ -242,7 +337,13 @@ export struct AiInputDialog {
     .padding(20)
     .backgroundColor(this.getPalette().cardBg)
     .borderRadius(16)
-    .width('90%')
+  }
+  .scrollable(ScrollDirection.Vertical)
+  .scrollBar(BarState.Auto)
+  .edgeEffect(EdgeEffect.Spring)
+  .friction(0.6)
+  .width(360)
+  .constraintSize({ maxWidth: '90%' })
   }
 }
 
