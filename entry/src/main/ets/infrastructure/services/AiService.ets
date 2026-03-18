@@ -3,6 +3,8 @@ import { http } from '@kit.NetworkKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AppConfig } from '../../common/utils/AppConfig';
 import { HttpRequestHelper } from '../adapters/HttpRequestHelper';
+import { ComposableStrategy, PreferenceType } from '../../domain/strategy/TravelStrategyDimensions';
+import { StrategyBuilder } from '../../domain/strategy/StrategyBuilder';
 
 export interface AiRawItem {
   name: string;
@@ -14,6 +16,7 @@ export interface AiRawItem {
 export interface AiGenerateRequest {
   userPrompt: string;
   strategyMode?: number;
+  customStrategy?: ComposableStrategy;
 }
 
 interface MessageContent {
@@ -174,7 +177,9 @@ export class AiService {
     AppConfig.validateAiConfig();
 
     const mode = request.strategyMode || 0;
-    const strategyFragment = AiService.buildStrategyFragment(mode);
+    const strategyFragment = request.customStrategy
+      ? AiService.buildComposablePrompt(request.customStrategy)
+      : AiService.buildStrategyFragment(mode);
 
     const systemPrompt = `
 你是一个专业的行程规划助手。请根据用户需求生成行程列表。
@@ -245,6 +250,26 @@ ${strategyFragment}
 - 行程宽松，留白时间约 40%
 - 避免频繁折返`.trim();
     }
-    return '';
+
+  static buildComposablePrompt(strategy: ComposableStrategy): string {
+    const profile = StrategyBuilder.buildProfile(strategy);
+    const parts = [
+      '【旅行策略】',
+      `- 密度：每日${profile.dailyPoiTarget.min}-${profile.dailyPoiTarget.max}个景点`,
+      `- 节奏：留白时间${Math.round(profile.slackRatio * 100)}%`,
+      `- 体力：单次移动${profile.moveTolerance}分钟内`,
+      AiService.buildPreferenceHint(strategy.preference)
+    ];
+    return parts.filter(p => p.length > 0).join('\n');
+  }
+
+  private static buildPreferenceHint(pref: PreferenceType): string {
+    const hints: Record<number, string> = {
+      1: '- 偏好：优先推荐知名景点和自然风光',
+      2: '- 偏好：优先推荐特色美食和餐厅',
+      3: '- 偏好：优先推荐博物馆、历史遗迹',
+      4: '- 偏好：包含夜景、夜市等夜间活动'
+    };
+    return hints[pref] || '';
   }
 }

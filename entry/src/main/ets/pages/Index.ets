@@ -15,6 +15,7 @@ import { DateConflictDialog } from './components/dialogs/DateConflictDialog';
 import { DateUtil } from '../common/utils/DateUtil';
 import { promptAction } from '@kit.ArkUI';
 import { AiInputDialog } from './components/dialogs/AiInputDialog';
+import { ComposableStrategy } from '../domain/strategy/TravelStrategyDimensions';
 
 import { SuggestionDialog } from './components/dialogs/SuggestionDialog';
 import { ConflictSelectionDialog } from './components/dialogs/ConflictSelectionDialog';
@@ -423,9 +424,9 @@ struct Index {
   aiDialogController: CustomDialogController = new CustomDialogController({
     builder: AiInputDialog({
       hasAiHistory: this.vm.hasAiHistory(),
-      onConfirm: async (text: string, strategy: number) => {
+      onConfirm: async (text: string, strategy: number, customStrategy?: ComposableStrategy) => {
         try {
-          await this.vm.generateByAi(text, strategy);
+          await this.vm.generateByAi(text, strategy, customStrategy);
           this.safeShowToast('AI 生成成功，已加入暂存池！');
           this.aiDialogController.close();
         } catch {

@@ -18,6 +18,10 @@ export interface PlanItem {
   strategyVersion?: number;
   lastAiPrompt?: string;
   lastStrategyExplanation?: string;
+  strategyDensity?: number;
+  strategyPace?: number;
+  strategyPreference?: number;
+  strategyEnergy?: number;
 }
 
 interface PlanPageWindow {
@@ -256,7 +260,15 @@ export class PlanRepositoryImpl {
           status: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.STATUS)),
           delFlag: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.DEL_FLAG)),
           deleteTime: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.DELETE_TIME)),
-          enableAutoAmapRoute: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.ENABLE_AUTO_AMAP_ROUTE))
+          enableAutoAmapRoute: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.ENABLE_AUTO_AMAP_ROUTE)),
+          strategyMode: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.STRATEGY_MODE)),
+          strategyVersion: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.STRATEGY_VERSION)),
+          lastAiPrompt: resultSet.getString(resultSet.getColumnIndex(PlanEntity.LAST_AI_PROMPT)),
+          lastStrategyExplanation: resultSet.getString(resultSet.getColumnIndex(PlanEntity.LAST_STRATEGY_EXPLANATION)),
+          strategyDensity: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.STRATEGY_DENSITY)),
+          strategyPace: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.STRATEGY_PACE)),
+          strategyPreference: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.STRATEGY_PREFERENCE)),
+          strategyEnergy: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.STRATEGY_ENERGY))
         });
       }
     } catch (err) {
@@ -303,6 +315,41 @@ export class PlanRepositoryImpl {
         throw err;
       }
       throw new Error(`update_plan_status_failed:${JSON.stringify(err)}`);
+    }
+  }
+
+  /**
+   * 更新策略维度
+   */
+  public static async updateStrategyDimensions(
+    id: number,
+    density: number,
+    pace: number,
+    preference: number,
+    energy: number
+  ): Promise<void> {
+    const rdbStore = RdbHelper.getInstance().getRdbStore();
+    if (!rdbStore) return;
+
+    try {
+      const valueBucket: ValuesBucket = {};
+      valueBucket[PlanEntity.STRATEGY_MODE] = -1;
+      valueBucket[PlanEntity.STRATEGY_DENSITY] = density;
+      valueBucket[PlanEntity.STRATEGY_PACE] = pace;
+      valueBucket[PlanEntity.STRATEGY_PREFERENCE] = preference;
+      valueBucket[PlanEntity.STRATEGY_ENERGY] = energy;
+
+      let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
+      predicates.equalTo(PlanEntity.ID, id);
+
+      await rdbStore.update(valueBucket, predicates);
+      PlanRepositoryImpl.markPlanDirty(id);
+    } catch (err) {
+      console.error(`[PlanDao] updateStrategyDimensions failed: ${JSON.stringify(err)}`);
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new Error(`update_strategy_dimensions_failed:${JSON.stringify(err)}`);
     }
   }
 
