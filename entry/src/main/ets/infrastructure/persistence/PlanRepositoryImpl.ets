@@ -15,6 +15,7 @@ export interface PlanItem {
   deleteTime?: number; // [淇敼鐐?1] 鏂板 deleteTime 瀛楁
   enableAutoAmapRoute?: number;
   strategyMode?: number;
+  strategyVersion?: number;
   lastAiPrompt?: string;
   lastStrategyExplanation?: string;
 }
@@ -129,6 +130,7 @@ export class PlanRepositoryImpl {
             delFlag: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.DEL_FLAG)),
             enableAutoAmapRoute: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.ENABLE_AUTO_AMAP_ROUTE)),
             strategyMode: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.STRATEGY_MODE)),
+            strategyVersion: resultSet.getLong(resultSet.getColumnIndex(PlanEntity.STRATEGY_VERSION)),
             lastAiPrompt: resultSet.getString(resultSet.getColumnIndex(PlanEntity.LAST_AI_PROMPT)),
             lastStrategyExplanation: resultSet.getString(resultSet.getColumnIndex(PlanEntity.LAST_STRATEGY_EXPLANATION))
           };
