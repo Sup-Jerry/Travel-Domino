@@ -1,7 +1,12 @@
 import { PreferenceType, EnergyLevel } from './TravelStrategyDimensions';
 
+export interface DailyPoiTarget {
+  min: number;
+  max: number;
+}
+
 export interface TravelStrategyProfile {
-  dailyPoiTarget: { min: number; max: number };
+  dailyPoiTarget: DailyPoiTarget;
   moveTolerance: number;
   slackRatio: number;
   preferCompactSchedule: boolean;
