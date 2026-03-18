@@ -8,6 +8,8 @@ import { DateUtil } from '../common/utils/DateUtil';
 import { TimelineDatePolicy } from '../domain/policy/TimelineDatePolicy';
 import { TimelineExecutionState } from '../domain/policy/TimelineExecutionState';
 import { AiService } from '../infrastructure/services/AiService';
+import { ComposableStrategy } from '../domain/strategy/TravelStrategyDimensions';
+import { PlanRepositoryImpl } from '../infrastructure/persistence/PlanRepositoryImpl';
 import { PreferenceManager } from '../common/utils/PreferenceManager';
 import { AppStorageKeys } from '../common/constants/AppStorageKeys';
 import { ScheduleOrchestrator } from './internal/ScheduleOrchestrator';
@@ -19,6 +21,8 @@ import { HistoryManager } from '../domain/timeline/HistoryManager';
 import { TimelineGroupingService, DateGroup, PlaceCheckinSummary, PlaceCheckinRecord } from '../domain/timeline/services/TimelineGroupingService';
 import { TimelineCalculationService } from '../domain/timeline/services/TimelineCalculationService';
 import { TimelineConflictResolver } from '../domain/timeline/services/TimelineConflictResolver';
+import { StrategyPresets } from '../domain/strategy/StrategyPresets';
+import { TravelStrategyMode } from '../domain/strategy/TravelStrategyMode';
 
 // 重新导出类型以保持向后兼容
 export { DateGroup, PlaceCheckinSummary, PlaceCheckinRecord };
@@ -922,7 +926,8 @@ export class TimelineViewModel {
       {
         autoRouteEnabled: this.isAutoRouteEnabled(),
         idleGapDetectionEnabled: this.idleGapDetectionEnabled,
-        idleGapTriggerMinutes: this.idleGapTriggerMinutes
+        idleGapTriggerMinutes: this.idleGapTriggerMinutes,
+        slackRatio: StrategyPresets.getProfile(this.currentStrategyMode as TravelStrategyMode).slackRatio
       },
       (entity: EventEntity, calculated: SolverCalculatedItem | undefined): ApplyResultFlags => this.applyCalculatedResult(entity, calculated)
     );
@@ -1609,13 +1614,14 @@ export class TimelineViewModel {
   /**
    * [新增] AI 智能生成入口
    */
-  public async generateByAi(userPrompt: string, strategyMode: number = 0) {
+  public async generateByAi(userPrompt: string, strategyMode: number = 0, customStrategy?: ComposableStrategy) {
     try {
       this.currentStrategyMode = strategyMode;
 
       const aiItems = await AiService.generateItineraryWithStrategy({
         userPrompt: userPrompt,
-        strategyMode: strategyMode
+        strategyMode: customStrategy ? -1 : strategyMode,
+        customStrategy: customStrategy
       });
 
       if (!aiItems || aiItems.length === 0) {
@@ -1625,7 +1631,18 @@ export class TimelineViewModel {
       // 保存AI上下文到数据库
       const explanation = this.buildStrategyExplanation(strategyMode);
       await this.persistence.saveAiContext(this.planId, userPrompt, explanation);
-      await this.persistence.updateStrategyMode(this.planId, strategyMode);
+
+      if (customStrategy) {
+        await PlanRepositoryImpl.updateStrategyDimensions(
+          this.planId,
+          customStrategy.density,
+          customStrategy.pace,
+          customStrategy.preference,
+          customStrategy.energy
+        );
+      } else {
+        await this.persistence.updateStrategyMode(this.planId, strategyMode);
+      }
 
       for (const item of aiItems) {
         const newItemInterface: import('../model/interface/IStandardEvent').TravelPlanItem = {

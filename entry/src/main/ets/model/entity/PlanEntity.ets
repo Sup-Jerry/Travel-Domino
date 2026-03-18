@@ -52,6 +52,10 @@ export class PlanEntity {
   static readonly STRATEGY_VERSION = 'strategy_version';
   static readonly LAST_AI_PROMPT = 'last_ai_prompt';
   static readonly LAST_STRATEGY_EXPLANATION = 'last_strategy_explanation';
+  static readonly STRATEGY_DENSITY = 'strategy_density';
+  static readonly STRATEGY_PACE = 'strategy_pace';
+  static readonly STRATEGY_PREFERENCE = 'strategy_preference';
+  static readonly STRATEGY_ENERGY = 'strategy_energy';
 
   // ==================== 建表语句 ====================
   static readonly SQL_CREATE_TABLE = `
@@ -69,7 +73,11 @@ export class PlanEntity {
       ${PlanEntity.STRATEGY_MODE} INTEGER DEFAULT 0,
       ${PlanEntity.STRATEGY_VERSION} INTEGER DEFAULT 1,
       ${PlanEntity.LAST_AI_PROMPT} TEXT,
-      ${PlanEntity.LAST_STRATEGY_EXPLANATION} TEXT
+      ${PlanEntity.LAST_STRATEGY_EXPLANATION} TEXT,
+      ${PlanEntity.STRATEGY_DENSITY} INTEGER DEFAULT 1,
+      ${PlanEntity.STRATEGY_PACE} INTEGER DEFAULT 1,
+      ${PlanEntity.STRATEGY_PREFERENCE} INTEGER DEFAULT 0,
+      ${PlanEntity.STRATEGY_ENERGY} INTEGER DEFAULT 1
     )
   `;
 }
