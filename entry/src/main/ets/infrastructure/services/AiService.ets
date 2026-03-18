@@ -250,6 +250,8 @@ ${strategyFragment}
 - 行程宽松，留白时间约 40%
 - 避免频繁折返`.trim();
     }
+    return '';
+  }
 
   static buildComposablePrompt(strategy: ComposableStrategy): string {
     const profile = StrategyBuilder.buildProfile(strategy);
