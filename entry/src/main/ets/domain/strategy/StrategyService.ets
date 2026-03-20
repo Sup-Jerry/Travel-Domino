@@ -52,6 +52,39 @@ export class StrategyService {
     return `自定义策略：${densityText}密度 + ${paceText}节奏 + ${preferenceText}偏好 + ${energyText}体力`;
   }
 
+  static buildWeatherAwareConstraint(
+    strategy: ComposableStrategy,
+    routeScore: number,
+    riskTags: string[],
+    trendTag?: string,
+    strategyMode?: number
+  ): string {
+    const tags = riskTags.join(',');
+    const isRainy = trendTag === 'RAIN_PERSIST' || tags.indexOf('RAIN') >= 0;
+    // 优先使用预设模式，保证“特种兵/休闲”语义稳定。
+    if (strategyMode === 1 && isRainy && routeScore < 70) {
+      return '受天气影响，建议将今日密度适度降低，优先安排室内类型。';
+    }
+    if (strategyMode === 2 && routeScore > 85 && trendTag === 'STABLE') {
+      return '天气良好，可按原策略执行。';
+    }
+
+    // 无明确模式时，回退到维度判定。
+    if (strategy.density === 2 && isRainy && routeScore < 70) {
+      return '受天气影响，建议将今日密度适度降低，优先安排室内类型。';
+    }
+    if (strategy.density === 0 && routeScore > 85 && trendTag === 'STABLE') {
+      return '天气良好，可按原策略执行。';
+    }
+    if (trendTag === 'WARMING' && routeScore < 70) {
+      return '气温上行且适宜度偏低，建议放慢节奏并降低体力消耗。';
+    }
+    if (routeScore < 60) {
+      return '当前天气风险偏高，建议减少跨区移动并降低景点密度。';
+    }
+    return '请将天气与策略联合评估，优先保证路线可执行性。';
+  }
+
   // 偏好提示词
   private static buildPreferenceHint(pref: PreferenceType): string {
     const hints: Record<number, string> = {

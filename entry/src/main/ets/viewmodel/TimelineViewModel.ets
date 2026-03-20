@@ -45,7 +45,7 @@ import {
   WeatherUserPreference
 } from '../domain/services/WeatherModels';
 import { ArrivalReminderEngine } from '../infrastructure/services/ArrivalReminderEngine';
-import { WeatherReminderStore } from '../common/utils/weather/WeatherReminderStore';
+import { WeatherReminderStore, WeatherStrategyAdjustment } from '../common/utils/weather/WeatherReminderStore';
 import { AmapService } from '../infrastructure/services/AmapService';
 import { PlanStateMachine } from '../domain/statemachine/PlanStateMachine';
 import { PlanStatus, TransitionTriggerSource } from '../domain/statemachine/PlanStatus';
@@ -148,6 +148,12 @@ export interface CompanionActions {
   canSkip: boolean;
   canNavigate: boolean;
   canViewDetail: boolean;
+}
+
+export interface ExecutionSuggestionApplyResult {
+  strategyApplied: boolean;
+  replanSuccess: boolean;
+  errorCode: string;
 }
 
 export interface CompanionContext {
@@ -255,6 +261,7 @@ export class TimelineViewModel {
   private behaviorTracker: UserBehaviorTracker = new UserBehaviorTracker();
   @Track public strategyAdaptationPrompt: AdaptationPrompt | null = null;
   @Track public weatherPlanningHint: string = '';
+  @Track public weatherStrategyHint: string = '';
   @Track public weatherRouteScore: number = -1;
   @Track public weatherCollabSummary: string = '';
   @Track public weatherCollabLabel: string = '';
@@ -292,6 +299,7 @@ export class TimelineViewModel {
   private readonly runtimeMotionSampleLimit: number = 3;
   private executionWeatherLastLocation: GeoPointInput | null = null;
   private executionWeatherLastEmitAt: number = 0;
+  private weatherStrategyAppliedKey: string = '';
   private readonly executionWeatherLocationDeltaMeters: number = 1000;
   private readonly executionWeatherLocationTriggerCooldownMs: number = 2 * 60 * 1000;
   private executionWeatherLastLocationTriggerAt: number = 0;
@@ -1985,7 +1993,7 @@ export class TimelineViewModel {
         this.weatherCollabOptions,
         stage
       );
-      this.applyPlanningWeatherResult(result, forceRefresh);
+      await this.applyPlanningWeatherResult(result, forceRefresh);
       hilog.info(
         0x0000,
         TAG,
@@ -1996,7 +2004,7 @@ export class TimelineViewModel {
     }
   }
 
-  private applyPlanningWeatherResult(result: WeatherContextBuildResult, forceRefresh: boolean): void {
+  private async applyPlanningWeatherResult(result: WeatherContextBuildResult, forceRefresh: boolean): Promise<void> {
     const context = result.context;
     this.weatherRouteScore = context.routeSuitability.routeScore;
     this.weatherPlanningHint = context.routeSuitability.summaryText;
@@ -2037,6 +2045,46 @@ export class TimelineViewModel {
       TAG,
       `[WEATHER_PREF][planning_apply] total=${this.events.filter((item: EventEntity) => item.status === 1).length}, unknown=${unknownCount}, routeScore=${this.weatherRouteScore}`
     );
+    const currentStrategy = await this.getCurrentStrategy();
+    const weatherDecision = StrategyAdaptationEngine.adaptToWeather(
+      context.collabContext,
+      context.routeSuitability.routeScore,
+      currentStrategy
+    );
+    if (weatherDecision) {
+      const nextStrategy = StrategyAdaptationEngine.applyAdjustment(currentStrategy, weatherDecision);
+      const hasStrategyChange = nextStrategy.density !== currentStrategy.density ||
+        nextStrategy.pace !== currentStrategy.pace ||
+        nextStrategy.preference !== currentStrategy.preference ||
+        nextStrategy.energy !== currentStrategy.energy;
+      const adaptationKey = this.buildWeatherStrategyAdaptationKey(
+        context.generatedAt,
+        context.routeSuitability.routeScore
+      );
+      if (hasStrategyChange && adaptationKey !== this.weatherStrategyAppliedKey) {
+        await PlanRepositoryImpl.updateStrategyDimensions(
+          this.planId,
+          nextStrategy.density,
+          nextStrategy.pace,
+          nextStrategy.preference,
+          nextStrategy.energy
+        );
+        this.currentStrategyMode = -1;
+        this.weatherStrategyHint = weatherDecision.message;
+        this.weatherStrategyAppliedKey = adaptationKey;
+        hilog.info(
+          0x0000,
+          TAG,
+          `[WEATHER_STRATEGY][planning_applied] reason=${weatherDecision.reason}, generatedAt=${context.generatedAt}, score=${context.routeSuitability.routeScore}, trend=${context.collabContext?.trendTag ?? 'UNKNOWN'}`
+        );
+      } else if (hasStrategyChange) {
+        this.weatherStrategyHint = weatherDecision.message;
+      } else {
+        this.weatherStrategyHint = '';
+      }
+    } else {
+      this.weatherStrategyHint = '';
+    }
     this.events = [...this.events];
   }
 
@@ -2215,7 +2263,9 @@ export class TimelineViewModel {
     this.markExecutionSuggestionCooldown(suggestion, now);
 
     if (suggestion.level === 'NOTICE' || suggestion.level === 'WARNING') {
-      const payload = WeatherReminderStore.fromSuggestion(this.planId, suggestion);
+      const strategyHint = this.buildExecutionStrategyHint(suggestion);
+      const strategyAdjustment = this.buildExecutionStrategyAdjustment(suggestion);
+      const payload = WeatherReminderStore.fromSuggestion(this.planId, suggestion, strategyHint, strategyAdjustment);
       WeatherReminderStore.writePayload(payload);
       const candidateCount = suggestion.actionPayload?.replacementCandidates?.length ?? 0;
       hilog.info(
@@ -2224,6 +2274,26 @@ export class TimelineViewModel {
         `[WEATHER_REPLAN][reminder_emit] level=${suggestion.level}, trigger=${trigger}, action=${suggestion.actionType}, candidates=${candidateCount}, message=${suggestion.message}`
       );
     }
+  }
+
+  private buildExecutionStrategyHint(suggestion: WeatherSuggestion): string | undefined {
+    if (suggestion.triggerType === 'RAIN') {
+      return '明日有雨，建议降低行程密度。';
+    }
+    if (suggestion.triggerType === 'HEAT') {
+      return '持续高温，建议减少体力消耗。';
+    }
+    return undefined;
+  }
+
+  private buildExecutionStrategyAdjustment(suggestion: WeatherSuggestion): WeatherStrategyAdjustment | undefined {
+    if (suggestion.triggerType === 'RAIN') {
+      return { density: -1 };
+    }
+    if (suggestion.triggerType === 'HEAT') {
+      return { pace: -1, energy: -1 };
+    }
+    return undefined;
   }
 
   public async requestSoftReplan(
@@ -2906,9 +2976,17 @@ export class TimelineViewModel {
             this.weatherCollabOptions,
             weatherStage
           );
+          const effectiveStrategy = customStrategy ?? await this.getCurrentStrategy();
+          const weatherAwareConstraint = StrategyService.buildWeatherAwareConstraint(
+            effectiveStrategy,
+            weatherResult.context.routeSuitability.routeScore,
+            weatherResult.context.routeSuitability.riskTags,
+            weatherResult.context.collabContext?.trendTag,
+            strategyMode
+          );
           const weatherSummary = this.weatherFacade.buildPromptSummary(weatherResult.context, this.weatherUserPreference);
-          enhancedPrompt += `\n【天气约束】\n${weatherSummary}\n请把天气作为软约束，不要输出不可执行路线。并根据用户天气偏好优化建议。`;
-          this.applyPlanningWeatherResult(weatherResult, false);
+          enhancedPrompt += this.composeWeatherConstraintPrompt(weatherAwareConstraint, weatherSummary);
+          await this.applyPlanningWeatherResult(weatherResult, false);
         } catch (_weatherError) {
           enhancedPrompt += '\n【天气约束】天气数据暂不可用，请优先保证路线可执行性。';
         }
@@ -3019,6 +3097,74 @@ export class TimelineViewModel {
     this.currentStrategyMode = -1;
   }
 
+  public async applyWeatherStrategyAdjustment(
+    adjustment?: WeatherStrategyAdjustment,
+    hint?: string
+  ): Promise<boolean> {
+    if (!adjustment) {
+      return false;
+    }
+    const hasAdjustment = adjustment.density !== undefined ||
+      adjustment.pace !== undefined ||
+      adjustment.energy !== undefined;
+    if (!hasAdjustment) {
+      return false;
+    }
+
+    const current = await this.getCurrentStrategy();
+    const next: ComposableStrategy = {
+      density: current.density,
+      pace: current.pace,
+      preference: current.preference,
+      energy: current.energy
+    };
+
+    if (adjustment.density !== undefined) {
+      next.density = this.clampStrategyLevel(current.density + adjustment.density);
+    }
+    if (adjustment.pace !== undefined) {
+      next.pace = this.clampStrategyLevel(current.pace + adjustment.pace);
+    }
+    if (adjustment.energy !== undefined) {
+      next.energy = this.clampStrategyLevel(current.energy + adjustment.energy);
+    }
+
+    const changed = next.density !== current.density ||
+      next.pace !== current.pace ||
+      next.energy !== current.energy;
+    if (!changed) {
+      return false;
+    }
+
+    await PlanRepositoryImpl.updateStrategyDimensions(
+      this.planId,
+      next.density,
+      next.pace,
+      next.preference,
+      next.energy
+    );
+    this.currentStrategyMode = -1;
+    if (hint && hint.trim().length > 0) {
+      this.weatherStrategyHint = hint.trim();
+    }
+    return true;
+  }
+
+  public async applyExecutionSuggestionWithStrategy(
+    planId: number,
+    suggestionId: string,
+    adjustment?: WeatherStrategyAdjustment,
+    hint?: string
+  ): Promise<ExecutionSuggestionApplyResult> {
+    const strategyApplied = await this.applyWeatherStrategyAdjustment(adjustment, hint);
+    const replan = await this.requestSoftReplan(planId, suggestionId, 'APPLY');
+    return {
+      strategyApplied: strategyApplied,
+      replanSuccess: replan.success,
+      errorCode: replan.errorCode || 'REPLAN_CONFLICT'
+    };
+  }
+
   private async getCurrentStrategy(): Promise<ComposableStrategy> {
     const snapshot = await this.persistence.getPlanAndEvents(this.planId);
     if (!snapshot.plan) {
@@ -3030,6 +3176,27 @@ export class TimelineViewModel {
       preference: snapshot.plan.strategyPreference ?? 0,
       energy: snapshot.plan.strategyEnergy ?? 1
     };
+  }
+
+  private clampStrategyLevel(value: number): 0 | 1 | 2 {
+    if (value <= 0) {
+      return 0;
+    }
+    if (value >= 2) {
+      return 2;
+    }
+    return 1;
+  }
+
+  private buildWeatherStrategyAdaptationKey(generatedAt: number, routeScore: number): string {
+    return `${generatedAt}_${routeScore}`;
+  }
+
+  private composeWeatherConstraintPrompt(
+    weatherAwareConstraint: string,
+    weatherSummary: string
+  ): string {
+    return `\n【策略天气联合约束】\n${weatherAwareConstraint}\n${weatherSummary}\n请把天气与策略作为联合软约束，不要输出不可执行路线，并根据用户天气偏好优化建议。`;
   }
 
   private async triggerStrategyAdaptation(): Promise<void> {
@@ -3909,6 +4076,7 @@ export class TimelineViewModel {
   private clearWeatherRuntimeState(): void {
     this.weatherRouteScore = -1;
     this.weatherPlanningHint = '';
+    this.weatherStrategyHint = '';
     this.weatherCollabSummary = '';
     this.weatherCollabLabel = '';
     this.executionWeatherHint = '';
@@ -3920,6 +4088,7 @@ export class TimelineViewModel {
     this.executionWeatherAppliedSummary = '';
     this.executionWeatherCollabBadge = '';
     this.executionWeatherCollabSummary = '';
+    this.weatherStrategyAppliedKey = '';
   }
 
   private isAutoRouteEnabled(): boolean {

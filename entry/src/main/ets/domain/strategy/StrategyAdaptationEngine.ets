@@ -2,7 +2,8 @@
  * 策略自适应引擎 - 根据用户行为动态调整策略
  */
 
-import { ComposableStrategy } from './TravelStrategyDimensions';
+import { ComposableStrategy, PreferenceType } from './TravelStrategyDimensions';
+import { WeatherCollabContext } from '../services/WeatherModels';
 
 // 删除事件信息
 export interface DeletedEventInfo {
@@ -26,10 +27,11 @@ export interface StrategyAdjustments {
   density?: -1 | 0 | 1;
   pace?: -1 | 0 | 1;
   energy?: -1 | 0 | 1;
+  preference?: PreferenceType;
 }
 
 export interface AdaptationDecision {
-  reason: 'HIGH_INTENSITY_DELETIONS' | 'EXCESSIVE_TRAFFIC' | 'USER_FEEDBACK';
+  reason: 'HIGH_INTENSITY_DELETIONS' | 'EXCESSIVE_TRAFFIC' | 'USER_FEEDBACK' | 'WEATHER_RISK';
   adjustments: StrategyAdjustments;
   message: string;
 }
@@ -98,6 +100,9 @@ export class StrategyAdaptationEngine {
     if (decision.adjustments.energy !== undefined) {
       adjusted.energy = StrategyAdaptationEngine.clamp(current.energy + decision.adjustments.energy, 0, 2);
     }
+    if (decision.adjustments.preference !== undefined) {
+      adjusted.preference = decision.adjustments.preference;
+    }
 
     return adjusted;
   }
@@ -106,8 +111,48 @@ export class StrategyAdaptationEngine {
     return Math.max(min, Math.min(max, value));
   }
 
-  // 预留：天气自适应接口（暂不实现）
-  // static adaptToWeather(weather: WeatherInfo): AdaptationDecision | null {
-  //   return null;
-  // }
+  static adaptToWeather(
+    collabContext: WeatherCollabContext | undefined,
+    routeScore: number,
+    currentStrategy: ComposableStrategy
+  ): AdaptationDecision | null {
+    if (routeScore < 60) {
+      return {
+        reason: 'WEATHER_RISK',
+        adjustments: { density: -1 },
+        message: '天气风险较高，已自动降低行程密度。'
+      };
+    }
+
+    const trendTag = collabContext?.trendTag ?? 'UNKNOWN';
+    if (trendTag === 'RAIN_PERSIST') {
+      if (routeScore < 70) {
+        return {
+          reason: 'WEATHER_RISK',
+          adjustments: {
+            density: -1,
+            preference: currentStrategy.preference === PreferenceType.CULTURE
+              ? currentStrategy.preference
+              : PreferenceType.CULTURE
+          },
+          message: '持续降雨，已降低密度并优先文化/室内偏好。'
+        };
+      }
+      return {
+        reason: 'WEATHER_RISK',
+        adjustments: { density: -1 },
+        message: '持续降雨，已自动降低行程密度。'
+      };
+    }
+
+    if (trendTag === 'WARMING' && routeScore < 70) {
+      return {
+        reason: 'WEATHER_RISK',
+        adjustments: { pace: -1, energy: -1 },
+        message: '天气转热且适宜度偏低，已降低节奏与体力强度。'
+      };
+    }
+
+    return null;
+  }
 }

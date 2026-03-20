@@ -17,6 +17,8 @@ import weatherExecutionTest from './WeatherExecution.test';
 import weatherStageCoordinatorTest from './WeatherStageCoordinator.test';
 import weatherCityCapTest from './WeatherCityCap.test';
 import weatherFacadeTest from './WeatherFacade.test';
+import weatherStrategyLinkageTest from './WeatherStrategyLinkage.test';
+import timelineWeatherLinkageIntegrationTest from './TimelineWeatherLinkageIntegration.test';
 export default function testsuite() {
   localUnitTest();
   automatedTest();
@@ -37,4 +39,6 @@ export default function testsuite() {
   weatherStageCoordinatorTest();
   weatherCityCapTest();
   weatherFacadeTest();
+  weatherStrategyLinkageTest();
+  timelineWeatherLinkageIntegrationTest();
 }
