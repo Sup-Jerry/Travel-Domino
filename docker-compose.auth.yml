@@ -1,0 +1,68 @@
+﻿version: '3.9'
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: travel_auth
+      POSTGRES_USER: travel
+      POSTGRES_PASSWORD: travel_pass
+    ports:
+      - '5432:5432'
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./backend/migrations:/docker-entrypoint-initdb.d
+
+  backend:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run start:dev"
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgres://travel:travel_pass@postgres:5432/travel_auth
+      JWT_SECRET: change_me_production
+      AUTH_ACCESS_TTL_SECONDS: 7200
+      AUTH_REFRESH_TTL_SECONDS: 2592000
+      AUTH_USE_STUB_PROVIDERS: 'false'
+      SMS_PROVIDER: production
+    volumes:
+      - ./backend:/app
+    ports:
+      - '3000:3000'
+    depends_on:
+      - postgres
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    volumes:
+      - ./backend/deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - '9090:9090'
+
+  loki:
+    image: grafana/loki:3.1.1
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - '3100:3100'
+    volumes:
+      - ./backend/deploy/loki/loki-config.yaml:/etc/loki/local-config.yaml
+
+  promtail:
+    image: grafana/promtail:3.1.1
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./backend/deploy/promtail/promtail-config.yaml:/etc/promtail/config.yml
+      - ./backend:/var/log/backend
+
+  grafana:
+    image: grafana/grafana:11.1.5
+    ports:
+      - '3001:3000'
+    volumes:
+      - ./backend/deploy/grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+      - loki
+
+volumes:
+  pg_data:

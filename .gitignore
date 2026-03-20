@@ -21,3 +21,6 @@ buildarkts_debug.log
 buildarkts_fail.log
 buildarkts_run.log
 .app-size-prune-report-*.json
+
+/backend/node_modules
+/backend/dist
