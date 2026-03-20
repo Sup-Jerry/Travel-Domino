@@ -1,4 +1,4 @@
-import localUnitTest from './LocalUnit.test';
+﻿import localUnitTest from './LocalUnit.test';
 import automatedTest from './AutomatedTest.test';
 import conflictCompressionTest from './ConflictCompression.test';
 import planJsonTransferServiceTest from './PlanJsonTransferService.test';
@@ -19,6 +19,7 @@ import weatherCityCapTest from './WeatherCityCap.test';
 import weatherFacadeTest from './WeatherFacade.test';
 import weatherStrategyLinkageTest from './WeatherStrategyLinkage.test';
 import timelineWeatherLinkageIntegrationTest from './TimelineWeatherLinkageIntegration.test';
+import authServiceTest from './AuthService.test';
 export default function testsuite() {
   localUnitTest();
   automatedTest();
@@ -41,4 +42,6 @@ export default function testsuite() {
   weatherFacadeTest();
   weatherStrategyLinkageTest();
   timelineWeatherLinkageIntegrationTest();
+  authServiceTest();
 }
+

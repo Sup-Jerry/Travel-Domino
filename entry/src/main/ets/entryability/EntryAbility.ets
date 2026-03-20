@@ -1,4 +1,4 @@
-import { AbilityConstant, UIAbility, Want } from '@kit.AbilityKit';
+﻿import { AbilityConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
 import { RdbHelper } from '../common/utils/RdbHelper';
@@ -73,6 +73,7 @@ export default class EntryAbility extends UIAbility {
     AppStorage.setOrCreate(AppStorageKeys.ARRIVAL_LIVE_ACTIVITY_PAYLOAD, '');
     AppStorage.setOrCreate(AppStorageKeys.NOTIFICATION_NAV_SEQ, 0);
     AppStorage.setOrCreate(AppStorageKeys.NOTIFICATION_NAV_PAYLOAD, '');
+    AppStorage.setOrCreate(AppStorageKeys.AUTH_SESSION_JSON, '');
     hilog.info(DOMAIN, TAG, '%{public}s', 'Ability onCreate');
     this.handleNotificationLaunchWant(want);
 
@@ -137,7 +138,7 @@ export default class EntryAbility extends UIAbility {
     RdbHelper.getInstance().init(this.context).then(() => {
       hilog.info(DOMAIN, TAG, '✅ Database initialized.');
 
-      windowStage.loadContent('pages/PlanListPage', (err) => {
+      windowStage.loadContent('pages/AuthGatePage', (err) => {
         if (err.code) {
           hilog.error(DOMAIN, TAG, 'Failed to load the content. Cause: %{public}s', JSON.stringify(err));
           return;
@@ -146,7 +147,7 @@ export default class EntryAbility extends UIAbility {
       });
     }).catch((err: object) => {
       hilog.error(DOMAIN, TAG, `Database init failed: ${JSON.stringify(err)}`);
-      windowStage.loadContent('pages/PlanListPage');
+      windowStage.loadContent('pages/AuthGatePage');
     });
   }
 
@@ -285,3 +286,5 @@ export default class EntryAbility extends UIAbility {
     }
   }
 }
+
+

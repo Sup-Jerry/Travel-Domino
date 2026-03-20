@@ -6,7 +6,10 @@
     "pages/MapPickerPage",
     "pages/SettingsPage",
     "pages/TrashPage",
-    "pages/ArchivePage"
-
+    "pages/ArchivePage",
+    "pages/AuthGatePage",
+    "pages/LoginPage",
+    "pages/PhoneLoginPage",
+    "pages/AccountCenterPage"
   ]
 }
