@@ -44,7 +44,7 @@ export interface AmapPoiSearchResponse {
 
 interface PoiItemListLike {
   length?: number;
-  size?: number;
+  size?: (() => number) | number;
   get?: (index: number) => PoiItem | undefined;
   forEach?: (callback: (value: PoiItem) => void) => void;
 }
@@ -278,6 +278,22 @@ export class AmapService {
     return new PoiSearchItem(name, address, lat, lng, distance);
   }
 
+  private static resolvePoiListCount(listObj: PoiItemListLike): number {
+    if (typeof listObj.length === 'number' && Number.isFinite(listObj.length)) {
+      return listObj.length;
+    }
+    if (typeof listObj.size === 'number' && Number.isFinite(listObj.size)) {
+      return listObj.size;
+    }
+    if (typeof listObj.size === 'function') {
+      const size = listObj.size();
+      if (Number.isFinite(size)) {
+        return size;
+      }
+    }
+    return 0;
+  }
+
   private static extractPoiItems(result: PoiResult | undefined): PoiSearchItem[] {
     if (!result) {
       return [];
@@ -291,24 +307,8 @@ export class AmapService {
     const listObj = pois as PoiItemListLike;
 
     const resolved: PoiSearchItem[] = [];
-    if (typeof listObj.forEach === 'function') {
-      listObj.forEach((poi: PoiItem) => {
-        const mapped = AmapService.toPoiSearchItem(poi);
-        if (mapped) {
-          resolved.push(mapped);
-        }
-      });
-      if (resolved.length > 0) {
-        return resolved;
-      }
-    }
-
-    const length = Number(listObj.length ?? listObj.size ?? 0);
-    if (!Number.isFinite(length) || length <= 0) {
-      return [];
-    }
-
-    if (typeof listObj.get === 'function') {
+    const length = AmapService.resolvePoiListCount(listObj);
+    if (length > 0 && typeof listObj.get === 'function') {
       for (let i = 0; i < length; i++) {
         const poi = listObj.get(i);
         const mapped = AmapService.toPoiSearchItem(poi);
@@ -316,6 +316,18 @@ export class AmapService {
           resolved.push(mapped);
         }
       }
+      if (resolved.length > 0) {
+        return resolved;
+      }
+    }
+
+    if (typeof listObj.forEach === 'function') {
+      listObj.forEach((poi: PoiItem) => {
+        const mapped = AmapService.toPoiSearchItem(poi);
+        if (mapped) {
+          resolved.push(mapped);
+        }
+      });
     }
 
     return resolved;
@@ -346,7 +358,75 @@ export class AmapService {
     }
 
     const result = await search.searchPOI();
-    return AmapService.extractPoiItems(result);
+    const resolved = AmapService.extractPoiItems(result);
+    hilog.info(
+      0x0000,
+      AmapService.TAG,
+      `[AMAP_TRACE][searchPoiBySdk] keyword_len=${keyword.length}, nearbyOnly=${nearbyOnly}, resolved=${resolved.length}`
+    );
+    return resolved;
+  }
+
+  private static async searchPoiByWebApi(
+    keyword: string,
+    centerLat: number,
+    centerLng: number,
+    limit: number,
+    nearbyOnly: boolean
+  ): Promise<PoiSearchItem[]> {
+    AppConfig.validateAmapWebConfig();
+    const safeLimit = limit > 0 ? limit : AmapService.POI_DEFAULT_LIMIT;
+    const encodedKeyword = encodeURIComponent(keyword);
+    const base = 'https://restapi.amap.com/v3/place';
+    const url = nearbyOnly
+      ? `${base}/around?key=${AppConfig.AMAP_WEB_API_KEY}&location=${centerLng},${centerLat}` +
+        `&keywords=${encodedKeyword}&radius=${AmapService.POI_NEARBY_RADIUS_METERS}&sortrule=distance` +
+        `&offset=${safeLimit}&page=1&extensions=base`
+      : `${base}/text?key=${AppConfig.AMAP_WEB_API_KEY}&keywords=${encodedKeyword}` +
+        `&offset=${safeLimit}&page=1&extensions=base`;
+
+    const response = await HttpRequestHelper.request(AmapService.TAG, 'searchPoiByWebApi', url, {
+      method: http.RequestMethod.GET,
+      connectTimeout: 5000,
+      readTimeout: 5000
+    });
+
+    if (response.responseCode !== 200) {
+      hilog.warn(
+        0x0000,
+        AmapService.TAG,
+        `[AMAP_TRACE][searchPoiByWebApi] non-200 responseCode=${response.responseCode}, nearbyOnly=${nearbyOnly}`
+      );
+      return [];
+    }
+
+    const payload = String(response.result ?? '');
+    const resolved = AmapService.parsePoiResponse(payload);
+    hilog.info(
+      0x0000,
+      AmapService.TAG,
+      `[AMAP_TRACE][searchPoiByWebApi] keyword_len=${keyword.length}, nearbyOnly=${nearbyOnly}, resolved=${resolved.length}`
+    );
+    return resolved;
+  }
+
+  private static isSdkMd5AuthError(error: Object): boolean {
+    const raw = JSON.stringify(error);
+    return raw.includes('"errorCode":1008') || raw.includes('MD5') || raw.includes('安全码未通过');
+  }
+
+  private static async searchPoiWithWebFallback(
+    keyword: string,
+    centerLat: number,
+    centerLng: number,
+    limit: number
+  ): Promise<PoiSearchItem[]> {
+    const nearby = await AmapService.searchPoiByWebApi(keyword, centerLat, centerLng, limit, true);
+    if (!AmapService.shouldFallbackToNationwide(nearby.length)) {
+      return nearby.slice(0, limit);
+    }
+    const nationwide = await AmapService.searchPoiByWebApi(keyword, centerLat, centerLng, limit, false);
+    return AmapService.mergePoiResults(nearby, nationwide, limit);
   }
 
   private static buildPoiCacheKey(keyword: string, centerLat: number, centerLng: number, limit: number): string {
@@ -418,8 +498,32 @@ export class AmapService {
       AmapService.writePoiCache(cacheKey, merged);
       return merged;
     } catch (error) {
-      hilog.error(0x0000, AmapService.TAG, `[AMAP_TRACE][searchPoi] failed, error=${JSON.stringify(error)}`);
-      return [];
+      hilog.error(0x0000, AmapService.TAG, `[AMAP_TRACE][searchPoi] sdk failed, error=${JSON.stringify(error)}`);
+      try {
+        const fallback = await AmapService.searchPoiWithWebFallback(trimmed, centerLat, centerLng, safeLimit);
+        AmapService.writePoiCache(cacheKey, fallback);
+        if (AmapService.isSdkMd5AuthError(error)) {
+          hilog.warn(
+            0x0000,
+            AmapService.TAG,
+            `[AMAP_TRACE][searchPoi] sdk_auth_1008_fallback_web resolved=${fallback.length}`
+          );
+        } else {
+          hilog.warn(
+            0x0000,
+            AmapService.TAG,
+            `[AMAP_TRACE][searchPoi] sdk_failed_fallback_web resolved=${fallback.length}`
+          );
+        }
+        return fallback;
+      } catch (fallbackError) {
+        hilog.error(
+          0x0000,
+          AmapService.TAG,
+          `[AMAP_TRACE][searchPoi] web fallback failed, error=${JSON.stringify(fallbackError)}`
+        );
+        return [];
+      }
     }
   }
 
