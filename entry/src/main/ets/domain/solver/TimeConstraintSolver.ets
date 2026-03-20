@@ -34,6 +34,10 @@ export class TimeConstraintSolver {
     return baseTimestamp + (dayOffset * TimeConstraintSolver.DAY_MS) + (minuteOfDay * TimeConstraintSolver.MINUTE_MS);
   }
 
+  private static isSameNaturalDay(tsA: number, tsB: number): boolean {
+    return TimeConstraintSolver.getDayStart(tsA) === TimeConstraintSolver.getDayStart(tsB);
+  }
+
   private static resolveGlobalStartMin(globalStartTimeStr: string): number {
     if (DateUtil.isValidTimeString(globalStartTimeStr)) {
       return DateUtil.timeToMinutes(globalStartTimeStr);
@@ -241,7 +245,8 @@ export class TimeConstraintSolver {
             );
           } else {
             const gapMs = anchorTimestamp - idealStartTimeFromCursor;
-            if (idleGapDetectionEnabled && gapMs >= idleGapTriggerMs) {
+            const sameDayGap = TimeConstraintSolver.isSameNaturalDay(anchorTimestamp, idealStartTimeFromCursor);
+            if (idleGapDetectionEnabled && sameDayGap && gapMs >= idleGapTriggerMs) {
               item.hasGap = true;
               item.gapMinutes = Math.floor(gapMs / TimeConstraintSolver.MINUTE_MS);
               item.naturalStartTime = DateUtil.formatDate(new Date(idealStartTimeFromCursor), "HH:mm");
@@ -254,7 +259,8 @@ export class TimeConstraintSolver {
             finalStartTimestamp = idealStartTimeFromCursor;
           } else {
             const gapMs = anchorTimestamp - idealStartTimeFromCursor;
-            if (idleGapDetectionEnabled && gapMs >= idleGapTriggerMs) {
+            const sameDayGap = TimeConstraintSolver.isSameNaturalDay(anchorTimestamp, idealStartTimeFromCursor);
+            if (idleGapDetectionEnabled && sameDayGap && gapMs >= idleGapTriggerMs) {
               item.hasGap = true;
               item.gapMinutes = Math.floor(gapMs / TimeConstraintSolver.MINUTE_MS);
               item.naturalStartTime = DateUtil.formatDate(new Date(idealStartTimeFromCursor), "HH:mm");

@@ -18,7 +18,7 @@ export class TimelineInteractionHelper {
    */
   public static checkForGapAndPrompt(vm: TimelineViewModel, onGapFound?: (item: EventEntity) => void) {
     setTimeout(() => {
-      const gapItem = vm.events.find(e => e.has_gap && !e.is_ignore_wait);
+      const gapItem = vm.getSortedGaps().find((item: EventEntity) => !item.is_ignore_wait);
 
       // 濡傛灉鍙戠幇浜嗙┖绐楋紝骞朵笖澶栭儴浼犱簡鍥炶皟鍑芥暟锛屽氨閫氱煡澶栭儴
       if (gapItem && onGapFound) {

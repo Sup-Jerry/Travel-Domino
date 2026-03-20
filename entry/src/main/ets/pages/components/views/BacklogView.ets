@@ -13,6 +13,7 @@ export struct BacklogView {
   onToggleExpand: () => void = () => {};
 
   onMoveToSchedule: (item: TravelPlanItem) => void = () => {};
+  onMoveAllToSchedule: () => void = () => {};
 
   private getPalette() {
     return ThemeCenter.getPalette(this.effectiveTheme);
@@ -22,32 +23,49 @@ export struct BacklogView {
     Column() {
       // 标题栏
       Row() {
-        Text(this.isExpanded ? '▼' : '▶')
-          .fontSize(12)
-          .fontColor(this.getPalette().textTertiary)
-          .margin({ right: 8 })
+        Row() {
+          Text(this.isExpanded ? '▼' : '▶')
+            .fontSize(12)
+            .fontColor(this.getPalette().textTertiary)
+            .margin({ right: 8 })
 
-        Text('💡 暂存池 / 想去的地方')
-          .fontSize(14)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.getPalette().textPrimary)
+          Text('💡 暂存池 / 想去的地方')
+            .fontSize(14)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.getPalette().textPrimary)
 
-        Blank()
+          Blank()
 
-        Text(`${this.items.length}`)
-          .fontSize(12)
-          .fontColor(this.getPalette().textSecondary)
-          .backgroundColor(this.getPalette().cardBgSoft)
-          .padding({ left: 10, right: 10, top: 4, bottom: 4 })
-          .borderRadius(12)
+          Text(`${this.items.length}`)
+            .fontSize(12)
+            .fontColor(this.getPalette().textSecondary)
+            .backgroundColor(this.getPalette().cardBgSoft)
+            .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+            .borderRadius(12)
+        }
+        .layoutWeight(1)
+        .onClick(() => {
+          this.getUIContext().animateTo({ duration: 300, curve: Curve.FastOutSlowIn }, () => {
+            this.onToggleExpand();
+          });
+        })
+
+        if (this.items.length > 0) {
+          Button('一键加入日程')
+            .height(30)
+            .fontSize(11)
+            .backgroundColor(this.getPalette().primary)
+            .fontColor(Color.White)
+            .borderRadius(15)
+            .padding({ left: 10, right: 10 })
+            .margin({ left: 8 })
+            .onClick(() => {
+              this.onMoveAllToSchedule();
+            })
+        }
       }
       .width('100%')
       .padding({ bottom: this.isExpanded ? 12 : 0 })
-      .onClick(() => {
-        this.getUIContext().animateTo({ duration: 300, curve: Curve.FastOutSlowIn }, () => {
-          this.onToggleExpand();
-        });
-      })
 
       if (this.isExpanded) {
         if (this.items.length === 0) {
