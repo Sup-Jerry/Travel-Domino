@@ -138,6 +138,16 @@ export interface WeatherSuggestionActionPayload {
   replacementCandidates?: WeatherSuggestionAlternativeCandidate[];
 }
 
+export type ReplanChangeType = 'ORDER_CHANGED' | 'DURATION_CHANGED' | 'TIME_SHIFTED' | 'IMMUTABLE_BLOCKED' | 'NO_OP';
+
+export interface ReplanChangeSummaryItem {
+  type: ReplanChangeType;
+  nodeId: string;
+  before?: string;
+  after?: string;
+  deltaMinutes?: number;
+}
+
 export interface SoftReplanPreview {
   suggestionId: string;
   actionType: WeatherSuggestionActionType;
@@ -145,6 +155,9 @@ export interface SoftReplanPreview {
   changedDurations: boolean;
   skippedNodeIds: string[];
   affectedNodeIds: string[];
+  reasonCode?: string;
+  startFromEventId?: number;
+  changeSummary: ReplanChangeSummaryItem[];
   summary: string;
   riskDelta: number;
 }
@@ -153,5 +166,7 @@ export interface SoftReplanApplyResult {
   success: boolean;
   rolledBack: boolean;
   errorCode: '' | 'REPLAN_CONFLICT' | 'REPLAN_IMMUTABLE' | 'REPLAN_NO_CANDIDATE' | 'REPLAN_TIMEOUT' | 'REPLAN_INVALID' | 'REPLAN_BUSY';
+  reasonCode?: string;
+  startFromEventId?: number;
   preview: SoftReplanPreview;
 }

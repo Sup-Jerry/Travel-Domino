@@ -5,6 +5,8 @@ import { GlobalBottomNavBar } from './components/views/BottomNavBar';
 import { common } from '@kit.AbilityKit';
 import { ThemeCenter, ThemeMode } from '../common/utils/ThemeCenter';
 import { AppStorageKeys } from '../common/constants/AppStorageKeys';
+import { PlanStateMachine } from '../domain/statemachine/PlanStateMachine';
+import { PlanTransitionEvent } from '../domain/statemachine/ExecutionContext';
 
 const TAG = 'SettingsPage';
 
@@ -106,6 +108,7 @@ struct SettingSelectItem {
 @Component
 struct SettingsPage {
   @State enableAmapRouteApi: boolean = false;
+  @State weatherFeatureEnabled: boolean = true;
   @State enableIdleGapDetection: boolean = true;
   @State idleGapTriggerMinutes: number = 45;
   @State idleGapTriggerInput: string = '45';
@@ -115,7 +118,12 @@ struct SettingsPage {
   @State minEventDurationInput: string = '30';
   @State loading: boolean = true;
   @State themeMode: ThemeMode = 'system';
+  @State diagnosticsPlanIdInput: string = '';
+  @State diagnosticsSummary: string = '未加载';
+  @State diagnosticsLogs: string[] = [];
+  @State diagnosticsExportPreview: string = '';
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
+  private readonly planStateMachine: PlanStateMachine = PlanStateMachine.getInstance();
 
   private getThemePalette() {
     return ThemeCenter.getPalette(this.effectiveTheme);
@@ -208,6 +216,20 @@ struct SettingsPage {
     } catch (error) {
       this.enableAmapRouteApi = oldValue;
       this.safeShowToast('高德路线 API 设置失败');
+    }
+  }
+
+  private async onWeatherFeatureChanged(value: boolean): Promise<void> {
+    const oldValue = this.weatherFeatureEnabled;
+    this.weatherFeatureEnabled = value;
+    try {
+      const pref = PreferenceManager.getInstance();
+      await pref.setWeatherFeatureEnabled(value);
+      this.weatherFeatureEnabled = await pref.isWeatherFeatureEnabled();
+      this.safeShowToast(this.weatherFeatureEnabled ? '已开启天气功能' : '已关闭天气功能');
+    } catch (_error) {
+      this.weatherFeatureEnabled = oldValue;
+      this.safeShowToast('天气功能开关保存失败');
     }
   }
 
@@ -338,6 +360,7 @@ struct SettingsPage {
     this.effectiveTheme = ThemeCenter.applyThemeMode(context, this.themeMode);
 
     this.enableAmapRouteApi = await pref.isAmapRouteApiEnabled();
+    this.weatherFeatureEnabled = await pref.isWeatherFeatureEnabled();
     this.enableIdleGapDetection = await pref.getIdleGapDetectionEnabled();
     this.idleGapTriggerMinutes = await pref.getIdleGapTriggerMinutes();
     this.idleGapTriggerInput = `${this.idleGapTriggerMinutes}`;
@@ -358,6 +381,46 @@ struct SettingsPage {
     this.minEventDurationInput = `${this.minEventDuration}`;
     AppStorage.setOrCreate(AppStorageKeys.MIN_EVENT_DURATION, this.minEventDuration);
     hilog.info(0x0000, TAG, `[SETTING_UI][min_duration_loaded] value=${this.minEventDuration}`);
+    if (this.diagnosticsPlanIdInput.trim().length > 0) {
+      this.refreshStateMachineDiagnostics();
+    }
+  }
+
+  private refreshStateMachineDiagnostics(): void {
+    const planId = this.diagnosticsPlanIdInput.trim();
+    if (planId.length === 0) {
+      this.diagnosticsSummary = '请先输入计划ID';
+      this.diagnosticsLogs = [];
+      return;
+    }
+    const metrics = this.planStateMachine.getDailyMetrics(planId);
+    const transitions: PlanTransitionEvent[] = this.planStateMachine.getRecentTransitions(planId, 12);
+    const c = metrics.counters;
+    this.diagnosticsSummary =
+      `day=${metrics.dayKey} plan=${planId}\n` +
+      `ready: ${c['auto_transition_attempt_ready'] ?? 0}/${c['auto_transition_success_ready'] ?? 0}/${c['auto_transition_fail_ready'] ?? 0}\n` +
+      `in_progress: ${c['auto_transition_attempt_in_progress'] ?? 0}/${c['auto_transition_success_in_progress'] ?? 0}/${c['auto_transition_fail_in_progress'] ?? 0}\n` +
+      `jitter_blocked: ${c['transition_jitter_blocked'] ?? 0}\n` +
+      `recovery: ${c['recovery_attempt'] ?? 0}/${c['recovery_success'] ?? 0}/${c['recovery_fail'] ?? 0}`;
+    this.diagnosticsLogs = transitions.map((event: PlanTransitionEvent) => {
+      const ts = new Date(event.timestamp).toLocaleString();
+      return `${ts} ${event.fromStatus} -> ${event.toStatus} (${event.triggerReason})`;
+    }).reverse();
+  }
+
+  private exportStateMachineDiagnostics(): void {
+    const planId = this.diagnosticsPlanIdInput.trim();
+    if (planId.length === 0) {
+      this.safeShowToast('请先输入计划ID');
+      return;
+    }
+    const snapshot = this.planStateMachine.exportDiagnosticsSnapshot(planId);
+    const json = JSON.stringify(snapshot, null, 2);
+    AppStorage.setOrCreate(AppStorageKeys.PLAN_STATE_DIAGNOSTIC_EXPORT, json);
+    this.diagnosticsExportPreview = json.length > 320
+      ? `${json.slice(0, 320)}...`
+      : json;
+    this.safeShowToast('诊断快照已导出到本地（AppStorage）');
   }
 
   @Builder
@@ -409,6 +472,19 @@ struct SettingsPage {
               cardBg: this.getThemePalette().cardBg,
               onToggle: async (value: boolean) => {
                 await this.onAmapRouteApiChanged(value);
+              }
+            });
+
+            SettingSwitchItem({
+              title: '启用天气功能',
+              desc: '关闭后隐藏天气展示、刷新与提醒能力，不再参与规划与执行建议。',
+              loading: this.loading,
+              checked: this.weatherFeatureEnabled,
+              textPrimary: this.getThemePalette().textPrimary,
+              textSecondary: this.getThemePalette().textSecondary,
+              cardBg: this.getThemePalette().cardBg,
+              onToggle: async (value: boolean) => {
+                await this.onWeatherFeatureChanged(value);
               }
             });
 
@@ -567,6 +643,75 @@ struct SettingsPage {
               .onClick(async () => {
                 await this.resetAllTips();
               });
+
+            this.SettingSectionTitle('状态机诊断');
+
+            Column({ space: 10 }) {
+              Row({ space: 8 }) {
+                TextInput({ text: this.diagnosticsPlanIdInput, placeholder: '输入计划ID' })
+                  .type(InputType.Number)
+                  .fontSize(14)
+                  .textAlign(TextAlign.Center)
+                  .width(120)
+                  .height(38)
+                  .backgroundColor(this.getThemePalette().cardBgSoft)
+                  .borderRadius(8)
+                  .onChange((value: string) => {
+                    this.diagnosticsPlanIdInput = value;
+                  });
+                Button('刷新诊断')
+                  .height(38)
+                  .padding({ left: 14, right: 14 })
+                  .borderRadius(8)
+                  .backgroundColor(this.getThemePalette().primary)
+                  .fontColor(Color.White)
+                  .onClick(() => {
+                    this.refreshStateMachineDiagnostics();
+                  });
+                Button('导出JSON')
+                  .height(38)
+                  .padding({ left: 14, right: 14 })
+                  .borderRadius(8)
+                  .backgroundColor(this.getThemePalette().success)
+                  .fontColor(Color.White)
+                  .onClick(() => {
+                    this.exportStateMachineDiagnostics();
+                  });
+              }
+              .width('100%');
+
+              Text(this.diagnosticsSummary)
+                .fontSize(12)
+                .fontColor(this.getThemePalette().textSecondary)
+                .width('100%');
+
+              ForEach(this.diagnosticsLogs, (line: string) => {
+                Text(line)
+                  .fontSize(12)
+                  .fontColor(this.getThemePalette().textTertiary)
+                  .width('100%')
+                  .maxLines(2)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis });
+              }, (line: string) => line);
+              if (this.diagnosticsExportPreview.trim().length > 0) {
+                Text('导出预览：')
+                  .fontSize(12)
+                  .fontColor(this.getThemePalette().textSecondary)
+                  .width('100%')
+                  .margin({ top: 8 });
+                Text(this.diagnosticsExportPreview)
+                  .fontSize(11)
+                  .fontColor(this.getThemePalette().textTertiary)
+                  .width('100%')
+                  .maxLines(6)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis });
+              }
+            }
+            .width('100%')
+            .padding(16)
+            .backgroundColor(this.getThemePalette().cardBg)
+            .borderRadius(12)
+            .margin({ top: 4, bottom: 4 });
 
             this.SettingSectionTitle('说明');
 
