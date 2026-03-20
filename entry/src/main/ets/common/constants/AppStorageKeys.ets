@@ -1,4 +1,4 @@
-export class AppStorageKeys {
+﻿export class AppStorageKeys {
   static readonly THEME_MODE = 'ThemeMode';
   static readonly EFFECTIVE_THEME = 'EffectiveTheme';
   static readonly GLOBAL_TIME_DISPLAY_MODE = 'GlobalTimeDisplayMode';
@@ -22,4 +22,6 @@ export class AppStorageKeys {
   static readonly PICKED_LOCATION_STR = 'pickedLocationStr';
   static readonly HAS_UNSAVED_POSTPONE = 'hasUnsavedPostpone';
   static readonly MIN_EVENT_DURATION = 'MinEventDuration';
+  static readonly AUTH_SESSION_JSON = 'AuthSessionJson';
 }
+

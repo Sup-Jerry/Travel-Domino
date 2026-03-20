@@ -17,6 +17,7 @@ import { PlanAppService } from '../viewmodel/PlanAppService';
 import { DateUtil } from '../common/utils/DateUtil';
 import { AppTexts } from '../common/constants/AppTexts';
 import { AppStorageKeys } from '../common/constants/AppStorageKeys';
+import { AuthSessionStore } from '../infrastructure/auth/AuthSessionStore';
 
 interface NotificationNavPayload {
   planId: number;
@@ -78,6 +79,10 @@ struct PlanListPage {
   importJsonDialogController: CustomDialogController | null = null;
 
   onPageShow() {
+    if (!AuthSessionStore.getAccessToken()) {
+      this.getUIContext().getRouter().pushUrl({ url: 'pages/LoginPage' });
+      return;
+    }
     void this.loadPlans();
     this.startGlobalArrivalEngine();
     this.bindArrivalReminderSubscription();
@@ -467,16 +472,27 @@ struct PlanListPage {
             .fontColor(this.getThemePalette().textPrimary)
             .margin({ top: 12 });
 
-          Blank();
+                    Blank();
 
-          Button('导入JSON')
-            .fontSize(12)
-            .height(30)
-            .backgroundColor('#007DFF')
-            .fontColor(Color.White)
-            .onClick(() => {
-              this.openImportDialog();
-            });
+          Row({ space: 8 }) {
+            Button('账号中心')
+              .fontSize(12)
+              .height(30)
+              .backgroundColor('#34A853')
+              .fontColor(Color.White)
+              .onClick(() => {
+                this.getUIContext().getRouter().pushUrl({ url: 'pages/AccountCenterPage' });
+              });
+
+            Button('导入JSON')
+              .fontSize(12)
+              .height(30)
+              .backgroundColor('#007DFF')
+              .fontColor(Color.White)
+              .onClick(() => {
+                this.openImportDialog();
+              });
+          }
         }
         .width('100%')
         .padding({ left: 16, top: 10, bottom: 10, right: 16 })
@@ -561,6 +577,9 @@ struct PlanListPage {
     .backgroundColor(this.getThemePalette().pageBg);
   }
 }
+
+
+
 
 
 
