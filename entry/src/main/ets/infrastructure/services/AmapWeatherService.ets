@@ -19,6 +19,18 @@ interface AmapLiveWeatherNode {
 interface AmapLiveWeatherResponse {
   status?: string;
   lives?: AmapLiveWeatherNode[];
+  forecasts?: AmapForecastNode[];
+}
+
+interface AmapForecastCastNode {
+  dayweather?: string;
+  daytemp?: string;
+  nighttemp?: string;
+}
+
+interface AmapForecastNode {
+  adcode?: string;
+  casts?: AmapForecastCastNode[];
 }
 
 const TAG = 'AmapWeatherService';
@@ -51,7 +63,15 @@ export class AmapWeatherService implements IWeatherAdapter {
       }
       const payload = typeof response.result === 'string' ? response.result : JSON.stringify(response.result);
       const parsed = JSON.parse(payload) as AmapLiveWeatherResponse;
-      return this.mapLiveNodeToInfo(parsed.lives && parsed.lives.length > 0 ? parsed.lives[0] : undefined);
+      const mapped = this.mapResponseToInfo(parsed);
+      if (!mapped) {
+        hilog.warn(
+          0x0000,
+          TAG,
+          `[WEATHER][getWeather] empty business payload city=${cityName}, status=${parsed.status ?? ''}, lives=${parsed.lives?.length ?? 0}, forecasts=${parsed.forecasts?.length ?? 0}`
+        );
+      }
+      return mapped;
     } catch (error) {
       hilog.warn(0x0000, TAG, `[WEATHER][getWeather] failed reason=${JSON.stringify(error)}`);
       return null;
@@ -117,6 +137,7 @@ export class AmapWeatherService implements IWeatherAdapter {
     });
 
     const entries = Array.from(dedup.entries());
+    hilog.info(0x0000, TAG, `[WEATHER][batch] input=${points.length}, dedup=${entries.length}`);
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
       const pointKey = entry[0];
@@ -132,6 +153,7 @@ export class AmapWeatherService implements IWeatherAdapter {
         result.set(pointKey, weather);
       }
     }
+    hilog.info(0x0000, TAG, `[WEATHER][batch] output=${result.size}`);
     return result;
   }
 
@@ -139,21 +161,82 @@ export class AmapWeatherService implements IWeatherAdapter {
     return this.infoToSnapshot(pointKey, info);
   }
 
+  private mapResponseToInfo(response: AmapLiveWeatherResponse): WeatherInfo | null {
+    const liveNode = response.lives && response.lives.length > 0 ? response.lives[0] : undefined;
+    const liveMapped = this.mapLiveNodeToInfo(liveNode);
+    if (liveMapped) {
+      return liveMapped;
+    }
+
+    const forecastNode = response.forecasts && response.forecasts.length > 0 ? response.forecasts[0] : undefined;
+    const forecastMapped = this.mapForecastNodeToInfo(forecastNode);
+    if (forecastMapped) {
+      hilog.info(0x0000, TAG, '[WEATHER][getWeather] fallback to forecast payload');
+      return forecastMapped;
+    }
+    return null;
+  }
+
   private mapLiveNodeToInfo(node?: AmapLiveWeatherNode): WeatherInfo | null {
-    if (!node || !node.weather) {
+    if (!node) {
       return null;
     }
-    const temperature = Number.parseFloat(node.temperature ?? '0');
-    const humidity = Number.parseFloat(node.humidity ?? '0');
-    const windSpeed = Number.parseFloat(node.windpower ?? '0');
+    const condition = this.readAsText(node.weather);
+    if (condition.length === 0) {
+      return null;
+    }
+    const temperature = this.readAsNumber(node.temperature);
+    const humidity = this.readAsNumber(node.humidity);
+    const windSpeed = this.readAsNumber(node.windpower);
     return {
       temperature: Number.isFinite(temperature) ? temperature : 0,
-      condition: node.weather ?? '',
+      condition: condition,
       humidity: Number.isFinite(humidity) ? humidity : 0,
       windSpeed: Number.isFinite(windSpeed) ? windSpeed : 0,
-      reportTime: node.reporttime,
-      cityCode: node.adcode
+      reportTime: this.readAsText(node.reporttime),
+      cityCode: this.readAsText(node.adcode)
     };
+  }
+
+  private mapForecastNodeToInfo(node?: AmapForecastNode): WeatherInfo | null {
+    if (!node || !node.casts || node.casts.length === 0) {
+      return null;
+    }
+    const cast = node.casts[0];
+    const condition = this.readAsText(cast.dayweather);
+    if (condition.length === 0) {
+      return null;
+    }
+    const dayTemp = this.readAsNumber(cast.daytemp);
+    const nightTemp = this.readAsNumber(cast.nighttemp);
+    let temperature = dayTemp;
+    if (Number.isFinite(dayTemp) && Number.isFinite(nightTemp)) {
+      temperature = (dayTemp + nightTemp) / 2;
+    } else if (!Number.isFinite(dayTemp) && Number.isFinite(nightTemp)) {
+      temperature = nightTemp;
+    }
+    return {
+      temperature: Number.isFinite(temperature) ? temperature : 0,
+      condition: condition,
+      humidity: 0,
+      windSpeed: 0,
+      cityCode: this.readAsText(node.adcode)
+    };
+  }
+
+  private readAsText(value: string | undefined): string {
+    if (!value) {
+      return '';
+    }
+    return value.trim();
+  }
+
+  private readAsNumber(value: string | undefined): number {
+    if (!value) {
+      return Number.NaN;
+    }
+    const parsed = Number.parseFloat(value.trim());
+    return Number.isFinite(parsed) ? parsed : Number.NaN;
   }
 
   private infoToSnapshot(

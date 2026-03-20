@@ -1,4 +1,5 @@
 import { EventEntity } from '../../model/entity/EventEntity';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import { WeatherStagePolicy } from '../policy/WeatherStagePolicy';
 import { AmapWeatherService } from '../../infrastructure/services/AmapWeatherService';
 import { WeatherRiskEvaluator } from './WeatherRiskEvaluator';
@@ -28,6 +29,7 @@ interface CityBucketBuildResult {
 }
 
 export class WeatherContextBuilder {
+  private static readonly TAG: string = 'WeatherContextBuilder';
   private readonly weatherService: AmapWeatherService;
   private readonly riskEvaluator: WeatherRiskEvaluator;
 
@@ -51,24 +53,25 @@ export class WeatherContextBuilder {
     );
 
     const queryPoints: WeatherGeoPointRequest[] = [];
+    const pointKeyByEventId: Map<number, string> = new Map<number, string>();
     sourceEvents.forEach((event: EventEntity) => {
+      const targetTime = event.dynamic_start_time > 0 ? event.dynamic_start_time : Date.now();
       const point: WeatherGeoPointRequest = {
         latitude: event.latitude,
         longitude: event.longitude,
-        targetTime: event.dynamic_start_time > 0 ? event.dynamic_start_time : Date.now()
+        targetTime: targetTime
       };
       queryPoints.push(point);
+      pointKeyByEventId.set(event.id, AmapWeatherService.toPointKey(event.latitude, event.longitude, targetTime));
     });
     const weatherMap = await this.weatherService.batchGetWeather(queryPoints);
+    hilog.info(0x0000, WeatherContextBuilder.TAG, `[WEATHER_CTX][planning] sourceEvents=${sourceEvents.length}, queryPoints=${queryPoints.length}, weatherMap=${weatherMap.size}`);
 
     const bindings: PlanNodeWeatherBinding[] = [];
     const eventMap: Map<number, PlanNodeWeatherBinding> = new Map<number, PlanNodeWeatherBinding>();
     sourceEvents.forEach((event: EventEntity) => {
-      const pointKey = AmapWeatherService.toPointKey(
-        event.latitude,
-        event.longitude,
-        event.dynamic_start_time > 0 ? event.dynamic_start_time : Date.now()
-      );
+      const pointKey = pointKeyByEventId.get(event.id) ??
+        AmapWeatherService.toPointKey(event.latitude, event.longitude, event.dynamic_start_time > 0 ? event.dynamic_start_time : Date.now());
       const info = weatherMap.get(pointKey);
       const snapshot = info ? this.weatherService.toSnapshotByPoint(pointKey, info) : undefined;
       const risk = this.riskEvaluator.evaluateNodeSuitability(event, snapshot, pref);
@@ -130,6 +133,7 @@ export class WeatherContextBuilder {
       });
     });
     const futureWeatherMap = await this.weatherService.batchGetWeather(queryPoints);
+    hilog.info(0x0000, WeatherContextBuilder.TAG, `[WEATHER_CTX][execution] futureNodes=${futureNodes.length}, queryPoints=${queryPoints.length}, weatherMap=${futureWeatherMap.size}`);
 
     const bindings: PlanNodeWeatherBinding[] = [];
     const eventMap: Map<number, PlanNodeWeatherBinding> = new Map<number, PlanNodeWeatherBinding>();

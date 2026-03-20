@@ -443,17 +443,19 @@ export class AmapService {
 
       if (response.responseCode === 200) {
         const resultData = JSON.parse(response.result as string) as AmapRegeoResponse;
+        const adCode = resultData.regeocode?.addressComponent?.adcode?.trim() ?? '';
         const cityCode = resultData.regeocode?.addressComponent?.citycode?.trim() ?? '';
+        const weatherCity = adCode.length > 0 ? adCode : cityCode;
 
-        if (resultData.status === '1' && cityCode.length > 0) {
-          hilog.info(0x0000, AmapService.TAG, `[AMAP_TRACE][getCityCodeByCoordinate] resolve success cityCode=${cityCode}`);
-          return cityCode;
+        if (resultData.status === '1' && weatherCity.length > 0) {
+          hilog.info(0x0000, AmapService.TAG, `[AMAP_TRACE][getCityCodeByCoordinate] resolve success weatherCity=${weatherCity}, adCode=${adCode}, cityCode=${cityCode}`);
+          return weatherCity;
         }
 
         hilog.warn(
           0x0000,
           AmapService.TAG,
-          `[AMAP_TRACE][getCityCodeByCoordinate] business miss, status=${resultData.status}, cityCode=${cityCode}`
+          `[AMAP_TRACE][getCityCodeByCoordinate] business miss, status=${resultData.status}, adCode=${adCode}, cityCode=${cityCode}`
         );
       } else {
         hilog.warn(
