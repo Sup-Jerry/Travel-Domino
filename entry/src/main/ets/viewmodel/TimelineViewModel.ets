@@ -23,6 +23,23 @@ import { TimelineCalculationService } from '../domain/timeline/services/Timeline
 import { TimelineConflictResolver } from '../domain/timeline/services/TimelineConflictResolver';
 import { StrategyPresets } from '../domain/strategy/StrategyPresets';
 import { TravelStrategyMode } from '../domain/strategy/TravelStrategyMode';
+import { StrategyService } from '../domain/strategy/StrategyService';
+import { UserBehaviorTracker } from '../domain/strategy/UserBehaviorTracker';
+import { StrategyAdaptationEngine, AdaptationPrompt } from '../domain/strategy/StrategyAdaptationEngine';
+import { WeatherContextBuilder } from '../domain/services/WeatherContextBuilder';
+import {
+  DEFAULT_WEATHER_USER_PREFERENCE,
+  GeoPointInput,
+  SoftReplanApplyResult,
+  SoftReplanMode,
+  SoftReplanPreview,
+  WeatherCollabOptions,
+  WeatherContextBuildResult,
+  WeatherSuggestion,
+  WeatherUserPreference
+} from '../domain/services/WeatherModels';
+import { ArrivalReminderEngine } from '../infrastructure/services/ArrivalReminderEngine';
+import { WeatherReminderStore } from '../common/utils/weather/WeatherReminderStore';
 
 // 重新导出类型以保持向后兼容
 export { DateGroup, PlaceCheckinSummary, PlaceCheckinRecord };
@@ -207,6 +224,48 @@ export class TimelineViewModel {
   @Track private idleGapTriggerMinutes: number = 45;
   private currentStrategyMode: number = 0;
   private isRegenerating: boolean = false;  // AI重新生成锁
+  private behaviorTracker: UserBehaviorTracker = new UserBehaviorTracker();
+  @Track public strategyAdaptationPrompt: AdaptationPrompt | null = null;
+  @Track public weatherPlanningHint: string = '';
+  @Track public weatherRouteScore: number = -1;
+  @Track public weatherCollabSummary: string = '';
+  @Track public weatherCollabLabel: string = '';
+  @Track public weatherLastRefreshAt: number = 0;
+  @Track public weatherLoading: boolean = false;
+  @Track public executionWeatherHint: string = '';
+  @Track public executionWeatherLevel: 'INFO' | 'NOTICE' | 'WARNING' = 'INFO';
+  @Track public executionWeatherCurrentText: string = '';
+  @Track public executionWeatherNextText: string = '';
+  @Track public executionWeatherScore: number = -1;
+  @Track public executionWeatherRefreshAt: number = 0;
+  @Track public executionWeatherLoading: boolean = false;
+  @Track public executionWeatherEnabled: boolean = false;
+  @Track public executionWeatherLastTrigger: string = '';
+  @Track public executionWeatherErrorCode: string = '';
+  @Track public executionWeatherSuggestions: WeatherSuggestion[] = [];
+  @Track public executionWeatherAppliedSummary: string = '';
+  @Track public executionWeatherApplying: boolean = false;
+  @Track public executionWeatherCollabBadge: string = '';
+  @Track public executionWeatherCollabSummary: string = '';
+  @Track public weatherUserPreference: WeatherUserPreference = {
+    heatSensitivity: DEFAULT_WEATHER_USER_PREFERENCE.heatSensitivity,
+    rainSensitivity: DEFAULT_WEATHER_USER_PREFERENCE.rainSensitivity,
+    weatherRiskTolerance: DEFAULT_WEATHER_USER_PREFERENCE.weatherRiskTolerance
+  };
+  private readonly weatherContextBuilder: WeatherContextBuilder = new WeatherContextBuilder();
+  private executionWeatherTimerId: number = -1;
+  private executionWeatherLastLocation: GeoPointInput | null = null;
+  private executionWeatherLastEmitAt: number = 0;
+  private readonly executionWeatherPollIntervalMs: number = 20 * 60 * 1000;
+  private readonly executionWeatherLocationDeltaMeters: number = 1000;
+  private readonly executionSuggestionCooldownMs: number = 30 * 60 * 1000;
+  private readonly executionSuggestionCooldownMap: Map<string, number> = new Map<string, number>();
+  private readonly executionSuggestionMap: Map<string, WeatherSuggestion> = new Map<string, WeatherSuggestion>();
+  private executionReplanBusy: boolean = false;
+  private readonly weatherCollabOptions: WeatherCollabOptions = {
+    enableMultiDay: true,
+    enableMultiCity: true
+  };
 
   /**
    *
@@ -328,6 +387,7 @@ export class TimelineViewModel {
       await this.reloadMinEventDurationLimit();
       await this.reloadIdleGapSettings();
       await this.reloadGlobalRouteApiSwitch();
+      await this.reloadWeatherUserPreference();
       this.recalculate();
     } catch (err) {
       hilog.error(0x0000, TAG, `Load data failed: ${JSON.stringify(err)}`);
@@ -1009,6 +1069,14 @@ export class TimelineViewModel {
 
     // 3. 触发刷新
     this.recalculateFromIndex(index > 0 ? index - 1 : 0);
+
+    // 4. 记录删除行为并检查策略调整
+    if (item.source === 1) {
+      this.behaviorTracker.recordDeletion(item.type, item.duration, item.pre_travel_min);
+      if (this.behaviorTracker.shouldTriggerAdaptation()) {
+        await this.triggerStrategyAdaptation();
+      }
+    }
   }
 
   // 文件路径: ets/viewmodel/TimelineViewModel.ets
@@ -1611,6 +1679,592 @@ export class TimelineViewModel {
     this.recalculateFromIndex(startIndex);
   }
 
+  public async refreshPlanningWeather(forceRefresh: boolean = false): Promise<void> {
+    if (this.weatherLoading) {
+      return;
+    }
+    this.weatherLoading = true;
+    try {
+      const result = await this.weatherContextBuilder.buildPlanningContext(
+        this.events,
+        this.weatherUserPreference,
+        this.weatherCollabOptions
+      );
+      this.applyPlanningWeatherResult(result, forceRefresh);
+      hilog.info(
+        0x0000,
+        TAG,
+        `[WEATHER_PREF][planning] heat=${this.weatherUserPreference.heatSensitivity}, rain=${this.weatherUserPreference.rainSensitivity}, tolerance=${this.weatherUserPreference.weatherRiskTolerance}`
+      );
+    } finally {
+      this.weatherLoading = false;
+    }
+  }
+
+  private applyPlanningWeatherResult(result: WeatherContextBuildResult, forceRefresh: boolean): void {
+    const context = result.context;
+    this.weatherRouteScore = context.routeSuitability.routeScore;
+    this.weatherPlanningHint = context.routeSuitability.summaryText;
+    this.weatherCollabSummary = context.collabContext?.collabSummary ?? '';
+    this.weatherCollabLabel = this.weatherCollabSummary.trim().length > 0 ? '多日/多城' : '';
+    this.weatherLastRefreshAt = Date.now();
+
+    this.events.forEach((event: EventEntity) => {
+      const binding = result.eventMap.get(event.id);
+      if (!binding) {
+        if (event.status === 1 && (event.latitude !== 0 || event.longitude !== 0)) {
+          event.weather_text = '天气未知';
+          event.weather_condition = 'UNKNOWN';
+          event.weather_temperature = 0;
+          event.weather_fetch_time = Date.now();
+        }
+        return;
+      }
+      event.weather_text = binding.weather?.conditionText || '天气未知';
+      event.weather_condition = binding.weather?.conditionCode || 'UNKNOWN';
+      event.weather_temperature = binding.weather?.temperatureCelsius ?? 0;
+      event.weather_fetch_time = binding.weather?.fetchTime ?? Date.now();
+      if (forceRefresh && event.id > 0) {
+        const updates: EventFieldUpdate[] = [
+          { column: EventEntity.WEATHER_CONDITION, value: event.weather_condition },
+          { column: EventEntity.WEATHER_TEMPERATURE, value: event.weather_temperature },
+          { column: EventEntity.WEATHER_TEXT, value: event.weather_text },
+          { column: EventEntity.WEATHER_FETCH_TIME, value: event.weather_fetch_time }
+        ];
+        void EventRepositoryImpl.updateFields(event.id, updates, this.planId);
+      }
+    });
+    this.events = [...this.events];
+  }
+
+  public isExecutionWeatherStage(): boolean {
+    return this.events.some((event: EventEntity) => TimelineExecutionState.isActive(event));
+  }
+
+  public startExecutionWeatherScheduler(): void {
+    this.executionWeatherEnabled = true;
+    if (this.executionWeatherTimerId !== -1) {
+      clearInterval(this.executionWeatherTimerId);
+      this.executionWeatherTimerId = -1;
+    }
+    void this.refreshExecutionWeather(true, 'ENTER_EXECUTION');
+    this.executionWeatherTimerId = setInterval(() => {
+      void this.refreshExecutionWeather(false, 'TIMER');
+    }, this.executionWeatherPollIntervalMs);
+  }
+
+  public stopExecutionWeatherScheduler(): void {
+    this.executionWeatherEnabled = false;
+    if (this.executionWeatherTimerId !== -1) {
+      clearInterval(this.executionWeatherTimerId);
+      this.executionWeatherTimerId = -1;
+    }
+  }
+
+  public async refreshExecutionWeather(forceRefresh: boolean = false, trigger: 'ENTER_EXECUTION' | 'LOCATION_CHANGE' | 'TIMER' | 'MANUAL' = 'MANUAL'): Promise<void> {
+    if (!this.executionWeatherEnabled && trigger !== 'MANUAL') {
+      return;
+    }
+    if (this.executionWeatherLoading) {
+      return;
+    }
+    if (!this.isExecutionWeatherStage() && trigger !== 'MANUAL') {
+      return;
+    }
+    this.executionWeatherLoading = true;
+    this.executionWeatherLastTrigger = trigger;
+    this.executionWeatherErrorCode = '';
+    hilog.info(0x0000, TAG, `[WEATHER_EXEC][refresh_begin] trigger=${trigger}, forceRefresh=${forceRefresh}`);
+    hilog.info(
+      0x0000,
+      TAG,
+      `[WEATHER_REPLAN][refresh_begin] trigger=${trigger}, forceRefresh=${forceRefresh}, prefHeat=${this.weatherUserPreference.heatSensitivity}, prefRain=${this.weatherUserPreference.rainSensitivity}, prefTolerance=${this.weatherUserPreference.weatherRiskTolerance}`
+    );
+
+    try {
+      const currentLocation = this.resolveExecutionCurrentLocation();
+      if (trigger === 'TIMER' && !forceRefresh && this.shouldSkipByLocationThreshold(currentLocation)) {
+        this.executionWeatherLoading = false;
+        return;
+      }
+
+      const result = await this.weatherContextBuilder.buildExecutionContext(
+        this.events,
+        currentLocation ?? undefined,
+        forceRefresh,
+        this.weatherUserPreference,
+        this.weatherCollabOptions
+      );
+      const context = result.context;
+      const collab = context.collabContext;
+      this.executionWeatherScore = context.executionRiskScore ?? -1;
+      this.executionWeatherRefreshAt = Date.now();
+      this.executionWeatherCollabSummary = collab?.collabSummary ?? '';
+      this.executionWeatherCollabBadge = this.executionWeatherCollabSummary.trim().length > 0
+        ? (collab && collab.cityGroupCount > 1 ? '跨城协同中' : '多日趋势已纳入')
+        : '';
+      this.executionWeatherCurrentText = context.currentLocationWeather
+        ? `${context.currentLocationWeather.conditionText}${Number.isFinite(context.currentLocationWeather.temperatureCelsius) ? ` ${context.currentLocationWeather.temperatureCelsius}°C` : ''}`
+        : '天气未知';
+      this.executionWeatherNextText = context.nextNodeWeather
+        ? `${context.nextNodeWeather.conditionText}${Number.isFinite(context.nextNodeWeather.temperatureCelsius) ? ` ${context.nextNodeWeather.temperatureCelsius}°C` : ''}`
+        : '天气未知';
+
+      const suggestions = this.weatherContextBuilder.buildExecutionAdjustments(
+        this.planId,
+        context,
+        result.sourceEvents,
+        this.weatherUserPreference,
+        collab
+      );
+      this.executionWeatherSuggestions = this.filterActiveExecutionSuggestions(suggestions);
+      if (this.executionWeatherSuggestions.length > 0) {
+        this.applyExecutionSuggestion(this.executionWeatherSuggestions[0], trigger);
+      } else {
+        this.executionWeatherHint = '执行天气稳定，按当前节奏继续即可。';
+        this.executionWeatherLevel = 'INFO';
+      }
+      this.patchExecutionWeatherToEvents(result.eventMap, forceRefresh);
+      this.events = [...this.events];
+      if (currentLocation) {
+        this.executionWeatherLastLocation = {
+          latitude: currentLocation.latitude,
+          longitude: currentLocation.longitude
+        };
+      }
+      hilog.info(
+        0x0000,
+        TAG,
+        `[WEATHER_EXEC][refresh_done] trigger=${trigger}, targets=${result.sourceEvents.length}, suggestions=${this.executionWeatherSuggestions.length}, score=${this.executionWeatherScore}, level=${this.executionWeatherLevel}, dayWindowCount=${collab?.dayWindowCount ?? 0}, cityGroupCount=${collab?.cityGroupCount ?? 0}, cityMissCount=${collab?.cityMissCount ?? 0}, trendTag=${collab?.trendTag ?? 'UNKNOWN'}, fallbackPath=${collab?.fallbackPath ?? ''}`
+      );
+      hilog.info(
+        0x0000,
+        TAG,
+        `[WEATHER_REPLAN][refresh_done] trigger=${trigger}, requestTargets=${result.sourceEvents.length}, cacheHit=0, failures=${this.executionWeatherErrorCode || 'NONE'}, prefHeat=${this.weatherUserPreference.heatSensitivity}, prefRain=${this.weatherUserPreference.rainSensitivity}, dayWindowCount=${collab?.dayWindowCount ?? 0}, cityGroupCount=${collab?.cityGroupCount ?? 0}, cityMissCount=${collab?.cityMissCount ?? 0}, trendTag=${collab?.trendTag ?? 'UNKNOWN'}, fallbackPath=${collab?.fallbackPath ?? ''}`
+      );
+    } catch (error) {
+      this.executionWeatherErrorCode = 'WEATHER_002';
+      this.executionWeatherHint = '执行天气刷新失败，已降级使用节点天气/缓存。';
+      this.executionWeatherCollabBadge = '';
+      this.executionWeatherCollabSummary = '';
+      hilog.warn(0x0000, TAG, `[WEATHER_EXEC][refresh_failed] trigger=${trigger}, reason=${JSON.stringify(error)}`);
+      hilog.warn(0x0000, TAG, `[WEATHER_REPLAN][refresh_failed] trigger=${trigger}, reason=${JSON.stringify(error)}`);
+    } finally {
+      this.executionWeatherLoading = false;
+    }
+  }
+
+  private applyExecutionSuggestion(suggestion: WeatherSuggestion, trigger: string): void {
+    this.executionSuggestionMap.set(suggestion.suggestionId, suggestion);
+    this.executionWeatherHint = suggestion.message;
+    this.executionWeatherLevel = suggestion.level;
+
+    const now = Date.now();
+    if (now - this.executionWeatherLastEmitAt < 90_000 && trigger !== 'MANUAL') {
+      return;
+    }
+    if (this.isExecutionSuggestionCoolingDown(suggestion, now) && trigger !== 'MANUAL') {
+      return;
+    }
+    this.executionWeatherLastEmitAt = now;
+    this.markExecutionSuggestionCooldown(suggestion, now);
+
+    if (suggestion.level === 'NOTICE' || suggestion.level === 'WARNING') {
+      const payload = WeatherReminderStore.fromSuggestion(this.planId, suggestion);
+      WeatherReminderStore.writePayload(payload);
+      const candidateCount = suggestion.actionPayload?.replacementCandidates?.length ?? 0;
+      hilog.info(
+        0x0000,
+        TAG,
+        `[WEATHER_REPLAN][reminder_emit] level=${suggestion.level}, trigger=${trigger}, action=${suggestion.actionType}, candidates=${candidateCount}, message=${suggestion.message}`
+      );
+    }
+  }
+
+  public async requestSoftReplan(
+    planId: number,
+    suggestionId: string,
+    mode: SoftReplanMode
+  ): Promise<SoftReplanApplyResult> {
+    const emptyPreview: SoftReplanPreview = {
+      suggestionId: suggestionId,
+      actionType: 'NONE',
+      changedOrder: false,
+      changedDurations: false,
+      skippedNodeIds: [],
+      affectedNodeIds: [],
+      summary: '无可用建议',
+      riskDelta: 0
+    };
+    if (planId <= 0 || this.planId !== planId || !suggestionId || suggestionId.trim().length === 0) {
+      return { success: false, rolledBack: false, errorCode: 'REPLAN_INVALID', preview: emptyPreview };
+    }
+    if (this.executionReplanBusy) {
+      return { success: false, rolledBack: false, errorCode: 'REPLAN_BUSY', preview: emptyPreview };
+    }
+    const suggestion = this.executionSuggestionMap.get(suggestionId);
+    if (!suggestion) {
+      return { success: false, rolledBack: false, errorCode: 'REPLAN_INVALID', preview: emptyPreview };
+    }
+    const preview = this.buildSoftReplanPreview(suggestion);
+    if (mode === 'PREVIEW') {
+      return { success: true, rolledBack: false, errorCode: '', preview: preview };
+    }
+
+    this.executionReplanBusy = true;
+    this.executionWeatherApplying = true;
+    const snapshot = this.cloneEventSnapshot();
+    const startedAt = Date.now();
+    try {
+      const applyOk = await this.applySuggestionAction(suggestion);
+      if (!applyOk) {
+        this.restoreEventSnapshot(snapshot);
+        return { success: false, rolledBack: true, errorCode: 'REPLAN_CONFLICT', preview: preview };
+      }
+      if (Date.now() - startedAt > 10_000) {
+        this.restoreEventSnapshot(snapshot);
+        return { success: false, rolledBack: true, errorCode: 'REPLAN_TIMEOUT', preview: preview };
+      }
+      this.executionWeatherAppliedSummary = preview.summary;
+      this.executionWeatherHint = preview.summary;
+      this.executionWeatherLevel = 'NOTICE';
+      this.executionWeatherSuggestions = this.executionWeatherSuggestions.filter((item: WeatherSuggestion) =>
+        item.suggestionId !== suggestionId
+      );
+      this.executionSuggestionMap.delete(suggestionId);
+      this.markScheduleChanged();
+      hilog.info(
+        0x0000,
+        TAG,
+        `[WEATHER_REPLAN][apply_done] mode=${mode}, suggestionId=${suggestionId}, action=${suggestion.actionType}, affected=${preview.affectedNodeIds.length}, riskDelta=${preview.riskDelta}, rolledBack=false, result=SUCCESS`
+      );
+      return { success: true, rolledBack: false, errorCode: '', preview: preview };
+    } catch (error) {
+      this.restoreEventSnapshot(snapshot);
+      hilog.warn(0x0000, TAG, `[WEATHER_REPLAN][apply_failed] suggestionId=${suggestionId}, rolledBack=true, result=FAILED, reason=${JSON.stringify(error)}`);
+      return { success: false, rolledBack: true, errorCode: 'REPLAN_CONFLICT', preview: preview };
+    } finally {
+      this.executionReplanBusy = false;
+      this.executionWeatherApplying = false;
+    }
+  }
+
+  public dismissExecutionSuggestion(suggestionId: string): void {
+    if (!suggestionId || suggestionId.trim().length === 0) {
+      return;
+    }
+    this.executionWeatherSuggestions = this.executionWeatherSuggestions.filter((item: WeatherSuggestion) =>
+      item.suggestionId !== suggestionId
+    );
+    this.executionSuggestionMap.delete(suggestionId);
+  }
+
+  private filterActiveExecutionSuggestions(items: WeatherSuggestion[]): WeatherSuggestion[] {
+    const now = Date.now();
+    const filtered = items.filter((item: WeatherSuggestion) => {
+      if (!item) {
+        return false;
+      }
+      if (item.expiresAt > 0 && item.expiresAt < now) {
+        return false;
+      }
+      return !this.isExecutionSuggestionCoolingDown(item, now);
+    });
+    filtered.sort((a: WeatherSuggestion, b: WeatherSuggestion) => {
+      const levelWeight = (level: 'INFO' | 'NOTICE' | 'WARNING'): number =>
+        level === 'WARNING' ? 3 : (level === 'NOTICE' ? 2 : 1);
+      if (levelWeight(a.level) !== levelWeight(b.level)) {
+        return levelWeight(b.level) - levelWeight(a.level);
+      }
+      return a.createdAt - b.createdAt;
+    });
+    return filtered;
+  }
+
+  private isExecutionSuggestionCoolingDown(suggestion: WeatherSuggestion, now: number): boolean {
+    const key = suggestion.cooldownKey || suggestion.suggestionId;
+    const last = this.executionSuggestionCooldownMap.get(key) ?? 0;
+    return last > 0 && now - last < this.executionSuggestionCooldownMs;
+  }
+
+  private markExecutionSuggestionCooldown(suggestion: WeatherSuggestion, now: number): void {
+    const key = suggestion.cooldownKey || suggestion.suggestionId;
+    this.executionSuggestionCooldownMap.set(key, now);
+  }
+
+  private buildSoftReplanPreview(suggestion: WeatherSuggestion): SoftReplanPreview {
+    const payload = suggestion.actionPayload;
+    const affectedNodeIds = payload?.targetNodeIds ?? suggestion.relatedNodeIds ?? [];
+    const skippedNodeIds = suggestion.actionType === 'SKIP_NODE' ? affectedNodeIds.slice(0, 1) : [];
+    const changedOrder = suggestion.actionType === 'REORDER' || suggestion.actionType === 'REPLACE_NODE';
+    const changedDurations = suggestion.actionType === 'SHORTEN_STAY';
+    let summary = '天气建议已准备，可应用调整。';
+    if (suggestion.actionType === 'REORDER') {
+      summary = `已应用顺序调整，影响 ${affectedNodeIds.length} 个节点。`;
+    } else if (suggestion.actionType === 'SHORTEN_STAY') {
+      const mins = payload?.suggestedStayMinutes ?? 45;
+      summary = `已缩短停留时长至约 ${mins} 分钟。`;
+    } else if (suggestion.actionType === 'SKIP_NODE') {
+      summary = '已跳过高风险节点，继续后续安排。';
+    } else if (suggestion.actionType === 'REPLACE_NODE') {
+      summary = '已切换到保守执行策略（替代建议）。';
+    }
+    return {
+      suggestionId: suggestion.suggestionId,
+      actionType: suggestion.actionType,
+      changedOrder: changedOrder,
+      changedDurations: changedDurations,
+      skippedNodeIds: skippedNodeIds,
+      affectedNodeIds: affectedNodeIds,
+      summary: summary,
+      riskDelta: suggestion.level === 'WARNING' ? -20 : (suggestion.level === 'NOTICE' ? -10 : -5)
+    };
+  }
+
+  private async applySuggestionAction(suggestion: WeatherSuggestion): Promise<boolean> {
+    const payload = suggestion.actionPayload;
+    const targetIds = this.resolveSoftReplanTargetEventIds(payload?.targetNodeIds ?? suggestion.relatedNodeIds);
+    if (targetIds.length === 0 && suggestion.actionType !== 'NONE') {
+      return false;
+    }
+    if (this.containsImmutableNode(targetIds)) {
+      return false;
+    }
+    if (suggestion.actionType === 'REORDER') {
+      return await this.applySoftReorder(payload?.targetOrderNodeIds ?? []);
+    }
+    if (suggestion.actionType === 'SHORTEN_STAY') {
+      return await this.applySoftShorten(targetIds, payload?.suggestedStayMinutes);
+    }
+    if (suggestion.actionType === 'SKIP_NODE') {
+      return await this.applySoftSkip(targetIds);
+    }
+    if (suggestion.actionType === 'REPLACE_NODE') {
+      const candidateCount = suggestion.actionPayload?.replacementCandidates?.length ?? 0;
+      hilog.info(0x0000, TAG, `[WEATHER_REPLAN][replace_quality] candidates=${candidateCount}, suggestionId=${suggestion.suggestionId}`);
+      const reordered = await this.applySoftReorder(payload?.targetOrderNodeIds ?? []);
+      if (reordered) {
+        return true;
+      }
+      hilog.info(0x0000, TAG, `[WEATHER_REPLAN][replace_fallback] suggestionId=${suggestion.suggestionId}, fallback=SHORTEN_STAY, targetCount=${targetIds.length}`);
+      return await this.applySoftShorten(targetIds, payload?.suggestedStayMinutes ?? 45);
+    }
+    return true;
+  }
+
+  private resolveSoftReplanTargetEventIds(nodeIds: string[]): number[] {
+    const allowed = this.getSoftReplanFutureCandidates().map((item: EventEntity) => item.id);
+    const allowSet = new Set<number>(allowed);
+    const resolved: number[] = [];
+    (nodeIds || []).forEach((idText: string) => {
+      const id = Number(idText);
+      if (Number.isFinite(id) && allowSet.has(id)) {
+        resolved.push(id);
+      }
+    });
+    return resolved;
+  }
+
+  private getSoftReplanFutureCandidates(): EventEntity[] {
+    const ordered = this.getOrderedScheduleEvents();
+    const pending = ordered.filter((item: EventEntity) => item.completion_status === EventEntity.STATE_PENDING);
+    const active = pending.find((item: EventEntity) => TimelineExecutionState.isActive(item));
+    let start = 0;
+    if (active) {
+      const idx = pending.findIndex((item: EventEntity) => item.id === active.id);
+      start = idx >= 0 ? Math.min(idx + 1, Math.max(0, pending.length - 1)) : 0;
+    }
+    return pending.slice(start, start + 3);
+  }
+
+  private containsImmutableNode(targetIds: number[]): boolean {
+    return targetIds.some((id: number) => {
+      const event = this.events.find((item: EventEntity) => item.id === id);
+      if (!event) {
+        return true;
+      }
+      if (event.completion_status !== EventEntity.STATE_PENDING) {
+        return true;
+      }
+      return event.lock_status === 1 && !!event.fixed_start_time;
+    });
+  }
+
+  private async applySoftReorder(orderNodeIds: string[]): Promise<boolean> {
+    if (!orderNodeIds || orderNodeIds.length < 2) {
+      return false;
+    }
+    const targetIds = this.resolveSoftReplanTargetEventIds(orderNodeIds);
+    if (targetIds.length < 2) {
+      return false;
+    }
+    const schedule = this.events.filter((item: EventEntity) => item.status === 1);
+    const byId = new Map<number, EventEntity>();
+    schedule.forEach((item: EventEntity) => byId.set(item.id, item));
+
+    const reorderedTargets: EventEntity[] = [];
+    targetIds.forEach((id: number) => {
+      const found = byId.get(id);
+      if (found) {
+        reorderedTargets.push(found);
+      }
+    });
+    if (reorderedTargets.length < 2) {
+      return false;
+    }
+
+    const targetSet = new Set<number>(reorderedTargets.map((item: EventEntity) => item.id));
+    const merged: EventEntity[] = [];
+    let writeIdx = 0;
+    schedule.forEach((item: EventEntity) => {
+      if (targetSet.has(item.id)) {
+        if (writeIdx < reorderedTargets.length) {
+          merged.push(reorderedTargets[writeIdx]);
+          writeIdx += 1;
+        } else {
+          merged.push(item);
+        }
+      } else {
+        merged.push(item);
+      }
+    });
+    merged.forEach((item: EventEntity, idx: number) => {
+      item.sort_order = idx * 100;
+    });
+    await EventRepositoryImpl.updateTimelineConsistency(merged.map((item: EventEntity) => item.toInterface()), this.planId);
+    this.events.sort((a: EventEntity, b: EventEntity) => {
+      if (a.status !== b.status) {
+        return b.status - a.status;
+      }
+      return a.sort_order - b.sort_order;
+    });
+    this.recalculateFromIndex(0);
+    return true;
+  }
+
+  private async applySoftShorten(targetIds: number[], suggestedStayMinutes?: number): Promise<boolean> {
+    if (!targetIds || targetIds.length === 0) {
+      return false;
+    }
+    const normalizedSuggestion = suggestedStayMinutes ?? 45;
+    const minutes = Number.isFinite(normalizedSuggestion) && normalizedSuggestion > 0
+      ? Math.floor(normalizedSuggestion)
+      : 45;
+    const minAllowed = Math.max(20, this.getMinEventDurationLimit());
+    const newDuration = Math.max(minAllowed, minutes);
+    let changed = false;
+    for (let i = 0; i < targetIds.length; i++) {
+      const target = this.events.find((item: EventEntity) => item.id === targetIds[i]);
+      if (!target || target.duration <= newDuration) {
+        continue;
+      }
+      target.duration = newDuration;
+      await EventRepositoryImpl.updateSingleField(target.id, EventEntity.DURATION, target.duration, this.planId);
+      changed = true;
+    }
+    if (changed) {
+      this.recalculateFromIndex(0);
+    }
+    return changed;
+  }
+
+  private async applySoftSkip(targetIds: number[]): Promise<boolean> {
+    if (!targetIds || targetIds.length === 0) {
+      return false;
+    }
+    const target = this.events.find((item: EventEntity) => item.id === targetIds[0]);
+    if (!target) {
+      return false;
+    }
+    await this.skipEvent(target);
+    return true;
+  }
+
+  private cloneEventSnapshot(): EventEntity[] {
+    return this.events.map((item: EventEntity) => EventEntity.fromInterface(item.toInterface(), this.planId));
+  }
+
+  private restoreEventSnapshot(snapshot: EventEntity[]): void {
+    this.events = snapshot.map((item: EventEntity) => EventEntity.fromInterface(item.toInterface(), this.planId));
+    this.recalculateFromIndex(0);
+  }
+
+  private patchExecutionWeatherToEvents(eventMap: Map<number, import('../domain/services/WeatherModels').PlanNodeWeatherBinding>, forceRefresh: boolean): void {
+    this.events.forEach((event: EventEntity) => {
+      if (event.completion_status !== EventEntity.STATE_PENDING) {
+        return;
+      }
+      const binding = eventMap.get(event.id);
+      if (!binding) {
+        return;
+      }
+      event.weather_text = binding.weather?.conditionText ?? '天气未知';
+      event.weather_condition = binding.weather?.conditionCode ?? 'UNKNOWN';
+      event.weather_temperature = binding.weather?.temperatureCelsius ?? 0;
+      event.weather_fetch_time = binding.weather?.fetchTime ?? Date.now();
+      if (forceRefresh && event.id > 0) {
+        const updates: EventFieldUpdate[] = [
+          { column: EventEntity.WEATHER_CONDITION, value: event.weather_condition },
+          { column: EventEntity.WEATHER_TEMPERATURE, value: event.weather_temperature },
+          { column: EventEntity.WEATHER_TEXT, value: event.weather_text },
+          { column: EventEntity.WEATHER_FETCH_TIME, value: event.weather_fetch_time }
+        ];
+        void EventRepositoryImpl.updateFields(event.id, updates, this.planId);
+      }
+    });
+  }
+
+  private resolveExecutionCurrentLocation(): GeoPointInput | null {
+    const snapshot = ArrivalReminderEngine.getInstance().getLastKnownLocation();
+    if (snapshot && this.isValidCoordinate(snapshot.latitude, snapshot.longitude)) {
+      return { latitude: snapshot.latitude, longitude: snapshot.longitude };
+    }
+
+    const active = this.findCurrentActiveEvent();
+    if (active && this.isValidCoordinate(active.latitude, active.longitude)) {
+      return { latitude: active.latitude, longitude: active.longitude };
+    }
+    const next = this.getCompanionContext().nextEvent;
+    if (next && this.isValidCoordinate(next.latitude, next.longitude)) {
+      return { latitude: next.latitude, longitude: next.longitude };
+    }
+    return null;
+  }
+
+  private shouldSkipByLocationThreshold(currentLocation: GeoPointInput | null): boolean {
+    if (!currentLocation || !this.executionWeatherLastLocation) {
+      return false;
+    }
+    const delta = this.measureDistanceMeters(
+      currentLocation.latitude,
+      currentLocation.longitude,
+      this.executionWeatherLastLocation.latitude,
+      this.executionWeatherLastLocation.longitude
+    );
+    return delta < this.executionWeatherLocationDeltaMeters;
+  }
+
+  private isValidCoordinate(latitude: number, longitude: number): boolean {
+    return Number.isFinite(latitude) &&
+      Number.isFinite(longitude) &&
+      latitude >= -90 &&
+      latitude <= 90 &&
+      longitude >= -180 &&
+      longitude <= 180 &&
+      !(latitude === 0 && longitude === 0);
+  }
+
+  private measureDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+    const rad = (deg: number): number => deg * Math.PI / 180;
+    const earthRadius = 6378137;
+    const dLat = rad(lat2 - lat1);
+    const dLng = rad(lng2 - lng1);
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return earthRadius * c;
+  }
+
   /**
    * [新增] AI 智能生成入口
    */
@@ -1618,8 +2272,48 @@ export class TimelineViewModel {
     try {
       this.currentStrategyMode = strategyMode;
 
+      // 收集已有AI生成的地点，避免重复
+      const existingPlaces = this.events
+        .filter(e => e.source === 1)
+        .map(e => e.name)
+        .filter(name => name.length > 0);
+
+      // 计算合理的起始时间
+      const scheduleEvents = this.events.filter(e => e.status === 1);
+      let startTimeHint = '建议从上午9:00开始';
+      if (scheduleEvents.length > 0) {
+        const lastEvent = scheduleEvents[scheduleEvents.length - 1];
+        const lastEndTime = lastEvent.dynamic_end_time;
+        if (lastEndTime > 0) {
+          const lastDate = new Date(lastEndTime);
+          const nextDay = new Date(lastDate);
+          nextDay.setDate(nextDay.getDate() + 1);
+          nextDay.setHours(9, 0, 0, 0);
+          startTimeHint = `建议从${nextDay.getMonth() + 1}月${nextDay.getDate()}日上午9:00开始`;
+        }
+      }
+
+      // 增强userPrompt
+      let enhancedPrompt = userPrompt;
+      if (existingPlaces.length > 0) {
+        enhancedPrompt += `\n【已有地点】请避免重复：${existingPlaces.join('、')}`;
+      }
+      enhancedPrompt += `\n【起始时间】${startTimeHint}`;
+      try {
+        const weatherResult = await this.weatherContextBuilder.buildPlanningContext(
+          this.events,
+          this.weatherUserPreference,
+          this.weatherCollabOptions
+        );
+        const weatherSummary = this.weatherContextBuilder.buildPromptSummary(weatherResult.context, this.weatherUserPreference);
+        enhancedPrompt += `\n【天气约束】\n${weatherSummary}\n请把天气作为软约束，不要输出不可执行路线。并根据用户天气偏好优化建议。`;
+        this.applyPlanningWeatherResult(weatherResult, false);
+      } catch (_weatherError) {
+        enhancedPrompt += '\n【天气约束】天气数据暂不可用，请优先保证路线可执行性。';
+      }
+
       const aiItems = await AiService.generateItineraryWithStrategy({
-        userPrompt: userPrompt,
+        userPrompt: enhancedPrompt,
         strategyMode: customStrategy ? -1 : strategyMode,
         customStrategy: customStrategy
       });
@@ -1629,7 +2323,7 @@ export class TimelineViewModel {
       }
 
       // 保存AI上下文到数据库
-      const explanation = this.buildStrategyExplanation(strategyMode);
+      const explanation = StrategyService.buildStrategyExplanation(strategyMode);
       await this.persistence.saveAiContext(this.planId, userPrompt, explanation);
 
       if (customStrategy) {
@@ -1644,6 +2338,12 @@ export class TimelineViewModel {
         await this.persistence.updateStrategyMode(this.planId, strategyMode);
       }
 
+      // 计算新事件的dayOffset（如果已有行程，新事件应该在下一天）
+      const existingSchedule = this.events.filter(e => e.status === 1);
+      const newDayOffset = existingSchedule.length > 0
+        ? Math.max(...existingSchedule.map(e => e.day_offset || 0)) + 1
+        : 0;
+
       for (const item of aiItems) {
         const newItemInterface: import('../model/interface/IStandardEvent').TravelPlanItem = {
           name: item.name,
@@ -1654,7 +2354,7 @@ export class TimelineViewModel {
           status: 0,
           lockStatus: 0,
           fixedStartTime: undefined,
-          dayOffset: 0,
+          dayOffset: newDayOffset,
           itemType: item.type,
           priority: item.type === 1 ? 0 : 1,  // 美食=普通(0), 景点/住宿=必去(1)
           isTravelManual: 0,
@@ -1687,11 +2387,6 @@ export class TimelineViewModel {
     }
   }
 
-  private buildStrategyExplanation(mode: number): string {
-    if (mode === 1) return '已采用特种兵模式：高密度景点覆盖';
-    if (mode === 2) return '已采用休闲模式：低密度慢节奏';
-    return 'AI智能推荐';
-  }
 
   public getStrategyMode(): number {
     return this.currentStrategyMode;
@@ -1704,6 +2399,64 @@ export class TimelineViewModel {
   public async updateStrategyMode(mode: number): Promise<void> {
     this.currentStrategyMode = mode;
     await this.persistence.updateStrategyMode(this.planId, mode);
+  }
+
+  public async switchToCustomStrategy(strategy: ComposableStrategy): Promise<void> {
+    await PlanRepositoryImpl.updateStrategyDimensions(
+      this.planId,
+      strategy.density,
+      strategy.pace,
+      strategy.preference,
+      strategy.energy
+    );
+    this.currentStrategyMode = -1;
+  }
+
+  private async getCurrentStrategy(): Promise<ComposableStrategy> {
+    const snapshot = await this.persistence.getPlanAndEvents(this.planId);
+    if (!snapshot.plan) {
+      return { density: 1, pace: 1, preference: 0, energy: 1 };
+    }
+    return {
+      density: snapshot.plan.strategyDensity ?? 1,
+      pace: snapshot.plan.strategyPace ?? 1,
+      preference: snapshot.plan.strategyPreference ?? 0,
+      energy: snapshot.plan.strategyEnergy ?? 1
+    };
+  }
+
+  private async triggerStrategyAdaptation(): Promise<void> {
+    const currentStrategy = await this.getCurrentStrategy();
+    const context = this.behaviorTracker.getBehaviorContext(this.planId, currentStrategy);
+    const decision = StrategyAdaptationEngine.analyzeAndDecide(context);
+
+    if (!decision) {
+      return;
+    }
+
+    const adjustedStrategy = StrategyAdaptationEngine.applyAdjustment(currentStrategy, decision);
+    await PlanRepositoryImpl.updateStrategyDimensions(
+      this.planId,
+      adjustedStrategy.density,
+      adjustedStrategy.pace,
+      adjustedStrategy.preference,
+      adjustedStrategy.energy
+    );
+
+    this.behaviorTracker.reset();
+    hilog.info(0x0000, 'TimelineViewModel', `[策略自适应] ${decision.message}`);
+
+    // 触发UI提示
+    this.strategyAdaptationPrompt = {
+      message: decision.message,
+      oldStrategy: currentStrategy,
+      newStrategy: adjustedStrategy
+    };
+  }
+
+  public async regenerateWithCustomStrategy(strategy: ComposableStrategy): Promise<void> {
+    await this.switchToCustomStrategy(strategy);
+    await this.regenerateByCurrentStrategy();
   }
 
   public async regenerateByCurrentStrategy(): Promise<void> {
@@ -2063,6 +2816,11 @@ export class TimelineViewModel {
     );
     this.logTimelineSnapshot('skip_event');
     this.getPlaceCheckinSummary(item.name);
+
+    // 记录跳过行为
+    if (item.source === 1) {
+      this.behaviorTracker.recordSkip(item.id);
+    }
   }
 
 
@@ -2416,6 +3174,45 @@ export class TimelineViewModel {
   public async reloadRouteSwitches(): Promise<void> {
     await this.reloadIdleGapSettings();
     await this.reloadGlobalRouteApiSwitch();
+    await this.reloadWeatherUserPreference();
+  }
+
+  public getWeatherUserPreference(): WeatherUserPreference {
+    return {
+      heatSensitivity: this.weatherUserPreference.heatSensitivity,
+      rainSensitivity: this.weatherUserPreference.rainSensitivity,
+      weatherRiskTolerance: this.weatherUserPreference.weatherRiskTolerance
+    };
+  }
+
+  public async updateWeatherUserPreference(preference: WeatherUserPreference): Promise<void> {
+    const manager = PreferenceManager.getInstance();
+    await manager.setWeatherUserPreference(preference);
+    await this.reloadWeatherUserPreference();
+    hilog.info(
+      0x0000,
+      TAG,
+      `[WEATHER_PREF][update] heat=${this.weatherUserPreference.heatSensitivity}, rain=${this.weatherUserPreference.rainSensitivity}, tolerance=${this.weatherUserPreference.weatherRiskTolerance}`
+    );
+  }
+
+  private async reloadWeatherUserPreference(): Promise<void> {
+    try {
+      const manager = PreferenceManager.getInstance();
+      this.weatherUserPreference = await manager.getWeatherUserPreference();
+      hilog.info(
+        0x0000,
+        TAG,
+        `[WEATHER_PREF][load] heat=${this.weatherUserPreference.heatSensitivity}, rain=${this.weatherUserPreference.rainSensitivity}, tolerance=${this.weatherUserPreference.weatherRiskTolerance}`
+      );
+    } catch (error) {
+      this.weatherUserPreference = {
+        heatSensitivity: DEFAULT_WEATHER_USER_PREFERENCE.heatSensitivity,
+        rainSensitivity: DEFAULT_WEATHER_USER_PREFERENCE.rainSensitivity,
+        weatherRiskTolerance: DEFAULT_WEATHER_USER_PREFERENCE.weatherRiskTolerance
+      };
+      hilog.warn(0x0000, TAG, `[WEATHER_PREF][fallback] reason=${JSON.stringify(error)}`);
+    }
   }
 
   private isAutoRouteEnabled(): boolean {

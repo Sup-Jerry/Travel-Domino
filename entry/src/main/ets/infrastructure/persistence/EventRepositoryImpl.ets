@@ -132,6 +132,10 @@ export class EventRepositoryImpl {
     valueBucket[EventEntity.ACTUAL_START_TIME] = item.actualStartTime || 0;
     valueBucket[EventEntity.ACTUAL_END_TIME] = item.actualEndTime || 0;
     valueBucket[EventEntity.COMPLETION_STATUS] = item.completionStatus || 0;
+    valueBucket[EventEntity.WEATHER_CONDITION] = item.weatherCondition || '';
+    valueBucket[EventEntity.WEATHER_TEMPERATURE] = item.weatherTemperature || 0;
+    valueBucket[EventEntity.WEATHER_TEXT] = item.weatherText || '';
+    valueBucket[EventEntity.WEATHER_FETCH_TIME] = item.weatherFetchTime || 0;
 
       const rowId = await rdbStore.insert(EventEntity.TABLE_NAME, valueBucket);
       EventRepositoryImpl.markPlanDirty(planId);
@@ -192,6 +196,10 @@ export class EventRepositoryImpl {
         valueBucket[EventEntity.ACTUAL_START_TIME] = item.actualStartTime || 0;
         valueBucket[EventEntity.ACTUAL_END_TIME] = item.actualEndTime || 0;
         valueBucket[EventEntity.COMPLETION_STATUS] = item.completionStatus || 0;
+        valueBucket[EventEntity.WEATHER_CONDITION] = item.weatherCondition || '';
+        valueBucket[EventEntity.WEATHER_TEMPERATURE] = item.weatherTemperature || 0;
+        valueBucket[EventEntity.WEATHER_TEXT] = item.weatherText || '';
+        valueBucket[EventEntity.WEATHER_FETCH_TIME] = item.weatherFetchTime || 0;
 
         let persistedId = 0;
         if (item.id && item.id > 0) {
@@ -319,7 +327,11 @@ export class EventRepositoryImpl {
             delFlag: resultSet.getLong(resultSet.getColumnIndex(EventEntity.DEL_FLAG)),
             actualStartTime: resultSet.getLong(resultSet.getColumnIndex(EventEntity.ACTUAL_START_TIME)),
             actualEndTime: resultSet.getLong(resultSet.getColumnIndex(EventEntity.ACTUAL_END_TIME)),
-            completionStatus: resultSet.getLong(resultSet.getColumnIndex(EventEntity.COMPLETION_STATUS))
+            completionStatus: resultSet.getLong(resultSet.getColumnIndex(EventEntity.COMPLETION_STATUS)),
+            weatherCondition: resultSet.getString(resultSet.getColumnIndex(EventEntity.WEATHER_CONDITION)),
+            weatherTemperature: resultSet.getDouble(resultSet.getColumnIndex(EventEntity.WEATHER_TEMPERATURE)),
+            weatherText: resultSet.getString(resultSet.getColumnIndex(EventEntity.WEATHER_TEXT)),
+            weatherFetchTime: resultSet.getLong(resultSet.getColumnIndex(EventEntity.WEATHER_FETCH_TIME))
           });
         }
       } finally {

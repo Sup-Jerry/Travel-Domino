@@ -2,6 +2,7 @@
 import { preferences } from '@kit.ArkData';
 import { common } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { DEFAULT_WEATHER_USER_PREFERENCE, WeatherPreferenceLevel, WeatherUserPreference } from '../../domain/services/WeatherModels';
 
 const TAG = 'PreferenceManager';
 
@@ -19,6 +20,9 @@ export class PreferenceManager {
   static readonly KEY_IDLE_GAP_TRIGGER_MINUTES = 'idleGapTriggerMinutes';
   static readonly KEY_ARRIVAL_NOTIFY_PROMPTED = 'arrivalNotifyPrompted';
   static readonly KEY_ARRIVAL_LOCATION_PROMPTED = 'arrivalLocationPrompted';
+  static readonly KEY_WEATHER_HEAT_SENSITIVITY = 'weatherHeatSensitivity';
+  static readonly KEY_WEATHER_RAIN_SENSITIVITY = 'weatherRainSensitivity';
+  static readonly KEY_WEATHER_RISK_TOLERANCE = 'weatherRiskTolerance';
 
   // 新增：是否允许调用高德路线 API
   static readonly KEY_ENABLE_AMAP_ROUTE_API = 'enableAmapRouteApi';
@@ -63,6 +67,21 @@ export class PreferenceManager {
       safe = 720;
     }
     return safe;
+  }
+
+  public static normalizeWeatherPreferenceLevel(raw: preferences.ValueType): WeatherPreferenceLevel {
+    let safe = Number(raw);
+    if (!Number.isFinite(safe)) {
+      safe = 1;
+    }
+    safe = Math.floor(safe);
+    if (safe < 0) {
+      return 0;
+    }
+    if (safe > 2) {
+      return 2;
+    }
+    return safe as WeatherPreferenceLevel;
   }
 
   private sanitizeError(error: Object): string {
@@ -178,6 +197,37 @@ export class PreferenceManager {
   public async setIdleGapTriggerMinutes(minutes: number): Promise<void> {
     const safe = this.sanitizeIdleGapTriggerMinutes(minutes);
     await this.setValue(PreferenceManager.KEY_IDLE_GAP_TRIGGER_MINUTES, safe);
+  }
+
+  public async getWeatherUserPreference(): Promise<WeatherUserPreference> {
+    const heatRaw = await this.getValue(
+      PreferenceManager.KEY_WEATHER_HEAT_SENSITIVITY,
+      DEFAULT_WEATHER_USER_PREFERENCE.heatSensitivity
+    );
+    const rainRaw = await this.getValue(
+      PreferenceManager.KEY_WEATHER_RAIN_SENSITIVITY,
+      DEFAULT_WEATHER_USER_PREFERENCE.rainSensitivity
+    );
+    const toleranceRaw = await this.getValue(
+      PreferenceManager.KEY_WEATHER_RISK_TOLERANCE,
+      DEFAULT_WEATHER_USER_PREFERENCE.weatherRiskTolerance
+    );
+    return {
+      heatSensitivity: PreferenceManager.normalizeWeatherPreferenceLevel(heatRaw),
+      rainSensitivity: PreferenceManager.normalizeWeatherPreferenceLevel(rainRaw),
+      weatherRiskTolerance: PreferenceManager.normalizeWeatherPreferenceLevel(toleranceRaw)
+    };
+  }
+
+  public async setWeatherUserPreference(preference: WeatherUserPreference): Promise<void> {
+    const safe: WeatherUserPreference = {
+      heatSensitivity: PreferenceManager.normalizeWeatherPreferenceLevel(preference.heatSensitivity),
+      rainSensitivity: PreferenceManager.normalizeWeatherPreferenceLevel(preference.rainSensitivity),
+      weatherRiskTolerance: PreferenceManager.normalizeWeatherPreferenceLevel(preference.weatherRiskTolerance)
+    };
+    await this.setValue(PreferenceManager.KEY_WEATHER_HEAT_SENSITIVITY, safe.heatSensitivity);
+    await this.setValue(PreferenceManager.KEY_WEATHER_RAIN_SENSITIVITY, safe.rainSensitivity);
+    await this.setValue(PreferenceManager.KEY_WEATHER_RISK_TOLERANCE, safe.weatherRiskTolerance);
   }
 }
 

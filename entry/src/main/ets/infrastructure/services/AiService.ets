@@ -5,6 +5,7 @@ import { AppConfig } from '../../common/utils/AppConfig';
 import { HttpRequestHelper } from '../adapters/HttpRequestHelper';
 import { ComposableStrategy, PreferenceType } from '../../domain/strategy/TravelStrategyDimensions';
 import { StrategyBuilder } from '../../domain/strategy/StrategyBuilder';
+import { StrategyService } from '../../domain/strategy/StrategyService';
 
 export interface AiRawItem {
   name: string;
@@ -178,12 +179,17 @@ export class AiService {
 
     const mode = request.strategyMode || 0;
     const strategyFragment = request.customStrategy
-      ? AiService.buildComposablePrompt(request.customStrategy)
-      : AiService.buildStrategyFragment(mode);
+      ? StrategyService.buildComposablePrompt(request.customStrategy)
+      : StrategyService.buildStrategyPrompt(mode);
 
     const systemPrompt = `
 你是一个专业的行程规划助手。请根据用户需求生成行程列表。
 ${strategyFragment}
+【时间合理性约束】
+1. 景点(type=0)：适合8:00-20:00，避免深夜或凌晨
+2. 美食(type=1)：早餐6:00-9:00，午餐11:00-14:00，晚餐17:00-21:00，避免深夜用餐
+3. 住宿(type=2)：适合20:00-次日8:00
+4. 按时间顺序安排，确保活动时间段合理衔接
 【输出规则】
 1. 必须返回纯 JSON 数组，严禁包含 Markdown 格式。
 2. 数组对象字段：
@@ -234,44 +240,4 @@ ${strategyFragment}
     }
   }
 
-  private static buildStrategyFragment(mode: number): string {
-    if (mode === 1) {
-      return `
-【策略：特种兵模式】
-- 每日安排 6-8 个景点
-- 单次移动时间可接受 45 分钟内
-- 行程紧凑，留白时间约 10%
-- 优先覆盖更多景点`.trim();
-    } else if (mode === 2) {
-      return `
-【策略：休闲模式】
-- 每日安排 2-4 个景点
-- 单次移动时间控制在 30 分钟内
-- 行程宽松，留白时间约 40%
-- 避免频繁折返`.trim();
-    }
-    return '';
-  }
-
-  static buildComposablePrompt(strategy: ComposableStrategy): string {
-    const profile = StrategyBuilder.buildProfile(strategy);
-    const parts = [
-      '【旅行策略】',
-      `- 密度：每日${profile.dailyPoiTarget.min}-${profile.dailyPoiTarget.max}个景点`,
-      `- 节奏：留白时间${Math.round(profile.slackRatio * 100)}%`,
-      `- 体力：单次移动${profile.moveTolerance}分钟内`,
-      AiService.buildPreferenceHint(strategy.preference)
-    ];
-    return parts.filter(p => p.length > 0).join('\n');
-  }
-
-  private static buildPreferenceHint(pref: PreferenceType): string {
-    const hints: Record<number, string> = {
-      1: '- 偏好：优先推荐知名景点和自然风光',
-      2: '- 偏好：优先推荐特色美食和餐厅',
-      3: '- 偏好：优先推荐博物馆、历史遗迹',
-      4: '- 偏好：包含夜景、夜市等夜间活动'
-    };
-    return hints[pref] || '';
-  }
 }

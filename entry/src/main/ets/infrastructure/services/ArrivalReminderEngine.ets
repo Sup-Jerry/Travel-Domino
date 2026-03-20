@@ -60,6 +60,14 @@ interface PlanCandidateCache {
   timeDeltaByEventId: Map<number, number>;
 }
 
+export interface LastKnownLocationSnapshot {
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+  speed: number;
+  timestamp: number;
+}
+
 export class ArrivalReminderEngine {
   private static instance: ArrivalReminderEngine | null = null;
 
@@ -160,6 +168,19 @@ export class ArrivalReminderEngine {
       ArrivalReminderEngine.instance = new ArrivalReminderEngine();
     }
     return ArrivalReminderEngine.instance;
+  }
+
+  public getLastKnownLocation(): LastKnownLocationSnapshot | null {
+    if (!this.lastLocation) {
+      return null;
+    }
+    return {
+      latitude: this.lastLocation.latitude,
+      longitude: this.lastLocation.longitude,
+      accuracy: this.lastLocation.accuracy,
+      speed: this.lastLocation.speed,
+      timestamp: Date.now()
+    };
   }
 
   public start(planId: number, vm: TimelineViewModel, context: Context): void {

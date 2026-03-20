@@ -134,6 +134,10 @@ export class EventEntity {
   static readonly ACTUAL_START_TIME = 'actual_start_time'; // 实际开始时间戳
   static readonly ACTUAL_END_TIME = 'actual_end_time';     // 实际结束时间戳
   static readonly COMPLETION_STATUS = 'completion_status'; // 完成状态
+  static readonly WEATHER_CONDITION = 'weather_condition';
+  static readonly WEATHER_TEMPERATURE = 'weather_temperature';
+  static readonly WEATHER_TEXT = 'weather_text';
+  static readonly WEATHER_FETCH_TIME = 'weather_fetch_time';
 
   // 完成状态枚举
   static readonly STATE_PENDING = 0;   // 未开始
@@ -168,7 +172,11 @@ export class EventEntity {
       ${EventEntity.DELETE_TIME} INTEGER DEFAULT 0,
       ${EventEntity.ACTUAL_START_TIME} INTEGER DEFAULT 0,
       ${EventEntity.ACTUAL_END_TIME} INTEGER DEFAULT 0,
-      ${EventEntity.COMPLETION_STATUS} INTEGER DEFAULT 0
+      ${EventEntity.COMPLETION_STATUS} INTEGER DEFAULT 0,
+      ${EventEntity.WEATHER_CONDITION} TEXT,
+      ${EventEntity.WEATHER_TEMPERATURE} REAL,
+      ${EventEntity.WEATHER_TEXT} TEXT,
+      ${EventEntity.WEATHER_FETCH_TIME} INTEGER DEFAULT 0
     )
   `;
 
@@ -216,6 +224,10 @@ export class EventEntity {
   completion_status: number = 0; // 修改点
   dynamic_start_time: number = 0;
   dynamic_end_time: number = 0;
+  weather_condition: string = '';
+  weather_temperature: number = 0;
+  weather_text: string = '';
+  weather_fetch_time: number = 0;
   last_from_id: number = -1;
   // 构造函数 (可选，方便 new)
   constructor(name: string = '', plan_id: number = 0) {
@@ -273,6 +285,10 @@ export class EventEntity {
     entity.dynamic_start_time = item.dynamicStartTime || 0;
     entity.dynamic_end_time = item.dynamicEndTime || 0;
     entity.completion_status = item.completionStatus || 0;
+    entity.weather_condition = item.weatherCondition || '';
+    entity.weather_temperature = item.weatherTemperature || 0;
+    entity.weather_text = item.weatherText || '';
+    entity.weather_fetch_time = item.weatherFetchTime || 0;
     entity.is_ignore_wait = item.ignoreWait || false;
     entity.last_from_id = item.lastFromId ?? -1;
     entity.transit_warning = item.transitWarning || false;
@@ -316,6 +332,10 @@ export class EventEntity {
       dynamicStartTime: this.dynamic_start_time,
       dynamicEndTime: this.dynamic_end_time,
       completionStatus: this.completion_status,
+      weatherCondition: this.weather_condition,
+      weatherTemperature: this.weather_temperature,
+      weatherText: this.weather_text,
+      weatherFetchTime: this.weather_fetch_time,
       ignoreWait: this.is_ignore_wait
     };
   }

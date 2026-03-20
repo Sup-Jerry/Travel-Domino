@@ -120,6 +120,24 @@ export class RdbHelper {
               hilog.info(0x0000, TAG, 'Database upgraded to version 5 with strategy fields.');
             }
 
+            if (this.rdbStore.version < 6) {
+              const addWeatherColumns = [
+                `ALTER TABLE ${EventEntity.TABLE_NAME} ADD COLUMN ${EventEntity.WEATHER_CONDITION} TEXT`,
+                `ALTER TABLE ${EventEntity.TABLE_NAME} ADD COLUMN ${EventEntity.WEATHER_TEMPERATURE} REAL`,
+                `ALTER TABLE ${EventEntity.TABLE_NAME} ADD COLUMN ${EventEntity.WEATHER_TEXT} TEXT`,
+                `ALTER TABLE ${EventEntity.TABLE_NAME} ADD COLUMN ${EventEntity.WEATHER_FETCH_TIME} INTEGER DEFAULT 0`
+              ];
+              for (const sql of addWeatherColumns) {
+                try {
+                  await this.rdbStore.executeSql(sql);
+                } catch (e) {
+                  hilog.warn(0x0000, TAG, `Column might already exist: ${JSON.stringify(e)}`);
+                }
+              }
+              this.rdbStore.version = 6;
+              hilog.info(0x0000, TAG, 'Database upgraded to version 6 with weather fields.');
+            }
+
             hilog.info(0x0000, TAG, 'Succeeded in creating tables: plans & events');
             resolve();
           } catch (sqlErr) {

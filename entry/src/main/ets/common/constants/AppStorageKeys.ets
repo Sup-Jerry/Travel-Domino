@@ -9,6 +9,8 @@ export class AppStorageKeys {
   static readonly ARRIVAL_REMINDER_PAYLOAD = 'ArrivalReminderPayload';
   static readonly ARRIVAL_LIVE_ACTIVITY_SEQ = 'ArrivalLiveActivitySeq';
   static readonly ARRIVAL_LIVE_ACTIVITY_PAYLOAD = 'ArrivalLiveActivityPayload';
+  static readonly WEATHER_REMINDER_SEQ = 'WeatherReminderSeq';
+  static readonly WEATHER_REMINDER_PAYLOAD = 'WeatherReminderPayload';
   static readonly NOTIFICATION_NAV_SEQ = 'NotificationNavSeq';
   static readonly NOTIFICATION_NAV_PAYLOAD = 'NotificationNavPayload';
 

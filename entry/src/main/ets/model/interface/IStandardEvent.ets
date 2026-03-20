@@ -39,6 +39,10 @@ export interface TravelPlanItem {
   dynamicStartTime?: number; // 新增：推算的动态开始时间戳
   dynamicEndTime?: number;   // 新增：推算的动态结束时间戳
   completionStatus?: number; // 0:Pending, 1:Completed, 2:Skipped
+  weatherCondition?: string;
+  weatherTemperature?: number;
+  weatherText?: string;
+  weatherFetchTime?: number;
 
   // 兼容字段 (可逐步废弃)
   type: string; // 'ANCHOR' | 'FLOW'

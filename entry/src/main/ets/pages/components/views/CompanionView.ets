@@ -16,6 +16,7 @@ import { CompanionBottomActionBar } from './BottomNavBar';
 import { ThemeCenter } from '../../../common/utils/ThemeCenter';
 import { CompanionEventState, CompanionPresentationHelper } from './CompanionPresentationHelper';
 import { TimelineExecutionState } from '../../../domain/policy/TimelineExecutionState';
+import { WeatherSuggestion } from '../../../domain/services/WeatherModels';
 
 type CompanionSubMode = 'immersive' | 'control';
 type CompanionInteractionMode = 'immersive' | 'control' | 'both';
@@ -2188,10 +2189,166 @@ export struct CompanionView {
   }
 
   @Builder
+  private ExecutionWeatherCard() {
+    Column({ space: 8 }) {
+      Row() {
+        Text('执行天气')
+          .fontSize(13)
+          .fontColor(this.getThemePalette().textSecondary);
+        if (this.vm.executionWeatherCollabBadge.trim().length > 0) {
+          Text(this.vm.executionWeatherCollabBadge)
+            .fontSize(10)
+            .fontColor(this.getThemePalette().primary)
+            .backgroundColor(this.getThemePalette().cardBgSoft)
+            .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+            .borderRadius(6)
+            .margin({ left: 6 });
+        }
+        Blank();
+        Text(this.vm.executionWeatherLoading ? '刷新中...' : '刷新')
+          .fontSize(11)
+          .fontColor(this.getThemePalette().primary)
+          .onClick(() => {
+            void this.vm.refreshExecutionWeather(true, 'MANUAL');
+          });
+      }
+      .width('100%');
+
+      Row() {
+        Text(`当前位置：${this.vm.executionWeatherCurrentText || '天气未知'}`)
+          .fontSize(12)
+          .fontColor(this.getThemePalette().textPrimary)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .layoutWeight(1);
+      }
+      .width('100%');
+
+      Row() {
+        Text(`下一节点：${this.vm.executionWeatherNextText || '天气未知'}`)
+          .fontSize(12)
+          .fontColor(this.getThemePalette().textPrimary)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .layoutWeight(1);
+        if (this.vm.executionWeatherScore >= 0) {
+          Text(`评分 ${this.vm.executionWeatherScore}`)
+            .fontSize(11)
+            .fontColor(this.getThemePalette().textSecondary);
+        }
+      }
+      .width('100%');
+
+      if (this.vm.executionWeatherHint) {
+        Text(this.vm.executionWeatherHint)
+          .fontSize(12)
+          .fontColor(
+            this.vm.executionWeatherLevel === 'WARNING'
+              ? this.getThemePalette().danger
+              : (this.vm.executionWeatherLevel === 'NOTICE'
+                ? this.getThemePalette().warning
+                : this.getThemePalette().textSecondary)
+          )
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .width('100%');
+      }
+
+      if (this.vm.executionWeatherCollabSummary.trim().length > 0) {
+        Text(`多日/多城：${this.vm.executionWeatherCollabSummary}`)
+          .fontSize(11)
+          .fontColor(this.getThemePalette().textSecondary)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .width('100%');
+      }
+
+      if (this.vm.executionWeatherAppliedSummary && this.vm.executionWeatherAppliedSummary.trim().length > 0) {
+        Text(`调整结果：${this.vm.executionWeatherAppliedSummary}`)
+          .fontSize(11)
+          .fontColor(this.getThemePalette().primary)
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .width('100%');
+      }
+
+      if (this.vm.executionWeatherSuggestions.length > 0) {
+        Column({ space: 8 }) {
+          Text('调整建议（可选）')
+            .fontSize(12)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(this.getThemePalette().textSecondary)
+            .width('100%');
+
+          ForEach(this.vm.executionWeatherSuggestions, (item: WeatherSuggestion) => {
+            Column({ space: 6 }) {
+              Text(item.title)
+                .fontSize(12)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(this.getThemePalette().textPrimary)
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+                .width('100%');
+
+              Text(item.message)
+                .fontSize(11)
+                .fontColor(this.getThemePalette().textSecondary)
+                .maxLines(2)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+                .width('100%');
+
+              Row({ space: 8 }) {
+                Text('可选应用')
+                  .fontSize(11)
+                  .fontColor(this.getThemePalette().primary)
+                  .onClick(() => {
+                    if (this.vm.executionWeatherApplying) {
+                      this.safeShowToast('正在应用建议，请稍候');
+                      return;
+                    }
+                    void this.vm.requestSoftReplan(this.vm.planId, item.suggestionId, 'APPLY').then((result) => {
+                      this.safeShowToast(result.success ? '已按可选建议调整行程' : `可选建议应用失败：${result.errorCode || 'REPLAN_CONFLICT'}`);
+                    });
+                  });
+                Text('稍后')
+                  .fontSize(11)
+                  .fontColor(this.getThemePalette().warning)
+                  .onClick(() => {
+                    this.vm.dismissExecutionSuggestion(item.suggestionId);
+                    this.safeShowToast('已暂不处理该建议');
+                  });
+                Text('忽略')
+                  .fontSize(11)
+                  .fontColor(this.getThemePalette().textTertiary)
+                  .onClick(() => {
+                    this.vm.dismissExecutionSuggestion(item.suggestionId);
+                    this.safeShowToast('已忽略该可选建议');
+                  });
+              }
+              .width('100%');
+            }
+            .width('100%')
+            .padding(8)
+            .backgroundColor(this.getThemePalette().cardBgSoft)
+            .borderRadius(8);
+          }, (item: WeatherSuggestion) => item.suggestionId);
+        }
+        .width('100%');
+      }
+    }
+    .width('100%')
+    .padding(12)
+    .backgroundColor(this.getThemePalette().companionCardBg)
+    .borderRadius(12)
+    .border({ width: 1, color: this.getThemePalette().border, radius: 12 });
+  }
+
+  @Builder
   private ControlView() {
     Stack({ alignContent: Alignment.Bottom }) {
       Column({ space: 10 }) {
         this.ControlTopBar();
+        this.ExecutionWeatherCard();
         this.FocusedCardHost();
         this.TimelineSection();
       }
@@ -2261,11 +2418,6 @@ export struct CompanionView {
   }
   // endregion
 }
-
-
-
-
-
 
 
 
