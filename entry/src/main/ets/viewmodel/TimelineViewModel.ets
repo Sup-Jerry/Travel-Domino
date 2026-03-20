@@ -24,6 +24,7 @@ import { TimelineConflictResolver } from '../domain/timeline/services/TimelineCo
 import { StrategyPresets } from '../domain/strategy/StrategyPresets';
 import { TravelStrategyMode } from '../domain/strategy/TravelStrategyMode';
 import { StrategyService } from '../domain/strategy/StrategyService';
+import { UserProfileService } from '../domain/strategy/UserProfileService';
 import { UserBehaviorTracker } from '../domain/strategy/UserBehaviorTracker';
 import { StrategyAdaptationEngine, AdaptationPrompt } from '../domain/strategy/StrategyAdaptationEngine';
 import { WeatherContextBuilder } from '../domain/services/WeatherContextBuilder';
@@ -40,6 +41,7 @@ import {
 } from '../domain/services/WeatherModels';
 import { ArrivalReminderEngine } from '../infrastructure/services/ArrivalReminderEngine';
 import { WeatherReminderStore } from '../common/utils/weather/WeatherReminderStore';
+import { AmapService } from '../infrastructure/services/AmapService';
 
 // 重新导出类型以保持向后兼容
 export { DateGroup, PlaceCheckinSummary, PlaceCheckinRecord };
@@ -232,6 +234,7 @@ export class TimelineViewModel {
   @Track public weatherCollabLabel: string = '';
   @Track public weatherLastRefreshAt: number = 0;
   @Track public weatherLoading: boolean = false;
+  @Track public weatherFeatureEnabled: boolean = true;
   @Track public executionWeatherHint: string = '';
   @Track public executionWeatherLevel: 'INFO' | 'NOTICE' | 'WARNING' = 'INFO';
   @Track public executionWeatherCurrentText: string = '';
@@ -549,6 +552,7 @@ export class TimelineViewModel {
   ) {
 
     hilog.info(0x0000, TAG, `[节点3A: 准备新增入库] -> 地点: ${name}, lat: ${lat}, lng: ${lng}`);
+    const resolvedCoordinate = await this.resolveCoordinatesForPlaceName(name, lat, lng, 'add');
 
     const newItemInterface: TravelPlanItem = {
       name: name,
@@ -570,8 +574,8 @@ export class TimelineViewModel {
       address: '',
       aiReasoning: '',
       travelMode: 2,
-      latitude: lat || 0,
-      longitude: lng || 0
+      latitude: resolvedCoordinate.latitude,
+      longitude: resolvedCoordinate.longitude
     };
 
     const newId = await EventRepositoryImpl.insertEvent(this.planId, newItemInterface);
@@ -1100,9 +1104,12 @@ export class TimelineViewModel {
     const oldName = target.name;
     const oldLat = target.latitude;
     const oldLng = target.longitude;
+    const resolvedCoordinate = await this.resolveCoordinatesForPlaceName(name, lat, lng, 'update', oldLat, oldLng);
+    const resolvedLat = resolvedCoordinate.latitude;
+    const resolvedLng = resolvedCoordinate.longitude;
     const dayOffsetChanged = oldDayOffset !== dayOffset;
-    const nextLat = (lat !== undefined && lat !== 0) ? lat : oldLat;
-    const nextLng = (lng !== undefined && lng !== 0) ? lng : oldLng;
+    const nextLat = this.isCoordinateMissingForWeather(resolvedLat, resolvedLng) ? oldLat : resolvedLat;
+    const nextLng = this.isCoordinateMissingForWeather(resolvedLat, resolvedLng) ? oldLng : resolvedLng;
     const placeChanged = oldName !== name || oldLat !== nextLat || oldLng !== nextLng;
 
     if (dayOffsetChanged) {
@@ -1120,8 +1127,10 @@ export class TimelineViewModel {
     target.day_offset = dayOffset;
     target.dynamic_day_offset = dayOffset;
     target.priority = priority;
-    if (lat !== undefined && lat !== 0) target.latitude = lat;
-    if (lng !== undefined && lng !== 0) target.longitude = lng;
+    if (!this.isCoordinateMissingForWeather(resolvedLat, resolvedLng)) {
+      target.latitude = resolvedLat;
+      target.longitude = resolvedLng;
+    }
 
     if (placeChanged && this.shouldAutoRouteForItem(target)) {
       target.is_travel_manual = 0;
@@ -1150,14 +1159,12 @@ export class TimelineViewModel {
         updates.push({ column: EventEntity.IS_TRAVEL_MANUAL, value: 0 });
         updates.push({ column: EventEntity.PRE_TRAVEL_MINUTES, value: -1 });
       }
-      if (lat !== undefined && lat !== 0) {
-        updates.push({ column: 'latitude', value: lat });
-      }
-      if (lng !== undefined && lng !== 0) {
-        updates.push({ column: 'longitude', value: lng });
+      if (!this.isCoordinateMissingForWeather(resolvedLat, resolvedLng)) {
+        updates.push({ column: 'latitude', value: resolvedLat });
+        updates.push({ column: 'longitude', value: resolvedLng });
       }
       await EventRepositoryImpl.updateFields(target.id, updates, this.planId);
-      hilog.info(0x0000, TAG, `[节点3B: 准备更新入库] -> 地点: ${name}(ID:${id}), lat: ${lat}, lng: ${lng}`);
+      hilog.info(0x0000, TAG, `[节点3B: 准备更新入库] -> 地点: ${name}(ID:${id}), lat: ${resolvedLat}, lng: ${resolvedLng}`);
     }
 
     // 3. 逻辑联动：处理状态变更、时间变动或 day_offset 变动
@@ -1680,11 +1687,35 @@ export class TimelineViewModel {
   }
 
   public async refreshPlanningWeather(forceRefresh: boolean = false): Promise<void> {
+    if (!this.weatherFeatureEnabled) {
+      this.clearWeatherRuntimeState();
+      return;
+    }
     if (this.weatherLoading) {
       return;
     }
     this.weatherLoading = true;
     try {
+      const scheduleEvents = this.events.filter((item: EventEntity) => item.status === 1);
+      await this.backfillPlanningCoordinatesByName(scheduleEvents);
+      const validGeoCount = scheduleEvents.filter((item: EventEntity) =>
+        this.isValidCoordinate(item.latitude, item.longitude)
+      ).length;
+      const missingGeoEvents = scheduleEvents.filter((item: EventEntity) =>
+        this.isCoordinateMissingForWeather(item.latitude, item.longitude)
+      );
+      const missingNamePreview = missingGeoEvents
+        .slice(0, 3)
+        .map((item: EventEntity) => item.name.trim())
+        .join('|');
+      hilog.info(0x0000, TAG, `[WEATHER_PREF][planning_begin] schedule=${scheduleEvents.length}, validGeo=${validGeoCount}, forceRefresh=${forceRefresh}`);
+      if (missingGeoEvents.length > 0) {
+        hilog.warn(
+          0x0000,
+          TAG,
+          `[WEATHER_PREF][planning_geo_missing] count=${missingGeoEvents.length}, sample=${missingNamePreview}`
+        );
+      }
       const result = await this.weatherContextBuilder.buildPlanningContext(
         this.events,
         this.weatherUserPreference,
@@ -1750,6 +1781,10 @@ export class TimelineViewModel {
   }
 
   public startExecutionWeatherScheduler(): void {
+    if (!this.weatherFeatureEnabled) {
+      this.stopExecutionWeatherScheduler();
+      return;
+    }
     this.executionWeatherEnabled = true;
     if (this.executionWeatherTimerId !== -1) {
       clearInterval(this.executionWeatherTimerId);
@@ -1770,6 +1805,9 @@ export class TimelineViewModel {
   }
 
   public async refreshExecutionWeather(forceRefresh: boolean = false, trigger: 'ENTER_EXECUTION' | 'LOCATION_CHANGE' | 'TIMER' | 'MANUAL' = 'MANUAL'): Promise<void> {
+    if (!this.weatherFeatureEnabled) {
+      return;
+    }
     if (!this.executionWeatherEnabled && trigger !== 'MANUAL') {
       return;
     }
@@ -2252,6 +2290,43 @@ export class TimelineViewModel {
     return delta < this.executionWeatherLocationDeltaMeters;
   }
 
+  private async resolveCoordinatesForPlaceName(
+    placeName: string,
+    lat?: number,
+    lng?: number,
+    source: 'add' | 'update' = 'add',
+    fallbackLat: number = 0,
+    fallbackLng: number = 0
+  ): Promise<GeoPointInput> {
+    const baseLat = lat ?? fallbackLat;
+    const baseLng = lng ?? fallbackLng;
+    if (!this.isCoordinateMissingForWeather(baseLat, baseLng)) {
+      const keep: GeoPointInput = { latitude: baseLat, longitude: baseLng };
+      return keep;
+    }
+    const trimmedName = placeName.trim();
+    if (trimmedName.length === 0) {
+      const keep: GeoPointInput = { latitude: baseLat, longitude: baseLng };
+      return keep;
+    }
+    const geocode = await AmapService.getGeocode(trimmedName);
+    if (geocode && this.isValidCoordinate(geocode.lat, geocode.lng)) {
+      hilog.info(0x0000, TAG, `[WEATHER_GEO][${source}] geocode_hit name=${trimmedName}, lat=${geocode.lat}, lng=${geocode.lng}`);
+      const hit: GeoPointInput = { latitude: geocode.lat, longitude: geocode.lng };
+      return hit;
+    }
+    hilog.warn(0x0000, TAG, `[WEATHER_GEO][${source}] geocode_miss name=${trimmedName}, fallbackLat=${baseLat}, fallbackLng=${baseLng}`);
+    const miss: GeoPointInput = { latitude: baseLat, longitude: baseLng };
+    return miss;
+  }
+
+  private isCoordinateMissingForWeather(latitude: number, longitude: number): boolean {
+    if (!this.isValidCoordinate(latitude, longitude)) {
+      return true;
+    }
+    return latitude === -1 || longitude === -1 || latitude === 0 || longitude === 0;
+  }
+
   private isValidCoordinate(latitude: number, longitude: number): boolean {
     return Number.isFinite(latitude) &&
       Number.isFinite(longitude) &&
@@ -2307,17 +2382,21 @@ export class TimelineViewModel {
         enhancedPrompt += `\n【已有地点】请避免重复：${existingPlaces.join('、')}`;
       }
       enhancedPrompt += `\n【起始时间】${startTimeHint}`;
-      try {
-        const weatherResult = await this.weatherContextBuilder.buildPlanningContext(
-          this.events,
-          this.weatherUserPreference,
-          this.weatherCollabOptions
-        );
-        const weatherSummary = this.weatherContextBuilder.buildPromptSummary(weatherResult.context, this.weatherUserPreference);
-        enhancedPrompt += `\n【天气约束】\n${weatherSummary}\n请把天气作为软约束，不要输出不可执行路线。并根据用户天气偏好优化建议。`;
-        this.applyPlanningWeatherResult(weatherResult, false);
-      } catch (_weatherError) {
-        enhancedPrompt += '\n【天气约束】天气数据暂不可用，请优先保证路线可执行性。';
+      if (this.weatherFeatureEnabled) {
+        try {
+          const weatherResult = await this.weatherContextBuilder.buildPlanningContext(
+            this.events,
+            this.weatherUserPreference,
+            this.weatherCollabOptions
+          );
+          const weatherSummary = this.weatherContextBuilder.buildPromptSummary(weatherResult.context, this.weatherUserPreference);
+          enhancedPrompt += `\n【天气约束】\n${weatherSummary}\n请把天气作为软约束，不要输出不可执行路线。并根据用户天气偏好优化建议。`;
+          this.applyPlanningWeatherResult(weatherResult, false);
+        } catch (_weatherError) {
+          enhancedPrompt += '\n【天气约束】天气数据暂不可用，请优先保证路线可执行性。';
+        }
+      } else {
+        enhancedPrompt += '\n【天气约束】用户已关闭天气功能，请忽略天气因素。';
       }
 
       const aiItems = await AiService.generateItineraryWithStrategy({
@@ -2345,6 +2424,9 @@ export class TimelineViewModel {
       } else {
         await this.persistence.updateStrategyMode(this.planId, strategyMode);
       }
+
+      // 记录用户策略偏好（用于个性化推荐）
+      UserProfileService.recordStrategyUsage(strategyMode, customStrategy).catch(() => {});
 
       // 计算新事件的dayOffset（如果已有行程，新事件应该在下一天）
       const existingSchedule = this.events.filter(e => e.status === 1);
@@ -3193,6 +3275,27 @@ export class TimelineViewModel {
     };
   }
 
+  public isWeatherFeatureEnabled(): boolean {
+    return this.weatherFeatureEnabled;
+  }
+
+  public async setWeatherFeatureEnabled(enabled: boolean): Promise<void> {
+    const manager = PreferenceManager.getInstance();
+    await manager.setWeatherFeatureEnabled(enabled);
+    this.weatherFeatureEnabled = enabled;
+    if (!enabled) {
+      this.stopExecutionWeatherScheduler();
+      this.clearWeatherRuntimeState();
+      this.events = [...this.events];
+    } else {
+      void this.refreshPlanningWeather(false);
+      if (this.isExecutionWeatherStage()) {
+        this.startExecutionWeatherScheduler();
+      }
+    }
+    hilog.info(0x0000, TAG, `[WEATHER_SWITCH][update] enabled=${this.weatherFeatureEnabled}`);
+  }
+
   public async updateWeatherUserPreference(preference: WeatherUserPreference): Promise<void> {
     const manager = PreferenceManager.getInstance();
     await manager.setWeatherUserPreference(preference);
@@ -3208,19 +3311,77 @@ export class TimelineViewModel {
     try {
       const manager = PreferenceManager.getInstance();
       this.weatherUserPreference = await manager.getWeatherUserPreference();
+      this.weatherFeatureEnabled = await manager.isWeatherFeatureEnabled();
       hilog.info(
         0x0000,
         TAG,
-        `[WEATHER_PREF][load] heat=${this.weatherUserPreference.heatSensitivity}, rain=${this.weatherUserPreference.rainSensitivity}, tolerance=${this.weatherUserPreference.weatherRiskTolerance}`
+        `[WEATHER_PREF][load] enabled=${this.weatherFeatureEnabled}, heat=${this.weatherUserPreference.heatSensitivity}, rain=${this.weatherUserPreference.rainSensitivity}, tolerance=${this.weatherUserPreference.weatherRiskTolerance}`
       );
+      if (!this.weatherFeatureEnabled) {
+        this.clearWeatherRuntimeState();
+      }
     } catch (error) {
       this.weatherUserPreference = {
         heatSensitivity: DEFAULT_WEATHER_USER_PREFERENCE.heatSensitivity,
         rainSensitivity: DEFAULT_WEATHER_USER_PREFERENCE.rainSensitivity,
         weatherRiskTolerance: DEFAULT_WEATHER_USER_PREFERENCE.weatherRiskTolerance
       };
+      this.weatherFeatureEnabled = true;
       hilog.warn(0x0000, TAG, `[WEATHER_PREF][fallback] reason=${JSON.stringify(error)}`);
     }
+  }
+
+  private async backfillPlanningCoordinatesByName(scheduleEvents: EventEntity[]): Promise<void> {
+    const geocodeCache: Map<string, GeoPointInput | null> = new Map();
+    for (const event of scheduleEvents) {
+      if (!this.isCoordinateMissingForWeather(event.latitude, event.longitude)) {
+        continue;
+      }
+      const placeName = event.name.trim();
+      if (placeName.length === 0) {
+        continue;
+      }
+      let cached = geocodeCache.get(placeName);
+      if (cached === undefined) {
+        const geocode = await AmapService.getGeocode(placeName);
+        if (geocode && this.isValidCoordinate(geocode.lat, geocode.lng)) {
+          cached = { latitude: geocode.lat, longitude: geocode.lng };
+          hilog.info(0x0000, TAG, `[WEATHER_GEO][planning_fill] geocode_hit id=${event.id}, name=${placeName}, lat=${geocode.lat}, lng=${geocode.lng}`);
+        } else {
+          cached = null;
+          hilog.warn(0x0000, TAG, `[WEATHER_GEO][planning_fill] geocode_miss id=${event.id}, name=${placeName}`);
+        }
+        geocodeCache.set(placeName, cached);
+      }
+      if (!cached) {
+        continue;
+      }
+      event.latitude = cached.latitude;
+      event.longitude = cached.longitude;
+      if (event.id > 0) {
+        const updates: EventFieldUpdate[] = [
+          { column: 'latitude', value: cached.latitude },
+          { column: 'longitude', value: cached.longitude }
+        ];
+        await EventRepositoryImpl.updateFields(event.id, updates, this.planId);
+      }
+    }
+  }
+
+  private clearWeatherRuntimeState(): void {
+    this.weatherRouteScore = -1;
+    this.weatherPlanningHint = '';
+    this.weatherCollabSummary = '';
+    this.weatherCollabLabel = '';
+    this.executionWeatherHint = '';
+    this.executionWeatherCurrentText = '';
+    this.executionWeatherNextText = '';
+    this.executionWeatherScore = -1;
+    this.executionWeatherErrorCode = '';
+    this.executionWeatherSuggestions = [];
+    this.executionWeatherAppliedSummary = '';
+    this.executionWeatherCollabBadge = '';
+    this.executionWeatherCollabSummary = '';
   }
 
   private isAutoRouteEnabled(): boolean {
