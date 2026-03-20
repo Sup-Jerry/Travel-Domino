@@ -11,6 +11,10 @@ export class AppStorageKeys {
   static readonly ARRIVAL_LIVE_ACTIVITY_PAYLOAD = 'ArrivalLiveActivityPayload';
   static readonly WEATHER_REMINDER_SEQ = 'WeatherReminderSeq';
   static readonly WEATHER_REMINDER_PAYLOAD = 'WeatherReminderPayload';
+  static readonly PLAN_EXECUTION_CONTEXT = 'PlanExecutionContext';
+  static readonly PLAN_TRANSITION_LOG = 'PlanTransitionLog';
+  static readonly PLAN_STATE_METRICS = 'PlanStateMetrics';
+  static readonly PLAN_STATE_DIAGNOSTIC_EXPORT = 'PlanStateDiagnosticExport';
   static readonly NOTIFICATION_NAV_SEQ = 'NotificationNavSeq';
   static readonly NOTIFICATION_NAV_PAYLOAD = 'NotificationNavPayload';
 

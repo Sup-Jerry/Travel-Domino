@@ -45,6 +45,8 @@ export struct CompanionView {
     hint: null,
     actions: {
       canStart: false,
+      canPause: false,
+      canResume: false,
       canEnd: false,
       canSkip: false,
       canNavigate: false,
@@ -691,6 +693,8 @@ export struct CompanionView {
         return '可开始';
       case 'ACTIVE':
         return '进行中';
+      case 'PAUSED':
+        return '已暂停';
       case 'GAP':
         return '空档中';
       default:
@@ -699,6 +703,9 @@ export struct CompanionView {
   }
 
   private getRuntimeDescription(): string {
+    if (this.context.runtimeState === 'PAUSED') {
+      return '当前执行已暂停，可继续恢复；恢复后会重新计算后续安排。';
+    }
     if (this.context.runtimeState === 'ACTIVE') {
       return '当前地点进行中。结束打卡后会自动重排后续行程。';
     }
@@ -785,6 +792,17 @@ export struct CompanionView {
       return;
     }
 
+    if (this.context.actions.canResume) {
+      const ok = this.vm.resumeCurrentExecution();
+      if (!ok) {
+        this.safeShowToast('继续失败，请稍后重试');
+        return;
+      }
+      this.refreshContext();
+      this.applyFocusById(focused.id, 'tap');
+      return;
+    }
+
     const state = this.getEventState(focused);
     const now = Date.now();
     if (state === 'PENDING') {
@@ -810,11 +828,15 @@ export struct CompanionView {
     }
 
     if (state === 'ACTIVE') {
-      if (!this.canEndFocused(focused)) {
-        this.safeShowToast('仅当前进行中的任务可结束');
+      if (!this.context.actions.canPause) {
+        this.safeShowToast('当前状态不可暂停');
         return;
       }
-      await this.vm.updateActualTime(focused.id, 'actual_end_time', now);
+      const paused = this.vm.pauseCurrentExecution();
+      if (!paused) {
+        this.safeShowToast('暂停失败，请稍后重试');
+        return;
+      }
       this.refreshContext();
     }
   }
@@ -1106,11 +1128,17 @@ export struct CompanionView {
           .borderRadius(16);
 
         Row({ space: 10 }) {
-          if (this.isCurrentEventPending()) {
-            Button('开始打卡')
+          if (this.isCurrentEventPending() || this.isCurrentEventActive() || this.context.runtimeState === 'PAUSED') {
+            Button(this.context.runtimeState === 'PAUSED' ? '继续' : (this.isCurrentEventActive() ? '暂停' : '开始'))
               .layoutWeight(2)
               .height(50)
-              .enabled(this.context.currentEvent ? this.canStartFocused(this.context.currentEvent) : false)
+              .enabled(
+                this.context.runtimeState === 'PAUSED'
+                  ? this.context.actions.canResume
+                  : (this.isCurrentEventActive()
+                    ? this.context.actions.canPause
+                    : (this.context.currentEvent ? this.canStartFocused(this.context.currentEvent) : false))
+              )
               .backgroundColor(this.getThemePalette().success)
               .fontColor(Color.White)
               .onClick(async () => {
@@ -1118,20 +1146,24 @@ export struct CompanionView {
                 await this.handleFocusedPrimaryAction();
               });
           }
-          if (this.isCurrentEventActive()) {
-            Button('结束打卡')
-              .layoutWeight(2)
+          if (this.isCurrentEventActive() || this.context.runtimeState === 'PAUSED') {
+            Button('结束')
+              .layoutWeight(1)
               .height(50)
               .enabled(this.context.currentEvent ? this.canEndFocused(this.context.currentEvent) : false)
-              .backgroundColor(this.getThemePalette().success)
+              .backgroundColor(this.getThemePalette().warning)
               .fontColor(Color.White)
               .onClick(async () => {
-                this.applyFocusById(this.context.currentEvent ? this.context.currentEvent.id : -1, 'tap');
-                await this.handleFocusedPrimaryAction();
+                const current = this.context.currentEvent;
+                if (!current) {
+                  return;
+                }
+                await this.vm.updateActualTime(current.id, 'actual_end_time', Date.now());
+                this.refreshContext();
               });
           }
           Button('导航')
-            .layoutWeight(this.isCurrentEventPending() || this.isCurrentEventActive() ? 1 : 3)
+            .layoutWeight(this.isCurrentEventPending() || this.isCurrentEventActive() || this.context.runtimeState === 'PAUSED' ? 1 : 3)
             .height(50)
             .backgroundColor(this.getThemePalette().primary)
             .fontColor(Color.White)
@@ -1270,22 +1302,44 @@ export struct CompanionView {
               await this.handleFocusedSkip();
             });
         } else if (this.getEventState(event) === 'ACTIVE') {
-          Button('结束')
+          Button('暂停')
             .layoutWeight(1)
             .height(42)
-            .enabled(this.canEndFocused(event))
+            .enabled(this.context.actions.canPause)
             .backgroundColor(this.getThemePalette().success)
             .fontColor(Color.White)
             .onClick(async () => {
               await this.handleFocusedPrimaryAction();
             });
-          Button('跳过')
+          Button('结束')
             .layoutWeight(1)
             .height(42)
+            .enabled(this.canEndFocused(event))
             .backgroundColor(this.getThemePalette().warning)
             .fontColor(Color.White)
             .onClick(async () => {
-              await this.handleFocusedSkip();
+              await this.vm.updateActualTime(event.id, 'actual_end_time', Date.now());
+              this.refreshContext();
+            });
+        } else if (this.context.runtimeState === 'PAUSED' && this.context.currentEvent && this.context.currentEvent.id === event.id) {
+          Button('继续')
+            .layoutWeight(1)
+            .height(42)
+            .enabled(this.context.actions.canResume)
+            .backgroundColor(this.getThemePalette().success)
+            .fontColor(Color.White)
+            .onClick(async () => {
+              await this.handleFocusedPrimaryAction();
+            });
+          Button('结束')
+            .layoutWeight(1)
+            .height(42)
+            .enabled(this.canEndFocused(event))
+            .backgroundColor(this.getThemePalette().warning)
+            .fontColor(Color.White)
+            .onClick(async () => {
+              await this.vm.updateActualTime(event.id, 'actual_end_time', Date.now());
+              this.refreshContext();
             });
         } else if (this.getEventState(event) === 'SKIPPED') {
           Button('重新开始')
@@ -2348,7 +2402,9 @@ export struct CompanionView {
     Stack({ alignContent: Alignment.Bottom }) {
       Column({ space: 10 }) {
         this.ControlTopBar();
-        this.ExecutionWeatherCard();
+        if (this.vm.isWeatherFeatureEnabled()) {
+          this.ExecutionWeatherCard();
+        }
         this.FocusedCardHost();
         this.TimelineSection();
       }

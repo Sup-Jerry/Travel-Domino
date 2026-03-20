@@ -31,17 +31,22 @@ import { WeatherContextBuilder } from '../domain/services/WeatherContextBuilder'
 import {
   DEFAULT_WEATHER_USER_PREFERENCE,
   GeoPointInput,
+  ReplanChangeSummaryItem,
   SoftReplanApplyResult,
   SoftReplanMode,
   SoftReplanPreview,
   WeatherCollabOptions,
   WeatherContextBuildResult,
   WeatherSuggestion,
+  WeatherSuggestionActionType,
   WeatherUserPreference
 } from '../domain/services/WeatherModels';
 import { ArrivalReminderEngine } from '../infrastructure/services/ArrivalReminderEngine';
 import { WeatherReminderStore } from '../common/utils/weather/WeatherReminderStore';
 import { AmapService } from '../infrastructure/services/AmapService';
+import { PlanStateMachine } from '../domain/statemachine/PlanStateMachine';
+import { PlanStatus, TransitionTriggerSource } from '../domain/statemachine/PlanStatus';
+import { PlanTransitionEvent } from '../domain/statemachine/ExecutionContext';
 
 // 重新导出类型以保持向后兼容
 export { DateGroup, PlaceCheckinSummary, PlaceCheckinRecord };
@@ -123,7 +128,7 @@ export interface HistoryTimelineSummary {
   activeCount: number;
 }
 
-export type CompanionRuntimeState = 'IDLE' | 'READY' | 'ACTIVE' | 'GAP';
+export type CompanionRuntimeState = 'IDLE' | 'READY' | 'ACTIVE' | 'PAUSED' | 'GAP';
 
 export interface ReflowHint {
   type: 'reflow' | 'shift' | 'next_changed';
@@ -134,6 +139,8 @@ export interface ReflowHint {
 
 export interface CompanionActions {
   canStart: boolean;
+  canPause: boolean;
+  canResume: boolean;
   canEnd: boolean;
   canSkip: boolean;
   canNavigate: boolean;
@@ -197,6 +204,22 @@ interface ActualTimeMutationMeta {
   beforeNextName: string;
 }
 
+interface RuntimeMotionSnapshot {
+  latitude: number;
+  longitude: number;
+  speed?: number;
+  accuracy?: number;
+  ts: number;
+}
+
+interface ReplanNodeSnapshot {
+  id: number;
+  sortOrder: number;
+  duration: number;
+  startTs: number;
+  endTs: number;
+}
+
 
 @Observed
 export class TimelineViewModel {
@@ -256,6 +279,13 @@ export class TimelineViewModel {
     weatherRiskTolerance: DEFAULT_WEATHER_USER_PREFERENCE.weatherRiskTolerance
   };
   private readonly weatherContextBuilder: WeatherContextBuilder = new WeatherContextBuilder();
+  private readonly planStateMachine: PlanStateMachine = PlanStateMachine.getInstance();
+  private planStateUnsubscribe: (() => void) | null = null;
+  @Track private currentPlanStatus: PlanStatus = PlanStatus.DRAFT;
+  private stateEvaluationTimerId: number = -1;
+  private readonly stateEvaluationIntervalMs: number = 60 * 1000;
+  private readonly runtimeMotionSamples: RuntimeMotionSnapshot[] = [];
+  private readonly runtimeMotionSampleLimit: number = 3;
   private executionWeatherTimerId: number = -1;
   private executionWeatherLastLocation: GeoPointInput | null = null;
   private executionWeatherLastEmitAt: number = 0;
@@ -392,11 +422,214 @@ export class TimelineViewModel {
       await this.reloadGlobalRouteApiSwitch();
       await this.reloadWeatherUserPreference();
       this.recalculate();
+      this.bindPlanState(planId);
     } catch (err) {
       hilog.error(0x0000, TAG, `Load data failed: ${JSON.stringify(err)}`);
     }
   }
+  public bindPlanState(planId: number): void {
+    if (planId <= 0) {
+      return;
+    }
+    this.unbindPlanState();
+    const planIdStr = `${planId}`;
+    this.currentPlanStatus = this.planStateMachine.getPlanStatus(planIdStr).status;
+    this.planStateUnsubscribe = this.planStateMachine.subscribePlanTransition(planIdStr, (event: PlanTransitionEvent) => {
+      this.currentPlanStatus = event.toStatus;
+      this.handlePlanStateChanged(event.toStatus, event);
+    });
+    this.stateEvaluationTimerId = setInterval(() => {
+      this.evaluatePlanStatusByRuntime();
+    }, this.stateEvaluationIntervalMs);
+    this.recoverPlanRuntimeState();
+    this.syncPlanStatusAfterLoad();
+    this.handlePlanStateChanged(this.currentPlanStatus);
+  }
 
+  public unbindPlanState(): void {
+    if (this.planStateUnsubscribe) {
+      this.planStateUnsubscribe();
+      this.planStateUnsubscribe = null;
+    }
+    if (this.stateEvaluationTimerId !== -1) {
+      clearInterval(this.stateEvaluationTimerId);
+      this.stateEvaluationTimerId = -1;
+    }
+  }
+
+  public getCurrentPlanStatus(): PlanStatus {
+    return this.currentPlanStatus;
+  }
+
+  private syncPlanStatusAfterLoad(): void {
+    if (this.planId <= 0) {
+      return;
+    }
+    const planIdStr = `${this.planId}`;
+    const scheduled = this.events.filter((item: EventEntity) => item.status === 1);
+    const allCompleted = scheduled.length > 0 && scheduled.every((item: EventEntity) => item.completion_status === EventEntity.STATE_COMPLETED);
+
+    if (allCompleted) {
+      this.planStateMachine.completeExecution(planIdStr);
+      this.currentPlanStatus = this.planStateMachine.getPlanStatus(planIdStr).status;
+      return;
+    }
+
+    if (scheduled.length > 0) {
+      this.planStateMachine.confirmPlan(planIdStr);
+      this.currentPlanStatus = this.planStateMachine.getPlanStatus(planIdStr).status;
+      this.evaluatePlanStatusByRuntime();
+      this.currentPlanStatus = this.planStateMachine.getPlanStatus(planIdStr).status;
+    }
+  }
+
+  private evaluatePlanStatusByRuntime(): void {
+    if (this.planId <= 0) {
+      return;
+    }
+    const planIdStr = `${this.planId}`;
+    const locationSnapshot = ArrivalReminderEngine.getInstance().getLastKnownLocation();
+    if (locationSnapshot) {
+      this.onLocationSampleForStateMachine(
+        locationSnapshot.latitude,
+        locationSnapshot.longitude,
+        locationSnapshot.speed,
+        locationSnapshot.accuracy,
+        locationSnapshot.timestamp
+      );
+    }
+    const input = this.planStateMachine.buildEvaluationInput(planIdStr, this.events, Date.now());
+    this.planStateMachine.evaluateAndApply(input);
+    this.currentPlanStatus = this.planStateMachine.getPlanStatus(planIdStr).status;
+  }
+
+  private handlePlanStateChanged(status: PlanStatus, _event?: PlanTransitionEvent): void {
+    if (!this.weatherFeatureEnabled) {
+      this.stopExecutionWeatherScheduler();
+      return;
+    }
+    if (status === PlanStatus.READY || status === PlanStatus.IN_PROGRESS) {
+      this.startExecutionWeatherScheduler();
+      void this.refreshExecutionWeather(true, 'ENTER_EXECUTION');
+      return;
+    }
+    if (status === PlanStatus.PAUSED || status === PlanStatus.COMPLETED || status === PlanStatus.CANCELLED || status === PlanStatus.EXPIRED || status === PlanStatus.CONFIRMED || status === PlanStatus.DRAFT) {
+      this.stopExecutionWeatherScheduler();
+      if (status === PlanStatus.PAUSED || status === PlanStatus.COMPLETED || status === PlanStatus.CANCELLED || status === PlanStatus.EXPIRED) {
+        this.executionWeatherHint = '';
+        this.executionWeatherSuggestions = [];
+      }
+    }
+  }
+
+  public onLocationSampleForStateMachine(
+    latitude: number,
+    longitude: number,
+    speed?: number,
+    accuracy?: number,
+    sampleTs: number = Date.now()
+  ): void {
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      return;
+    }
+    this.runtimeMotionSamples.push({
+      latitude: latitude,
+      longitude: longitude,
+      speed: speed,
+      accuracy: accuracy,
+      ts: sampleTs
+    });
+    if (this.runtimeMotionSamples.length > this.runtimeMotionSampleLimit) {
+      this.runtimeMotionSamples.splice(0, this.runtimeMotionSamples.length - this.runtimeMotionSampleLimit);
+    }
+    if (this.planId <= 0) {
+      return;
+    }
+    let motionDistance = 0;
+    if (this.runtimeMotionSamples.length >= 2) {
+      const first = this.runtimeMotionSamples[0];
+      const last = this.runtimeMotionSamples[this.runtimeMotionSamples.length - 1];
+      motionDistance = this.measureDistanceMeters(first.latitude, first.longitude, last.latitude, last.longitude);
+    }
+    this.planStateMachine.updateExecutionContext({
+      planId: `${this.planId}`,
+      lastKnownLatitude: latitude,
+      lastKnownLongitude: longitude,
+      lastKnownSpeed: speed,
+      lastKnownAccuracy: accuracy,
+      distanceToFirstNodeMeters: motionDistance,
+      updatedAt: sampleTs
+    });
+  }
+
+  public recoverPlanRuntimeState(): void {
+    if (this.planId <= 0) {
+      return;
+    }
+    const planIdStr = `${this.planId}`;
+    const ctx = this.planStateMachine.getExecutionContext(planIdStr);
+    const now = Date.now();
+    if (!ctx) {
+      this.planStateMachine.markRecovery(planIdStr, false, 'context_missing');
+      this.evaluatePlanStatusByRuntime();
+      this.planStateMachine.markRecovery(planIdStr, true, 'context_rebuild');
+      return;
+    }
+    if (ctx.plannedEndTime > 0 && now > ctx.plannedEndTime && ctx.status !== PlanStatus.COMPLETED && ctx.status !== PlanStatus.CANCELLED && ctx.status !== PlanStatus.EXPIRED) {
+      this.planStateMachine.markRecovery(planIdStr, false, 'context_expired');
+    }
+    if ((ctx.status === PlanStatus.IN_PROGRESS || ctx.status === PlanStatus.PAUSED) &&
+      (!ctx.currentNodeId || ctx.currentNodeId.trim().length === 0)) {
+      this.planStateMachine.markRecovery(planIdStr, false, 'context_partial');
+    }
+    this.currentPlanStatus = ctx.status;
+    this.evaluatePlanStatusByRuntime();
+    this.planStateMachine.markRecovery(planIdStr, true, 'context_restored');
+    const latest = this.planStateMachine.getPlanStatus(planIdStr).status;
+    if (latest !== ctx.status) {
+      this.handlePlanStateChanged(latest, {
+        planId: planIdStr,
+        fromStatus: ctx.status,
+        toStatus: latest,
+        triggerSource: TransitionTriggerSource.SYSTEM_RECOVERY,
+        triggerReason: 'recovery_re_evaluated',
+        timestamp: now
+      });
+    }
+  }
+
+  public pauseCurrentExecution(): boolean {
+    if (this.planId <= 0) {
+      return false;
+    }
+    const planIdStr = `${this.planId}`;
+    const result = this.planStateMachine.pauseExecution(planIdStr);
+    if (!result.success) {
+      return false;
+    }
+    this.currentPlanStatus = result.toStatus;
+    this.handlePlanStateChanged(result.toStatus, result.event);
+    return true;
+  }
+
+  public resumeCurrentExecution(): boolean {
+    if (this.planId <= 0) {
+      return false;
+    }
+    const planIdStr = `${this.planId}`;
+    const result = this.planStateMachine.resumeExecution(planIdStr);
+    if (!result.success) {
+      return false;
+    }
+    this.currentPlanStatus = result.toStatus;
+    this.handlePlanStateChanged(result.toStatus, result.event);
+    this.recalculateFromIndex(0);
+    this.executionWeatherAppliedSummary = '执行恢复已触发增量重算（reasonCode=resume_recalculate）。';
+    this.executionWeatherHint = this.executionWeatherAppliedSummary;
+    this.executionWeatherLevel = 'NOTICE';
+    void this.refreshExecutionWeather(true, 'ENTER_EXECUTION');
+    return true;
+  }
   /**
    * 用户修改路程时间 (修复保存问题)
    */
@@ -1939,38 +2172,117 @@ export class TimelineViewModel {
       changedDurations: false,
       skippedNodeIds: [],
       affectedNodeIds: [],
+      reasonCode: 'no_suggestion',
+      startFromEventId: 0,
+      changeSummary: [],
       summary: '无可用建议',
       riskDelta: 0
     };
     if (planId <= 0 || this.planId !== planId || !suggestionId || suggestionId.trim().length === 0) {
-      return { success: false, rolledBack: false, errorCode: 'REPLAN_INVALID', preview: emptyPreview };
+      return { success: false, rolledBack: false, errorCode: 'REPLAN_INVALID', reasonCode: 'invalid_input', startFromEventId: 0, preview: emptyPreview };
+    }
+    const status = this.getCurrentPlanStatus();
+    if (!(status === PlanStatus.READY || status === PlanStatus.IN_PROGRESS || status === PlanStatus.PAUSED)) {
+      return { success: false, rolledBack: false, errorCode: 'REPLAN_INVALID', reasonCode: 'status_blocked', startFromEventId: 0, preview: emptyPreview };
     }
     if (this.executionReplanBusy) {
-      return { success: false, rolledBack: false, errorCode: 'REPLAN_BUSY', preview: emptyPreview };
+      return { success: false, rolledBack: false, errorCode: 'REPLAN_BUSY', reasonCode: 'busy', startFromEventId: 0, preview: emptyPreview };
+    }
+    const activeEvent = this.findCurrentActiveEvent();
+    const softGate = this.planStateMachine.requestSoftReplan({
+      planId: `${planId}`,
+      reason: 'weather_suggestion',
+      currentNodeId: activeEvent ? `${activeEvent.id}` : undefined,
+      preserveCompletedNodes: true,
+      preserveStartedWindow: true,
+      useWeatherConstraint: true
+    });
+    if (!softGate.success) {
+      return {
+        success: false,
+        rolledBack: false,
+        errorCode: 'REPLAN_INVALID',
+        reasonCode: softGate.reasonCode ?? 'status_blocked',
+        startFromEventId: softGate.startFromEventId ?? 0,
+        preview: emptyPreview
+      };
     }
     const suggestion = this.executionSuggestionMap.get(suggestionId);
     if (!suggestion) {
-      return { success: false, rolledBack: false, errorCode: 'REPLAN_INVALID', preview: emptyPreview };
+      return { success: false, rolledBack: false, errorCode: 'REPLAN_INVALID', reasonCode: 'suggestion_missing', startFromEventId: 0, preview: emptyPreview };
     }
-    const preview = this.buildSoftReplanPreview(suggestion);
+    const preview = this.buildSoftReplanPreview(suggestion, softGate.reasonCode, softGate.startFromEventId ?? 0);
     if (mode === 'PREVIEW') {
-      return { success: true, rolledBack: false, errorCode: '', preview: preview };
+      return {
+        success: true,
+        rolledBack: false,
+        errorCode: '',
+        reasonCode: preview.reasonCode,
+        startFromEventId: preview.startFromEventId,
+        preview: preview
+      };
     }
 
     this.executionReplanBusy = true;
     this.executionWeatherApplying = true;
     const snapshot = this.cloneEventSnapshot();
+    const beforeNodes = this.snapshotScheduleNodes();
     const startedAt = Date.now();
     try {
+      if (this.containsImmutableNode(this.resolveSoftReplanTargetEventIds(suggestion.actionPayload?.targetNodeIds ?? suggestion.relatedNodeIds))) {
+        preview.reasonCode = 'immutable_blocked';
+        preview.changeSummary = [{
+          type: 'IMMUTABLE_BLOCKED',
+          nodeId: '',
+          before: 'pending',
+          after: 'blocked',
+          deltaMinutes: 0
+        }];
+        return {
+          success: false,
+          rolledBack: false,
+          errorCode: 'REPLAN_IMMUTABLE',
+          reasonCode: preview.reasonCode,
+          startFromEventId: preview.startFromEventId,
+          preview: preview
+        };
+      }
       const applyOk = await this.applySuggestionAction(suggestion);
       if (!applyOk) {
         this.restoreEventSnapshot(snapshot);
-        return { success: false, rolledBack: true, errorCode: 'REPLAN_CONFLICT', preview: preview };
+        return {
+          success: false,
+          rolledBack: true,
+          errorCode: 'REPLAN_CONFLICT',
+          reasonCode: 'apply_failed',
+          startFromEventId: preview.startFromEventId,
+          preview: preview
+        };
+      }
+      const startFromEventId = softGate.startFromEventId && softGate.startFromEventId > 0
+        ? softGate.startFromEventId
+        : this.resolveSoftReplanStartEventId(preview);
+      if (startFromEventId > 0) {
+        this.recalculateFromEventId(startFromEventId);
+      } else {
+        this.recalculateFromIndex(0);
       }
       if (Date.now() - startedAt > 10_000) {
         this.restoreEventSnapshot(snapshot);
-        return { success: false, rolledBack: true, errorCode: 'REPLAN_TIMEOUT', preview: preview };
+        return {
+          success: false,
+          rolledBack: true,
+          errorCode: 'REPLAN_TIMEOUT',
+          reasonCode: 'timeout',
+          startFromEventId: startFromEventId,
+          preview: preview
+        };
       }
+      const afterNodes = this.snapshotScheduleNodes();
+      const structuredSummary = this.buildStructuredReplanSummary(beforeNodes, afterNodes, preview.affectedNodeIds);
+      preview.startFromEventId = startFromEventId;
+      preview.changeSummary = structuredSummary;
+      preview.summary = this.composeReplanSummaryText(preview, structuredSummary);
       this.executionWeatherAppliedSummary = preview.summary;
       this.executionWeatherHint = preview.summary;
       this.executionWeatherLevel = 'NOTICE';
@@ -1982,13 +2294,27 @@ export class TimelineViewModel {
       hilog.info(
         0x0000,
         TAG,
-        `[WEATHER_REPLAN][apply_done] mode=${mode}, suggestionId=${suggestionId}, action=${suggestion.actionType}, affected=${preview.affectedNodeIds.length}, riskDelta=${preview.riskDelta}, rolledBack=false, result=SUCCESS`
+        `[WEATHER_REPLAN][apply_done] mode=${mode}, suggestionId=${suggestionId}, action=${suggestion.actionType}, affected=${preview.affectedNodeIds.length}, riskDelta=${preview.riskDelta}, reason=${softGate.reasonCode ?? ''}, startFromEventId=${softGate.startFromEventId ?? 0}, rolledBack=false, result=SUCCESS`
       );
-      return { success: true, rolledBack: false, errorCode: '', preview: preview };
+      return {
+        success: true,
+        rolledBack: false,
+        errorCode: '',
+        reasonCode: preview.reasonCode,
+        startFromEventId: preview.startFromEventId,
+        preview: preview
+      };
     } catch (error) {
       this.restoreEventSnapshot(snapshot);
       hilog.warn(0x0000, TAG, `[WEATHER_REPLAN][apply_failed] suggestionId=${suggestionId}, rolledBack=true, result=FAILED, reason=${JSON.stringify(error)}`);
-      return { success: false, rolledBack: true, errorCode: 'REPLAN_CONFLICT', preview: preview };
+      return {
+        success: false,
+        rolledBack: true,
+        errorCode: 'REPLAN_CONFLICT',
+        reasonCode: 'exception',
+        startFromEventId: preview.startFromEventId,
+        preview: preview
+      };
     } finally {
       this.executionReplanBusy = false;
       this.executionWeatherApplying = false;
@@ -2038,7 +2364,11 @@ export class TimelineViewModel {
     this.executionSuggestionCooldownMap.set(key, now);
   }
 
-  private buildSoftReplanPreview(suggestion: WeatherSuggestion): SoftReplanPreview {
+  private buildSoftReplanPreview(
+    suggestion: WeatherSuggestion,
+    reasonCode: string | undefined,
+    startFromEventId: number
+  ): SoftReplanPreview {
     const payload = suggestion.actionPayload;
     const affectedNodeIds = payload?.targetNodeIds ?? suggestion.relatedNodeIds ?? [];
     const skippedNodeIds = suggestion.actionType === 'SKIP_NODE' ? affectedNodeIds.slice(0, 1) : [];
@@ -2062,9 +2392,113 @@ export class TimelineViewModel {
       changedDurations: changedDurations,
       skippedNodeIds: skippedNodeIds,
       affectedNodeIds: affectedNodeIds,
+      reasonCode: reasonCode ?? this.resolveReplanReasonCode(suggestion.actionType),
+      startFromEventId: startFromEventId,
+      changeSummary: [],
       summary: summary,
       riskDelta: suggestion.level === 'WARNING' ? -20 : (suggestion.level === 'NOTICE' ? -10 : -5)
     };
+  }
+
+  private resolveReplanReasonCode(actionType: WeatherSuggestionActionType): string {
+    if (actionType === 'REORDER') {
+      return 'order_adjusted';
+    }
+    if (actionType === 'SHORTEN_STAY') {
+      return 'duration_adjusted';
+    }
+    if (actionType === 'SKIP_NODE') {
+      return 'node_skipped';
+    }
+    if (actionType === 'REPLACE_NODE') {
+      return 'node_replaced';
+    }
+    return 'soft_replan';
+  }
+
+  private snapshotScheduleNodes(): Map<number, ReplanNodeSnapshot> {
+    const map = new Map<number, ReplanNodeSnapshot>();
+    this.events.filter((item: EventEntity) => item.status === 1).forEach((item: EventEntity) => {
+      map.set(item.id, {
+        id: item.id,
+        sortOrder: item.sort_order,
+        duration: item.duration,
+        startTs: item.dynamic_start_time,
+        endTs: item.dynamic_end_time
+      });
+    });
+    return map;
+  }
+
+  private buildStructuredReplanSummary(
+    beforeMap: Map<number, ReplanNodeSnapshot>,
+    afterMap: Map<number, ReplanNodeSnapshot>,
+    affectedNodeIds: string[]
+  ): ReplanChangeSummaryItem[] {
+    const summary: ReplanChangeSummaryItem[] = [];
+    const ids: number[] = [];
+    (affectedNodeIds || []).forEach((idText: string) => {
+      const id = Number(idText);
+      if (Number.isFinite(id) && id > 0) {
+        ids.push(id);
+      }
+    });
+    ids.forEach((id: number) => {
+      const before = beforeMap.get(id);
+      const after = afterMap.get(id);
+      if (!before || !after) {
+        return;
+      }
+      if (before.sortOrder !== after.sortOrder) {
+        summary.push({
+          type: 'ORDER_CHANGED',
+          nodeId: `${id}`,
+          before: `${before.sortOrder}`,
+          after: `${after.sortOrder}`
+        });
+      }
+      if (before.duration !== after.duration) {
+        summary.push({
+          type: 'DURATION_CHANGED',
+          nodeId: `${id}`,
+          before: `${before.duration}`,
+          after: `${after.duration}`,
+          deltaMinutes: after.duration - before.duration
+        });
+      }
+      if (before.startTs !== after.startTs || before.endTs !== after.endTs) {
+        summary.push({
+          type: 'TIME_SHIFTED',
+          nodeId: `${id}`,
+          before: `${before.startTs}-${before.endTs}`,
+          after: `${after.startTs}-${after.endTs}`,
+          deltaMinutes: Math.round((after.startTs - before.startTs) / 60000)
+        });
+      }
+    });
+    if (summary.length === 0) {
+      summary.push({
+        type: 'NO_OP',
+        nodeId: '',
+        before: 'stable',
+        after: 'stable',
+        deltaMinutes: 0
+      });
+    }
+    return summary;
+  }
+
+  private composeReplanSummaryText(preview: SoftReplanPreview, structured: ReplanChangeSummaryItem[]): string {
+    const orderCount = structured.filter((item: ReplanChangeSummaryItem) => item.type === 'ORDER_CHANGED').length;
+    const durationCount = structured.filter((item: ReplanChangeSummaryItem) => item.type === 'DURATION_CHANGED').length;
+    const shiftCount = structured.filter((item: ReplanChangeSummaryItem) => item.type === 'TIME_SHIFTED').length;
+    if (preview.reasonCode === 'immutable_blocked') {
+      return '命中已完成/锁定节点保护，未执行重排。';
+    }
+    if (orderCount === 0 && durationCount === 0 && shiftCount === 0) {
+      return '重排执行完成，计划保持稳定。';
+    }
+    return `重排完成：顺序变更 ${orderCount} 项，时长变更 ${durationCount} 项，时间偏移 ${shiftCount} 项。`;
   }
 
   private async applySuggestionAction(suggestion: WeatherSuggestion): Promise<boolean> {
@@ -2109,6 +2543,21 @@ export class TimelineViewModel {
       }
     });
     return resolved;
+  }
+
+  private resolveSoftReplanStartEventId(preview: SoftReplanPreview): number {
+    const ids = preview.affectedNodeIds ?? [];
+    if (ids.length === 0) {
+      return 0;
+    }
+    let minId = Number.MAX_SAFE_INTEGER;
+    ids.forEach((idText: string) => {
+      const id = Number(idText);
+      if (Number.isFinite(id) && id > 0 && id < minId) {
+        minId = id;
+      }
+    });
+    return minId === Number.MAX_SAFE_INTEGER ? 0 : minId;
   }
 
   private getSoftReplanFutureCandidates(): EventEntity[] {
@@ -2906,6 +3355,7 @@ export class TimelineViewModel {
     );
     this.logTimelineSnapshot('skip_event');
     this.getPlaceCheckinSummary(item.name);
+    this.evaluatePlanStatusByRuntime();
 
     // 记录跳过行为
     if (item.source === 1) {
@@ -2963,6 +3413,7 @@ export class TimelineViewModel {
     );
     this.logTimelineSnapshot('reopen_skipped');
     this.getPlaceCheckinSummary(target.name);
+    this.evaluatePlanStatusByRuntime();
     return true;
   }
 
@@ -3232,6 +3683,23 @@ export class TimelineViewModel {
         return false;
       }
       await this.postActualTimeMutationEffects(id, target, field, beforeNextTs, beforeNextName);
+
+      if (this.planId > 0) {
+        const planIdStr = `${this.planId}`;
+        if (field === 'actual_start_time' && timestamp > 0) {
+          this.planStateMachine.startExecution(planIdStr, TransitionTriggerSource.USER_ACTION);
+        } else if (field === 'actual_end_time') {
+          const scheduled = this.events.filter((item: EventEntity) => item.status === 1);
+          const allCompleted = scheduled.length > 0 && scheduled.every((item: EventEntity) => item.completion_status === EventEntity.STATE_COMPLETED);
+          if (allCompleted) {
+            this.planStateMachine.completeExecution(planIdStr);
+          } else {
+            this.evaluatePlanStatusByRuntime();
+          }
+        }
+        this.currentPlanStatus = this.planStateMachine.getPlanStatus(planIdStr).status;
+      }
+
       return true;
     } finally {
       this.actualTimeMutationInFlight = false;
@@ -3838,6 +4306,8 @@ export class TimelineViewModel {
         hint: this.latestReflowHint,
         actions: {
           canStart: false,
+          canPause: false,
+          canResume: false,
           canEnd: false,
           canSkip: false,
           canNavigate: false,
@@ -3862,7 +4332,25 @@ export class TimelineViewModel {
     }
 
     if (active) {
+      const stage = this.planStateMachine.getPlanStageViewModel(`${this.planId}`);
       const next = this.getNextExecutableEvent(active.id, schedule);
+      if (stage.canResume && !stage.canPause) {
+        return {
+          runtimeState: 'PAUSED',
+          currentEvent: active,
+          nextEvent: next,
+          hint: this.latestReflowHint,
+          actions: {
+            canStart: false,
+            canPause: false,
+            canResume: true,
+            canEnd: true,
+            canSkip: true,
+            canNavigate: true,
+            canViewDetail: true
+          }
+        };
+      }
       return {
         runtimeState: 'ACTIVE',
         currentEvent: active,
@@ -3870,6 +4358,8 @@ export class TimelineViewModel {
         hint: this.latestReflowHint,
         actions: {
           canStart: false,
+          canPause: stage.canPause,
+          canResume: stage.canResume,
           canEnd: true,
           canSkip: true,
           canNavigate: true,
@@ -3886,6 +4376,8 @@ export class TimelineViewModel {
         hint: this.latestReflowHint,
         actions: {
           canStart: false,
+          canPause: false,
+          canResume: false,
           canEnd: false,
           canSkip: false,
           canNavigate: false,
@@ -3916,6 +4408,8 @@ export class TimelineViewModel {
       hint: runtimeHint,
       actions: {
         canStart: true,
+        canPause: false,
+        canResume: false,
         canEnd: false,
         canSkip: true,
         canNavigate: true,
@@ -4011,6 +4505,12 @@ export class TimelineViewModel {
     });
   }
 }
+
+
+
+
+
+
 
 
 
