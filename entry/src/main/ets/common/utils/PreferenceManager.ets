@@ -3,8 +3,19 @@ import { preferences } from '@kit.ArkData';
 import { common } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { DEFAULT_WEATHER_USER_PREFERENCE, WeatherPreferenceLevel, WeatherUserPreference } from '../../domain/services/WeatherModels';
+import { DEFAULT_USER_PROFILE, UserStrategyProfile } from '../../domain/strategy/UserStrategyProfile';
 
 const TAG = 'PreferenceManager';
+
+interface UserStrategyProfileSnapshot {
+  avgDensity?: number;
+  avgPace?: number;
+  avgPreference?: number;
+  avgEnergy?: number;
+  modeFrequency?: string;
+  sampleCount?: number;
+  updatedAt?: number;
+}
 
 export class PreferenceManager {
   private static instance: PreferenceManager;
@@ -23,6 +34,8 @@ export class PreferenceManager {
   static readonly KEY_WEATHER_HEAT_SENSITIVITY = 'weatherHeatSensitivity';
   static readonly KEY_WEATHER_RAIN_SENSITIVITY = 'weatherRainSensitivity';
   static readonly KEY_WEATHER_RISK_TOLERANCE = 'weatherRiskTolerance';
+  static readonly KEY_WEATHER_FEATURE_ENABLED = 'weatherFeatureEnabled';
+  static readonly KEY_USER_STRATEGY_PROFILE = 'userStrategyProfile';
 
   // 新增：是否允许调用高德路线 API
   static readonly KEY_ENABLE_AMAP_ROUTE_API = 'enableAmapRouteApi';
@@ -228,6 +241,76 @@ export class PreferenceManager {
     await this.setValue(PreferenceManager.KEY_WEATHER_HEAT_SENSITIVITY, safe.heatSensitivity);
     await this.setValue(PreferenceManager.KEY_WEATHER_RAIN_SENSITIVITY, safe.rainSensitivity);
     await this.setValue(PreferenceManager.KEY_WEATHER_RISK_TOLERANCE, safe.weatherRiskTolerance);
+  }
+
+  public async isWeatherFeatureEnabled(): Promise<boolean> {
+    const value = await this.getValue(PreferenceManager.KEY_WEATHER_FEATURE_ENABLED, true);
+    return value === true;
+  }
+
+  public async setWeatherFeatureEnabled(enabled: boolean): Promise<void> {
+    await this.setValue(PreferenceManager.KEY_WEATHER_FEATURE_ENABLED, enabled);
+  }
+
+  private cloneDefaultUserProfile(): UserStrategyProfile {
+    return {
+      avgDensity: DEFAULT_USER_PROFILE.avgDensity,
+      avgPace: DEFAULT_USER_PROFILE.avgPace,
+      avgPreference: DEFAULT_USER_PROFILE.avgPreference,
+      avgEnergy: DEFAULT_USER_PROFILE.avgEnergy,
+      modeFrequency: DEFAULT_USER_PROFILE.modeFrequency,
+      sampleCount: DEFAULT_USER_PROFILE.sampleCount,
+      updatedAt: DEFAULT_USER_PROFILE.updatedAt
+    };
+  }
+
+  public async getUserStrategyProfile(): Promise<UserStrategyProfile> {
+    const raw = await this.getValue(PreferenceManager.KEY_USER_STRATEGY_PROFILE, '');
+    if (typeof raw !== 'string' || raw.length === 0) {
+      return this.cloneDefaultUserProfile();
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as UserStrategyProfileSnapshot;
+      return {
+        avgDensity: Number.isFinite(Number(parsed.avgDensity))
+          ? Number(parsed.avgDensity)
+          : DEFAULT_USER_PROFILE.avgDensity,
+        avgPace: Number.isFinite(Number(parsed.avgPace))
+          ? Number(parsed.avgPace)
+          : DEFAULT_USER_PROFILE.avgPace,
+        avgPreference: Number.isFinite(Number(parsed.avgPreference))
+          ? Number(parsed.avgPreference)
+          : DEFAULT_USER_PROFILE.avgPreference,
+        avgEnergy: Number.isFinite(Number(parsed.avgEnergy))
+          ? Number(parsed.avgEnergy)
+          : DEFAULT_USER_PROFILE.avgEnergy,
+        modeFrequency: typeof parsed.modeFrequency === 'string'
+          ? parsed.modeFrequency
+          : DEFAULT_USER_PROFILE.modeFrequency,
+        sampleCount: Number.isFinite(Number(parsed.sampleCount))
+          ? Math.max(0, Math.floor(Number(parsed.sampleCount)))
+          : DEFAULT_USER_PROFILE.sampleCount,
+        updatedAt: Number.isFinite(Number(parsed.updatedAt))
+          ? Number(parsed.updatedAt)
+          : DEFAULT_USER_PROFILE.updatedAt
+      };
+    } catch (_error) {
+      return this.cloneDefaultUserProfile();
+    }
+  }
+
+  public async setUserStrategyProfile(profile: UserStrategyProfile): Promise<void> {
+    const safe: UserStrategyProfile = {
+      avgDensity: profile.avgDensity,
+      avgPace: profile.avgPace,
+      avgPreference: profile.avgPreference,
+      avgEnergy: profile.avgEnergy,
+      modeFrequency: profile.modeFrequency,
+      sampleCount: profile.sampleCount,
+      updatedAt: profile.updatedAt
+    };
+    await this.setValue(PreferenceManager.KEY_USER_STRATEGY_PROFILE, JSON.stringify(safe));
   }
 }
 

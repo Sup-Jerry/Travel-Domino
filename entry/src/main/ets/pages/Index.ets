@@ -67,13 +67,6 @@ interface PendingItemData {
   lng?: number;
 }
 
-interface TempPlaceSeed {
-  name: string;
-  duration: number;
-  lat: number;
-  lng: number;
-}
-
 @Entry
 @Component
 struct Index {
@@ -90,8 +83,8 @@ struct Index {
   @State currentStrategyExplanation: string = '';
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
   @StorageLink('TrafficDataUpdated') @Watch('onTrafficSignal') trafficSignal: number = 0;
-  @StorageLink('ArrivalReminderSeq') @Watch('onArrivalReminderSignal') arrivalReminderSeq: number = 0;
-  @StorageLink('WeatherReminderSeq') @Watch('onWeatherReminderSignal') weatherReminderSeq: number = 0;
+  private arrivalReminderUnsubscribe: (() => void) | null = null;
+  private weatherReminderUnsubscribe: (() => void) | null = null;
   @State isArrivalDialogOpen: boolean = false;
   @State isWeatherDialogOpen: boolean = false;
   private readonly planService: PlanAppService = PlanAppService.getInstance();
@@ -112,15 +105,7 @@ struct Index {
     this.vm.recalculateTrafficOnly(); // 路况回填走轻量重算，避免全量重算风暴
   }
 
-  onArrivalReminderSignal(): void {
-    this.consumeArrivalReminder();
-  }
-
-  onWeatherReminderSignal(): void {
-    this.consumeWeatherReminder();
-  }
-
-  private scopedStorageKey(base: string): string {
+   private scopedStorageKey(base: string): string {
     if (this.currentPlanId > 0) {
       return `${base}_${this.currentPlanId}`;
     }
@@ -158,50 +143,6 @@ struct Index {
       promptAction.openToast({ message: message });
     } catch (error) {
       hilog.warn(0x0000, 'Index', `[TOAST_FAIL] ${this.sanitizeError(error as Object)}`);
-    }
-  }
-
-  private async generateTemporaryPlaces(): Promise<void> {
-    if (this.vm.isArchived) {
-      this.safeShowToast('归档计划不可操作');
-      return;
-    }
-    const seeds: TempPlaceSeed[] = [
-      { name: '临时点-天安门', duration: 60, lat: 39.90872, lng: 116.39748 },
-      { name: '临时点-故宫', duration: 90, lat: 39.91634, lng: 116.39716 },
-      { name: '临时点-景山公园', duration: 50, lat: 39.92943, lng: 116.39682 },
-      { name: '临时点-北海公园', duration: 50, lat: 39.92876, lng: 116.38972 },
-      { name: '临时点-王府井', duration: 70, lat: 39.91484, lng: 116.40464 }
-    ];
-    const existing = new Set<string>(
-      this.vm.events.map((event: EventEntity) => (event.name || '').trim()).filter((name: string) => name.length > 0)
-    );
-    const dayOffset = this.findLeastBusyDay();
-    let inserted = 0;
-    for (let i = 0; i < seeds.length; i++) {
-      const seed = seeds[i];
-      if (existing.has(seed.name)) {
-        continue;
-      }
-      await this.vm.addNewItem(
-        seed.name,
-        seed.duration,
-        true,
-        '',
-        dayOffset,
-        -1,
-        false,
-        '临时测试地点（天气联调）',
-        0,
-        seed.lat,
-        seed.lng
-      );
-      existing.add(seed.name);
-      inserted += 1;
-    }
-    this.safeShowToast(inserted > 0 ? `已生成 ${inserted} 个临时地点` : '临时地点已存在，无需重复生成');
-    if (inserted > 0) {
-      void this.vm.refreshPlanningWeather(true);
     }
   }
 
@@ -278,86 +219,112 @@ struct Index {
     }
   }
 
-  private consumeArrivalReminder(): void {
-    this.arrivalCoordinator.consumeOnPlan({
-      isDialogOpen: this.isArrivalDialogOpen,
-      currentPlanId: this.currentPlanId,
-      events: this.vm.events,
-      onShow: (payload: ArrivalReminderPayload): void => {
-        this.isArrivalDialogOpen = true;
-        this.getUIContext().showAlertDialog({
-          title: '到达提醒',
-          message: `你已到达【${payload.placeName}】附近（约${Math.max(1, payload.distanceMeters)}米）`,
-          autoCancel: false,
-          alignment: DialogAlignment.Center,
-          primaryButton: {
-            value: '进入行程页',
-            action: () => {
-              this.isCompanionMode = true;
-              this.isArrivalDialogOpen = false;
-              this.arrivalCoordinator.acknowledge(payload.eventId, 'open_page');
-            }
-          },
-          secondaryButton: {
-            value: '立即开始',
-            action: () => {
-              this.isCompanionMode = true;
-              this.isArrivalDialogOpen = false;
-              void this.tryStartEventWithConflictPrompt(payload.eventId).then((started: boolean) => {
-                if (started) {
-                  this.arrivalCoordinator.acknowledge(payload.eventId, 'start');
-                } else {
-                  this.arrivalCoordinator.acknowledge(payload.eventId, 'open_page');
-                }
-              });
-            }
-          }
-        });
+  private bindReminderSubscriptions(): void {
+    this.unbindReminderSubscriptions();
+    if (this.currentPlanId <= 0) {
+      return;
+    }
+
+    this.arrivalReminderUnsubscribe = this.arrivalCoordinator.subscribePlan(this.currentPlanId, {
+      isDialogOpen: (): boolean => this.isArrivalDialogOpen,
+      resolveEvents: (): EventEntity[] => this.vm.events,
+      onShowPlan: (payload: ArrivalReminderPayload): void => {
+        this.showArrivalReminderDialog(payload);
+      }
+    });
+
+    this.weatherReminderUnsubscribe = this.weatherCoordinator.subscribePlan(this.currentPlanId, {
+      isDialogOpen: (): boolean => this.isWeatherDialogOpen,
+      onShow: (payload: WeatherReminderPayload): void => {
+        if (!this.vm.isWeatherFeatureEnabled()) {
+          return;
+        }
+        this.showWeatherReminderDialog(payload);
+      },
+      onClear: (): void => {
+        this.isWeatherDialogOpen = false;
       }
     });
   }
 
-  private consumeWeatherReminder(): void {
-    this.weatherCoordinator.consumeOnPlan({
-      isDialogOpen: this.isWeatherDialogOpen,
-      currentPlanId: this.currentPlanId,
-      onShow: (payload: WeatherReminderPayload): void => {
-        this.isWeatherDialogOpen = true;
-        const dialogTitle = payload.suggestionId ? `天气建议（可选）· ${payload.title}` : `天气提醒（可选）· ${payload.title}`;
-        const dialogMessage = payload.suggestionId
-          ? `${payload.message}\n\n此建议基于多日/多城天气协同，属可选动作，不会自动执行。`
-          : `${payload.message}\n\n你可以选择刷新天气，不影响主流程。`;
-        this.getUIContext().showAlertDialog({
-          title: dialogTitle,
-          message: dialogMessage,
-          autoCancel: true,
-          alignment: DialogAlignment.Center,
-          primaryButton: {
-            value: '知道了',
-            action: () => {
-              this.isWeatherDialogOpen = false;
-              this.weatherCoordinator.clear(this.currentPlanId);
+  private unbindReminderSubscriptions(): void {
+    if (this.arrivalReminderUnsubscribe) {
+      this.arrivalReminderUnsubscribe();
+      this.arrivalReminderUnsubscribe = null;
+    }
+    if (this.weatherReminderUnsubscribe) {
+      this.weatherReminderUnsubscribe();
+      this.weatherReminderUnsubscribe = null;
+    }
+  }
+
+  private showArrivalReminderDialog(payload: ArrivalReminderPayload): void {
+    this.isArrivalDialogOpen = true;
+    this.getUIContext().showAlertDialog({
+      title: '到达提醒',
+      message: `你已到达【${payload.placeName}】附近（约${Math.max(1, payload.distanceMeters)}米）`,
+      autoCancel: false,
+      alignment: DialogAlignment.Center,
+      primaryButton: {
+        value: '进入行程页',
+        action: () => {
+          this.isCompanionMode = true;
+          this.isArrivalDialogOpen = false;
+          this.arrivalCoordinator.acknowledge(payload.eventId, 'open_page');
+        }
+      },
+      secondaryButton: {
+        value: '立即开始',
+        action: () => {
+          this.isCompanionMode = true;
+          this.isArrivalDialogOpen = false;
+          void this.tryStartEventWithConflictPrompt(payload.eventId).then((started: boolean) => {
+            if (started) {
+              this.arrivalCoordinator.acknowledge(payload.eventId, 'start');
+            } else {
+              this.arrivalCoordinator.acknowledge(payload.eventId, 'open_page');
             }
-          },
-          secondaryButton: {
-            value: payload.suggestionId ? '可选：应用建议' : '可选：刷新天气',
-            action: () => {
-              this.isWeatherDialogOpen = false;
-              this.weatherCoordinator.clear(this.currentPlanId);
-              if (payload.suggestionId) {
-                void this.vm.requestSoftReplan(this.currentPlanId, payload.suggestionId, 'APPLY').then((result) => {
-                  if (result.success) {
-                    this.safeShowToast('已按可选建议调整行程');
-                  } else {
-                    this.safeShowToast(`可选建议未应用：${result.errorCode || 'REPLAN_CONFLICT'}`);
-                  }
-                });
+          });
+        }
+      }
+    });
+  }
+
+  private showWeatherReminderDialog(payload: WeatherReminderPayload): void {
+    this.isWeatherDialogOpen = true;
+    const dialogTitle = payload.suggestionId ? `天气建议（可选）· ${payload.title}` : `天气提醒（可选）· ${payload.title}`;
+    const dialogMessage = payload.suggestionId
+      ? `${payload.message}\n\n此建议基于多日/多城天气协同，属可选动作，不会自动执行。`
+      : `${payload.message}\n\n你可以选择刷新天气，不影响主流程。`;
+    this.getUIContext().showAlertDialog({
+      title: dialogTitle,
+      message: dialogMessage,
+      autoCancel: true,
+      alignment: DialogAlignment.Center,
+      primaryButton: {
+        value: '知道了',
+        action: () => {
+          this.isWeatherDialogOpen = false;
+          this.weatherCoordinator.clear(this.currentPlanId);
+        }
+      },
+      secondaryButton: {
+        value: payload.suggestionId ? '可选：应用建议' : '可选：刷新天气',
+        action: () => {
+          this.isWeatherDialogOpen = false;
+          this.weatherCoordinator.clear(this.currentPlanId);
+          if (payload.suggestionId) {
+            void this.vm.requestSoftReplan(this.currentPlanId, payload.suggestionId, 'APPLY').then((result) => {
+              if (result.success) {
+                this.safeShowToast('已按可选建议调整行程');
               } else {
-                void this.vm.refreshExecutionWeather(true, 'MANUAL');
+                this.safeShowToast(`可选建议未应用：${result.errorCode || 'REPLAN_CONFLICT'}`);
               }
-            }
+            });
+          } else {
+            void this.vm.refreshExecutionWeather(true, 'MANUAL');
           }
-        });
+        }
       }
     });
   }
@@ -524,7 +491,6 @@ struct Index {
       this.safeShowToast('地图选点缓存损坏，已自动清理。');
     }
 
-    this.consumeArrivalReminder();
   }
 
 
@@ -1201,8 +1167,10 @@ struct Index {
         onWeatherPreferenceChange: async (preference: WeatherUserPreference) => {
           try {
             await this.vm.updateWeatherUserPreference(preference);
-            void this.vm.refreshPlanningWeather(false);
-            if (this.vm.isExecutionWeatherStage()) {
+            if (this.vm.isWeatherFeatureEnabled()) {
+              void this.vm.refreshPlanningWeather(false);
+            }
+            if (this.vm.isWeatherFeatureEnabled() && this.vm.isExecutionWeatherStage()) {
               void this.vm.refreshExecutionWeather(false, 'MANUAL');
             }
           } catch (_error) {
@@ -1251,12 +1219,15 @@ struct Index {
       this.vm.setHasUnsavedPostponeStorageKey(this.scopedStorageKey(AppStorageKeys.HAS_UNSAVED_POSTPONE));
       this.refreshUnsavedFlag();
       this.planTitle = params['title'] as string || '行程详情';
+      this.bindReminderSubscriptions();
       void this.vm.loadData(planId).then(() => {
         this.strategyMode = this.vm.getStrategyMode();
         this.loadStrategyExplanation();
-        void this.vm.refreshPlanningWeather(false);
-        this.vm.startExecutionWeatherScheduler();
-        void this.vm.refreshExecutionWeather(true, 'ENTER_EXECUTION');
+        if (this.vm.isWeatherFeatureEnabled()) {
+          void this.vm.refreshPlanningWeather(false);
+        } else {
+          this.vm.stopExecutionWeatherScheduler();
+        }
         if (autoStartFromReminder && reminderEventId > 0) {
           this.isCompanionMode = true;
           void this.tryStartEventWithConflictPrompt(reminderEventId);
@@ -1264,8 +1235,6 @@ struct Index {
           this.isCompanionMode = true;
         }
         this.startArrivalReminderEngine();
-        this.consumeArrivalReminder();
-        this.consumeWeatherReminder();
         this.startStrategyAdaptationCheck();
       }).catch((error: Error) => {
         hilog.error(0x0000, 'Index', `[ARRIVAL][load_data_failed] reason=${this.sanitizeError(error)}`);
@@ -1278,8 +1247,10 @@ struct Index {
   }
 
   aboutToDisappear() {
+    this.unbindReminderSubscriptions();
     this.planService.stopArrivalEngine();
     this.vm.stopExecutionWeatherScheduler();
+    this.vm.unbindPlanState();
     this.clearDialogDraftStorage();
     if (this.strategyAdaptationCheckTimer !== -1) {
       clearInterval(this.strategyAdaptationCheckTimer);
@@ -1459,6 +1430,23 @@ struct Index {
                 .fontSize(11)
                 .fontColor('#4CAF50')
                 .margin({ top: 2 })
+            } else if (this.strategyMode === -1) {
+              Text('🎛 自定义策略')
+                .fontSize(11)
+                .fontColor('#2196F3')
+                .margin({ top: 2 })
+            }
+
+            // 策略解释文案（非默认模式时展示）
+            if (this.strategyMode !== 0 && this.currentStrategyExplanation) {
+              Text(this.currentStrategyExplanation)
+                .fontSize(10)
+                .fontColor(this.strategyMode === 1 ? '#FF6B35'
+                  : this.strategyMode === 2 ? '#4CAF50'
+                  : '#2196F3')
+                .margin({ top: 1 })
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
             }
 
             Text('点击修改日期')
@@ -1499,30 +1487,22 @@ struct Index {
           })
 
           if (!this.isCompanionMode) {
-            Button('临时地点')
-              .height(30)
-              .fontSize(12)
-              .padding({ left: 10, right: 10 })
-              .backgroundColor(this.getThemePalette().cardBgSoft)
-              .fontColor(this.getThemePalette().textPrimary)
-              .margin({ right: 6 })
-              .onClick(() => {
-                void this.generateTemporaryPlaces();
-              })
-            Button(this.vm.weatherLoading ? '刷新中' : '可选刷新天气')
-              .height(30)
-              .fontSize(12)
-              .padding({ left: 10, right: 10 })
-              .backgroundColor(this.getThemePalette().cardBgSoft)
-              .fontColor(this.getThemePalette().textPrimary)
-              .enabled(!this.vm.weatherLoading)
-              .onClick(() => {
-                void this.vm.refreshPlanningWeather(true).then(() => {
-                  this.safeShowToast('天气已刷新');
-                }).catch((_error: Object) => {
-                  this.safeShowToast('天气刷新失败');
-                });
-              })
+            if (this.vm.isWeatherFeatureEnabled()) {
+              Button(this.vm.weatherLoading ? '刷新中' : '可选刷新天气')
+                .height(30)
+                .fontSize(12)
+                .padding({ left: 10, right: 10 })
+                .backgroundColor(this.getThemePalette().cardBgSoft)
+                .fontColor(this.getThemePalette().textPrimary)
+                .enabled(!this.vm.weatherLoading)
+                .onClick(() => {
+                  void this.vm.refreshPlanningWeather(true).then(() => {
+                    this.safeShowToast('天气已刷新');
+                  }).catch((_error: Object) => {
+                    this.safeShowToast('天气刷新失败');
+                  });
+                })
+            }
           }
 
         }
@@ -1530,7 +1510,7 @@ struct Index {
         .padding(16)
         .backgroundColor(Color.Transparent)
 
-        if (this.vm.weatherPlanningHint) {
+        if (this.vm.isWeatherFeatureEnabled() && this.vm.weatherPlanningHint) {
           Row() {
             Text(`天气建议（可选）${this.vm.weatherCollabLabel ? `· ${this.vm.weatherCollabLabel}` : ''}：${this.vm.weatherPlanningHint}${this.vm.weatherCollabSummary ? `（${this.vm.weatherCollabSummary}）` : ''}`)
               .fontSize(12)
@@ -1627,6 +1607,7 @@ struct Index {
                   EventItemView({
                     event: item,
                     isCompanionMode: this.isCompanionMode,
+                    showWeather: this.vm.isWeatherFeatureEnabled(),
                     showTravelIndicator: dayIndex > 0,
 
                     index: this.vm.events.indexOf(item),
@@ -1812,6 +1793,12 @@ struct Index {
     }
 
 }
+
+
+
+
+
+
 
 
 

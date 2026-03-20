@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@ohos/hypium';
-import { TimelineDatePolicy } from '../main/ets/common/utils/TimelineDatePolicy';
+import { TimelineDatePolicy } from '../main/ets/domain/policy/TimelineDatePolicy';
 import { EventEntity } from '../main/ets/model/entity/EventEntity';
 import { TimelineViewModel } from '../main/ets/viewmodel/TimelineViewModel';
 
@@ -28,12 +28,15 @@ export default function timelineDatePolicyTest() {
     });
 
     it('resolve_day_offset_should_fallback_to_day_offset_when_dynamic_missing', 0, () => {
-      const resolved = TimelineDatePolicy.resolveDayOffset(undefined, 3);
+      const dynamicValue: number | undefined = undefined;
+      const resolved = TimelineDatePolicy.resolveDayOffset(dynamicValue, 3);
       expect(resolved).assertEqual(3);
     });
 
     it('resolve_day_offset_should_return_zero_when_all_missing', 0, () => {
-      const resolved = TimelineDatePolicy.resolveDayOffset(undefined, undefined);
+      const dynamicValue: number | undefined = undefined;
+      const dayValue: number | undefined = undefined;
+      const resolved = TimelineDatePolicy.resolveDayOffset(dynamicValue, dayValue);
       expect(resolved).assertEqual(0);
     });
 

@@ -3,6 +3,7 @@ import { promptAction } from '@kit.ArkUI';
 import { ThemeCenter } from '../../../common/utils/ThemeCenter';
 import { ComposableStrategy, DensityLevel, PaceLevel, PreferenceType, EnergyLevel } from '../../../domain/strategy/TravelStrategyDimensions';
 import { StrategyService } from '../../../domain/strategy/StrategyService';
+import { UserProfileService } from '../../../domain/strategy/UserProfileService';
 
 @CustomDialog
 export struct AiInputDialog {
@@ -20,10 +21,26 @@ export struct AiInputDialog {
     preference: PreferenceType.BALANCED,
     energy: EnergyLevel.MEDIUM
   }
+  @State recommendHint: string = ''
+  @State recommendedStrategy: ComposableStrategy | null = null
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light'
 
   private getPalette() {
     return ThemeCenter.getPalette(this.effectiveTheme);
+  }
+
+  aboutToAppear() {
+    void this.loadRecommendation();
+  }
+
+  private async loadRecommendation(): Promise<void> {
+    try {
+      this.recommendHint = await UserProfileService.getRecommendationHint();
+      this.recommendedStrategy = await UserProfileService.getRecommendedStrategy();
+    } catch (_error) {
+      this.recommendHint = '';
+      this.recommendedStrategy = null;
+    }
   }
 
 
@@ -72,6 +89,42 @@ export struct AiInputDialog {
         .onChange((value) => {
           this.inputText = value;
         })
+
+      if (this.recommendHint) {
+        Row() {
+          Text('💡 ' + this.recommendHint)
+            .fontSize(12)
+            .fontColor(this.getPalette().textSecondary)
+            .layoutWeight(1)
+          Button('应用')
+            .height(28)
+            .fontSize(12)
+            .backgroundColor(this.getPalette().primary)
+            .fontColor(Color.White)
+            .borderRadius(8)
+            .margin({ left: 8 })
+            .enabled(this.recommendedStrategy !== null)
+            .onClick(() => {
+              if (!this.recommendedStrategy) {
+                return;
+              }
+              this.useCustomStrategy = true;
+              this.selectedStrategy = -1;
+              const r = this.recommendedStrategy;
+              this.customStrategy = {
+                density: r.density,
+                pace: r.pace,
+                preference: r.preference,
+                energy: r.energy
+              };
+            })
+        }
+        .width('100%')
+        .padding({ top: 10, bottom: 10, left: 10, right: 10 })
+        .backgroundColor(this.getPalette().cardBgSoft)
+        .borderRadius(8)
+        .margin({ top: 10 })
+      }
 
       Row() {
         Text('旅行节奏')

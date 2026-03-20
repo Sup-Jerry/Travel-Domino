@@ -1,13 +1,16 @@
 ﻿import { PlanStatus } from './PlanStatus';
 import { WeatherPolicyResolver } from './WeatherPolicyResolver';
 
-export interface WeatherScheduleDecision {
+// Deprecated naming note:
+// This planner is internal to state-machine metrics/transition bookkeeping.
+// Runtime weather polling is handled by domain/services/WeatherRefreshScheduler.
+export interface PlanWeatherScheduleDecision {
   shouldRefresh: boolean;
   nextRefreshAt?: number;
   intervalMinutes?: number;
 }
 
-export class WeatherRefreshScheduler {
+export class PlanWeatherRefreshPlanner {
   private readonly resolver: WeatherPolicyResolver;
   private readonly nextRunMap: Map<string, number> = new Map<string, number>();
 
@@ -15,7 +18,7 @@ export class WeatherRefreshScheduler {
     this.resolver = resolver ?? new WeatherPolicyResolver();
   }
 
-  public onStatusEntered(planId: string, status: PlanStatus, now: number = Date.now()): WeatherScheduleDecision {
+  public onStatusEntered(planId: string, status: PlanStatus, now: number = Date.now()): PlanWeatherScheduleDecision {
     const policy = this.resolver.resolveWeatherFetchPolicy(status);
     if (!policy.refreshIntervalMinutes || policy.refreshIntervalMinutes <= 0) {
       this.nextRunMap.delete(planId);
@@ -34,7 +37,7 @@ export class WeatherRefreshScheduler {
     };
   }
 
-  public evaluate(planId: string, status: PlanStatus, now: number = Date.now()): WeatherScheduleDecision {
+  public evaluate(planId: string, status: PlanStatus, now: number = Date.now()): PlanWeatherScheduleDecision {
     const policy = this.resolver.resolveWeatherFetchPolicy(status);
     const interval = policy.refreshIntervalMinutes;
     if (!interval || interval <= 0) {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from '@ohos/hypium';
 import { ScheduleOrchestrator } from '../main/ets/viewmodel/internal/ScheduleOrchestrator';
-import { TimeConstraintSolver } from '../main/ets/model/logic/TimeConstraintSolver';
+import { TimeConstraintSolver } from '../main/ets/domain/solver/TimeConstraintSolver';
 import { TravelPlanItem } from '../main/ets/model/interface/IStandardEvent';
 
 function buildItem(id: number, name: string, dayOffset: number, sortOrder: number): TravelPlanItem {
@@ -35,7 +35,7 @@ function buildItem(id: number, name: string, dayOffset: number, sortOrder: numbe
 
 export default function scheduleOrchestratorTest() {
   describe('scheduleOrchestratorTest', () => {
-    it('calculate_should_delegate_to_solver_without_behavior_change', 0, (done: Function) => {
+    it('calculate_should_delegate_to_solver_without_behavior_change', 0, (done: () => void) => {
       const input = [
         buildItem(1, 'A', 0, 100),
         buildItem(2, 'B', 0, 200)

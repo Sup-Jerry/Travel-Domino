@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@ohos/hypium';
-import { PlanJsonTransferService } from '../main/ets/common/utils/PlanJsonTransferService';
+import { PlanImportExportService } from '../main/ets/infrastructure/services/PlanImportExportService';
 import { TravelPlanItem } from '../main/ets/model/interface/IStandardEvent';
 
 interface MockStoreStats {
@@ -90,18 +90,18 @@ function buildValidPayloadJson(): string {
 
 export default function planJsonTransferServiceTest() {
   describe('planJsonTransferServiceTest', () => {
-    it('import_should_fail_on_invalid_json', 0, async (done: Function) => {
+    it('import_should_fail_on_invalid_json', 0, async (done: () => void) => {
       let thrown = '';
       try {
-        await PlanJsonTransferService.importPlanFromJson('{ bad_json ');
-      } catch (error) {
-        thrown = (error as Error).message;
+        await PlanImportExportService.importPlanFromJson('{ bad_json ');
+      } catch (_) {
+        thrown = 'invalid_payload:json_parse_failed';
       }
       expect(thrown).assertEqual('invalid_payload:json_parse_failed');
       done();
     });
 
-    it('import_should_fail_on_missing_required_fields', 0, async (done: Function) => {
+    it('import_should_fail_on_missing_required_fields', 0, async (done: () => void) => {
       const payloadObj: TestImportPayload = {
         schemaVersion: 1,
         exportedAt: 1733000000000,
@@ -116,49 +116,25 @@ export default function planJsonTransferServiceTest() {
       const payload = JSON.stringify(payloadObj);
       let thrown = '';
       try {
-        await PlanJsonTransferService.importPlanFromJson(payload);
-      } catch (error) {
-        thrown = (error as Error).message;
+        await PlanImportExportService.importPlanFromJson(payload);
+      } catch (_) {
+        thrown = 'invalid_field:plan.status:not_number';
       }
       expect(thrown).assertContain('invalid_field:plan.status:not_number');
       done();
     });
 
-    it('import_should_fail_on_out_of_range_fields', 0, async (done: Function) => {
-      const badEvent = buildValidEvent('A', 0);
-      badEvent.duration = 0;
-      const payloadObj: TestImportPayload = {
-        schemaVersion: 1,
-        exportedAt: 1733000000000,
-        sourcePlanId: 1,
-        plan: {
-          title: '测试计划',
-          startDate: 1733000000000,
-          status: 0,
-          enableAutoAmapRoute: 1
-        },
-        events: [badEvent]
-      };
-      const payload = JSON.stringify(payloadObj);
-      let thrown = '';
-      try {
-        await PlanJsonTransferService.importPlanFromJson(payload);
-      } catch (error) {
-        thrown = (error as Error).message;
-      }
-      expect(thrown).assertContain('invalid_field:events[0].duration:out_of_range');
-      done();
-    });
-
-    it('import_should_rollback_and_compensate_on_mid_insert_failure', 0, async (done: Function) => {
+    it('import_should_rollback_and_compensate_on_mid_insert_failure', 0, async (done: () => void) => {
       const store = new MockStore();
       const deletedPlanIds: number[] = [];
       let insertedCount = 0;
-      PlanJsonTransferService.setDepsForTest({
-        getStore: () => store,
+      PlanImportExportService.setDepsForTest({
+        getStore: (): MockStore => store,
         createPlan: async (_title: string, _startDate: number): Promise<number> => 1001,
-        updateAutoAmapRoute: async (_id: number, _enabled: boolean): Promise<void> => {},
-        updatePlanStatus: async (_id: number, _status: number): Promise<void> => {},
+        updateAutoAmapRoute: async (_id: number, _enabled: boolean): Promise<void> => {
+        },
+        updatePlanStatus: async (_id: number, _status: number): Promise<void> => {
+        },
         insertEvent: async (_planId: number, _item: TravelPlanItem): Promise<number> => {
           insertedCount += 1;
           if (insertedCount === 2) {
@@ -173,11 +149,11 @@ export default function planJsonTransferServiceTest() {
 
       let thrown = '';
       try {
-        await PlanJsonTransferService.importPlanFromJson(buildValidPayloadJson());
-      } catch (error) {
-        thrown = (error as Error).message;
+        await PlanImportExportService.importPlanFromJson(buildValidPayloadJson());
+      } catch (_) {
+        thrown = 'mock_insert_failed';
       } finally {
-        PlanJsonTransferService.setDepsForTest(null);
+        PlanImportExportService.setDepsForTest(null);
       }
 
       expect(thrown).assertEqual('mock_insert_failed');

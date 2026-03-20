@@ -1,4 +1,4 @@
-import { EventEntity } from '../../model/entity/EventEntity';
+﻿import { EventEntity } from '../../model/entity/EventEntity';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { WeatherStagePolicy } from '../policy/WeatherStagePolicy';
 import { AmapWeatherService } from '../../infrastructure/services/AmapWeatherService';
@@ -6,6 +6,9 @@ import { WeatherRiskEvaluator } from './WeatherRiskEvaluator';
 import { WeatherGeoPointRequest } from '../../infrastructure/adapters/IWeatherAdapter';
 import { TimelineDatePolicy } from '../policy/TimelineDatePolicy';
 import { TimelineExecutionState } from '../policy/TimelineExecutionState';
+import { ExecutionContext } from '../statemachine/ExecutionContext';
+import { PlanStatus } from '../statemachine/PlanStatus';
+import { WeatherPolicyResolver, WeatherRefreshResult } from '../statemachine/WeatherPolicyResolver';
 import {
   CityWeatherBucket,
   DEFAULT_WEATHER_USER_PREFERENCE,
@@ -17,6 +20,7 @@ import {
   WeatherContextBuildResult,
   WeatherDayWindow,
   WeatherSnapshot,
+  WeatherStageType,
   WeatherSuggestion,
   WeatherSuggestionAlternativeCandidate,
   WeatherTrendTag,
@@ -26,22 +30,89 @@ import {
 interface CityBucketBuildResult {
   buckets: CityWeatherBucket[];
   missCount: number;
+  cappedCount: number;
 }
 
 export class WeatherContextBuilder {
   private static readonly TAG: string = 'WeatherContextBuilder';
+  private static readonly MAX_CITY_BUCKETS: number = 5;
   private readonly weatherService: AmapWeatherService;
   private readonly riskEvaluator: WeatherRiskEvaluator;
+  private readonly weatherPolicyResolver: WeatherPolicyResolver;
 
-  constructor(weatherService?: AmapWeatherService, riskEvaluator?: WeatherRiskEvaluator) {
+  constructor(weatherService?: AmapWeatherService, riskEvaluator?: WeatherRiskEvaluator, weatherPolicyResolver?: WeatherPolicyResolver) {
     this.weatherService = weatherService ?? new AmapWeatherService();
     this.riskEvaluator = riskEvaluator ?? new WeatherRiskEvaluator();
+    this.weatherPolicyResolver = weatherPolicyResolver ?? new WeatherPolicyResolver();
   }
 
+  public resolveWeatherFetchPolicy(status: PlanStatus) {
+    return this.weatherPolicyResolver.resolveWeatherFetchPolicy(status);
+  }
+
+  public buildWeatherTargets(
+    planId: string,
+    status: PlanStatus,
+    events: EventEntity[],
+    context?: ExecutionContext
+  ) {
+    return this.weatherPolicyResolver.buildWeatherTargets(planId, status, events, context);
+  }
+
+  public async refreshWeatherByStatus(
+    planId: string,
+    status: PlanStatus,
+    events: EventEntity[],
+    context?: ExecutionContext,
+    forceRefresh: boolean = false,
+    preference?: WeatherUserPreference,
+    options?: WeatherCollabOptions
+  ): Promise<WeatherRefreshResult> {
+    const targets = this.buildWeatherTargets(planId, status, events, context);
+    try {
+      if (status === PlanStatus.DRAFT || status === PlanStatus.CONFIRMED) {
+        const result = await this.buildPlanningContext(events, preference, options, status === PlanStatus.CONFIRMED ? 'CONFIRMED' : 'PLANNING');
+        return {
+          success: true,
+          requestedTargets: targets,
+          snapshotVersion: `${status}_${result.context.generatedAt}`,
+          degraded: false
+        };
+      }
+
+      if (status === PlanStatus.READY || status === PlanStatus.IN_PROGRESS || status === PlanStatus.PAUSED) {
+        const currentLocation = this.resolveExecutionGeoByContext(context);
+        const stage = status === PlanStatus.READY ? 'READY' : (status === PlanStatus.PAUSED ? 'PAUSED' : 'IN_PROGRESS');
+        const result = await this.buildExecutionContext(events, currentLocation, forceRefresh, preference, options, stage);
+        return {
+          success: true,
+          requestedTargets: targets,
+          snapshotVersion: `${status}_${result.context.generatedAt}`,
+          degraded: false
+        };
+      }
+
+      return {
+        success: true,
+        requestedTargets: targets,
+        snapshotVersion: `${status}_${Date.now()}`,
+        degraded: false
+      };
+    } catch (error) {
+      hilog.warn(0x0000, WeatherContextBuilder.TAG, `[WEATHER_CTX][refresh_by_status] failed status=${status}, reason=${JSON.stringify(error)}`);
+      return {
+        success: false,
+        requestedTargets: targets,
+        degraded: true,
+        errorMessage: error instanceof Error ? error.message : 'refresh_failed'
+      };
+    }
+  }
   public async buildPlanningContext(
     events: EventEntity[],
     preference?: WeatherUserPreference,
-    options?: WeatherCollabOptions
+    options?: WeatherCollabOptions,
+    stage?: WeatherStageType
   ): Promise<WeatherContextBuildResult> {
     const pref = preference ?? DEFAULT_WEATHER_USER_PREFERENCE;
     const collabOptions = this.normalizeCollabOptions(options);
@@ -90,7 +161,7 @@ export class WeatherContextBuilder {
     const collabContext = this.buildCollabContext(sourceEvents, bindings, collabOptions);
     const routeSuitability = this.riskEvaluator.evaluateRouteSuitability(bindings, pref, collabContext);
     const context: WeatherContext = {
-      stage: WeatherStagePolicy.resolveStageForPlan(events),
+      stage: stage ?? WeatherStagePolicy.resolveDetailedStage(undefined, events),
       generatedAt: Date.now(),
       bindings: bindings,
       routeSuitability: routeSuitability,
@@ -109,7 +180,8 @@ export class WeatherContextBuilder {
     currentLocation?: GeoPointInput,
     forceRefresh: boolean = false,
     preference?: WeatherUserPreference,
-    options?: WeatherCollabOptions
+    options?: WeatherCollabOptions,
+    stage?: WeatherStageType
   ): Promise<WeatherContextBuildResult> {
     const pref = preference ?? DEFAULT_WEATHER_USER_PREFERENCE;
     const collabOptions = this.normalizeCollabOptions(options);
@@ -189,7 +261,7 @@ export class WeatherContextBuilder {
     const collabContext = this.buildCollabContext(futureNodes, bindings, collabOptions);
     const routeSuitability = this.riskEvaluator.evaluateRouteSuitability(bindings, pref, collabContext);
     const context: WeatherContext = {
-      stage: 'EXECUTION',
+      stage: stage ?? WeatherStagePolicy.resolveDetailedStage(undefined, events),
       generatedAt: now,
       bindings: bindings,
       routeSuitability: routeSuitability,
@@ -407,6 +479,23 @@ export class WeatherContextBuilder {
     return `天气上下文：\n${lines.join('\n')}`;
   }
 
+  private resolveExecutionGeoByContext(context?: ExecutionContext): GeoPointInput | undefined {
+    if (!context) {
+      return undefined;
+    }
+    if (!Number.isFinite(context.lastKnownLatitude) || !Number.isFinite(context.lastKnownLongitude)) {
+      return undefined;
+    }
+    if (context.lastKnownLatitude === 0 && context.lastKnownLongitude === 0) {
+      return undefined;
+    }
+    const latitude = context.lastKnownLatitude as number;
+    const longitude = context.lastKnownLongitude as number;
+    return {
+      latitude: latitude,
+      longitude: longitude
+    };
+  }
   private normalizeCollabOptions(options?: WeatherCollabOptions): Required<WeatherCollabOptions> {
     return {
       enableMultiDay: options?.enableMultiDay !== false,
@@ -434,7 +523,8 @@ export class WeatherContextBuilder {
     } else {
       cityBuildResult = {
         buckets: [],
-        missCount: 0
+        missCount: 0,
+        cappedCount: 0
       };
     }
     if (options.enableMultiCity && cityBuildResult.missCount > 0) {
@@ -452,6 +542,7 @@ export class WeatherContextBuilder {
       collabSummary: collabSummary,
       dayWindowCount: dayWindows.length,
       cityGroupCount: cityBuildResult.buckets.length,
+      cityCappedCount: cityBuildResult.cappedCount,
       cityMissCount: cityBuildResult.missCount,
       trendTag: trendTag,
       fallbackPath: fallbackPath.join('|')
@@ -524,7 +615,7 @@ export class WeatherContextBuilder {
     bindings: PlanNodeWeatherBinding[]
   ): CityBucketBuildResult {
     if (!events || !bindings || events.length === 0 || bindings.length === 0) {
-      const emptyResult: CityBucketBuildResult = { buckets: [], missCount: 0 };
+      const emptyResult: CityBucketBuildResult = { buckets: [], missCount: 0, cappedCount: 0 };
       return emptyResult;
     }
     const eventById: Map<number, EventEntity> = new Map<number, EventEntity>();
@@ -534,6 +625,8 @@ export class WeatherContextBuilder {
 
     let missCount = 0;
     const grouped = new Map<string, PlanNodeWeatherBinding[]>();
+    const firstSeenOrderByCity = new Map<string, number>();
+    let seenCounter = 0;
     bindings.forEach((binding: PlanNodeWeatherBinding) => {
       const event = eventById.get(binding.eventId);
       const cityCode = (binding.weather?.cityCode || '').trim();
@@ -548,10 +641,26 @@ export class WeatherContextBuilder {
       const list = grouped.get(cityKey) ?? [];
       list.push(binding);
       grouped.set(cityKey, list);
+      if (!firstSeenOrderByCity.has(cityKey)) {
+        firstSeenOrderByCity.set(cityKey, seenCounter++);
+      }
     });
 
+    const entries = Array.from(grouped.entries());
+    entries.sort((a: [string, PlanNodeWeatherBinding[]], b: [string, PlanNodeWeatherBinding[]]) => {
+      const orderA = firstSeenOrderByCity.get(a[0]) ?? 0;
+      const orderB = firstSeenOrderByCity.get(b[0]) ?? 0;
+      return orderA - orderB;
+    });
+    const cappedCount = entries.length > WeatherContextBuilder.MAX_CITY_BUCKETS
+      ? entries.length - WeatherContextBuilder.MAX_CITY_BUCKETS
+      : 0;
+    const cappedEntries = entries.slice(0, WeatherContextBuilder.MAX_CITY_BUCKETS);
+
     const buckets: CityWeatherBucket[] = [];
-    grouped.forEach((items: PlanNodeWeatherBinding[], cityKey: string) => {
+    cappedEntries.forEach((entry: [string, PlanNodeWeatherBinding[]]) => {
+      const cityKey = entry[0];
+      const items = entry[1];
       const score = Math.round(items.reduce((sum: number, item: PlanNodeWeatherBinding) => sum + item.suitabilityScore, 0) / items.length);
       buckets.push({
         cityKey: cityKey,
@@ -560,7 +669,12 @@ export class WeatherContextBuilder {
         summaryText: `${cityKey}均分${score}`
       });
     });
-    const result: CityBucketBuildResult = { buckets: buckets, missCount: missCount };
+    hilog.info(
+      0x0000,
+      WeatherContextBuilder.TAG,
+      `[WEATHER_CITY][bucket] cityGroupCount=${entries.length}, cityCappedCount=${cappedCount}, cityMissCount=${missCount}`
+    );
+    const result: CityBucketBuildResult = { buckets: buckets, missCount: missCount, cappedCount: cappedCount };
     return result;
   }
 
@@ -736,3 +850,8 @@ export class WeatherContextBuilder {
     return 'UNKNOWN';
   }
 }
+
+
+
+
+

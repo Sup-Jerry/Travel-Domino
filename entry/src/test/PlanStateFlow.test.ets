@@ -1,6 +1,6 @@
 import { describe, it, expect } from '@ohos/hypium';
 import { PlanAppService, PlanRepository } from '../main/ets/viewmodel/PlanAppService';
-import { PlanItem } from '../main/ets/model/entity/PlanDao';
+import { PlanItem } from '../main/ets/infrastructure/persistence/PlanRepositoryImpl';
 
 interface PlanRecord {
   plan: PlanItem;
@@ -137,7 +137,7 @@ function buildPlan(id: number, title: string, status: number): PlanItem {
 
 export default function planStateFlowTest() {
   describe('planStateFlowTest', () => {
-    it('soft_delete_should_hide_from_visible_and_show_in_trash', 0, async (done: Function) => {
+    it('soft_delete_should_hide_from_visible_and_show_in_trash', 0, async (done: () => void) => {
       const repo = new InMemoryPlanRepo();
       repo.seedPlan(buildPlan(1, 'A', 0), 3);
       PlanAppService.setPlanRepositoryForTest(repo);
@@ -154,7 +154,7 @@ export default function planStateFlowTest() {
       done();
     });
 
-    it('restore_should_keep_archived_status_and_metadata', 0, async (done: Function) => {
+    it('restore_should_keep_archived_status_and_metadata', 0, async (done: () => void) => {
       const repo = new InMemoryPlanRepo();
       repo.seedPlan(buildPlan(2, 'ArchivedPlan', 0), 2);
       PlanAppService.setPlanRepositoryForTest(repo);
@@ -178,7 +178,7 @@ export default function planStateFlowTest() {
       done();
     });
 
-    it('hard_delete_should_remove_plan_from_all_lists', 0, async (done: Function) => {
+    it('hard_delete_should_remove_plan_from_all_lists', 0, async (done: () => void) => {
       const repo = new InMemoryPlanRepo();
       repo.seedPlan(buildPlan(3, 'DeleteMe', 0), 4);
       PlanAppService.setPlanRepositoryForTest(repo);

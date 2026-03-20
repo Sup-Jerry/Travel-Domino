@@ -33,9 +33,16 @@ interface AmapForecastNode {
   casts?: AmapForecastCastNode[];
 }
 
+interface CityBatchPoint {
+  pointKey: string;
+  point: WeatherGeoPointRequest;
+  order: number;
+}
+
 const TAG = 'AmapWeatherService';
 
 export class AmapWeatherService implements IWeatherAdapter {
+  private static readonly MAX_BATCH_CITY_GROUPS: number = 5;
   private readonly cache: WeatherCache = new WeatherCache();
   private readonly planningTtlMs: number = 45 * 60 * 1000;
   private readonly executionTtlMs: number = 15 * 60 * 1000;
@@ -138,19 +145,84 @@ export class AmapWeatherService implements IWeatherAdapter {
 
     const entries = Array.from(dedup.entries());
     hilog.info(0x0000, TAG, `[WEATHER][batch] input=${points.length}, dedup=${entries.length}`);
+
+    const groupedByCity: Map<string, CityBatchPoint[]> = new Map<string, CityBatchPoint[]>();
+    let cityMissCount = 0;
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
       const pointKey = entry[0];
       const point = entry[1];
-      const weather = await this.getWeatherByGeoPoint(
-        point.latitude,
-        point.longitude,
-        point.targetTime,
-        point.sourceType ?? 'PLAN_LOCATION',
-        point.forceRefresh ?? false
-      );
-      if (weather) {
-        result.set(pointKey, weather);
+      const sourceType = point.sourceType ?? 'PLAN_LOCATION';
+      const ttl = sourceType === 'CURRENT_LOCATION' ? this.executionTtlMs : this.planningTtlMs;
+      if (!(point.forceRefresh ?? false)) {
+        const cacheKey = this.cache.buildCacheKey(sourceType, pointKey);
+        const cached = this.cache.get(cacheKey, ttl);
+        if (cached) {
+          result.set(pointKey, this.snapshotToInfo(cached));
+          continue;
+        }
+      }
+      const cityCode = await AmapService.getCityCodeByCoordinate(point.latitude, point.longitude);
+      if (!cityCode || cityCode.trim().length === 0) {
+        cityMissCount += 1;
+        continue;
+      }
+      const list = groupedByCity.get(cityCode) ?? [];
+      const cityItem: CityBatchPoint = {
+        pointKey: pointKey,
+        point: point,
+        order: i
+      };
+      list.push(cityItem);
+      groupedByCity.set(cityCode, list);
+    }
+
+    const cityEntries = Array.from(groupedByCity.entries());
+    cityEntries.forEach((entry: [string, CityBatchPoint[]]) => {
+      entry[1].sort((x, y) => x.order - y.order);
+    });
+    cityEntries.sort((a: [string, CityBatchPoint[]], b: [string, CityBatchPoint[]]) => {
+      const firstA = a[1][0];
+      const firstB = b[1][0];
+      const rank = (item?: CityBatchPoint): number => {
+        if (!item) {
+          return 9;
+        }
+        if ((item.point.sourceType ?? 'PLAN_LOCATION') === 'CURRENT_LOCATION') {
+          return 1;
+        }
+        return item.order === 0 ? 0 : 2;
+      };
+      const rankDiff = rank(firstA) - rank(firstB);
+      if (rankDiff !== 0) {
+        return rankDiff;
+      }
+      return (firstA?.order ?? 0) - (firstB?.order ?? 0);
+    });
+    const cityCappedCount = cityEntries.length > AmapWeatherService.MAX_BATCH_CITY_GROUPS
+      ? cityEntries.length - AmapWeatherService.MAX_BATCH_CITY_GROUPS
+      : 0;
+    const selectedCities = cityEntries.slice(0, AmapWeatherService.MAX_BATCH_CITY_GROUPS);
+    hilog.info(
+      0x0000,
+      TAG,
+      `[WEATHER_CITY][batch] cityGroupCount=${cityEntries.length}, cityCappedCount=${cityCappedCount}, cityMissCount=${cityMissCount}`
+    );
+
+    for (let i = 0; i < selectedCities.length; i++) {
+      const selected = selectedCities[i];
+      const cityCode = selected[0];
+      const cityPoints = selected[1];
+      const weather = await this.getWeather(cityCode);
+      if (!weather) {
+        continue;
+      }
+      for (let j = 0; j < cityPoints.length; j++) {
+        const item = cityPoints[j];
+        result.set(item.pointKey, weather);
+        const sourceType = item.point.sourceType ?? 'PLAN_LOCATION';
+        const cacheKey = this.cache.buildCacheKey(sourceType, item.pointKey);
+        this.cache.set(cacheKey, this.infoToSnapshot(item.pointKey, weather, sourceType));
       }
     }
     hilog.info(0x0000, TAG, `[WEATHER][batch] output=${result.size}`);

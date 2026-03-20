@@ -27,7 +27,8 @@ import { StrategyService } from '../domain/strategy/StrategyService';
 import { UserProfileService } from '../domain/strategy/UserProfileService';
 import { UserBehaviorTracker } from '../domain/strategy/UserBehaviorTracker';
 import { StrategyAdaptationEngine, AdaptationPrompt } from '../domain/strategy/StrategyAdaptationEngine';
-import { WeatherContextBuilder } from '../domain/services/WeatherContextBuilder';
+import { WeatherFacade } from '../domain/services/WeatherFacade';
+import { WeatherRefreshScheduler } from '../domain/services/WeatherRefreshScheduler';
 import {
   DEFAULT_WEATHER_USER_PREFERENCE,
   GeoPointInput,
@@ -37,6 +38,8 @@ import {
   SoftReplanPreview,
   WeatherCollabOptions,
   WeatherContextBuildResult,
+  WeatherSchedulePolicy,
+  WeatherStageType,
   WeatherSuggestion,
   WeatherSuggestionActionType,
   WeatherUserPreference
@@ -278,7 +281,8 @@ export class TimelineViewModel {
     rainSensitivity: DEFAULT_WEATHER_USER_PREFERENCE.rainSensitivity,
     weatherRiskTolerance: DEFAULT_WEATHER_USER_PREFERENCE.weatherRiskTolerance
   };
-  private readonly weatherContextBuilder: WeatherContextBuilder = new WeatherContextBuilder();
+  private readonly weatherFacade: WeatherFacade = new WeatherFacade();
+  private readonly weatherRefreshScheduler: WeatherRefreshScheduler = new WeatherRefreshScheduler();
   private readonly planStateMachine: PlanStateMachine = PlanStateMachine.getInstance();
   private planStateUnsubscribe: (() => void) | null = null;
   @Track private currentPlanStatus: PlanStatus = PlanStatus.DRAFT;
@@ -286,11 +290,18 @@ export class TimelineViewModel {
   private readonly stateEvaluationIntervalMs: number = 60 * 1000;
   private readonly runtimeMotionSamples: RuntimeMotionSnapshot[] = [];
   private readonly runtimeMotionSampleLimit: number = 3;
-  private executionWeatherTimerId: number = -1;
   private executionWeatherLastLocation: GeoPointInput | null = null;
   private executionWeatherLastEmitAt: number = 0;
-  private readonly executionWeatherPollIntervalMs: number = 20 * 60 * 1000;
   private readonly executionWeatherLocationDeltaMeters: number = 1000;
+  private readonly executionWeatherLocationTriggerCooldownMs: number = 2 * 60 * 1000;
+  private executionWeatherLastLocationTriggerAt: number = 0;
+  private currentWeatherSchedulePolicy: WeatherSchedulePolicy = {
+    stage: 'IN_PROGRESS',
+    pollIntervalMs: 20 * 60 * 1000,
+    allowLocationTrigger: true,
+    allowManualBypass: true,
+    forceRefreshOnEnter: true
+  };
   private readonly executionSuggestionCooldownMs: number = 30 * 60 * 1000;
   private readonly executionSuggestionCooldownMap: Map<string, number> = new Map<string, number>();
   private readonly executionSuggestionMap: Map<string, WeatherSuggestion> = new Map<string, WeatherSuggestion>();
@@ -508,18 +519,23 @@ export class TimelineViewModel {
       this.stopExecutionWeatherScheduler();
       return;
     }
-    if (status === PlanStatus.READY || status === PlanStatus.IN_PROGRESS) {
-      this.startExecutionWeatherScheduler();
-      void this.refreshExecutionWeather(true, 'ENTER_EXECUTION');
+    const stage = this.resolveCurrentWeatherStage();
+    if (status === PlanStatus.CONFIRMED || status === PlanStatus.READY || status === PlanStatus.IN_PROGRESS || status === PlanStatus.PAUSED) {
+      this.startExecutionWeatherScheduler(this.planId, stage);
       return;
     }
-    if (status === PlanStatus.PAUSED || status === PlanStatus.COMPLETED || status === PlanStatus.CANCELLED || status === PlanStatus.EXPIRED || status === PlanStatus.CONFIRMED || status === PlanStatus.DRAFT) {
+    if (status === PlanStatus.COMPLETED || status === PlanStatus.CANCELLED || status === PlanStatus.EXPIRED || status === PlanStatus.DRAFT) {
       this.stopExecutionWeatherScheduler();
-      if (status === PlanStatus.PAUSED || status === PlanStatus.COMPLETED || status === PlanStatus.CANCELLED || status === PlanStatus.EXPIRED) {
+      if (status === PlanStatus.COMPLETED || status === PlanStatus.CANCELLED || status === PlanStatus.EXPIRED) {
         this.executionWeatherHint = '';
         this.executionWeatherSuggestions = [];
       }
     }
+  }
+
+  private resolveCurrentWeatherStage(): WeatherStageType {
+    const runtimeState = this.getCompanionContext().runtimeState;
+    return this.weatherFacade.resolveStage(this.currentPlanStatus, this.events, runtimeState);
   }
 
   public onLocationSampleForStateMachine(
@@ -560,6 +576,18 @@ export class TimelineViewModel {
       distanceToFirstNodeMeters: motionDistance,
       updatedAt: sampleTs
     });
+    if (!this.weatherFeatureEnabled || !this.executionWeatherEnabled) {
+      return;
+    }
+    const stage = this.resolveCurrentWeatherStage();
+    const policy = this.weatherFacade.resolveSchedulePolicy(stage);
+    if (!policy.allowLocationTrigger) {
+      return;
+    }
+    if (!(stage === 'READY' || stage === 'IN_PROGRESS' || stage === 'PAUSED')) {
+      return;
+    }
+    void this.refreshExecutionWeather(false, 'LOCATION_CHANGE', stage);
   }
 
   public recoverPlanRuntimeState(): void {
@@ -1929,6 +1957,7 @@ export class TimelineViewModel {
     }
     this.weatherLoading = true;
     try {
+      const stage = this.resolveCurrentWeatherStage();
       const scheduleEvents = this.events.filter((item: EventEntity) => item.status === 1);
       await this.backfillPlanningCoordinatesByName(scheduleEvents);
       const validGeoCount = scheduleEvents.filter((item: EventEntity) =>
@@ -1941,6 +1970,7 @@ export class TimelineViewModel {
         .slice(0, 3)
         .map((item: EventEntity) => item.name.trim())
         .join('|');
+      hilog.info(0x0000, TAG, `[WEATHER_STAGE][planning] stage=${stage}`);
       hilog.info(0x0000, TAG, `[WEATHER_PREF][planning_begin] schedule=${scheduleEvents.length}, validGeo=${validGeoCount}, forceRefresh=${forceRefresh}`);
       if (missingGeoEvents.length > 0) {
         hilog.warn(
@@ -1949,10 +1979,11 @@ export class TimelineViewModel {
           `[WEATHER_PREF][planning_geo_missing] count=${missingGeoEvents.length}, sample=${missingNamePreview}`
         );
       }
-      const result = await this.weatherContextBuilder.buildPlanningContext(
+      const result = await this.weatherFacade.buildPlanningContext(
         this.events,
         this.weatherUserPreference,
-        this.weatherCollabOptions
+        this.weatherCollabOptions,
+        stage
       );
       this.applyPlanningWeatherResult(result, forceRefresh);
       hilog.info(
@@ -2010,34 +2041,54 @@ export class TimelineViewModel {
   }
 
   public isExecutionWeatherStage(): boolean {
-    return this.events.some((event: EventEntity) => TimelineExecutionState.isActive(event));
+    return this.currentPlanStatus === PlanStatus.READY ||
+      this.currentPlanStatus === PlanStatus.IN_PROGRESS ||
+      this.currentPlanStatus === PlanStatus.PAUSED ||
+      this.events.some((event: EventEntity) => TimelineExecutionState.isActive(event));
   }
 
-  public startExecutionWeatherScheduler(): void {
+  public startExecutionWeatherScheduler(_planId?: number, stage?: WeatherStageType): void {
     if (!this.weatherFeatureEnabled) {
       this.stopExecutionWeatherScheduler();
       return;
     }
     this.executionWeatherEnabled = true;
-    if (this.executionWeatherTimerId !== -1) {
-      clearInterval(this.executionWeatherTimerId);
-      this.executionWeatherTimerId = -1;
+    const resolvedStage = stage ?? this.resolveCurrentWeatherStage();
+    this.currentWeatherSchedulePolicy = this.weatherFacade.resolveSchedulePolicy(resolvedStage);
+    hilog.info(
+      0x0000,
+      TAG,
+      `[WEATHER_STAGE][scheduler_start] stage=${resolvedStage}, intervalMs=${this.currentWeatherSchedulePolicy.pollIntervalMs}`
+    );
+    this.weatherRefreshScheduler.start(this.currentWeatherSchedulePolicy.pollIntervalMs, () => {
+      if (!this.weatherFeatureEnabled) {
+        return;
+      }
+      if (this.currentPlanStatus === PlanStatus.CONFIRMED) {
+        void this.refreshPlanningWeather(false);
+        return;
+      }
+      void this.refreshExecutionWeather(false, 'TIMER', resolvedStage);
+    });
+    if (this.currentWeatherSchedulePolicy.forceRefreshOnEnter) {
+      if (resolvedStage === 'CONFIRMED' || resolvedStage === 'PLANNING') {
+        void this.refreshPlanningWeather(true);
+      } else {
+        void this.refreshExecutionWeather(true, 'ENTER_EXECUTION', resolvedStage);
+      }
     }
-    void this.refreshExecutionWeather(true, 'ENTER_EXECUTION');
-    this.executionWeatherTimerId = setInterval(() => {
-      void this.refreshExecutionWeather(false, 'TIMER');
-    }, this.executionWeatherPollIntervalMs);
   }
 
   public stopExecutionWeatherScheduler(): void {
     this.executionWeatherEnabled = false;
-    if (this.executionWeatherTimerId !== -1) {
-      clearInterval(this.executionWeatherTimerId);
-      this.executionWeatherTimerId = -1;
-    }
+    this.weatherRefreshScheduler.stop();
   }
 
-  public async refreshExecutionWeather(forceRefresh: boolean = false, trigger: 'ENTER_EXECUTION' | 'LOCATION_CHANGE' | 'TIMER' | 'MANUAL' = 'MANUAL'): Promise<void> {
+  public async refreshExecutionWeather(
+    forceRefresh: boolean = false,
+    trigger: 'ENTER_EXECUTION' | 'LOCATION_CHANGE' | 'TIMER' | 'MANUAL' = 'MANUAL',
+    stage?: WeatherStageType
+  ): Promise<void> {
     if (!this.weatherFeatureEnabled) {
       return;
     }
@@ -2050,9 +2101,15 @@ export class TimelineViewModel {
     if (!this.isExecutionWeatherStage() && trigger !== 'MANUAL') {
       return;
     }
+    const resolvedStage = stage ?? this.resolveCurrentWeatherStage();
+    const policy = this.weatherFacade.resolveSchedulePolicy(resolvedStage);
+    if (trigger === 'LOCATION_CHANGE' && !policy.allowLocationTrigger) {
+      return;
+    }
     this.executionWeatherLoading = true;
     this.executionWeatherLastTrigger = trigger;
     this.executionWeatherErrorCode = '';
+    hilog.info(0x0000, TAG, `[WEATHER_STAGE][refresh_begin] stage=${resolvedStage}, trigger=${trigger}, forceRefresh=${forceRefresh}`);
     hilog.info(0x0000, TAG, `[WEATHER_EXEC][refresh_begin] trigger=${trigger}, forceRefresh=${forceRefresh}`);
     hilog.info(
       0x0000,
@@ -2062,17 +2119,27 @@ export class TimelineViewModel {
 
     try {
       const currentLocation = this.resolveExecutionCurrentLocation();
-      if (trigger === 'TIMER' && !forceRefresh && this.shouldSkipByLocationThreshold(currentLocation)) {
+      if ((trigger === 'TIMER' || trigger === 'LOCATION_CHANGE') && !forceRefresh &&
+        this.shouldSkipByLocationThreshold(currentLocation)) {
         this.executionWeatherLoading = false;
         return;
       }
+      if (trigger === 'LOCATION_CHANGE' && !forceRefresh) {
+        const nowTs = Date.now();
+        if (nowTs - this.executionWeatherLastLocationTriggerAt < this.executionWeatherLocationTriggerCooldownMs) {
+          this.executionWeatherLoading = false;
+          return;
+        }
+        this.executionWeatherLastLocationTriggerAt = nowTs;
+      }
 
-      const result = await this.weatherContextBuilder.buildExecutionContext(
+      const result = await this.weatherFacade.buildExecutionContext(
         this.events,
         currentLocation ?? undefined,
         forceRefresh,
         this.weatherUserPreference,
-        this.weatherCollabOptions
+        this.weatherCollabOptions,
+        resolvedStage
       );
       const context = result.context;
       const collab = context.collabContext;
@@ -2089,12 +2156,11 @@ export class TimelineViewModel {
         ? `${context.nextNodeWeather.conditionText}${Number.isFinite(context.nextNodeWeather.temperatureCelsius) ? ` ${context.nextNodeWeather.temperatureCelsius}°C` : ''}`
         : '天气未知';
 
-      const suggestions = this.weatherContextBuilder.buildExecutionAdjustments(
+      const suggestions = this.weatherFacade.buildExecutionAdjustments(
         this.planId,
         context,
         result.sourceEvents,
-        this.weatherUserPreference,
-        collab
+        this.weatherUserPreference
       );
       this.executionWeatherSuggestions = this.filterActiveExecutionSuggestions(suggestions);
       if (this.executionWeatherSuggestions.length > 0) {
@@ -2114,12 +2180,12 @@ export class TimelineViewModel {
       hilog.info(
         0x0000,
         TAG,
-        `[WEATHER_EXEC][refresh_done] trigger=${trigger}, targets=${result.sourceEvents.length}, suggestions=${this.executionWeatherSuggestions.length}, score=${this.executionWeatherScore}, level=${this.executionWeatherLevel}, dayWindowCount=${collab?.dayWindowCount ?? 0}, cityGroupCount=${collab?.cityGroupCount ?? 0}, cityMissCount=${collab?.cityMissCount ?? 0}, trendTag=${collab?.trendTag ?? 'UNKNOWN'}, fallbackPath=${collab?.fallbackPath ?? ''}`
+        `[WEATHER_EXEC][refresh_done] trigger=${trigger}, targets=${result.sourceEvents.length}, suggestions=${this.executionWeatherSuggestions.length}, score=${this.executionWeatherScore}, level=${this.executionWeatherLevel}, dayWindowCount=${collab?.dayWindowCount ?? 0}, cityGroupCount=${collab?.cityGroupCount ?? 0}, cityCappedCount=${collab?.cityCappedCount ?? 0}, cityMissCount=${collab?.cityMissCount ?? 0}, trendTag=${collab?.trendTag ?? 'UNKNOWN'}, fallbackPath=${collab?.fallbackPath ?? ''}`
       );
       hilog.info(
         0x0000,
         TAG,
-        `[WEATHER_REPLAN][refresh_done] trigger=${trigger}, requestTargets=${result.sourceEvents.length}, cacheHit=0, failures=${this.executionWeatherErrorCode || 'NONE'}, prefHeat=${this.weatherUserPreference.heatSensitivity}, prefRain=${this.weatherUserPreference.rainSensitivity}, dayWindowCount=${collab?.dayWindowCount ?? 0}, cityGroupCount=${collab?.cityGroupCount ?? 0}, cityMissCount=${collab?.cityMissCount ?? 0}, trendTag=${collab?.trendTag ?? 'UNKNOWN'}, fallbackPath=${collab?.fallbackPath ?? ''}`
+        `[WEATHER_REPLAN][refresh_done] trigger=${trigger}, requestTargets=${result.sourceEvents.length}, cacheHit=0, failures=${this.executionWeatherErrorCode || 'NONE'}, prefHeat=${this.weatherUserPreference.heatSensitivity}, prefRain=${this.weatherUserPreference.rainSensitivity}, dayWindowCount=${collab?.dayWindowCount ?? 0}, cityGroupCount=${collab?.cityGroupCount ?? 0}, cityCappedCount=${collab?.cityCappedCount ?? 0}, cityMissCount=${collab?.cityMissCount ?? 0}, trendTag=${collab?.trendTag ?? 'UNKNOWN'}, fallbackPath=${collab?.fallbackPath ?? ''}`
       );
     } catch (error) {
       this.executionWeatherErrorCode = 'WEATHER_002';
@@ -2833,12 +2899,14 @@ export class TimelineViewModel {
       enhancedPrompt += `\n【起始时间】${startTimeHint}`;
       if (this.weatherFeatureEnabled) {
         try {
-          const weatherResult = await this.weatherContextBuilder.buildPlanningContext(
+          const weatherStage = this.resolveCurrentWeatherStage();
+          const weatherResult = await this.weatherFacade.buildPlanningContext(
             this.events,
             this.weatherUserPreference,
-            this.weatherCollabOptions
+            this.weatherCollabOptions,
+            weatherStage
           );
-          const weatherSummary = this.weatherContextBuilder.buildPromptSummary(weatherResult.context, this.weatherUserPreference);
+          const weatherSummary = this.weatherFacade.buildPromptSummary(weatherResult.context, this.weatherUserPreference);
           enhancedPrompt += `\n【天气约束】\n${weatherSummary}\n请把天气作为软约束，不要输出不可执行路线。并根据用户天气偏好优化建议。`;
           this.applyPlanningWeatherResult(weatherResult, false);
         } catch (_weatherError) {
@@ -3757,8 +3825,10 @@ export class TimelineViewModel {
       this.events = [...this.events];
     } else {
       void this.refreshPlanningWeather(false);
-      if (this.isExecutionWeatherStage()) {
-        this.startExecutionWeatherScheduler();
+      const stage = this.resolveCurrentWeatherStage();
+      const policy = this.weatherFacade.resolveSchedulePolicy(stage);
+      if (policy.pollIntervalMs > 0) {
+        this.startExecutionWeatherScheduler(this.planId, stage);
       }
     }
     hilog.info(0x0000, TAG, `[WEATHER_SWITCH][update] enabled=${this.weatherFeatureEnabled}`);

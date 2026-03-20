@@ -1,7 +1,7 @@
 import { describe, it, expect } from '@ohos/hypium';
 import { MapServiceImpl } from '../main/ets/model/acl/MapServiceImpl';
 import { LocationInfo } from '../main/ets/model/interface/IMapService';
-import { GeoCoordinate } from '../main/ets/common/utils/AmapService';
+import { GeoCoordinate } from '../main/ets/infrastructure/services/AmapService';
 
 function buildLocation(name: string, lat: number, lng: number, address: string = ''): LocationInfo {
   return {
@@ -14,7 +14,7 @@ function buildLocation(name: string, lat: number, lng: number, address: string =
 
 export default function mapServiceImplTest() {
   describe('mapServiceImplTest', () => {
-    it('route_should_fallback_when_api_disabled', 0, async (done: Function) => {
+    it('route_should_fallback_when_api_disabled', 0, async (done: () => void) => {
       MapServiceImpl.setTestHooks({
         routeApiEnabledResolver: async (): Promise<boolean> => false
       });
@@ -30,7 +30,7 @@ export default function mapServiceImplTest() {
       done();
     });
 
-    it('route_should_fallback_when_coordinate_invalid_and_geocode_miss', 0, async (done: Function) => {
+    it('route_should_fallback_when_coordinate_invalid_and_geocode_miss', 0, async (done: () => void) => {
       MapServiceImpl.setTestHooks({
         routeApiEnabledResolver: async (): Promise<boolean> => true,
         geocodeResolver: async (_address: string): Promise<GeoCoordinate | null> => null
@@ -47,7 +47,7 @@ export default function mapServiceImplTest() {
       done();
     });
 
-    it('bus_should_fallback_when_city_code_missing', 0, async (done: Function) => {
+    it('bus_should_fallback_when_city_code_missing', 0, async (done: () => void) => {
       MapServiceImpl.setTestHooks({
         routeApiEnabledResolver: async (): Promise<boolean> => true,
         cityCodeResolver: async (_lat: number, _lng: number): Promise<string | null> => null

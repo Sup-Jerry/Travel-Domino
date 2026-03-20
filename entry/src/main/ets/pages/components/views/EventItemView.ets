@@ -21,6 +21,7 @@ export struct EventItemView {
   @Prop showTravelIndicator: boolean = true;
   @Prop isCompanionMode: boolean = false;
   @Prop companionCurrentEventId: number = -1;
+  @Prop showWeather: boolean = true;
 
   onMoveUp: () => void = () => {};
   onMoveDown: () => void = () => {};
@@ -691,22 +692,24 @@ export struct EventItemView {
             .margin({ top: 6 })
             .width('100%') // 确保能撑开布局
 
-            Row() {
-              Text('🌤')
-                .fontSize(11)
-                .margin({ right: 4 })
-              Text(
-                this.event.weather_text && this.event.weather_text.length > 0
-                  ? `${this.event.weather_text}${this.event.weather_temperature > 0 ? ` ${this.event.weather_temperature}°C` : ''}`
-                  : '天气未知'
-              )
-                .fontSize(11)
-                .fontColor(this.event.weather_text ? this.getPalette().textSecondary : this.getPalette().textTertiary)
-                .maxLines(1)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
+            if (this.showWeather) {
+              Row() {
+                Text('🌤')
+                  .fontSize(11)
+                  .margin({ right: 4 })
+                Text(
+                  this.event.weather_text && this.event.weather_text.length > 0
+                    ? `${this.event.weather_text}${this.event.weather_temperature > 0 ? ` ${this.event.weather_temperature}°C` : ''}`
+                    : '天气未知'
+                )
+                  .fontSize(11)
+                  .fontColor(this.event.weather_text ? this.getPalette().textSecondary : this.getPalette().textTertiary)
+                  .maxLines(1)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+              }
+              .margin({ top: 6 })
+              .width('100%')
             }
-            .margin({ top: 6 })
-            .width('100%')
 
             if (this.event.is_conflict) {
               Row() {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@ohos/hypium';
-import { ArrivalReminderEngine } from '../main/ets/common/utils/ArrivalReminderEngine';
+import { ArrivalReminderEngine } from '../main/ets/infrastructure/services/ArrivalReminderEngine';
 
 export default function arrivalReminderEngineTest() {
   describe('arrivalReminderEngineTest', () => {
