@@ -1,7 +1,9 @@
-import { EventEntity } from '../../model/entity/EventEntity';
+﻿import { EventEntity } from '../../model/entity/EventEntity';
 import { ArrivalReminderAction, ArrivalReminderEngine, ArrivalReminderPayload } from './ArrivalReminderEngine';
 import { ArrivalReminderStore } from '../../common/utils/arrival/ArrivalReminderStore';
 import { TimelineExecutionState } from '../../domain/policy/TimelineExecutionState';
+import { PlanStateMachine } from '../../domain/statemachine/PlanStateMachine';
+import { PlanStatus } from '../../domain/statemachine/PlanStatus';
 
 export interface HomeArrivalConsumeInput {
   isDialogOpen: boolean;
@@ -16,14 +18,106 @@ export interface PlanArrivalConsumeInput {
   onShow: (payload: ArrivalReminderPayload) => void;
 }
 
+export interface ArrivalReminderSubscriptionHandlers {
+  isDialogOpen: () => boolean;
+  resolveEvents?: () => EventEntity[];
+  resolvePlanTitle?: (planId: number) => string;
+  onShowPlan?: (payload: ArrivalReminderPayload) => void;
+  onShowHome?: (payload: ArrivalReminderPayload, planTitle: string) => void;
+  pollIntervalMs?: number;
+}
+
 export class ArrivalReminderCoordinator {
   private static instance: ArrivalReminderCoordinator | null = null;
+  private readonly planStateMachine: PlanStateMachine = PlanStateMachine.getInstance();
 
   public static getInstance(): ArrivalReminderCoordinator {
     if (!ArrivalReminderCoordinator.instance) {
       ArrivalReminderCoordinator.instance = new ArrivalReminderCoordinator();
     }
     return ArrivalReminderCoordinator.instance;
+  }
+
+  public subscribePlan(planId: number | '*', handlers: ArrivalReminderSubscriptionHandlers): () => void {
+    const isWildcard = planId === '*';
+    let disposed = false;
+    let lastConsumeKey = '';
+
+    const stateUnsubscribe = this.planStateMachine.subscribePlanTransition(
+      isWildcard ? '*' : `${planId}`,
+      (event) => {
+        if (!this.isTerminalStatus(event.toStatus)) {
+          return;
+        }
+        const payload = this.readPayload(Number(event.planId));
+        if (payload) {
+          this.acknowledge(payload.eventId, 'dismiss');
+        }
+        ArrivalReminderStore.clearPayload(Number(event.planId));
+      }
+    );
+
+    const tick = (): void => {
+      if (disposed || handlers.isDialogOpen()) {
+        return;
+      }
+      const payload = this.readPayload(isWildcard ? undefined : (planId as number));
+      if (!payload) {
+        return;
+      }
+      if (!this.canShowByPlanStatus(payload.planId)) {
+        return;
+      }
+
+      const key = `${payload.planId}_${payload.eventId}_${payload.seq}`;
+      if (key === lastConsumeKey) {
+        return;
+      }
+
+      if (isWildcard) {
+        if (!handlers.onShowHome || !handlers.resolvePlanTitle) {
+          return;
+        }
+        lastConsumeKey = key;
+        handlers.onShowHome(payload, handlers.resolvePlanTitle(payload.planId));
+        return;
+      }
+
+      const currentPlanId = planId as number;
+      if (payload.planId !== currentPlanId) {
+        return;
+      }
+      if (!handlers.onShowPlan || !handlers.resolveEvents) {
+        return;
+      }
+      const events = handlers.resolveEvents();
+      const active = events.find((event: EventEntity) => TimelineExecutionState.isActive(event));
+      if (active && active.id !== payload.eventId) {
+        this.acknowledge(payload.eventId, 'dismiss');
+        return;
+      }
+      const target = events.find((event: EventEntity) => event.id === payload.eventId);
+      if (!target || !TimelineExecutionState.isStartable(target)) {
+        this.acknowledge(payload.eventId, 'dismiss');
+        return;
+      }
+
+      lastConsumeKey = key;
+      handlers.onShowPlan(payload);
+    };
+
+    const interval = handlers.pollIntervalMs ?? 1000;
+    const timerId = setInterval(() => tick(), interval);
+    tick();
+
+    return () => {
+      if (disposed) {
+        return;
+      }
+      disposed = true;
+      clearInterval(timerId);
+      stateUnsubscribe();
+    };
   }
 
   public consumeOnHome(input: HomeArrivalConsumeInput): void {
@@ -70,5 +164,14 @@ export class ArrivalReminderCoordinator {
 
   private readPayload(planId?: number): ArrivalReminderPayload | null {
     return ArrivalReminderStore.readPayload(planId);
+  }
+
+  private canShowByPlanStatus(planId: number): boolean {
+    const status = this.planStateMachine.getPlanStatus(`${planId}`).status;
+    return status === PlanStatus.READY || status === PlanStatus.IN_PROGRESS;
+  }
+
+  private isTerminalStatus(status: PlanStatus): boolean {
+    return status === PlanStatus.COMPLETED || status === PlanStatus.CANCELLED || status === PlanStatus.EXPIRED;
   }
 }

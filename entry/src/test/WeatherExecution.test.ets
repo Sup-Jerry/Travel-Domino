@@ -93,6 +93,7 @@ export default function weatherExecutionTest() {
         collabSummary: '1城1日：降雨持续',
         dayWindowCount: 1,
         cityGroupCount: 1,
+        cityCappedCount: 0,
         cityMissCount: 0,
         trendTag: 'RAIN_PERSIST',
         fallbackPath: ''

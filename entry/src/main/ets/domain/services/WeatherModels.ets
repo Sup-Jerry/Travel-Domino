@@ -1,7 +1,7 @@
 import { EventEntity } from '../../model/entity/EventEntity';
 
 export type WeatherSourceType = 'CURRENT_LOCATION' | 'PLAN_LOCATION';
-export type WeatherStageType = 'PLANNING' | 'EXECUTION';
+export type WeatherStageType = 'PLANNING' | 'EXECUTION' | 'CONFIRMED' | 'READY' | 'IN_PROGRESS' | 'PAUSED';
 export type WeatherTriggerSource = 'ENTER_EXECUTION' | 'LOCATION_CHANGE' | 'TIMER' | 'MANUAL';
 export type WeatherSuggestionLevel = 'INFO' | 'NOTICE' | 'WARNING';
 export type WeatherSuggestionTriggerType = 'RAIN' | 'HEAT' | 'COLD' | 'WIND' | 'SEVERE_ALERT' | 'UNKNOWN';
@@ -72,9 +72,18 @@ export interface WeatherCollabContext {
   collabSummary: string;
   dayWindowCount: number;
   cityGroupCount: number;
+  cityCappedCount: number;
   cityMissCount: number;
   trendTag: WeatherTrendTag;
   fallbackPath: string;
+}
+
+export interface WeatherSchedulePolicy {
+  stage: WeatherStageType;
+  pollIntervalMs: number;
+  allowLocationTrigger: boolean;
+  allowManualBypass: boolean;
+  forceRefreshOnEnter: boolean;
 }
 
 export interface WeatherCollabOptions {

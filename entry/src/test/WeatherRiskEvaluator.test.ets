@@ -98,6 +98,7 @@ export default function weatherRiskEvaluatorTest() {
         collabSummary: '2城2日：降雨持续',
         dayWindowCount: 2,
         cityGroupCount: 2,
+        cityCappedCount: 0,
         cityMissCount: 0,
         trendTag: 'RAIN_PERSIST',
         fallbackPath: ''

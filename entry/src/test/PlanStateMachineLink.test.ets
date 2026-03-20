@@ -2,7 +2,7 @@
 import { NotificationBridge } from '../main/ets/domain/statemachine/NotificationBridge';
 import { ReplanCoordinator } from '../main/ets/domain/statemachine/ReplanCoordinator';
 import { PlanStatus, TransitionTriggerSource } from '../main/ets/domain/statemachine/PlanStatus';
-import { WeatherRefreshScheduler } from '../main/ets/domain/statemachine/WeatherRefreshScheduler';
+import { PlanWeatherRefreshPlanner } from '../main/ets/domain/statemachine/WeatherRefreshScheduler';
 import { PlanStateMachine } from '../main/ets/domain/statemachine/PlanStateMachine';
 
 export default function planStateMachineLinkTest() {
@@ -85,7 +85,7 @@ export default function planStateMachineLinkTest() {
     });
 
     it('scheduler_should_trigger_refresh_when_due', 0, () => {
-      const scheduler = new WeatherRefreshScheduler();
+      const scheduler = new PlanWeatherRefreshPlanner();
       const now = Date.now();
       scheduler.onStatusEntered('p1', PlanStatus.READY, now);
       const early = scheduler.evaluate('p1', PlanStatus.READY, now + 5 * 60 * 1000);
@@ -109,14 +109,14 @@ export default function planStateMachineLinkTest() {
 
     it('weather_side_effect_failure_should_not_break_transition', 0, () => {
       const machine = PlanStateMachine.getInstance({
-        weatherRefreshScheduler: {
+        weatherRefreshPlanner: {
           onStatusEntered: (_planId: string, _status: PlanStatus, _timestamp: number): void => {
             throw new Error('weather_failed');
           },
           evaluate: (_planId: string, _status: PlanStatus, _now: number) => {
             return { shouldRefresh: false, reason: 'none', nextDueAt: 0 };
           }
-        } as unknown as WeatherRefreshScheduler
+        } as unknown as PlanWeatherRefreshPlanner
       });
       const planId = `weather_fail_${Date.now()}`;
       const result = machine.confirmPlan(planId);

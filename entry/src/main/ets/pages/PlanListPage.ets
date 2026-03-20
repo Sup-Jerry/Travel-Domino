@@ -29,8 +29,8 @@ interface NotificationNavPayload {
 struct PlanListPage {
   @State planList: PlanItem[] = [];
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
-  @StorageLink('ArrivalReminderSeq') @Watch('onArrivalReminderSignal') arrivalReminderSeq: number = 0;
   @StorageLink('NotificationNavSeq') @Watch('onNotificationNavSignal') notificationNavSeq: number = 0;
+  private arrivalReminderUnsubscribe: (() => void) | null = null;
   @State exportJsonText: string = '';
   @State isArrivalDialogOpen: boolean = false;
   private arrivalVm: TimelineViewModel = new TimelineViewModel();
@@ -80,13 +80,9 @@ struct PlanListPage {
   onPageShow() {
     void this.loadPlans();
     this.startGlobalArrivalEngine();
-    this.consumeArrivalReminderOnHome();
+    this.bindArrivalReminderSubscription();
     this.consumeNotificationNavRoute();
     void this.ensureArrivalPermissionPromptOnFirstEntry();
-  }
-
-  onArrivalReminderSignal(): void {
-    this.consumeArrivalReminderOnHome();
   }
 
   onNotificationNavSignal(): void {
@@ -94,6 +90,10 @@ struct PlanListPage {
   }
 
   aboutToDisappear() {
+    if (this.arrivalReminderUnsubscribe) {
+      this.arrivalReminderUnsubscribe();
+      this.arrivalReminderUnsubscribe = null;
+    }
     this.planService.stopArrivalEngine();
   }
 
@@ -106,45 +106,53 @@ struct PlanListPage {
     }
   }
 
-  private consumeArrivalReminderOnHome(): void {
-    this.arrivalCoordinator.consumeOnHome({
-      isDialogOpen: this.isArrivalDialogOpen,
+  private bindArrivalReminderSubscription(): void {
+    if (this.arrivalReminderUnsubscribe) {
+      this.arrivalReminderUnsubscribe();
+      this.arrivalReminderUnsubscribe = null;
+    }
+    this.arrivalReminderUnsubscribe = this.arrivalCoordinator.subscribePlan('*', {
+      isDialogOpen: (): boolean => this.isArrivalDialogOpen,
       resolvePlanTitle: (planId: number): string => {
         const plan = this.planList.find((item: PlanItem) => item.id === planId);
         return plan ? plan.title : '行程详情';
       },
-      onShow: (payload: ArrivalReminderPayload, title: string): void => {
-        this.isArrivalDialogOpen = true;
-        this.getUIContext().showAlertDialog({
-          title: '到达提醒',
-          message: `你已到达【${payload.placeName}】附近（约${Math.max(1, payload.distanceMeters)}米）\n来自计划：${title}`,
-          autoCancel: false,
-          alignment: DialogAlignment.Center,
-          primaryButton: {
-            value: '稍后',
-            action: () => {
-              this.isArrivalDialogOpen = false;
-              this.arrivalCoordinator.acknowledge(payload.eventId, 'dismiss');
+      onShowHome: (payload: ArrivalReminderPayload, title: string): void => {
+        this.showArrivalReminderOnHome(payload, title);
+      }
+    });
+  }
+
+  private showArrivalReminderOnHome(payload: ArrivalReminderPayload, title: string): void {
+    this.isArrivalDialogOpen = true;
+    this.getUIContext().showAlertDialog({
+      title: '到达提醒',
+      message: `你已到达【${payload.placeName}】附近（约${Math.max(1, payload.distanceMeters)}米）\n来自计划：${title}`,
+      autoCancel: false,
+      alignment: DialogAlignment.Center,
+      primaryButton: {
+        value: '稍后',
+        action: () => {
+          this.isArrivalDialogOpen = false;
+          this.arrivalCoordinator.acknowledge(payload.eventId, 'dismiss');
+        }
+      },
+      secondaryButton: {
+        value: '开始打卡',
+        action: () => {
+          this.isArrivalDialogOpen = false;
+          this.arrivalCoordinator.acknowledge(payload.eventId, 'open_page');
+          this.getUIContext().getRouter().pushUrl({
+            url: 'pages/Index',
+            params: {
+              planId: payload.planId,
+              title: title,
+              isNewPlan: false,
+              autoStartFromReminder: true,
+              reminderEventId: payload.eventId
             }
-          },
-          secondaryButton: {
-            value: '开始打卡',
-            action: () => {
-              this.isArrivalDialogOpen = false;
-              this.arrivalCoordinator.acknowledge(payload.eventId, 'open_page');
-              this.getUIContext().getRouter().pushUrl({
-                url: 'pages/Index',
-                params: {
-                  planId: payload.planId,
-                  title: title,
-                  isNewPlan: false,
-                  autoStartFromReminder: true,
-                  reminderEventId: payload.eventId
-                }
-              });
-            }
-          }
-        });
+          });
+        }
       }
     });
   }
@@ -553,6 +561,11 @@ struct PlanListPage {
     .backgroundColor(this.getThemePalette().pageBg);
   }
 }
+
+
+
+
+
 
 
 

@@ -14,6 +14,9 @@ import timelineDatePolicyTest from './TimelineDatePolicy.test';
 import weatherCacheTest from './WeatherCache.test';
 import weatherRiskEvaluatorTest from './WeatherRiskEvaluator.test';
 import weatherExecutionTest from './WeatherExecution.test';
+import weatherStageCoordinatorTest from './WeatherStageCoordinator.test';
+import weatherCityCapTest from './WeatherCityCap.test';
+import weatherFacadeTest from './WeatherFacade.test';
 export default function testsuite() {
   localUnitTest();
   automatedTest();
@@ -31,4 +34,7 @@ export default function testsuite() {
   weatherCacheTest();
   weatherRiskEvaluatorTest();
   weatherExecutionTest();
+  weatherStageCoordinatorTest();
+  weatherCityCapTest();
+  weatherFacadeTest();
 }

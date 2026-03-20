@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@ohos/hypium';
-import { TimeConstraintSolver } from '../main/ets/model/logic/TimeConstraintSolver';
+import { TimeConstraintSolver } from '../main/ets/domain/solver/TimeConstraintSolver';
 import { TravelPlanItem } from '../main/ets/model/interface/IStandardEvent';
 
 function buildScheduleItem(id: number, name: string, duration: number, dayOffset: number, fixedStart: string = '', lock: number = 0): TravelPlanItem {
@@ -76,8 +76,8 @@ export default function timeConstraintSolverTest() {
         autoRouteEnabled: false
       });
 
-      const a = result[0];
-      const b = result[1];
+      const a: TravelPlanItem = result[0];
+      const b: TravelPlanItem = result[1];
       expect(a.dynamicDayOffset ?? -1).assertEqual(0);
       expect(b.dynamicDayOffset ?? -1).assertEqual(1);
       const delta = Math.floor(((b.dynamicStartTime ?? 0) - (a.dynamicStartTime ?? 0)) / 60000);
@@ -94,7 +94,7 @@ export default function timeConstraintSolverTest() {
         autoRouteEnabled: false
       });
 
-      const anchor = result[1];
+      const anchor: TravelPlanItem = result[1];
       const expectedAnchorTs = new Date('2026-01-01T10:00:00').getTime();
       expect(anchor.dynamicStartTime ?? 0).assertEqual(expectedAnchorTs);
       expect(anchor.isConflict ?? false).assertEqual(true);

@@ -19,7 +19,7 @@ import { ExecutionContextStore } from '../../infrastructure/persistence/Executio
 import { StateEventBus } from './StateEventBus';
 import { NotificationBridge } from './NotificationBridge';
 import { ReplanCoordinator, FullReplanCommand, ReplanResult, SoftReplanCommand } from './ReplanCoordinator';
-import { WeatherRefreshScheduler, WeatherScheduleDecision } from './WeatherRefreshScheduler';
+import { PlanWeatherRefreshPlanner, PlanWeatherScheduleDecision } from './WeatherRefreshScheduler';
 import { ArrivalReminderEngine } from '../../infrastructure/services/ArrivalReminderEngine';
 import { PlanStateMetricsSnapshot, PlanStateMetricsStore } from './PlanStateMetricsStore';
 
@@ -30,7 +30,7 @@ export interface PlanStateMachineDeps {
   stateEventBus?: StateEventBus;
   notificationBridge?: NotificationBridge;
   replanCoordinator?: ReplanCoordinator;
-  weatherRefreshScheduler?: WeatherRefreshScheduler;
+  weatherRefreshPlanner?: PlanWeatherRefreshPlanner;
   metricsStore?: PlanStateMetricsStore;
 }
 
@@ -51,7 +51,7 @@ export class PlanStateMachine {
   private readonly stateEventBus: StateEventBus;
   private readonly notificationBridge: NotificationBridge;
   private readonly replanCoordinator: ReplanCoordinator;
-  private readonly weatherRefreshScheduler: WeatherRefreshScheduler;
+  private readonly weatherRefreshPlanner: PlanWeatherRefreshPlanner;
   private readonly metricsStore: PlanStateMetricsStore;
 
   private constructor(deps?: PlanStateMachineDeps) {
@@ -61,7 +61,7 @@ export class PlanStateMachine {
     this.stateEventBus = deps?.stateEventBus ?? new StateEventBus();
     this.notificationBridge = deps?.notificationBridge ?? new NotificationBridge();
     this.replanCoordinator = deps?.replanCoordinator ?? new ReplanCoordinator();
-    this.weatherRefreshScheduler = deps?.weatherRefreshScheduler ?? new WeatherRefreshScheduler();
+    this.weatherRefreshPlanner = deps?.weatherRefreshPlanner ?? new PlanWeatherRefreshPlanner();
     this.metricsStore = deps?.metricsStore ?? PlanStateMetricsStore.getInstance();
   }
 
@@ -166,7 +166,7 @@ export class PlanStateMachine {
     this.store.appendTransition(transitionEvent);
     this.safeSideEffect(() => this.stateEventBus.publish(transitionEvent), 'event_bus_publish');
     this.safeSideEffect(() => this.notificationBridge.handlePlanTransitionNotification(transitionEvent), 'notification_bridge');
-    this.safeSideEffect(() => this.weatherRefreshScheduler.onStatusEntered(command.planId, result.toStatus, now), 'weather_scheduler');
+    this.safeSideEffect(() => this.weatherRefreshPlanner.onStatusEntered(command.planId, result.toStatus, now), 'weather_scheduler');
     this.safeSideEffect(() => this.replanCoordinator.onStateEntered(result.toStatus, nextContext), 'replan_coordinator');
     this.bumpTransitionSuccessMetric(command.planId, result.toStatus, command.triggerReason);
     return result;
@@ -353,9 +353,9 @@ export class PlanStateMachine {
     return this.replanCoordinator.requestFullReplan(command, status);
   }
 
-  public evaluateWeatherRefresh(planId: string): WeatherScheduleDecision {
+  public evaluateWeatherRefresh(planId: string): PlanWeatherScheduleDecision {
     const ctx = this.getOrCreateContext(planId, Date.now());
-    return this.weatherRefreshScheduler.evaluate(planId, ctx.status, Date.now());
+    return this.weatherRefreshPlanner.evaluate(planId, ctx.status, Date.now());
   }
 
   private getOrCreateContext(planId: string, now: number): ExecutionContext {
@@ -507,6 +507,7 @@ export class PlanStateMachine {
     }
   }
 }
+
 
 
 
