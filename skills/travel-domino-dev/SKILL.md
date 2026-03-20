@@ -219,6 +219,9 @@ description: 用于 Travel Domino（HarmonyOS 行程规划项目）的定向开�
 - 对比蓝图与实现时，先读蓝图文档再读代码，避免盲目搜索
 - 补充数据库字段时，先验证Entity定义再检查Repository实现
 - Edit工具失败时立即切换为sed或精确行编辑，不重试
+- 对于多文件策略重构，实施前先验证计划中的类型名称与实际代码一致性
+- 当用户直接提供错误日志时，先基于错误码做根因归类，再决定最小修复路径。
+- 地图搜索故障排查默认先区分 SDK 鉴权失败 与 搜索链路/解析问题，避免误判为关键词问题。
 
 ### Known Fixes & Workarounds
 - For cross-day domino shifts, user-facing date and writeback inputs must prefer dynamic_day_offset; do not mix with day_offset in one flow.
@@ -294,7 +297,11 @@ description: 用于 Travel Domino（HarmonyOS 行程规划项目）的定向开�
 - AI重新生成：添加isRegenerating锁，先生成新数据再删除旧数据
 - 进度提示：根据策略模式显示不同预计时间（特种兵30-60秒，休闲20-40秒）
 - grep搜索字段时同时搜索定义和使用位置，避免遗漏
+- ArkTS静态方法中必须使用类名调用而非this（如StrategyService.method()而非this.method()）
+- Windows环境编译验证优先使用后台运行或简化命令格式
+- 当 AMap POI SDK 返回 errorCode=1008（MD5安全码未通过）时，保持 SDK 为主链路但自动降级到 Web POI API（around/text）保障可用性。
+- 修复后必须跑一次 hvigorw assembleApp，并在结论中明确区分“新增问题”与“仓库既有问题”。
 
 ### Custom Instruction Injection
 
-遇到模糊需求（如读取持久化文件）先确认用户意图再执行
+地图选点搜索问题：日志定因 -> 最小补丁 -> 编译验证 -> 回归建议
