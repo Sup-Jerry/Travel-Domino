@@ -75,6 +75,7 @@ struct Index {
   @State editingItemId: number = -1;
   @State currentPlanId: number = -1;
   @State backlogExpanded: boolean = false;
+  @State collapsedDayOffsets: number[] = [];
   @State pendingItem: PendingItemData | null = null;
   @State gapItem: EventEntity | null = null; // 用于传给弹窗
   @State isCompanionMode: boolean = false;
@@ -674,6 +675,51 @@ struct Index {
     this.openCompressSelectionDialog(index, item, targetTime, saveCallback, reopenConflictMenu);
   }
 
+  private handleSameDayShiftConflict(index: number, item: EventEntity, targetTime: string, gap: number,
+    saveCallback: (t?: string) => void): void {
+    const requestedShift = this.resolveConflictGapMinutes(item, gap);
+    const preview = this.vm.previewSameDayFixedShiftBeforeTarget(index, requestedShift);
+    if (preview.appliedShiftMinutes <= 0 || preview.affectedItems.length === 0) {
+      this.safeShowToast(preview.message);
+      return;
+    }
+
+    const remainText = preview.remainingGapMinutes > 0
+      ? `\n前移后仍预计剩余 ${preview.remainingGapMinutes} 分钟冲突。`
+      : '\n前移后预计可消除本次冲突。';
+
+    this.getUIContext().showAlertDialog({
+      title: '同日整体前移',
+      message: `${preview.message}${remainText}\n仅作用于当前 DayX，不影响其他 DayX。`,
+      primaryButton: {
+        value: '取消',
+        action: () => {}
+      },
+      secondaryButton: {
+        value: '确认前移',
+        action: () => {
+          void this.vm.applySameDayFixedShiftBeforeTarget(preview).then((result) => {
+            if (result.appliedShiftMinutes <= 0) {
+              this.safeShowToast('整体前移未生效');
+              return;
+            }
+            if (result.remainingGapMinutes > 0) {
+              this.safeShowToast(`已前移 ${result.appliedShiftMinutes} 分钟，仍有 ${result.remainingGapMinutes} 分钟冲突`);
+              const latestGap = this.resolveConflictGapMinutes(item, result.remainingGapMinutes);
+              this.openConflictMenu(index, item, targetTime, latestGap, saveCallback);
+              return;
+            }
+            this.safeShowToast(`已整体前移 ${result.appliedShiftMinutes} 分钟`);
+          }).catch((_error: Object) => {
+            this.safeShowToast('整体前移失败');
+          });
+        }
+      },
+      alignment: DialogAlignment.Center,
+      autoCancel: false
+    });
+  }
+
   private showCompressionBlockedDialog(index: number, item: EventEntity, targetTime: string, plan: import('../viewmodel/TimelineViewModel').CompressionPlan,
     selectedIds: number[], mode: CompressionMode, saveCallback: (t?: string) => void, onBack: () => void) {
     const remain = plan.remainingGapMinutes ?? 0;
@@ -814,6 +860,11 @@ struct Index {
           });
         },
 
+        onShiftSameDay: () => {
+          hilog.info(0x0000, 'Index', `[CONFLICT_UI][menu_shift_same_day] itemId=${item.id}`);
+          this.handleSameDayShiftConflict(index, item, targetTime, gap, saveCallback);
+        },
+
         // 兼容入口：智能均衡并入压缩前序
         onSmartAdjust: () => {
           hilog.info(0x0000, 'Index', `[CONFLICT_UI][menu_smart] itemId=${item.id}`);
@@ -870,6 +921,20 @@ struct Index {
         this.backlogExpanded
       );
     }
+  }
+
+  private isDayCollapsed(dayOffset: number): boolean {
+    return this.collapsedDayOffsets.indexOf(dayOffset) >= 0;
+  }
+
+  private toggleDayCollapse(dayOffset: number): void {
+    const idx = this.collapsedDayOffsets.indexOf(dayOffset);
+    if (idx >= 0) {
+      this.collapsedDayOffsets.splice(idx, 1);
+    } else {
+      this.collapsedDayOffsets.push(dayOffset);
+    }
+    this.collapsedDayOffsets = [...this.collapsedDayOffsets];
   }
 
   // [新增] 抽离出来的预览逻辑
@@ -1374,8 +1439,13 @@ struct Index {
   }
 
   @Builder
-  BuildDateHeader(text: string) {
+  BuildDateHeader(text: string, dayOffset: number) {
     Row() {
+      Text(this.isDayCollapsed(dayOffset) ? '▶' : '▼')
+        .fontSize(12)
+        .fontColor(this.getThemePalette().textTertiary)
+        .margin({ right: 8 })
+
       Column()
         .width(4)
         .height(14)
@@ -1391,6 +1461,11 @@ struct Index {
     .width('100%')
     .padding({ top: 16, bottom: 8, left: 4 })
     .backgroundColor(this.getThemePalette().pageBg) // 保持与背景一致
+    .onClick(() => {
+      this.getUIContext().animateTo({ duration: 220, curve: Curve.FastOutSlowIn }, () => {
+        this.toggleDayCollapse(dayOffset);
+      });
+    })
   }
 
 
@@ -1595,9 +1670,16 @@ struct Index {
               dayOffset: suggestedDay,
               isSchedule: true
             });
+          },
+          onMoveAllToSchedule: () => {
+            const movedCount = this.vm.moveAllBacklogToSchedule();
+            if (movedCount > 0) {
+              this.safeShowToast(`已加入日程 ${movedCount} 个地点`);
+            } else {
+              this.safeShowToast('暂存池暂无可加入地点');
+            }
           }
         })
-          .constraintSize({ maxHeight: '30%' })
           .constraintSize({ maxHeight: '30%' })
           .zIndex(1)
 
@@ -1610,68 +1692,70 @@ struct Index {
           ForEach(this.vm.groupedEvents, (group: import('../viewmodel/TimelineViewModel').DateGroup) => {
 
             // [新增] 日期组组件
-            ListItemGroup({ header: this.BuildDateHeader(group.dateHeader) }) {
+            ListItemGroup({ header: this.BuildDateHeader(group.dateHeader, group.dayOffset) }) {
 
               // [第二层循环] 遍历组内事件
-              ForEach(group.events, (item: EventEntity, dayIndex: number) => {
-                ListItem() {
-                  EventItemView({
-                    event: item,
-                    isCompanionMode: this.isCompanionMode,
-                    showWeather: this.vm.isWeatherFeatureEnabled(),
-                    showTravelIndicator: dayIndex > 0,
+              if (!this.isDayCollapsed(group.dayOffset)) {
+                ForEach(group.events, (item: EventEntity, dayIndex: number) => {
+                  ListItem() {
+                    EventItemView({
+                      event: item,
+                      isCompanionMode: this.isCompanionMode,
+                      showWeather: this.vm.isWeatherFeatureEnabled(),
+                      showTravelIndicator: dayIndex > 0,
 
-                    index: this.vm.events.indexOf(item),
-                    totalCount: this.vm.events.length,
+                      index: this.vm.events.indexOf(item),
+                      totalCount: this.vm.events.length,
 
-                    onMoveUp: () => {
-                      this.vm.moveEvent(this.vm.events.indexOf(item), 'up');
-                    },
-                    onMoveDown: () => {
-                      this.vm.moveEvent(this.vm.events.indexOf(item), 'down');
-                    },
-                    onMainContentClick: () => { // 原 onItemClick / onEditClick
-                      if (this.vm.isArchived) return;
-                      this.openEditDialog(item); // 点击中间 -> 完整编辑
-                    },
+                      onMoveUp: () => {
+                        this.vm.moveEvent(this.vm.events.indexOf(item), 'up');
+                      },
+                      onMoveDown: () => {
+                        this.vm.moveEvent(this.vm.events.indexOf(item), 'down');
+                      },
+                      onMainContentClick: () => { // 原 onItemClick / onEditClick
+                        if (this.vm.isArchived) return;
+                        this.openEditDialog(item); // 点击中间 -> 完整编辑
+                      },
 
-                    onTimeClick: () => { // 点击左侧时间
-                      if (this.vm.isArchived) return;
-                      this.openTimeEditDialog(item); // 点击左侧 -> 时间编辑
-                    },
-                    onTravelModeChange: (mode: number) => {
-                      this.vm.updateTravelMode(item, mode);
-                    },
-                    onManualTravelInput: (minutes: number) => {
-                      this.vm.updateManualCommute(item, minutes);
-                    },
-                    onCommuteChange: (m) => {
-                      TimelineInteractionHelper.handleCommuteChange(this.vm, item, m,this.onGapFoundCallback);
-                    },
-                    onConflictAction: (targetItem: EventEntity, strategy: 'delay' | 'compress' | 'smart', gapMinutes: number) => {
-                      if (this.vm.isArchived) {
-                        return;
-                      }
-                      this.handleEventConflictAction(targetItem, strategy, gapMinutes);
-                    },
-                  })
-                    .enabled(!this.vm.isArchived)
-                }
-                .swipeAction(this.vm.isArchived ? undefined : {
-                  start: {
-                    builder: () => {
-                      this.SwipeStartAction(item)
-                    },
-                    actionAreaDistance: 60
-                  },
-                  end: {
-                    builder: () => {
-                      this.SwipeEndAction(item)
-                    },
-                    actionAreaDistance: 60
+                      onTimeClick: () => { // 点击左侧时间
+                        if (this.vm.isArchived) return;
+                        this.openTimeEditDialog(item); // 点击左侧 -> 时间编辑
+                      },
+                      onTravelModeChange: (mode: number) => {
+                        this.vm.updateTravelMode(item, mode);
+                      },
+                      onManualTravelInput: (minutes: number) => {
+                        this.vm.updateManualCommute(item, minutes);
+                      },
+                      onCommuteChange: (m) => {
+                        TimelineInteractionHelper.handleCommuteChange(this.vm, item, m,this.onGapFoundCallback);
+                      },
+                      onConflictAction: (targetItem: EventEntity, strategy: 'delay' | 'compress' | 'smart', gapMinutes: number) => {
+                        if (this.vm.isArchived) {
+                          return;
+                        }
+                        this.handleEventConflictAction(targetItem, strategy, gapMinutes);
+                      },
+                    })
+                      .enabled(!this.vm.isArchived)
                   }
-                })
-              }, (item: EventEntity) => `${item.id}_${item.sort_order}_${item.status}`)
+                  .swipeAction(this.vm.isArchived ? undefined : {
+                    start: {
+                      builder: () => {
+                        this.SwipeStartAction(item)
+                      },
+                      actionAreaDistance: 60
+                    },
+                    end: {
+                      builder: () => {
+                        this.SwipeEndAction(item)
+                      },
+                      actionAreaDistance: 60
+                    }
+                  })
+                }, (item: EventEntity) => `${item.id}_${item.sort_order}_${item.status}`)
+              }
             }
             .divider({ strokeWidth: 0 }) // 组内分割线 (可选)
           }, (group: import('../viewmodel/TimelineViewModel').DateGroup) =>

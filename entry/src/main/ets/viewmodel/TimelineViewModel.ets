@@ -103,6 +103,31 @@ export interface PlanDateShiftPreview {
   conflictMsg: string;
 }
 
+export interface SameDayShiftAffectedItem {
+  id: number;
+  name: string;
+  oldTime: string;
+  newTime: string;
+  index: number;
+}
+
+export interface SameDayFixedShiftPreview {
+  targetItemId: number;
+  targetIndex: number;
+  targetDayOffset: number;
+  requestedShiftMinutes: number;
+  appliedShiftMinutes: number;
+  remainingGapMinutes: number;
+  affectedItems: SameDayShiftAffectedItem[];
+  message: string;
+}
+
+export interface SameDayFixedShiftApplyResult {
+  appliedShiftMinutes: number;
+  remainingGapMinutes: number;
+  affectedCount: number;
+}
+
 export type HistoryTimelineFilter = 'all' | 'completed' | 'skipped' | 'abnormal';
 export type HistoryTimelineActionType = 'ARRIVE' | 'LEAVE' | 'SKIP' | 'ACTIVE';
 
@@ -790,6 +815,37 @@ export class TimelineViewModel {
     }
   }
 
+  public moveAllBacklogToSchedule(): number {
+    const backlogItems = this.events.filter((event) => event.status !== 1);
+    if (backlogItems.length === 0) {
+      return 0;
+    }
+
+    const scheduleItems = this.events.filter((event) => event.status === 1);
+    let maxSort = scheduleItems.reduce((max, cur) => cur.sort_order > max ? cur.sort_order : max, 0);
+
+    backlogItems.forEach((target) => {
+      maxSort += 100;
+      target.status = 1;
+      target.sort_order = maxSort;
+      target.fixed_start_time = '';
+      target.computed_time = '';
+      target.dynamic_start_time = 0;
+      target.dynamic_end_time = 0;
+      if (this.shouldAutoRouteForItem(target)) {
+        target.pre_travel_min = -1;
+      }
+    });
+
+    this.events.sort((a, b) => {
+      if (a.status !== b.status) return b.status - a.status;
+      return a.sort_order - b.sort_order;
+    });
+    this.recalculateFromIndex(0);
+    this.save();
+    return backlogItems.length;
+  }
+
   // 兼容 Backlog 移除逻辑
   public moveToBacklog(item: TravelPlanItem | EventEntity): void {
     const target = this.events.find(e => e.id === item.id);
@@ -807,6 +863,135 @@ export class TimelineViewModel {
     if (updated) {
       this.recalculateFromEventId(item.id || 0);
     }
+  }
+
+  public previewSameDayFixedShiftBeforeTarget(targetIndex: number, requestedShiftMinutes: number): SameDayFixedShiftPreview {
+    const target = this.events[targetIndex];
+    const safeRequested = Math.max(0, Math.floor(requestedShiftMinutes));
+    if (!target || target.status !== 1 || targetIndex <= 0) {
+      return {
+        targetItemId: target?.id ?? -1,
+        targetIndex: targetIndex,
+        targetDayOffset: 0,
+        requestedShiftMinutes: safeRequested,
+        appliedShiftMinutes: 0,
+        remainingGapMinutes: safeRequested,
+        affectedItems: [],
+        message: '未找到可处理的冲突目标'
+      };
+    }
+
+    const targetDayOffset = this.getEffectiveDayOffset(target);
+    const dayStartMin = this.resolveEffectiveGlobalStartMinutes();
+    const affectedItems: SameDayShiftAffectedItem[] = [];
+    let maxShift = Number.MAX_SAFE_INTEGER;
+
+    for (let i = 0; i < targetIndex; i++) {
+      const item = this.events[i];
+      if (item.status !== 1 || this.getEffectiveDayOffset(item) !== targetDayOffset) {
+        continue;
+      }
+      const fixed = DateUtil.extractPureTime(item.fixed_start_time || '');
+      if (!fixed || !DateUtil.isValidTimeString(fixed)) {
+        continue;
+      }
+
+      const oldMin = DateUtil.timeToMinutes(fixed);
+      const itemCap = Math.max(0, oldMin - dayStartMin);
+      if (itemCap < maxShift) {
+        maxShift = itemCap;
+      }
+
+      affectedItems.push({
+        id: item.id,
+        name: item.name,
+        oldTime: fixed,
+        newTime: fixed,
+        index: i
+      });
+    }
+
+    if (affectedItems.length === 0) {
+      return {
+        targetItemId: target.id,
+        targetIndex: targetIndex,
+        targetDayOffset: targetDayOffset,
+        requestedShiftMinutes: safeRequested,
+        appliedShiftMinutes: 0,
+        remainingGapMinutes: safeRequested,
+        affectedItems: [],
+        message: '当前 DayX 没有可整体前移的前序固定地点'
+      };
+    }
+
+    if (maxShift === Number.MAX_SAFE_INTEGER) {
+      maxShift = 0;
+    }
+    const appliedShift = Math.min(safeRequested, Math.max(0, maxShift));
+    const remainingGap = Math.max(0, safeRequested - appliedShift);
+
+    for (let i = 0; i < affectedItems.length; i++) {
+      const oldMin = DateUtil.timeToMinutes(affectedItems[i].oldTime);
+      affectedItems[i].newTime = DateUtil.minutesToTime(oldMin - appliedShift);
+    }
+
+    const message = appliedShift > 0
+      ? `将同日 ${affectedItems.length} 个前序固定地点整体提前 ${appliedShift} 分钟`
+      : '当前 DayX 的前序固定地点已到当天起点，无法继续前移';
+
+    return {
+      targetItemId: target.id,
+      targetIndex: targetIndex,
+      targetDayOffset: targetDayOffset,
+      requestedShiftMinutes: safeRequested,
+      appliedShiftMinutes: appliedShift,
+      remainingGapMinutes: remainingGap,
+      affectedItems: affectedItems,
+      message: message
+    };
+  }
+
+  public async applySameDayFixedShiftBeforeTarget(preview: SameDayFixedShiftPreview): Promise<SameDayFixedShiftApplyResult> {
+    if (!preview || preview.appliedShiftMinutes <= 0 || preview.affectedItems.length === 0) {
+      return {
+        appliedShiftMinutes: 0,
+        remainingGapMinutes: preview?.remainingGapMinutes ?? 0,
+        affectedCount: 0
+      };
+    }
+
+    let minTouchedIndex = this.events.length;
+    for (let i = 0; i < preview.affectedItems.length; i++) {
+      const patch = preview.affectedItems[i];
+      const target = this.events.find((item) => item.id === patch.id);
+      if (!target || target.status !== 1) {
+        continue;
+      }
+      if (this.getEffectiveDayOffset(target) !== preview.targetDayOffset) {
+        continue;
+      }
+      target.fixed_start_time = patch.newTime;
+      const idx = this.events.indexOf(target);
+      if (idx >= 0 && idx < minTouchedIndex) {
+        minTouchedIndex = idx;
+      }
+      if (target.id > 0) {
+        await EventRepositoryImpl.updateSingleField(target.id, 'fixed_start_time', patch.newTime, this.planId);
+      }
+    }
+
+    if (minTouchedIndex < this.events.length) {
+      this.recalculateFromIndex(minTouchedIndex > 0 ? minTouchedIndex - 1 : 0);
+      await this.save();
+    }
+
+    const target = this.events.find((item) => item.id === preview.targetItemId);
+    const remainingGap = target && target.gap_minutes > 0 ? target.gap_minutes : 0;
+    return {
+      appliedShiftMinutes: preview.appliedShiftMinutes,
+      remainingGapMinutes: remainingGap,
+      affectedCount: preview.affectedItems.length
+    };
   }
 
 
@@ -975,6 +1160,14 @@ export class TimelineViewModel {
 
   private getEffectiveDayOffset(item: EventEntity): number {
     return TimelineDatePolicy.resolveEventDayOffset(item);
+  }
+
+  private resolveEffectiveGlobalStartMinutes(): number {
+    const pure = DateUtil.extractPureTime(this.globalStartTime) || this.globalStartTime;
+    if (DateUtil.isValidTimeString(pure)) {
+      return DateUtil.timeToMinutes(pure);
+    }
+    return DateUtil.timeToMinutes('08:00');
   }
 
   private completionStatusLabel(status: number): string {
@@ -4487,9 +4680,20 @@ export class TimelineViewModel {
       e.status === 1 &&
       e.has_gap &&
         e.gap_minutes >= minGap &&
-        !this.isFirstScheduledItemOfDay(e)
+        !this.isFirstScheduledItemOfDay(e) &&
+        this.isSameDayGapWithPreviousScheduleItem(e)
       )
       .sort((a, b) => b.gap_minutes - a.gap_minutes);
+  }
+
+  private isSameDayGapWithPreviousScheduleItem(item: EventEntity): boolean {
+    const schedule = this.getOrderedScheduleEvents();
+    const idx = schedule.findIndex((event: EventEntity) => event.id === item.id);
+    if (idx <= 0) {
+      return false;
+    }
+    const prev = schedule[idx - 1];
+    return this.getEffectiveDayOffset(prev) === this.getEffectiveDayOffset(item);
   }
 
   /** * 获取空闲时间段的前序地点名称

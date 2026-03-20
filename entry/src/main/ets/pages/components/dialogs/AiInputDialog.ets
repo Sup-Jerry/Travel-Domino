@@ -15,6 +15,7 @@ export struct AiInputDialog {
   @State isLoading: boolean = false
   @State selectedStrategy: number = 0
   @State useCustomStrategy: boolean = false
+  @State paceSwiperIndex: number = PaceLevel.BALANCED
   @State customStrategy: ComposableStrategy = {
     density: DensityLevel.MEDIUM,
     pace: PaceLevel.BALANCED,
@@ -30,6 +31,7 @@ export struct AiInputDialog {
   }
 
   aboutToAppear() {
+    this.paceSwiperIndex = this.customStrategy.pace;
     void this.loadRecommendation();
   }
 
@@ -68,6 +70,56 @@ export struct AiInputDialog {
           .padding({ left: 12, right: 12 })
           .onClick(() => onChange(values[idx]))
       }, (opt: string, idx: number) => `${label}-${idx}`)
+    }.width('100%').margin({ top: 8 })
+  }
+
+  @Builder
+  buildPaceSwipeRow() {
+    Column() {
+      Row() {
+        Text('节奏').fontSize(14).fontColor(this.getPalette().textSecondary).width(60)
+        Text(['松弛', '平衡', '紧凑'][this.paceSwiperIndex])
+          .fontSize(12)
+          .fontColor(this.getPalette().textSecondary)
+          .margin({ left: 8 })
+      }.width('100%')
+
+      Swiper() {
+        ForEach(['松弛', '平衡', '紧凑'], (opt: string, idx: number) => {
+          Button(opt)
+            .width('100%')
+            .height(44)
+            .fontSize(13)
+            .backgroundColor(this.paceSwiperIndex === idx ? this.getPalette().primary : this.getPalette().cardBgSoft)
+            .fontColor(this.paceSwiperIndex === idx ? Color.White : this.getPalette().textPrimary)
+            .borderRadius(8)
+            .onClick(() => {
+              this.paceSwiperIndex = idx;
+              this.customStrategy = {
+                density: this.customStrategy.density,
+                pace: idx,
+                preference: this.customStrategy.preference,
+                energy: this.customStrategy.energy
+              };
+            })
+        }, (opt: string, idx: number) => `pace-${idx}`)
+      }
+      .index(this.paceSwiperIndex)
+      .loop(false)
+      .indicator(true)
+      .displayArrow(false)
+      .onChange((index: number) => {
+        this.paceSwiperIndex = index;
+        this.customStrategy = {
+          density: this.customStrategy.density,
+          pace: index,
+          preference: this.customStrategy.preference,
+          energy: this.customStrategy.energy
+        };
+      })
+      .width('100%')
+      .height(56)
+      .margin({ top: 8, left: 68 })
     }.width('100%').margin({ top: 8 })
   }
 
@@ -117,6 +169,7 @@ export struct AiInputDialog {
                 preference: r.preference,
                 energy: r.energy
               };
+              this.paceSwiperIndex = r.pace;
             })
         }
         .width('100%')
@@ -215,14 +268,7 @@ export struct AiInputDialog {
               energy: this.customStrategy.energy
             };
           })
-          this.buildDimensionRow('节奏', ['松弛', '平衡', '紧凑'], [0, 1, 2], () => this.customStrategy.pace, (val) => {
-            this.customStrategy = {
-              density: this.customStrategy.density,
-              pace: val,
-              preference: this.customStrategy.preference,
-              energy: this.customStrategy.energy
-            };
-          })
+          this.buildPaceSwipeRow()
 
           // 偏好行 - 分2行显示
           Column() {
