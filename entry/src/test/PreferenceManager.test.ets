@@ -20,5 +20,11 @@ export default function preferenceManagerTest() {
       expect(PreferenceManager.normalizeThemeMode('abc')).assertEqual('system');
       expect(PreferenceManager.normalizeThemeMode(1)).assertEqual('system');
     });
+
+    it('weather_pref_level_should_fallback_and_clip', 0, () => {
+      expect(PreferenceManager.normalizeWeatherPreferenceLevel('bad')).assertEqual(1);
+      expect(PreferenceManager.normalizeWeatherPreferenceLevel(-1)).assertEqual(0);
+      expect(PreferenceManager.normalizeWeatherPreferenceLevel(99)).assertEqual(2);
+    });
   });
 }

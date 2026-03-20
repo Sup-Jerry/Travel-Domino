@@ -2,6 +2,7 @@
 import { promptAction } from '@kit.ArkUI';
 import { ThemeCenter } from '../../../common/utils/ThemeCenter';
 import { ComposableStrategy, DensityLevel, PaceLevel, PreferenceType, EnergyLevel } from '../../../domain/strategy/TravelStrategyDimensions';
+import { StrategyService } from '../../../domain/strategy/StrategyService';
 
 @CustomDialog
 export struct AiInputDialog {
@@ -25,15 +26,6 @@ export struct AiInputDialog {
     return ThemeCenter.getPalette(this.effectiveTheme);
   }
 
-  private getStrategyExplanation(mode: number): string {
-    if (mode === 1) {
-      return '特种兵模式：优先提高每日覆盖率与景点数量，适合体力充沛、追求高效打卡的旅行者';
-    }
-    if (mode === 2) {
-      return '休闲模式：优先降低日内移动强度与景点密度，适合放松度假、慢节奏体验的旅行者';
-    }
-    return '';
-  }
 
   private getLoadingText(): string {
     if (this.selectedStrategy === 1) {
@@ -148,7 +140,7 @@ export struct AiInputDialog {
           Text('💡')
             .fontSize(14)
             .margin({ right: 6 })
-          Text(this.getStrategyExplanation(this.selectedStrategy))
+          Text(StrategyService.buildStrategyExplanation(this.selectedStrategy))
             .fontSize(12)
             .fontColor(this.getPalette().textSecondary)
             .layoutWeight(1)

@@ -16,6 +16,7 @@ import { DateUtil } from '../common/utils/DateUtil';
 import { promptAction } from '@kit.ArkUI';
 import { AiInputDialog } from './components/dialogs/AiInputDialog';
 import { ComposableStrategy } from '../domain/strategy/TravelStrategyDimensions';
+import { StrategyService } from '../domain/strategy/StrategyService';
 
 import { SuggestionDialog } from './components/dialogs/SuggestionDialog';
 import { ConflictSelectionDialog } from './components/dialogs/ConflictSelectionDialog';
@@ -30,12 +31,15 @@ import { ThemeCenter } from '../common/utils/ThemeCenter';
 import { NavigationHelper } from '../common/utils/NavigationHelper';
 import { ArrivalReminderPayload } from '../infrastructure/services/ArrivalReminderEngine';
 import { ArrivalReminderCoordinator } from '../infrastructure/services/ArrivalReminderCoordinator';
+import { WeatherReminderCoordinator } from '../infrastructure/services/WeatherReminderCoordinator';
+import { WeatherReminderPayload } from '../common/utils/weather/WeatherReminderStore';
 import { PlanAppService } from '../viewmodel/PlanAppService';
 import { TimelineDatePolicy } from '../domain/policy/TimelineDatePolicy';
 import { PageDraftRecovery } from '../common/utils/PageDraftRecovery';
 import { AppStorageKeys } from '../common/constants/AppStorageKeys';
 import { DomainConstants } from '../common/constants/DomainConstants';
 import { PlanRepositoryImpl } from '../infrastructure/persistence/PlanRepositoryImpl';
+import { WeatherUserPreference } from '../domain/services/WeatherModels';
 
 interface InitDialogData {
   name: string;
@@ -76,12 +80,17 @@ struct Index {
   @State isCompanionMode: boolean = false;
   @State hasUnsavedChanges: boolean = false;
   @State strategyMode: number = 0;
+  @State currentStrategyExplanation: string = '';
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
   @StorageLink('TrafficDataUpdated') @Watch('onTrafficSignal') trafficSignal: number = 0;
   @StorageLink('ArrivalReminderSeq') @Watch('onArrivalReminderSignal') arrivalReminderSeq: number = 0;
+  @StorageLink('WeatherReminderSeq') @Watch('onWeatherReminderSignal') weatherReminderSeq: number = 0;
   @State isArrivalDialogOpen: boolean = false;
+  @State isWeatherDialogOpen: boolean = false;
   private readonly planService: PlanAppService = PlanAppService.getInstance();
   private readonly arrivalCoordinator: ArrivalReminderCoordinator = ArrivalReminderCoordinator.getInstance();
+  private readonly weatherCoordinator: WeatherReminderCoordinator = WeatherReminderCoordinator.getInstance();
+  private strategyAdaptationCheckTimer: number = -1;
   dialogController: CustomDialogController | null = null;
 
   settingsDialogController: CustomDialogController | null = null;
@@ -98,6 +107,10 @@ struct Index {
 
   onArrivalReminderSignal(): void {
     this.consumeArrivalReminder();
+  }
+
+  onWeatherReminderSignal(): void {
+    this.consumeWeatherReminder();
   }
 
   private scopedStorageKey(base: string): string {
@@ -246,6 +259,51 @@ struct Index {
                   this.arrivalCoordinator.acknowledge(payload.eventId, 'open_page');
                 }
               });
+            }
+          }
+        });
+      }
+    });
+  }
+
+  private consumeWeatherReminder(): void {
+    this.weatherCoordinator.consumeOnPlan({
+      isDialogOpen: this.isWeatherDialogOpen,
+      currentPlanId: this.currentPlanId,
+      onShow: (payload: WeatherReminderPayload): void => {
+        this.isWeatherDialogOpen = true;
+        const dialogTitle = payload.suggestionId ? `天气建议（可选）· ${payload.title}` : `天气提醒（可选）· ${payload.title}`;
+        const dialogMessage = payload.suggestionId
+          ? `${payload.message}\n\n此建议基于多日/多城天气协同，属可选动作，不会自动执行。`
+          : `${payload.message}\n\n你可以选择刷新天气，不影响主流程。`;
+        this.getUIContext().showAlertDialog({
+          title: dialogTitle,
+          message: dialogMessage,
+          autoCancel: true,
+          alignment: DialogAlignment.Center,
+          primaryButton: {
+            value: '知道了',
+            action: () => {
+              this.isWeatherDialogOpen = false;
+              this.weatherCoordinator.clear(this.currentPlanId);
+            }
+          },
+          secondaryButton: {
+            value: payload.suggestionId ? '可选：应用建议' : '可选：刷新天气',
+            action: () => {
+              this.isWeatherDialogOpen = false;
+              this.weatherCoordinator.clear(this.currentPlanId);
+              if (payload.suggestionId) {
+                void this.vm.requestSoftReplan(this.currentPlanId, payload.suggestionId, 'APPLY').then((result) => {
+                  if (result.success) {
+                    this.safeShowToast('已按可选建议调整行程');
+                  } else {
+                    this.safeShowToast(`可选建议未应用：${result.errorCode || 'REPLAN_CONFLICT'}`);
+                  }
+                });
+              } else {
+                void this.vm.refreshExecutionWeather(true, 'MANUAL');
+              }
             }
           }
         });
@@ -1047,6 +1105,8 @@ struct Index {
         onStrategyChange: async (mode: number) => {
           try {
             await this.vm.updateStrategyMode(mode);
+            this.strategyMode = mode;
+            this.currentStrategyExplanation = StrategyService.buildStrategyExplanation(mode);
             const modeName = mode === 1 ? '特种兵' : mode === 2 ? '休闲' : '默认';
             this.safeShowToast(`已切换为${modeName}模式`);
           } catch (error) {
@@ -1056,11 +1116,46 @@ struct Index {
         onRegenerateWithStrategy: async (mode: number) => {
           try {
             await this.vm.changeStrategyAndRegenerate(mode);
+            this.strategyMode = mode;
+            this.currentStrategyExplanation = StrategyService.buildStrategyExplanation(mode);
             const modeName = mode === 1 ? '特种兵' : mode === 2 ? '休闲' : '默认';
             this.safeShowToast(`已切换为${modeName}模式并重新生成`);
           } catch (error) {
             const msg = error instanceof Error ? error.message : '重新生成失败';
             this.safeShowToast(msg);
+          }
+        },
+        onCustomStrategyChange: async (strategy: ComposableStrategy) => {
+          try {
+            await this.vm.switchToCustomStrategy(strategy);
+            this.strategyMode = -1;
+            this.currentStrategyExplanation = StrategyService.buildComposableExplanation(strategy);
+            this.safeShowToast('已应用自定义策略');
+          } catch (error) {
+            this.safeShowToast('策略更新失败');
+          }
+        },
+        onRegenerateWithCustomStrategy: async (strategy: ComposableStrategy) => {
+          try {
+            await this.vm.regenerateWithCustomStrategy(strategy);
+            this.strategyMode = -1;
+            this.currentStrategyExplanation = StrategyService.buildComposableExplanation(strategy);
+            this.safeShowToast('已应用自定义策略并重新生成');
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : '重新生成失败';
+            this.safeShowToast(msg);
+          }
+        },
+        weatherUserPreference: this.vm.getWeatherUserPreference(),
+        onWeatherPreferenceChange: async (preference: WeatherUserPreference) => {
+          try {
+            await this.vm.updateWeatherUserPreference(preference);
+            void this.vm.refreshPlanningWeather(false);
+            if (this.vm.isExecutionWeatherStage()) {
+              void this.vm.refreshExecutionWeather(false, 'MANUAL');
+            }
+          } catch (_error) {
+            this.safeShowToast('天气偏好保存失败');
           }
         }
       }),
@@ -1107,6 +1202,10 @@ struct Index {
       this.planTitle = params['title'] as string || '行程详情';
       void this.vm.loadData(planId).then(() => {
         this.strategyMode = this.vm.getStrategyMode();
+        this.loadStrategyExplanation();
+        void this.vm.refreshPlanningWeather(false);
+        this.vm.startExecutionWeatherScheduler();
+        void this.vm.refreshExecutionWeather(true, 'ENTER_EXECUTION');
         if (autoStartFromReminder && reminderEventId > 0) {
           this.isCompanionMode = true;
           void this.tryStartEventWithConflictPrompt(reminderEventId);
@@ -1115,6 +1214,8 @@ struct Index {
         }
         this.startArrivalReminderEngine();
         this.consumeArrivalReminder();
+        this.consumeWeatherReminder();
+        this.startStrategyAdaptationCheck();
       }).catch((error: Error) => {
         hilog.error(0x0000, 'Index', `[ARRIVAL][load_data_failed] reason=${this.sanitizeError(error)}`);
       });
@@ -1127,7 +1228,57 @@ struct Index {
 
   aboutToDisappear() {
     this.planService.stopArrivalEngine();
+    this.vm.stopExecutionWeatherScheduler();
     this.clearDialogDraftStorage();
+    if (this.strategyAdaptationCheckTimer !== -1) {
+      clearInterval(this.strategyAdaptationCheckTimer);
+      this.strategyAdaptationCheckTimer = -1;
+    }
+  }
+
+  private loadStrategyExplanation() {
+    this.currentStrategyExplanation = StrategyService.buildStrategyExplanation(this.strategyMode);
+  }
+
+  private startStrategyAdaptationCheck(): void {
+    this.strategyAdaptationCheckTimer = setInterval(() => {
+      if (this.vm.strategyAdaptationPrompt) {
+        this.showStrategyAdaptationDialog();
+      }
+    }, 1000);
+  }
+
+  private showStrategyAdaptationDialog(): void {
+    const prompt = this.vm.strategyAdaptationPrompt;
+    if (!prompt) return;
+
+    // 立即清空，防止重复弹窗
+    this.vm.strategyAdaptationPrompt = null;
+
+    const strategyLabels = ['低', '中', '高'];
+    const message = `${prompt.message}\n\n` +
+      `密度：${strategyLabels[prompt.oldStrategy.density]} → ${strategyLabels[prompt.newStrategy.density]}\n` +
+      `节奏：${strategyLabels[prompt.oldStrategy.pace]} → ${strategyLabels[prompt.newStrategy.pace]}\n` +
+      `体力：${strategyLabels[prompt.oldStrategy.energy]} → ${strategyLabels[prompt.newStrategy.energy]}`;
+
+    this.getUIContext().showAlertDialog({
+      title: '✨ 策略已自动调整',
+      message: message,
+      autoCancel: false,
+      alignment: DialogAlignment.Center,
+      primaryButton: {
+        value: '立即生成',
+        action: () => {
+          void this.vm.regenerateByCurrentStrategy();
+        }
+      },
+      secondaryButton: {
+        value: '稍后',
+        action: () => {
+          // 已清空，无需操作
+        }
+      }
+    });
   }
 
   @Builder
@@ -1296,10 +1447,48 @@ struct Index {
             this.isCompanionMode = true;
           })
 
+          if (!this.isCompanionMode) {
+            Button(this.vm.weatherLoading ? '刷新中' : '可选刷新天气')
+              .height(30)
+              .fontSize(12)
+              .padding({ left: 10, right: 10 })
+              .backgroundColor(this.getThemePalette().cardBgSoft)
+              .fontColor(this.getThemePalette().textPrimary)
+              .enabled(!this.vm.weatherLoading)
+              .onClick(() => {
+                void this.vm.refreshPlanningWeather(true).then(() => {
+                  this.safeShowToast('天气已刷新');
+                }).catch((_error: Object) => {
+                  this.safeShowToast('天气刷新失败');
+                });
+              })
+          }
+
         }
         .width('100%')
         .padding(16)
         .backgroundColor(Color.Transparent)
+
+        if (this.vm.weatherPlanningHint) {
+          Row() {
+            Text(`天气建议（可选）${this.vm.weatherCollabLabel ? `· ${this.vm.weatherCollabLabel}` : ''}：${this.vm.weatherPlanningHint}${this.vm.weatherCollabSummary ? `（${this.vm.weatherCollabSummary}）` : ''}`)
+              .fontSize(12)
+              .fontColor(this.getThemePalette().warning)
+              .maxLines(2)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .layoutWeight(1)
+            if (this.vm.weatherRouteScore >= 0) {
+              Text(`评分 ${this.vm.weatherRouteScore}`)
+                .fontSize(11)
+                .fontColor(this.getThemePalette().textSecondary)
+            }
+          }
+          .width('100%')
+          .padding({ left: 16, right: 16, top: 8, bottom: 8 })
+          .margin({ bottom: 4 })
+          .backgroundColor(this.getThemePalette().cardBgSoft)
+          .borderRadius(12)
+        }
 
         // --- 区域 1: 顶部暂存池 ---
         BacklogView({

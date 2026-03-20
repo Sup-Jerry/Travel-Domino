@@ -10,6 +10,7 @@ export interface TimelineCalculateOptions {
   idleGapDetectionEnabled?: boolean;
   idleGapTriggerMinutes?: number;
   startFromEventId?: number;
+  slackRatio?: number;
 }
 
 export class TimeConstraintSolver {
@@ -83,6 +84,7 @@ export class TimeConstraintSolver {
       ? Math.max(1, Math.floor(idleGapTriggerMinutesRaw))
       : TimeConstraintSolver.DEFAULT_IDLE_GAP_TRIGGER_MINUTES;
     const idleGapTriggerMs = idleGapTriggerMinutes * TimeConstraintSolver.MINUTE_MS;
+    const slackRatio = options?.slackRatio ?? 0.25;
 
     let cursorTimestamp = baseTimestamp + (globalStartMin * TimeConstraintSolver.MINUTE_MS);
     let previousItem: TravelPlanItem | null = null;
@@ -316,7 +318,7 @@ export class TimeConstraintSolver {
         item.computedEndTime = `+${diffDays}天 ${endTimeStr}`;
       }
 
-      cursorTimestamp = endObj.getTime();
+      cursorTimestamp = endObj.getTime() + (60 * slackRatio * TimeConstraintSolver.MINUTE_MS);
       previousItem = item;
       previousFinalDayOffset = finalDayOffset;
     }
