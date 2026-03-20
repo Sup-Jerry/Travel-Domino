@@ -1,6 +1,12 @@
 import { AppStorageKeys } from '../../constants/AppStorageKeys';
 import { WeatherSuggestion } from '../../../domain/services/WeatherModels';
 
+export interface WeatherStrategyAdjustment {
+  density?: -1 | 0 | 1;
+  pace?: -1 | 0 | 1;
+  energy?: -1 | 0 | 1;
+}
+
 export interface WeatherReminderPayload {
   seq: number;
   planId: number;
@@ -10,6 +16,8 @@ export interface WeatherReminderPayload {
   relatedNodeIds: string[];
   suggestionId?: string;
   actionType?: string;
+  strategyHint?: string;
+  strategyAdjustment?: WeatherStrategyAdjustment;
   createdAt: number;
 }
 
@@ -57,7 +65,23 @@ export class WeatherReminderStore {
     }
   }
 
-  public static fromSuggestion(planId: number, suggestion: WeatherSuggestion): WeatherReminderPayload {
+  public static fromSuggestion(
+    planId: number,
+    suggestion: WeatherSuggestion,
+    strategyHint?: string,
+    strategyAdjustment?: WeatherStrategyAdjustment
+  ): WeatherReminderPayload {
+    let resolvedHint: string | undefined = strategyHint;
+    let resolvedAdjustment: WeatherStrategyAdjustment | undefined = strategyAdjustment;
+    if (!resolvedHint && !resolvedAdjustment) {
+      if (suggestion.triggerType === 'RAIN') {
+        resolvedHint = '明日有雨，建议降低行程密度。';
+        resolvedAdjustment = { density: -1 };
+      } else if (suggestion.triggerType === 'HEAT') {
+        resolvedHint = '持续高温，建议降低节奏并减少体力消耗。';
+        resolvedAdjustment = { pace: -1, energy: -1 };
+      }
+    }
     return {
       seq: WeatherReminderStore.nextSeq(),
       planId: planId,
@@ -67,6 +91,8 @@ export class WeatherReminderStore {
       relatedNodeIds: suggestion.relatedNodeIds,
       suggestionId: suggestion.suggestionId,
       actionType: suggestion.actionType,
+      strategyHint: resolvedHint,
+      strategyAdjustment: resolvedAdjustment,
       createdAt: suggestion.createdAt
     };
   }

@@ -294,7 +294,7 @@ struct Index {
     this.isWeatherDialogOpen = true;
     const dialogTitle = payload.suggestionId ? `天气建议（可选）· ${payload.title}` : `天气提醒（可选）· ${payload.title}`;
     const dialogMessage = payload.suggestionId
-      ? `${payload.message}\n\n此建议基于多日/多城天气协同，属可选动作，不会自动执行。`
+      ? `${payload.message}${payload.strategyHint ? `\n策略建议：${payload.strategyHint}` : ''}\n\n此建议基于多日/多城天气协同，属可选动作，不会自动执行。`
       : `${payload.message}\n\n你可以选择刷新天气，不影响主流程。`;
     this.getUIContext().showAlertDialog({
       title: dialogTitle,
@@ -309,16 +309,27 @@ struct Index {
         }
       },
       secondaryButton: {
-        value: payload.suggestionId ? '可选：应用建议' : '可选：刷新天气',
+        value: payload.suggestionId ? '应用建议+调整策略' : '可选：刷新天气',
         action: () => {
           this.isWeatherDialogOpen = false;
           this.weatherCoordinator.clear(this.currentPlanId);
           if (payload.suggestionId) {
-            void this.vm.requestSoftReplan(this.currentPlanId, payload.suggestionId, 'APPLY').then((result) => {
-              if (result.success) {
-                this.safeShowToast('已按可选建议调整行程');
+            void this.vm.applyExecutionSuggestionWithStrategy(
+              this.currentPlanId,
+              payload.suggestionId || '',
+              payload.strategyAdjustment,
+              payload.strategyHint
+            ).then((applyResult) => {
+              if (applyResult.replanSuccess) {
+                if (applyResult.strategyApplied) {
+                  this.safeShowToast('已应用建议并调整策略');
+                } else {
+                  this.safeShowToast('已按可选建议调整行程');
+                }
+              } else if (applyResult.strategyApplied) {
+                this.safeShowToast('策略已应用，行程重排失败，可稍后重试。');
               } else {
-                this.safeShowToast(`可选建议未应用：${result.errorCode || 'REPLAN_CONFLICT'}`);
+                this.safeShowToast(`可选建议未应用：${applyResult.errorCode}`);
               }
             });
           } else {
@@ -1512,10 +1523,10 @@ struct Index {
 
         if (this.vm.isWeatherFeatureEnabled() && this.vm.weatherPlanningHint) {
           Row() {
-            Text(`天气建议（可选）${this.vm.weatherCollabLabel ? `· ${this.vm.weatherCollabLabel}` : ''}：${this.vm.weatherPlanningHint}${this.vm.weatherCollabSummary ? `（${this.vm.weatherCollabSummary}）` : ''}`)
+            Text(`天气建议（可选）${this.vm.weatherCollabLabel ? `· ${this.vm.weatherCollabLabel}` : ''}：${this.vm.weatherPlanningHint}${this.vm.weatherCollabSummary ? `（${this.vm.weatherCollabSummary}）` : ''}${this.vm.weatherStrategyHint ? `；策略联动：${this.vm.weatherStrategyHint}` : ''}`)
               .fontSize(12)
               .fontColor(this.getThemePalette().warning)
-              .maxLines(2)
+              .maxLines(3)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
               .layoutWeight(1)
             if (this.vm.weatherRouteScore >= 0) {
