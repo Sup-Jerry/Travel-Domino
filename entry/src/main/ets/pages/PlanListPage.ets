@@ -36,6 +36,9 @@ struct PlanListPage {
   private arrivalVm: TimelineViewModel = new TimelineViewModel();
   private readonly planService: PlanAppService = PlanAppService.getInstance();
   private readonly arrivalCoordinator: ArrivalReminderCoordinator = ArrivalReminderCoordinator.getInstance();
+  private lastNotifyPermissionPromptAt: number = 0;
+  private lastLocationPermissionPromptAt: number = 0;
+  private readonly permissionRepromptCooldownMs: number = 10 * 60 * 1000;
 
   private getThemePalette() {
     return ThemeCenter.getPalette(this.effectiveTheme);
@@ -186,17 +189,35 @@ struct PlanListPage {
     try {
       const hostContext = this.getUIContext().getHostContext() as common.UIAbilityContext;
       const promptState = await this.planService.getArrivalPromptState(hostContext);
-      if (!promptState.notifyPrompted) {
-        await this.planService.markNotifyPrompted(hostContext);
+      const now = Date.now();
+
+      const notifyEnabled = await this.planService.isNotificationEnabled();
+      if (!notifyEnabled && this.canRepromptPermission(now, this.lastNotifyPermissionPromptAt, promptState.notifyPrompted)) {
+        if (!promptState.notifyPrompted) {
+          await this.planService.markNotifyPrompted(hostContext);
+        }
+        this.lastNotifyPermissionPromptAt = now;
         await this.ensureNotificationPermissionPrompt(hostContext);
       }
-      if (!promptState.locationPrompted) {
-        await this.planService.markLocationPrompted(hostContext);
+
+      const locationGranted = await this.planService.isLocationPermissionGranted();
+      if (!locationGranted && this.canRepromptPermission(now, this.lastLocationPermissionPromptAt, promptState.locationPrompted)) {
+        if (!promptState.locationPrompted) {
+          await this.planService.markLocationPrompted(hostContext);
+        }
+        this.lastLocationPermissionPromptAt = now;
         await this.ensureLocationPermissionPrompt(hostContext);
       }
     } catch (error) {
       hilog.warn(0x0000, 'PlanListPage', `[ARRIVAL][first_entry_prompt_failed] reason=${JSON.stringify(error)}`);
     }
+  }
+
+  private canRepromptPermission(now: number, lastPromptAt: number, hasPromptedBefore: boolean): boolean {
+    if (!hasPromptedBefore) {
+      return true;
+    }
+    return now - lastPromptAt >= this.permissionRepromptCooldownMs;
   }
 
   private async ensureNotificationPermissionPrompt(hostContext: common.UIAbilityContext): Promise<void> {

@@ -67,6 +67,13 @@ interface PendingItemData {
   lng?: number;
 }
 
+interface TempPlaceSeed {
+  name: string;
+  duration: number;
+  lat: number;
+  lng: number;
+}
+
 @Entry
 @Component
 struct Index {
@@ -151,6 +158,50 @@ struct Index {
       promptAction.openToast({ message: message });
     } catch (error) {
       hilog.warn(0x0000, 'Index', `[TOAST_FAIL] ${this.sanitizeError(error as Object)}`);
+    }
+  }
+
+  private async generateTemporaryPlaces(): Promise<void> {
+    if (this.vm.isArchived) {
+      this.safeShowToast('归档计划不可操作');
+      return;
+    }
+    const seeds: TempPlaceSeed[] = [
+      { name: '临时点-天安门', duration: 60, lat: 39.90872, lng: 116.39748 },
+      { name: '临时点-故宫', duration: 90, lat: 39.91634, lng: 116.39716 },
+      { name: '临时点-景山公园', duration: 50, lat: 39.92943, lng: 116.39682 },
+      { name: '临时点-北海公园', duration: 50, lat: 39.92876, lng: 116.38972 },
+      { name: '临时点-王府井', duration: 70, lat: 39.91484, lng: 116.40464 }
+    ];
+    const existing = new Set<string>(
+      this.vm.events.map((event: EventEntity) => (event.name || '').trim()).filter((name: string) => name.length > 0)
+    );
+    const dayOffset = this.findLeastBusyDay();
+    let inserted = 0;
+    for (let i = 0; i < seeds.length; i++) {
+      const seed = seeds[i];
+      if (existing.has(seed.name)) {
+        continue;
+      }
+      await this.vm.addNewItem(
+        seed.name,
+        seed.duration,
+        true,
+        '',
+        dayOffset,
+        -1,
+        false,
+        '临时测试地点（天气联调）',
+        0,
+        seed.lat,
+        seed.lng
+      );
+      existing.add(seed.name);
+      inserted += 1;
+    }
+    this.safeShowToast(inserted > 0 ? `已生成 ${inserted} 个临时地点` : '临时地点已存在，无需重复生成');
+    if (inserted > 0) {
+      void this.vm.refreshPlanningWeather(true);
     }
   }
 
@@ -1448,6 +1499,16 @@ struct Index {
           })
 
           if (!this.isCompanionMode) {
+            Button('临时地点')
+              .height(30)
+              .fontSize(12)
+              .padding({ left: 10, right: 10 })
+              .backgroundColor(this.getThemePalette().cardBgSoft)
+              .fontColor(this.getThemePalette().textPrimary)
+              .margin({ right: 6 })
+              .onClick(() => {
+                void this.generateTemporaryPlaces();
+              })
             Button(this.vm.weatherLoading ? '刷新中' : '可选刷新天气')
               .height(30)
               .fontSize(12)

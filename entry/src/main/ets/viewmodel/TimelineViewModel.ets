@@ -1734,6 +1734,14 @@ export class TimelineViewModel {
         void EventRepositoryImpl.updateFields(event.id, updates, this.planId);
       }
     });
+    const unknownCount = this.events.filter((event: EventEntity) =>
+      event.status === 1 && (((event.weather_text || '').trim().length === 0) || event.weather_text === '天气未知')
+    ).length;
+    hilog.info(
+      0x0000,
+      TAG,
+      `[WEATHER_PREF][planning_apply] total=${this.events.filter((item: EventEntity) => item.status === 1).length}, unknown=${unknownCount}, routeScore=${this.weatherRouteScore}`
+    );
     this.events = [...this.events];
   }
 
