@@ -17,14 +17,14 @@ export default function weatherExecutionTest() {
   describe('weatherExecutionTest', () => {
     it('weather_stage_should_resolve_execution_when_active_exists', 0, () => {
       const events = [buildEvent(false), buildEvent(true)];
-      const stage = WeatherStagePolicy.resolveStageForPlan(events);
-      expect(stage).assertEqual('EXECUTION');
+      const stage = WeatherStagePolicy.resolveDetailedStage(undefined, events);
+      expect(stage).assertEqual('IN_PROGRESS');
     });
 
     it('weather_stage_should_resolve_planning_when_no_active', 0, () => {
       const events = [buildEvent(false), buildEvent(false)];
-      const stage = WeatherStagePolicy.resolveStageForPlan(events);
-      expect(stage).assertEqual('PLANNING');
+      const stage = WeatherStagePolicy.resolveDetailedStage(undefined, events);
+      expect(stage).assertEqual('CONFIRMED');
     });
 
     it('execution_suggestion_should_emit_warning_on_low_score', 0, () => {
@@ -122,6 +122,116 @@ export default function weatherExecutionTest() {
       const suggestions = builder.buildExecutionAdjustments(1, context, [event], undefined, collab);
       expect(suggestions.length > 0).assertEqual(true);
       expect(suggestions[0].message.includes('多日/多城协同')).assertEqual(true);
+    });
+    it('execution_adjustment_should_generate_reorder_for_rain_on_outdoor_node', 0, () => {
+      const builder = new WeatherContextBuilder();
+      const event = new EventEntity();
+      event.id = 11;
+      event.name = 'rain_outdoor';
+      event.status = 1;
+      event.type = 0;
+      event.duration = 60;
+      const context: WeatherContext = {
+        stage: 'IN_PROGRESS',
+        generatedAt: Date.now(),
+        bindings: [],
+        routeSuitability: { routeScore: 62, riskTags: ['RAIN'], summaryText: '' },
+        executionRiskScore: 62,
+        executionRiskTags: ['RAIN'],
+        futureNodeWeatherList: [{
+          nodeId: '11',
+          eventId: 11,
+          nodeName: 'rain_outdoor',
+          suitabilityScore: 55,
+          riskTags: ['RAIN'],
+          weather: {
+            locationKey: 'k1',
+            sourceType: 'PLAN_LOCATION',
+            weatherTime: Date.now(),
+            fetchTime: Date.now(),
+            conditionCode: 'RAIN',
+            conditionText: 'rain'
+          }
+        }]
+      };
+      const suggestions = builder.buildExecutionAdjustments(1, context, [event]);
+      const reorder = suggestions.find((item) => item.actionType === 'REORDER');
+      expect(!!reorder).assertEqual(true);
+      expect(reorder?.triggerType).assertEqual('RAIN');
+    });
+
+    it('execution_adjustment_should_generate_shorten_for_heat_over_35', 0, () => {
+      const builder = new WeatherContextBuilder();
+      const event = new EventEntity();
+      event.id = 12;
+      event.name = 'heat_outdoor';
+      event.status = 1;
+      event.type = 0;
+      event.duration = 60;
+      const context: WeatherContext = {
+        stage: 'IN_PROGRESS',
+        generatedAt: Date.now(),
+        bindings: [],
+        routeSuitability: { routeScore: 68, riskTags: ['HEAT'], summaryText: '' },
+        executionRiskScore: 68,
+        executionRiskTags: ['HEAT'],
+        futureNodeWeatherList: [{
+          nodeId: '12',
+          eventId: 12,
+          nodeName: 'heat_outdoor',
+          suitabilityScore: 60,
+          riskTags: ['HEAT'],
+          weather: {
+            locationKey: 'k2',
+            sourceType: 'PLAN_LOCATION',
+            weatherTime: Date.now(),
+            fetchTime: Date.now(),
+            conditionCode: 'SUNNY',
+            conditionText: 'sunny',
+            temperatureCelsius: 36
+          }
+        }]
+      };
+      const suggestions = builder.buildExecutionAdjustments(1, context, [event]);
+      const shorten = suggestions.find((item) => item.actionType === 'SHORTEN_STAY');
+      expect(!!shorten).assertEqual(true);
+      expect((shorten?.suggestedDurationMin ?? 0) > 0).assertEqual(true);
+    });
+
+    it('execution_adjustment_should_generate_skip_for_severe_weather', 0, () => {
+      const builder = new WeatherContextBuilder();
+      const event = new EventEntity();
+      event.id = 13;
+      event.name = 'severe_outdoor';
+      event.status = 1;
+      event.type = 0;
+      const context: WeatherContext = {
+        stage: 'IN_PROGRESS',
+        generatedAt: Date.now(),
+        bindings: [],
+        routeSuitability: { routeScore: 45, riskTags: ['SEVERE_ALERT'], summaryText: '' },
+        executionRiskScore: 45,
+        executionRiskTags: ['SEVERE_ALERT'],
+        futureNodeWeatherList: [{
+          nodeId: '13',
+          eventId: 13,
+          nodeName: 'severe_outdoor',
+          suitabilityScore: 40,
+          riskTags: ['SEVERE_ALERT'],
+          weather: {
+            locationKey: 'k3',
+            sourceType: 'PLAN_LOCATION',
+            weatherTime: Date.now(),
+            fetchTime: Date.now(),
+            conditionCode: 'STORM',
+            conditionText: 'storm'
+          }
+        }]
+      };
+      const suggestions = builder.buildExecutionAdjustments(1, context, [event]);
+      const skip = suggestions.find((item) => item.actionType === 'SKIP_NODE');
+      expect(!!skip).assertEqual(true);
+      expect(skip?.level).assertEqual('WARNING');
     });
   });
 }
