@@ -294,8 +294,19 @@ struct Index {
   private showWeatherReminderDialog(payload: WeatherReminderPayload): void {
     this.isWeatherDialogOpen = true;
     const dialogTitle = payload.suggestionId ? `天气建议（可选）· ${payload.title}` : `天气提醒（可选）· ${payload.title}`;
+    const affectedText = payload.affectedNodes && payload.affectedNodes.length > 0
+      ? `\n受影响节点：${payload.affectedNodes.join('、')}`
+      : '';
+    const reasonText = payload.reason ? `\n原因：${payload.reason}` : '';
+    const benefitText = payload.expectedBenefit ? `\n收益：${payload.expectedBenefit}` : '';
+    const durationText = Number.isFinite(payload.suggestedDurationMin)
+      ? `\n建议停留：约 ${payload.suggestedDurationMin} 分钟`
+      : '';
+    const strategyAdjustText = payload.strategyAdjustment
+      ? `\n策略调整预览：密度${payload.strategyAdjustment.density ?? 0}，节奏${payload.strategyAdjustment.pace ?? 0}，体力${payload.strategyAdjustment.energy ?? 0}`
+      : '';
     const dialogMessage = payload.suggestionId
-      ? `${payload.message}${payload.strategyHint ? `\n策略建议：${payload.strategyHint}` : ''}\n\n此建议基于多日/多城天气协同，属可选动作，不会自动执行。`
+      ? `${payload.message}${reasonText}${benefitText}${affectedText}${durationText}${payload.strategyHint ? `\n策略建议：${payload.strategyHint}` : ''}${strategyAdjustText}\n\n此建议基于多日/多城天气协同，属可选动作，不会自动执行。`
       : `${payload.message}\n\n你可以选择刷新天气，不影响主流程。`;
     this.getUIContext().showAlertDialog({
       title: dialogTitle,
