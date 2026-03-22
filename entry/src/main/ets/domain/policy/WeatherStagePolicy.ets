@@ -2,8 +2,6 @@ import { EventEntity } from '../../model/entity/EventEntity';
 import { PlanStatus } from '../statemachine/PlanStatus';
 import { WeatherStageType } from '../services/WeatherModels';
 
-export type WeatherPlanningStage = 'PLANNING' | 'EXECUTION';
-
 export class WeatherStagePolicy {
   public static resolveDetailedStage(
     status?: PlanStatus,
@@ -38,20 +36,5 @@ export class WeatherStagePolicy {
       }
     }
     return 'PLANNING';
-  }
-
-  public static resolveStageForEvent(event: EventEntity): WeatherPlanningStage {
-    if (!event) {
-      return 'PLANNING';
-    }
-    const isExecution = event.status === 1 &&
-      event.completion_status === EventEntity.STATE_PENDING &&
-      event.actual_start_time > 0;
-    return isExecution ? 'EXECUTION' : 'PLANNING';
-  }
-
-  public static resolveStageForPlan(events: EventEntity[]): WeatherPlanningStage {
-    const stage = WeatherStagePolicy.resolveDetailedStage(undefined, events);
-    return stage === 'IN_PROGRESS' || stage === 'READY' || stage === 'PAUSED' ? 'EXECUTION' : 'PLANNING';
   }
 }
