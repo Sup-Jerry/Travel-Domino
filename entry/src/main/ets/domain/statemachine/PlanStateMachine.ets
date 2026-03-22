@@ -16,7 +16,7 @@ import { PlanStatus, TransitionTriggerSource } from './PlanStatus';
 import { StateEvaluator } from './StateEvaluator';
 import { TransitionEngine } from './TransitionEngine';
 import { ExecutionContextStore } from '../../infrastructure/persistence/ExecutionContextStore';
-import { StateEventBus } from './StateEventBus';
+import { LocationChangeEvent, StateEventBus } from './StateEventBus';
 import { NotificationBridge } from './NotificationBridge';
 import { ReplanCoordinator, FullReplanCommand, ReplanResult, SoftReplanCommand } from './ReplanCoordinator';
 import { PlanWeatherRefreshPlanner, PlanWeatherScheduleDecision } from './WeatherRefreshScheduler';
@@ -44,6 +44,7 @@ export interface PlanStateDiagnosticsSnapshot {
 
 export class PlanStateMachine {
   private static instance: PlanStateMachine | null = null;
+  private static readonly MOTION_TRIGGER_THRESHOLD_METERS: number = 120;
 
   private readonly store: ExecutionContextStore;
   private readonly evaluator: StateEvaluator;
@@ -132,6 +133,7 @@ export class PlanStateMachine {
     next.weatherSnapshotVersion = command.weatherSnapshotVersion ?? current.weatherSnapshotVersion;
     next.updatedAt = command.updatedAt;
     this.store.writeContext(next);
+    this.maybeEmitLocationChange(next, command.updatedAt);
     return next;
   }
 
@@ -343,6 +345,10 @@ export class PlanStateMachine {
     return this.stateEventBus.subscribe(planId, listener);
   }
 
+  public subscribeLocationChange(planId: string, listener: (event: LocationChangeEvent) => void): () => void {
+    return this.stateEventBus.subscribeLocationChange(planId, listener);
+  }
+
   public requestSoftReplan(command: SoftReplanCommand): ReplanResult {
     const context = this.getOrCreateContext(command.planId, Date.now());
     return this.replanCoordinator.requestSoftReplan(command, context);
@@ -484,6 +490,31 @@ export class PlanStateMachine {
       return false;
     }
     return Number.isFinite(lat) && Number.isFinite(lng);
+  }
+
+  private maybeEmitLocationChange(context: ExecutionContext, timestamp: number): void {
+    if (!this.isLocationTriggerStage(context.status)) {
+      return;
+    }
+    const distance = context.distanceToFirstNodeMeters;
+    if (distance === undefined || !Number.isFinite(distance) || distance < PlanStateMachine.MOTION_TRIGGER_THRESHOLD_METERS) {
+      return;
+    }
+    if (!this.hasLocation(context.lastKnownLatitude, context.lastKnownLongitude)) {
+      return;
+    }
+    const event: LocationChangeEvent = {
+      planId: context.planId,
+      latitude: Number(context.lastKnownLatitude),
+      longitude: Number(context.lastKnownLongitude),
+      distanceMeters: distance,
+      timestamp: timestamp
+    };
+    this.safeSideEffect(() => this.stateEventBus.publishLocationChange(event), 'location_change_publish');
+  }
+
+  private isLocationTriggerStage(status: PlanStatus): boolean {
+    return status === PlanStatus.READY || status === PlanStatus.IN_PROGRESS || status === PlanStatus.PAUSED;
   }
 
   private measureDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {

@@ -125,5 +125,46 @@ export default function planStateMachineLinkTest() {
       const status = machine.getPlanStatus(planId).status;
       expect(status).assertEqual(PlanStatus.CONFIRMED);
     });
+
+    it('location_change_should_publish_when_motion_pass_in_execution_stage', 0, () => {
+      const machine = PlanStateMachine.getInstance();
+      const planId = `location_trigger_${Date.now()}`;
+      machine.confirmPlan(planId);
+      machine.prepareExecution(planId, TransitionTriggerSource.TIME_WINDOW);
+      let called = false;
+      const dispose = machine.subscribeLocationChange(planId, (event) => {
+        called = true;
+        expect(event.planId).assertEqual(planId);
+        expect(event.distanceMeters >= 120).assertEqual(true);
+      });
+      machine.updateExecutionContext({
+        planId: planId,
+        lastKnownLatitude: 31.2304,
+        lastKnownLongitude: 121.4737,
+        distanceToFirstNodeMeters: 130,
+        updatedAt: Date.now()
+      });
+      dispose();
+      expect(called).assertEqual(true);
+    });
+
+    it('location_change_should_not_publish_when_stage_not_execution', 0, () => {
+      const machine = PlanStateMachine.getInstance();
+      const planId = `location_block_${Date.now()}`;
+      machine.confirmPlan(planId);
+      let called = false;
+      const dispose = machine.subscribeLocationChange(planId, (_event) => {
+        called = true;
+      });
+      machine.updateExecutionContext({
+        planId: planId,
+        lastKnownLatitude: 31.2304,
+        lastKnownLongitude: 121.4737,
+        distanceToFirstNodeMeters: 180,
+        updatedAt: Date.now()
+      });
+      dispose();
+      expect(called).assertEqual(false);
+    });
   });
 }

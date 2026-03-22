@@ -50,6 +50,7 @@ import { AmapService } from '../infrastructure/services/AmapService';
 import { PlanStateMachine } from '../domain/statemachine/PlanStateMachine';
 import { PlanStatus, TransitionTriggerSource } from '../domain/statemachine/PlanStatus';
 import { PlanTransitionEvent } from '../domain/statemachine/ExecutionContext';
+import { LocationChangeEvent } from '../domain/statemachine/StateEventBus';
 
 // 重新导出类型以保持向后兼容
 export { DateGroup, PlaceCheckinSummary, PlaceCheckinRecord };
@@ -317,6 +318,7 @@ export class TimelineViewModel {
   private readonly weatherRefreshScheduler: WeatherRefreshScheduler = new WeatherRefreshScheduler();
   private readonly planStateMachine: PlanStateMachine = PlanStateMachine.getInstance();
   private planStateUnsubscribe: (() => void) | null = null;
+  private planLocationChangeUnsubscribe: (() => void) | null = null;
   @Track private currentPlanStatus: PlanStatus = PlanStatus.DRAFT;
   private stateEvaluationTimerId: number = -1;
   private readonly stateEvaluationIntervalMs: number = 60 * 1000;
@@ -325,8 +327,8 @@ export class TimelineViewModel {
   private executionWeatherLastLocation: GeoPointInput | null = null;
   private executionWeatherLastEmitAt: number = 0;
   private weatherStrategyAppliedKey: string = '';
-  private readonly executionWeatherLocationDeltaMeters: number = 1000;
-  private readonly executionWeatherLocationTriggerCooldownMs: number = 2 * 60 * 1000;
+  private readonly executionWeatherLocationDeltaMeters: number = 120;
+  private readonly executionWeatherLocationTriggerCooldownMs: number = 5 * 60 * 1000;
   private executionWeatherLastLocationTriggerAt: number = 0;
   private currentWeatherSchedulePolicy: WeatherSchedulePolicy = {
     stage: 'IN_PROGRESS',
@@ -482,6 +484,9 @@ export class TimelineViewModel {
       this.currentPlanStatus = event.toStatus;
       this.handlePlanStateChanged(event.toStatus, event);
     });
+    this.planLocationChangeUnsubscribe = this.planStateMachine.subscribeLocationChange(planIdStr, (event: LocationChangeEvent) => {
+      this.handlePlanLocationChanged(event);
+    });
     this.stateEvaluationTimerId = setInterval(() => {
       this.evaluatePlanStatusByRuntime();
     }, this.stateEvaluationIntervalMs);
@@ -494,6 +499,10 @@ export class TimelineViewModel {
     if (this.planStateUnsubscribe) {
       this.planStateUnsubscribe();
       this.planStateUnsubscribe = null;
+    }
+    if (this.planLocationChangeUnsubscribe) {
+      this.planLocationChangeUnsubscribe();
+      this.planLocationChangeUnsubscribe = null;
     }
     if (this.stateEvaluationTimerId !== -1) {
       clearInterval(this.stateEvaluationTimerId);
@@ -609,6 +618,9 @@ export class TimelineViewModel {
       distanceToFirstNodeMeters: motionDistance,
       updatedAt: sampleTs
     });
+  }
+
+  private handlePlanLocationChanged(_event: LocationChangeEvent): void {
     if (!this.weatherFeatureEnabled || !this.executionWeatherEnabled) {
       return;
     }
@@ -3356,6 +3368,10 @@ export class TimelineViewModel {
       replanSuccess: replan.success,
       errorCode: replan.errorCode || 'REPLAN_CONFLICT'
     };
+  }
+
+  public async applyWeatherSuggestion(suggestionId: string): Promise<SoftReplanApplyResult> {
+    return this.requestSoftReplan(this.planId, suggestionId, 'APPLY');
   }
 
   private async getCurrentStrategy(): Promise<ComposableStrategy> {

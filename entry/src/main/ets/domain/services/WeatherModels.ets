@@ -129,6 +129,10 @@ export interface WeatherSuggestion {
   canRollback: boolean;
   cooldownKey: string;
   expiresAt: number;
+  strategyHint?: string;
+  affectedNodes?: string[];
+  suggestedDurationMin?: number;
+  alternativeNodeId?: string;
   actionPayload?: WeatherSuggestionActionPayload;
 }
 

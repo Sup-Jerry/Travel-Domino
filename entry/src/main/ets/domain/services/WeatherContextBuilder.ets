@@ -427,8 +427,127 @@ export class WeatherContextBuilder {
     if (planId <= 0 || !context || !futureNodes || futureNodes.length === 0) {
       return [];
     }
-    const suggestions = this.buildExecutionSuggestions(context, preference);
-    const allowedNodeIds = new Set<string>(futureNodes.slice(0, 3).map((item: EventEntity) => `${item.id}`));
+    const pref = preference ?? DEFAULT_WEATHER_USER_PREFERENCE;
+    const now = Date.now();
+    const expiresAt = now + 30 * 60 * 1000;
+    const scopedNodes = futureNodes.slice(0, 3);
+    const scopedNodeIds = scopedNodes.map((item: EventEntity) => `${item.id}`);
+    const allowedNodeIds = new Set<string>(scopedNodeIds);
+    const bindingMap = new Map<string, PlanNodeWeatherBinding>();
+    (context.futureNodeWeatherList ?? context.bindings ?? []).forEach((item: PlanNodeWeatherBinding) => {
+      bindingMap.set(item.nodeId, item);
+    });
+
+    const dedupeKeys = new Set<string>();
+    const suggestions: WeatherSuggestion[] = [];
+    const appendSuggestion = (item: WeatherSuggestion): void => {
+      const firstNodeId = item.relatedNodeIds && item.relatedNodeIds.length > 0 ? item.relatedNodeIds[0] : 'ALL';
+      const dedupeKey = `${item.actionType}_${firstNodeId}`;
+      if (dedupeKeys.has(dedupeKey)) {
+        return;
+      }
+      dedupeKeys.add(dedupeKey);
+      suggestions.push(item);
+    };
+
+    scopedNodes.forEach((event: EventEntity) => {
+      const nodeId = `${event.id}`;
+      const binding = bindingMap.get(nodeId);
+      const weather = binding?.weather;
+      const conditionCode = `${weather?.conditionCode ?? event.weather_condition ?? ''}`.toUpperCase();
+      const conditionText = `${weather?.conditionText ?? event.weather_text ?? '天气未知'}`;
+      const temperature = Number.isFinite(weather?.temperatureCelsius)
+        ? Number(weather?.temperatureCelsius)
+        : (Number.isFinite(event.weather_temperature) ? Number(event.weather_temperature) : undefined);
+      const isOutdoor = this.isOutdoorEvent(event);
+      const isRequired = event.priority === 1;
+      const affectedNodes = scopedNodes.map((item: EventEntity) => item.name || `节点${item.id}`);
+
+      if (this.isSevereWeather(conditionCode, conditionText)) {
+        appendSuggestion({
+          suggestionId: `wx_skip_${event.id}_${context.generatedAt}`,
+          level: 'WARNING',
+          triggerType: 'SEVERE_ALERT',
+          actionType: 'SKIP_NODE',
+          title: '极端天气，建议跳过节点',
+          message: `${event.name} 预计${conditionText}，建议跳过该节点并继续后续行程。`,
+          relatedNodeIds: [nodeId],
+          createdAt: now,
+          reason: `${event.name} 存在极端天气暴露风险。`,
+          expectedBenefit: '优先保障安全并降低执行中断风险。',
+          canRollback: false,
+          cooldownKey: `SKIP_NODE_${nodeId}`,
+          expiresAt: expiresAt,
+          strategyHint: '建议降低行程密度，优先保留室内或刚需节点。',
+          affectedNodes: affectedNodes,
+          actionPayload: {
+            targetNodeIds: [nodeId]
+          }
+        });
+        return;
+      }
+
+      if (this.isRainWeather(conditionCode, conditionText) && isOutdoor) {
+        const reordered = this.buildRainReorderTarget(scopedNodes);
+        appendSuggestion({
+          suggestionId: `wx_reorder_${event.id}_${context.generatedAt}`,
+          level: isRequired ? 'WARNING' : 'NOTICE',
+          triggerType: 'RAIN',
+          actionType: 'REORDER',
+          title: '降雨影响户外节点，建议调整顺序',
+          message: `${event.name} 为户外活动且预计降雨，建议优先前往室内节点。`,
+          relatedNodeIds: scopedNodeIds,
+          createdAt: now,
+          reason: `${event.name} 遇雨会显著降低体验并拉高时延风险。`,
+          expectedBenefit: '先室内后室外可减少淋雨与等待时间。',
+          canRollback: true,
+          cooldownKey: `REORDER_${nodeId}`,
+          expiresAt: expiresAt,
+          strategyHint: '建议降低密度（density -1），把户外节点后置。',
+          affectedNodes: affectedNodes,
+          actionPayload: {
+            targetNodeIds: scopedNodeIds,
+            targetOrderNodeIds: reordered
+          }
+        });
+      }
+
+      if (isOutdoor && Number.isFinite(temperature) && (Number(temperature) > 35 || Number(temperature) < 5)) {
+        const ratio = Number(temperature) > 35 ? 0.6 : 0.7;
+        const minDuration = Number(temperature) > 35 ? 20 : 25;
+        const suggestedStay = Math.max(minDuration, Math.floor(event.duration * ratio));
+        const trigger: 'HEAT' | 'COLD' = Number(temperature) > 35 ? 'HEAT' : 'COLD';
+        appendSuggestion({
+          suggestionId: `wx_shorten_${event.id}_${context.generatedAt}`,
+          level: Number(temperature) > 35 ? 'NOTICE' : 'INFO',
+          triggerType: trigger,
+          actionType: 'SHORTEN_STAY',
+          title: Number(temperature) > 35 ? '高温风险，建议缩短停留' : '低温风险，建议缩短停留',
+          message: `${event.name} 预计${Number(temperature)}°C，建议缩短停留至约 ${suggestedStay} 分钟。`,
+          relatedNodeIds: [nodeId],
+          createdAt: now,
+          reason: `${event.name} 在当前气温下长时间停留的体感风险升高。`,
+          expectedBenefit: '降低体力消耗并提升后续节点准点率。',
+          canRollback: true,
+          cooldownKey: `SHORTEN_STAY_${nodeId}`,
+          expiresAt: expiresAt,
+          strategyHint: Number(temperature) > 35
+            ? '建议放慢节奏（pace -1）并降低体力负担（energy -1）。'
+            : '建议放慢节奏（pace -1），减少低温暴露。',
+          affectedNodes: [event.name || `节点${event.id}`],
+          suggestedDurationMin: suggestedStay,
+          actionPayload: {
+            targetNodeIds: [nodeId],
+            suggestedStayMinutes: suggestedStay
+          }
+        });
+      }
+    });
+
+    if (suggestions.length === 0) {
+      this.buildExecutionSuggestions(context, pref).forEach((item: WeatherSuggestion) => appendSuggestion(item));
+    }
+
     const activeCollab = collabContext ?? context.collabContext;
     return suggestions.filter((item: WeatherSuggestion) => {
       if (!item.relatedNodeIds || item.relatedNodeIds.length === 0) {
@@ -453,10 +572,53 @@ export class WeatherContextBuilder {
         canRollback: item.canRollback,
         cooldownKey: item.cooldownKey,
         expiresAt: item.expiresAt,
+        strategyHint: item.strategyHint,
+        affectedNodes: item.affectedNodes,
+        suggestedDurationMin: item.suggestedDurationMin,
+        alternativeNodeId: item.alternativeNodeId,
         actionPayload: item.actionPayload
       };
       return copied;
     });
+  }
+
+  private isOutdoorEvent(event: EventEntity): boolean {
+    if (!event) {
+      return false;
+    }
+    // 约定: type=0 景点通常为户外场景，其他类型默认按室内/可遮蔽处理。
+    return event.type === 0;
+  }
+
+  private buildRainReorderTarget(nodes: EventEntity[]): string[] {
+    if (!nodes || nodes.length === 0) {
+      return [];
+    }
+    const sorted = nodes.slice().sort((a: EventEntity, b: EventEntity) => {
+      const aw = this.isOutdoorEvent(a) ? 1 : 0;
+      const bw = this.isOutdoorEvent(b) ? 1 : 0;
+      if (aw !== bw) {
+        return aw - bw;
+      }
+      return a.sort_order - b.sort_order;
+    });
+    return sorted.map((item: EventEntity) => `${item.id}`);
+  }
+
+  private isRainWeather(code: string, text: string): boolean {
+    const normalizedText = text.toUpperCase();
+    return code.indexOf('RAIN') >= 0 ||
+      code.indexOf('SHOWER') >= 0 ||
+      normalizedText.indexOf('雨') >= 0;
+  }
+
+  private isSevereWeather(code: string, text: string): boolean {
+    const normalizedText = text.toUpperCase();
+    return code.indexOf('STORM') >= 0 ||
+      code.indexOf('THUNDER') >= 0 ||
+      code.indexOf('HEAVY_RAIN') >= 0 ||
+      normalizedText.indexOf('雷暴') >= 0 ||
+      normalizedText.indexOf('暴雨') >= 0;
   }
 
   public buildPromptSummary(context: WeatherContext, preference?: WeatherUserPreference): string {

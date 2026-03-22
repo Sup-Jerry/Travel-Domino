@@ -16,6 +16,10 @@ export interface WeatherReminderPayload {
   relatedNodeIds: string[];
   suggestionId?: string;
   actionType?: string;
+  reason?: string;
+  expectedBenefit?: string;
+  affectedNodes?: string[];
+  suggestedDurationMin?: number;
   strategyHint?: string;
   strategyAdjustment?: WeatherStrategyAdjustment;
   createdAt: number;
@@ -91,6 +95,10 @@ export class WeatherReminderStore {
       relatedNodeIds: suggestion.relatedNodeIds,
       suggestionId: suggestion.suggestionId,
       actionType: suggestion.actionType,
+      reason: suggestion.reason,
+      expectedBenefit: suggestion.expectedBenefit,
+      affectedNodes: suggestion.affectedNodes,
+      suggestedDurationMin: suggestion.suggestedDurationMin ?? suggestion.actionPayload?.suggestedStayMinutes,
       strategyHint: resolvedHint,
       strategyAdjustment: resolvedAdjustment,
       createdAt: suggestion.createdAt
