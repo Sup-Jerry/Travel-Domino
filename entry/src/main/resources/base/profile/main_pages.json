@@ -8,8 +8,6 @@
     "pages/TrashPage",
     "pages/ArchivePage",
     "pages/AuthGatePage",
-    "pages/LoginPage",
-    "pages/PhoneLoginPage",
-    "pages/AccountCenterPage"
+    "pages/LoginPage"
   ]
 }

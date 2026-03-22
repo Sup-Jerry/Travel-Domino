@@ -1,12 +1,5 @@
-﻿import { promptAction, router } from '@kit.ArkUI';
-import {
-  AuthLoginResult,
-  AuthProviderType,
-  AuthSessionPayload,
-  AuthSocialLoginResult,
-  DeviceInfo,
-  SocialCredential
-} from '../domain/auth/AuthModels';
+import { promptAction, router } from '@kit.ArkUI';
+import { AuthLoginResult, AuthSessionPayload, DeviceInfo } from '../domain/auth/AuthModels';
 import { AuthGateway } from '../infrastructure/auth/AuthGateway';
 import { AuthSessionStore } from '../infrastructure/auth/AuthSessionStore';
 
@@ -42,6 +35,9 @@ struct LoginPage {
   }
 
   private async loginAsGuest(): Promise<void> {
+    if (!this.ensureAgreement()) {
+      return;
+    }
     this.loading = true;
     const result = await AuthGateway.createGuest(this.makeDeviceInfo());
     this.loading = false;
@@ -56,134 +52,86 @@ struct LoginPage {
     router.pushUrl({ url: 'pages/PlanListPage' });
   }
 
-  private async loginWithSocial(providerType: AuthProviderType): Promise<void> {
-    if (!this.ensureAgreement()) {
-      return;
-    }
-
-    this.loading = true;
-    const credential = new SocialCredential();
-    credential.authCode = `${providerType.toLowerCase()}_demo_auth`;
-    credential.openId = `${providerType.toLowerCase()}_demo_openid`;
-
-    const res = await AuthGateway.loginWithSocial(providerType, credential, true, this.makeDeviceInfo());
-    if (res.code !== 0) {
-      this.loading = false;
-      this.toast(`登录失败：${res.message}`);
-      return;
-    }
-
-    const payload = res.data as AuthSocialLoginResult;
-
-    if (payload.action === 'NEED_BIND_OR_CREATE' && payload.pendingToken) {
-      const created = await AuthGateway.createSocialAccount(payload.pendingToken, `${providerType}用户`, true, this.makeDeviceInfo());
-      this.loading = false;
-      if (created.code !== 0) {
-        this.toast(`创建账号失败：${created.message}`);
-        return;
-      }
-      const createdPayload = created.data as AuthLoginResult;
-      this.saveSession(createdPayload.session);
-      this.toast('首次登录已创建账号');
-      router.pushUrl({ url: 'pages/PlanListPage' });
-      return;
-    }
-
-    this.loading = false;
-    if (payload.loginResult) {
-      this.saveSession(payload.loginResult.session);
-      this.toast('登录成功');
-      router.pushUrl({ url: 'pages/PlanListPage' });
-      return;
-    }
-
-    this.toast('登录失败：无有效会话');
-  }
-
   build() {
-    Column({ space: 14 }) {
-      Blank().layoutWeight(1)
-      Text('统一登录')
-        .fontSize(30)
-        .fontWeight(FontWeight.Bold)
+    Column() {
+      Column({ space: 8 }) {
+        Text('Travel Domino')
+          .fontSize(34)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#1F2937')
+        Text('智能行程规划，从登录开始')
+          .fontSize(14)
+          .fontColor('#6B7280')
+      }
+      .width('100%')
+      .alignItems(HorizontalAlign.Start)
+      .margin({ top: 24, bottom: 22 })
 
-      Text('手机号 / HUAWEI ID / 微信 / QQ / 游客')
-        .fontSize(13)
-        .fontColor('#666666')
+      Column({ space: 14 }) {
+        Text('账号登录')
+          .fontSize(22)
+          .fontWeight(FontWeight.Medium)
+          .fontColor('#111827')
+          .width('100%')
+          .textAlign(TextAlign.Start)
 
-      Row({ space: 8 }) {
-        Checkbox()
-          .select(this.agreementAccepted)
-          .onChange((value: boolean) => {
-            this.agreementAccepted = value;
+        Text('当前仅支持游客模式')
+          .fontSize(13)
+          .fontColor('#6B7280')
+          .width('100%')
+          .textAlign(TextAlign.Start)
+
+        Row({ space: 8 }) {
+          Checkbox()
+            .select(this.agreementAccepted)
+            .onChange((value: boolean) => {
+              this.agreementAccepted = value;
+            })
+          Text('我已阅读并同意《用户协议》《隐私政策》')
+            .fontSize(12)
+            .fontColor('#6B7280')
+        }
+        .width('100%')
+        .margin({ top: 2, bottom: 6 })
+
+        Button('进入游客模式')
+          .width('100%')
+          .height(48)
+          .enabled(!this.loading)
+          .backgroundColor('#2563EB')
+          .fontColor('#FFFFFF')
+          .fontSize(16)
+          .borderRadius(14)
+          .onClick(() => {
+            void this.loginAsGuest();
           })
-        Text('我已阅读并同意《用户协议》《隐私政策》')
-          .fontSize(12)
-          .fontColor('#666666')
+
+        if (this.loading) {
+          Text('处理中，请稍候...')
+            .width('100%')
+            .textAlign(TextAlign.Center)
+            .fontSize(12)
+            .fontColor('#9CA3AF')
+            .margin({ top: 4 })
+        }
       }
-      .margin({ top: 6, bottom: 10 })
+      .width('100%')
+      .padding({ left: 18, right: 18, top: 22, bottom: 22 })
+      .backgroundColor('#FFFFFF')
+      .borderRadius(22)
 
-      Button('手机号登录')
-        .width('86%')
-        .height(44)
-        .enabled(!this.loading)
-        .onClick(() => {
-          if (!this.ensureAgreement()) {
-            return;
-          }
-          router.pushUrl({
-            url: 'pages/PhoneLoginPage',
-            params: {
-              agreementAccepted: this.agreementAccepted
-            }
-          });
-        })
-
-      Button('HUAWEI ID 登录')
-        .width('86%')
-        .height(44)
-        .enabled(!this.loading)
-        .onClick(() => {
-          void this.loginWithSocial('HUAWEI');
-        })
-
-      Button('微信登录')
-        .width('86%')
-        .height(44)
-        .enabled(!this.loading)
-        .onClick(() => {
-          void this.loginWithSocial('WECHAT');
-        })
-
-      Button('QQ 登录')
-        .width('86%')
-        .height(44)
-        .enabled(!this.loading)
-        .onClick(() => {
-          void this.loginWithSocial('QQ');
-        })
-
-      Button('游客模式')
-        .width('86%')
-        .height(44)
-        .enabled(!this.loading)
-        .backgroundColor('#F3F4F6')
-        .fontColor('#222222')
-        .onClick(() => {
-          void this.loginAsGuest();
-        })
-
-      if (this.loading) {
-        Text('处理中...')
-          .fontSize(12)
-          .fontColor('#999999')
-      }
       Blank().layoutWeight(1)
+
+      Text('游客模式可直接开始规划行程')
+        .fontSize(12)
+        .fontColor('#9CA3AF')
+        .margin({ bottom: 12 })
     }
-    .padding(24)
+    .padding({ left: 24, right: 24, top: 8, bottom: 12 })
+    .backgroundColor('#F5F7FB')
     .width('100%')
     .height('100%')
-    .justifyContent(FlexAlign.Center)
+    .justifyContent(FlexAlign.Start)
     .alignItems(HorizontalAlign.Center)
   }
 }
