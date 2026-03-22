@@ -1,4 +1,4 @@
-﻿export type AuthProviderType = 'PHONE' | 'HUAWEI' | 'WECHAT' | 'QQ' | 'GUEST' | 'CUSTOM';
+export type AuthProviderType = 'GUEST' | 'CUSTOM';
 
 export class DeviceInfo {
   deviceId: string = '';
@@ -33,7 +33,7 @@ export class AuthUserProfile {
   avatarUrl: string = '';
   profileCompleted: boolean = false;
   isGuest: boolean = false;
-  defaultLoginMethod: AuthProviderType = 'PHONE';
+  defaultLoginMethod: AuthProviderType = 'GUEST';
 }
 
 export class AuthLoginResult {
@@ -55,7 +55,7 @@ export class AuthSocialLoginResult {
 }
 
 export class AuthIdentityView {
-  providerType: AuthProviderType = 'PHONE';
+  providerType: AuthProviderType = 'GUEST';
   displayName: string = '';
   bound: boolean = false;
   isPrimary: boolean = false;
@@ -85,14 +85,14 @@ export class AuthMeResult {
   mobileMasked: string = '';
   profileCompleted: boolean = false;
   isGuest: boolean = false;
-  defaultLoginMethod: AuthProviderType = 'PHONE';
+  defaultLoginMethod: AuthProviderType = 'GUEST';
 }
 
 export class AuthSessionListItem {
   sessionId: string = '';
   deviceName: string = '';
   platform: string = '';
-  loginMethod: AuthProviderType = 'PHONE';
+  loginMethod: AuthProviderType = 'GUEST';
   lastActiveTime: number = 0;
   current: boolean = false;
 }

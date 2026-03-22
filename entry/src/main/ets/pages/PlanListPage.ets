@@ -475,15 +475,6 @@ struct PlanListPage {
                     Blank();
 
           Row({ space: 8 }) {
-            Button('账号中心')
-              .fontSize(12)
-              .height(30)
-              .backgroundColor('#34A853')
-              .fontColor(Color.White)
-              .onClick(() => {
-                this.getUIContext().getRouter().pushUrl({ url: 'pages/AccountCenterPage' });
-              });
-
             Button('导入JSON')
               .fontSize(12)
               .height(30)
