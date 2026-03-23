@@ -136,6 +136,10 @@ export class PlanAppService {
     ArrivalReminderEngine.getInstance().stop();
   }
 
+  public async requestArrivalCheckNow(reason: string = 'manual_refresh'): Promise<void> {
+    await ArrivalReminderEngine.getInstance().requestImmediateDetection(reason);
+  }
+
   public async getArrivalPromptState(hostContext: common.UIAbilityContext): Promise<ArrivalPromptState> {
     const pref = PreferenceManager.getInstance();
     await pref.init(hostContext);

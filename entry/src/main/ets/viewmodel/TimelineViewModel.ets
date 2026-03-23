@@ -255,6 +255,18 @@ interface ReplanNodeSnapshot {
   endTs: number;
 }
 
+interface DemoPlanTemplateItem {
+  name: string;
+  duration: number;
+  isSchedule: boolean;
+  fixedTime: string;
+  dayOffset: number;
+  note: string;
+  priority: number;
+  latitude: number;
+  longitude: number;
+}
+
 interface PlanningWeatherSnapshot {
   hint: string;
   score: number;
@@ -1137,6 +1149,145 @@ export class TimelineViewModel {
       }
     });
     this.recalculate(); // 触发 Solver 调用 TrafficEngine
+  }
+
+  public async generateRecordingDemoPlan(): Promise<void> {
+    if (this.planId <= 0) {
+      return;
+    }
+
+    const tomorrow = new Date();
+    tomorrow.setHours(0, 0, 0, 0);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const targetStartDate = tomorrow.getTime();
+
+    hilog.info(0x0000, TAG, `[DEMO_PLAN][generate_begin] planId=${this.planId}, targetStartDate=${targetStartDate}`);
+    await this.updatePlanDate(targetStartDate);
+
+    this.events = [];
+    await this.save();
+
+    const templates: DemoPlanTemplateItem[] = [
+      {
+        name: '酒店办理入住',
+        duration: 30,
+        isSchedule: true,
+        fixedTime: '09:00',
+        dayOffset: 0,
+        note: '演示锚点：固定开始',
+        priority: 1,
+        latitude: 31.2304,
+        longitude: 121.4737
+      },
+      {
+        name: '城市博物馆',
+        duration: 120,
+        isSchedule: true,
+        fixedTime: '10:00',
+        dayOffset: 0,
+        note: '演示编辑与时间链联动',
+        priority: 0,
+        latitude: 31.2270,
+        longitude: 121.4740
+      },
+      {
+        name: '午餐·本帮菜馆',
+        duration: 60,
+        isSchedule: true,
+        fixedTime: '13:00',
+        dayOffset: 0,
+        note: '演示冲突与压缩处理',
+        priority: 0,
+        latitude: 31.2290,
+        longitude: 121.4800
+      },
+      {
+        name: '江边步道',
+        duration: 90,
+        isSchedule: true,
+        fixedTime: '15:00',
+        dayOffset: 0,
+        note: '演示伴游开始/暂停/继续',
+        priority: 0,
+        latitude: 31.2400,
+        longitude: 121.4900
+      },
+      {
+        name: '古镇晨游',
+        duration: 120,
+        isSchedule: true,
+        fixedTime: '09:30',
+        dayOffset: 1,
+        note: '演示跨日行程',
+        priority: 0,
+        latitude: 31.2989,
+        longitude: 120.5853
+      },
+      {
+        name: '返程高铁站',
+        duration: 40,
+        isSchedule: true,
+        fixedTime: '13:30',
+        dayOffset: 1,
+        note: '演示结束与历史记录',
+        priority: 0,
+        latitude: 31.1947,
+        longitude: 121.3180
+      },
+      {
+        name: '夜景观景台',
+        duration: 60,
+        isSchedule: false,
+        fixedTime: '',
+        dayOffset: 0,
+        note: '暂存池示例：可一键加入日程',
+        priority: 0,
+        latitude: 31.2390,
+        longitude: 121.4990
+      },
+      {
+        name: '特色咖啡馆',
+        duration: 45,
+        isSchedule: false,
+        fixedTime: '',
+        dayOffset: 0,
+        note: '暂存池示例：待确认地点',
+        priority: 0,
+        latitude: 31.2210,
+        longitude: 121.4710
+      }
+    ];
+
+    for (let i = 0; i < templates.length; i++) {
+      const item = templates[i];
+      await this.addNewItem(
+        item.name,
+        item.duration,
+        item.isSchedule,
+        item.fixedTime && item.fixedTime.trim().length > 0 ? item.fixedTime : undefined,
+        item.dayOffset,
+        -1,
+        false,
+        item.note,
+        item.priority,
+        item.latitude,
+        item.longitude
+      );
+    }
+
+    this.recalculateFromIndex(0);
+    this.markScheduleChanged();
+    this.events = [...this.events];
+
+    if (this.isWeatherFeatureEnabled()) {
+      try {
+        await this.refreshPlanningWeather(true);
+      } catch (error) {
+        hilog.warn(0x0000, TAG, `[DEMO_PLAN][weather_refresh_fail] reason=${JSON.stringify(error)}`);
+      }
+    }
+
+    hilog.info(0x0000, TAG, `[DEMO_PLAN][generate_done] planId=${this.planId}, total=${this.events.length}`);
   }
 
 
