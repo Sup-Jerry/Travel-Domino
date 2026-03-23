@@ -67,6 +67,11 @@ interface PendingItemData {
   lng?: number;
 }
 
+class AddDialogDefaults {
+  dayOffset: number = 0;
+  suggestedTime: string = '08:00';
+}
+
 @Entry
 @Component
 struct Index {
@@ -82,6 +87,8 @@ struct Index {
   @State hasUnsavedChanges: boolean = false;
   @State strategyMode: number = 0;
   @State currentStrategyExplanation: string = '';
+  @State showPlanningWeatherHintPopup: boolean = false;
+  @State showPlanningWeatherScorePopup: boolean = false;
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
   @StorageLink('TrafficDataUpdated') @Watch('onTrafficSignal') trafficSignal: number = 0;
   private arrivalReminderUnsubscribe: (() => void) | null = null;
@@ -610,6 +617,63 @@ struct Index {
     // 4. 如果是第一个元素，返回 09:00
     return '09:00';
   }
+
+  private getDefaultAddTime(): string {
+    return '08:00';
+  }
+
+  private normalizeTimeText(raw?: string): string {
+    const pure = DateUtil.extractPureTime(raw || '');
+    if (pure && DateUtil.isValidTimeString(pure)) {
+      return pure;
+    }
+    return this.getDefaultAddTime();
+  }
+
+  private resolveEventEndTimeText(event: EventEntity): string {
+    const start = this.normalizeTimeText(event.fixed_start_time || event.computed_time);
+    const duration = Number.isFinite(event.duration) && event.duration > 0 ? event.duration : 0;
+    return DateUtil.calculateEndTime(start, duration);
+  }
+
+  private getLatestCreatedScheduleEvent(): EventEntity | undefined {
+    const scheduled = this.vm.events.filter((item: EventEntity) => item.status === 1);
+    if (scheduled.length === 0) {
+      return undefined;
+    }
+    const sorted = scheduled.slice().sort((a: EventEntity, b: EventEntity) => {
+      const idA = Number.isFinite(a.id) ? a.id : -1;
+      const idB = Number.isFinite(b.id) ? b.id : -1;
+      return idB - idA;
+    });
+    return sorted[0];
+  }
+
+  private recommendAddByDayOffset(dayOffset: number): string {
+    const sameDay = this.vm.events.filter((item: EventEntity) =>
+      item.status === 1 && TimelineDatePolicy.resolveEventDayOffset(item) === dayOffset
+    );
+    if (sameDay.length === 0) {
+      return this.getDefaultAddTime();
+    }
+    const anchor = sameDay[sameDay.length - 1];
+    return this.resolveEventEndTimeText(anchor);
+  }
+
+  private resolveAddDialogDefaults(): AddDialogDefaults {
+    const latest = this.getLatestCreatedScheduleEvent();
+    if (!latest) {
+      const emptyDefaults = new AddDialogDefaults();
+      emptyDefaults.dayOffset = 0;
+      emptyDefaults.suggestedTime = this.getDefaultAddTime();
+      return emptyDefaults;
+    }
+    const dayOffset = TimelineDatePolicy.resolveEventDayOffset(latest);
+    const nextDefaults = new AddDialogDefaults();
+    nextDefaults.dayOffset = dayOffset;
+    nextDefaults.suggestedTime = this.resolveEventEndTimeText(latest);
+    return nextDefaults;
+  }
   private resolveConflictGapMinutes(item: EventEntity, fallbackGap: number = 0): number {
     if (item.gap_minutes > 0) {
       return item.gap_minutes;
@@ -1011,7 +1075,20 @@ struct Index {
   }
 
   openDialog(initData?: InitDialogData) {
-    const smartTime = initData?.suggestedTime || this.calculateSmartTime(this.editingItemId);
+    const isCreateMode = this.editingItemId === -1;
+    const createDefaults = new AddDialogDefaults();
+    if (isCreateMode) {
+      const computed = this.resolveAddDialogDefaults();
+      createDefaults.dayOffset = computed.dayOffset;
+      createDefaults.suggestedTime = computed.suggestedTime;
+    } else {
+      createDefaults.dayOffset = 0;
+      createDefaults.suggestedTime = '';
+    }
+    const smartTime = initData?.suggestedTime || (isCreateMode ? createDefaults.suggestedTime : this.calculateSmartTime(this.editingItemId));
+    const initDayOffset = initData?.dayOffset !== undefined
+      ? initData.dayOffset
+      : (isCreateMode ? createDefaults.dayOffset : 0);
     let currentPreTravel = 0;
 
     // ✅ 准备 Priority 数据
@@ -1036,7 +1113,7 @@ struct Index {
         initFixedTime: initData?.fixedTime || '',
         initSuggestedTime: smartTime,
         initIsSchedule: initData ? true : false,
-        initDayOffset: initData?.dayOffset || 0,
+        initDayOffset: initDayOffset,
         initPreTravel: currentPreTravel,
         initPriority: currentPriority, // ✅ 传入
         storageScopePlanId: this.currentPlanId,
@@ -1044,6 +1121,12 @@ struct Index {
 
         initLat: initData?.lat || 0, // ✅ 确保把坐标传给弹窗
         initLng: initData?.lng || 0,
+        onDateChangedRecommendTime: (dayOffset: number, currentTime: string): string => {
+          if (!isCreateMode) {
+            return currentTime;
+          }
+          return this.recommendAddByDayOffset(dayOffset);
+        },
 
         // ✅ [核心拦截逻辑] 更新回调签名
         // ✅ 增加 lat, lng 接收参数
@@ -1311,7 +1394,9 @@ struct Index {
         this.strategyMode = this.vm.getStrategyMode();
         this.loadStrategyExplanation();
         if (this.vm.isWeatherFeatureEnabled()) {
-          void this.vm.refreshPlanningWeather(false);
+          if (this.vm.shouldAutoRefreshPlanningWeather()) {
+            void this.vm.refreshPlanningWeather(false);
+          }
         } else {
           this.vm.stopExecutionWeatherScheduler();
         }
@@ -1490,6 +1575,95 @@ struct Index {
     })
   }
 
+  @Builder
+  private PlanningWeatherHintPopupBuilder() {
+    Scroll() {
+      Column({ space: 2 }) {
+        Text(this.getPlanningHintLine(0))
+          .fontSize(12)
+          .lineHeight(20)
+          .fontColor('#1565C0')
+          .fontWeight(FontWeight.Medium)
+        Text(this.getPlanningHintLine(1))
+          .fontSize(12)
+          .lineHeight(20)
+          .fontColor('#2E7D32')
+          .fontWeight(FontWeight.Medium)
+        Text(this.getPlanningHintLine(2))
+          .fontSize(12)
+          .lineHeight(20)
+          .fontColor('#6A1B9A')
+          .fontWeight(FontWeight.Medium)
+        Text(this.getPlanningHintLine(3))
+          .fontSize(12)
+          .lineHeight(20)
+          .fontColor('#455A64')
+          .fontWeight(FontWeight.Medium)
+        Text('仅作为建议，不会自动改行程。')
+          .fontSize(12)
+          .lineHeight(20)
+          .fontColor('#D32F2F')
+          .fontWeight(FontWeight.Bold)
+      }
+      .padding(10)
+      .width('100%');
+    }
+    .height(230)
+    .width(280);
+  }
+
+  private getPlanningHintLine(index: number): string {
+    const lines = this.vm.buildPlanningWeatherHintExplanation().split('\n');
+    return lines[index] ?? '';
+  }
+
+  @Builder
+  private PlanningWeatherScorePopupBuilder() {
+    Scroll() {
+      Column({ space: 2 }) {
+        Text(this.getPlanningScoreLine(0))
+          .fontSize(12)
+          .lineHeight(20)
+          .fontColor('#1565C0')
+          .fontWeight(FontWeight.Bold)
+        Text(this.getPlanningScoreLine(1))
+          .fontSize(12)
+          .lineHeight(20)
+          .fontColor('#2E7D32')
+          .fontWeight(FontWeight.Medium)
+        Text(this.getPlanningScoreLine(2))
+          .fontSize(12)
+          .lineHeight(20)
+          .fontColor('#6A1B9A')
+          .fontWeight(FontWeight.Medium)
+        Text(this.getPlanningScoreLine(3))
+          .fontSize(12)
+          .lineHeight(20)
+          .fontColor('#455A64')
+          .fontWeight(FontWeight.Medium)
+        Text(this.getPlanningScoreLine(4))
+          .fontSize(12)
+          .lineHeight(20)
+          .fontColor('#EF6C00')
+          .fontWeight(FontWeight.Medium)
+        Text(this.getPlanningScoreLine(5))
+          .fontSize(12)
+          .lineHeight(20)
+          .fontColor('#1B5E20')
+          .fontWeight(FontWeight.Medium)
+      }
+      .padding(10)
+      .width('100%');
+    }
+    .height(230)
+    .width(280);
+  }
+
+  private getPlanningScoreLine(index: number): string {
+    const lines = this.vm.buildWeatherScoreExplanation(this.vm.weatherRouteScore).split('\n');
+    return lines[index] ?? '';
+  }
+
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
       Column() {
@@ -1585,9 +1759,9 @@ struct Index {
 
           if (!this.isCompanionMode) {
             if (this.vm.isWeatherFeatureEnabled()) {
-              Button(this.vm.weatherLoading ? '刷新中' : '可选刷新天气')
+              Button(this.vm.weatherLoading ? '⏳' : '🌤️')
                 .height(30)
-                .fontSize(12)
+                .fontSize(16)
                 .padding({ left: 10, right: 10 })
                 .backgroundColor(this.getThemePalette().cardBgSoft)
                 .fontColor(this.getThemePalette().textPrimary)
@@ -1609,16 +1783,57 @@ struct Index {
 
         if (this.vm.isWeatherFeatureEnabled() && this.vm.weatherPlanningHint) {
           Row() {
-            Text(`天气建议（可选）${this.vm.weatherCollabLabel ? `· ${this.vm.weatherCollabLabel}` : ''}：${this.vm.weatherPlanningHint}${this.vm.weatherCollabSummary ? `（${this.vm.weatherCollabSummary}）` : ''}${this.vm.weatherStrategyHint ? `；策略联动：${this.vm.weatherStrategyHint}` : ''}`)
-              .fontSize(12)
-              .fontColor(this.getThemePalette().warning)
+            Text(`天气建议（可选） ⓘ ${this.vm.weatherCollabLabel ? `· ${this.vm.weatherCollabLabel}` : ''}：${this.vm.weatherPlanningHint}${this.vm.weatherCollabSummary ? `（${this.vm.weatherCollabSummary}）` : ''}${this.vm.weatherStrategyHint ? `；策略联动：${this.vm.weatherStrategyHint}` : ''}`)
+              .fontSize(13)
+              .fontColor(this.getThemePalette().primary)
               .maxLines(3)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
               .layoutWeight(1)
+              .onClick(() => {
+                this.showPlanningWeatherHintPopup = !this.showPlanningWeatherHintPopup;
+              })
+              .bindPopup(this.showPlanningWeatherHintPopup, {
+                builder: this.PlanningWeatherHintPopupBuilder,
+                placement: Placement.BottomLeft,
+                mask: false,
+                popupColor: this.getThemePalette().cardBgSoft,
+                onStateChange: (e) => {
+                  if (!e.isVisible) {
+                    this.showPlanningWeatherHintPopup = false;
+                  }
+                }
+              })
+            Column()
+              .width(1)
+              .height(36)
+              .margin({ left: 10, right: 10 })
+              .backgroundColor('#2E7D32')
+              .borderRadius(1)
             if (this.vm.weatherRouteScore >= 0) {
-              Text(`评分 ${this.vm.weatherRouteScore}`)
-                .fontSize(11)
-                .fontColor(this.getThemePalette().textSecondary)
+              Column() {
+                Text('评分 ⓘ')
+                  .fontSize(12)
+                  .fontColor(this.getThemePalette().primary)
+                Text(`${this.vm.weatherRouteScore}`)
+                  .fontSize(15)
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor(this.getThemePalette().textPrimary)
+              }
+              .alignItems(HorizontalAlign.Center)
+              .onClick(() => {
+                this.showPlanningWeatherScorePopup = !this.showPlanningWeatherScorePopup;
+              })
+              .bindPopup(this.showPlanningWeatherScorePopup, {
+                builder: this.PlanningWeatherScorePopupBuilder,
+                placement: Placement.BottomLeft,
+                mask: false,
+                popupColor: this.getThemePalette().cardBgSoft,
+                onStateChange: (e) => {
+                  if (!e.isVisible) {
+                    this.showPlanningWeatherScorePopup = false;
+                  }
+                }
+              })
             }
           }
           .width('100%')

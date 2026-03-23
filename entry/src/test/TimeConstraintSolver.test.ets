@@ -73,7 +73,8 @@ export default function timeConstraintSolverTest() {
         buildScheduleItem(2, 'B', 30, 0)
       ];
       const result = TimeConstraintSolver.calculateTimeline(input, '23:50', planStart, {
-        autoRouteEnabled: false
+        autoRouteEnabled: false,
+        slackRatio: 0
       });
 
       const a: TravelPlanItem = result[0];
