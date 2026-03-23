@@ -31,7 +31,7 @@ export struct TipDialog {
           .onClick(() => this.controller.close())
 
         Button('确定')
-          .backgroundColor($r('app.color.card_bg')).layoutWeight(1).margin({ left: 12 })
+          .backgroundColor($r('app.color.accent_primary')).fontColor(Color.White).layoutWeight(1).margin({ left: 12 })
           .onClick(async () => { // 修改点：异步回调
             if (this.isChecked) {
               // 修改点：强制物理落盘，确保状态 100% 写入磁盘
