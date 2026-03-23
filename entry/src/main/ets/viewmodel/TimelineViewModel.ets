@@ -255,6 +255,14 @@ interface ReplanNodeSnapshot {
   endTs: number;
 }
 
+interface PlanningWeatherSnapshot {
+  hint: string;
+  score: number;
+  collabSummary: string;
+  strategyHint: string;
+  refreshedAt: number;
+}
+
 
 @Observed
 export class TimelineViewModel {
@@ -298,6 +306,7 @@ export class TimelineViewModel {
   @Track public executionWeatherLevel: 'INFO' | 'NOTICE' | 'WARNING' = 'INFO';
   @Track public executionWeatherCurrentText: string = '';
   @Track public executionWeatherNextText: string = '';
+  @Track public executionWeatherDisplaySource: 'CURRENT' | 'NEXT_FALLBACK' | 'UNKNOWN' = 'UNKNOWN';
   @Track public executionWeatherScore: number = -1;
   @Track public executionWeatherRefreshAt: number = 0;
   @Track public executionWeatherLoading: boolean = false;
@@ -462,6 +471,7 @@ export class TimelineViewModel {
 
       const entities = rawEvents.map(item => EventEntity.fromInterface(item, planId));
       this.events = entities;
+      this.restorePlanningWeatherSnapshot(planId);
 
       await this.reloadMinEventDurationLimit();
       await this.reloadIdleGapSettings();
@@ -2216,6 +2226,7 @@ export class TimelineViewModel {
     this.weatherCollabSummary = context.collabContext?.collabSummary ?? '';
     this.weatherCollabLabel = this.weatherCollabSummary.trim().length > 0 ? '多日/多城' : '';
     this.weatherLastRefreshAt = Date.now();
+    this.persistPlanningWeatherSnapshot();
 
     this.events.forEach((event: EventEntity) => {
       const binding = result.eventMap.get(event.id);
@@ -2318,14 +2329,18 @@ export class TimelineViewModel {
         return;
       }
       if (this.currentPlanStatus === PlanStatus.CONFIRMED) {
-        void this.refreshPlanningWeather(false);
+        if (this.shouldAutoRefreshPlanningWeather()) {
+          void this.refreshPlanningWeather(false);
+        }
         return;
       }
       void this.refreshExecutionWeather(false, 'TIMER', resolvedStage);
     });
     if (this.currentWeatherSchedulePolicy.forceRefreshOnEnter) {
       if (resolvedStage === 'CONFIRMED' || resolvedStage === 'PLANNING') {
-        void this.refreshPlanningWeather(true);
+        if (this.shouldAutoRefreshPlanningWeather()) {
+          void this.refreshPlanningWeather(true);
+        }
       } else {
         void this.refreshExecutionWeather(true, 'ENTER_EXECUTION', resolvedStage);
       }
@@ -2402,9 +2417,16 @@ export class TimelineViewModel {
       this.executionWeatherCollabBadge = this.executionWeatherCollabSummary.trim().length > 0
         ? (collab && collab.cityGroupCount > 1 ? '跨城协同中' : '多日趋势已纳入')
         : '';
-      this.executionWeatherCurrentText = context.currentLocationWeather
-        ? `${context.currentLocationWeather.conditionText}${Number.isFinite(context.currentLocationWeather.temperatureCelsius) ? ` ${context.currentLocationWeather.temperatureCelsius}°C` : ''}`
-        : '天气未知';
+      if (context.currentLocationWeather) {
+        this.executionWeatherDisplaySource = 'CURRENT';
+        this.executionWeatherCurrentText = `${context.currentLocationWeather.conditionText}${Number.isFinite(context.currentLocationWeather.temperatureCelsius) ? ` ${context.currentLocationWeather.temperatureCelsius}°C` : ''}`;
+      } else if (context.nextNodeWeather) {
+        this.executionWeatherDisplaySource = 'NEXT_FALLBACK';
+        this.executionWeatherCurrentText = `按下一节点天气估算（${context.nextNodeWeather.conditionText}${Number.isFinite(context.nextNodeWeather.temperatureCelsius) ? ` ${context.nextNodeWeather.temperatureCelsius}°C` : ''}）`;
+      } else {
+        this.executionWeatherDisplaySource = 'UNKNOWN';
+        this.executionWeatherCurrentText = '天气未知';
+      }
       this.executionWeatherNextText = context.nextNodeWeather
         ? `${context.nextNodeWeather.conditionText}${Number.isFinite(context.nextNodeWeather.temperatureCelsius) ? ` ${context.nextNodeWeather.temperatureCelsius}°C` : ''}`
         : '天气未知';
@@ -2443,6 +2465,7 @@ export class TimelineViewModel {
     } catch (error) {
       this.executionWeatherErrorCode = 'WEATHER_002';
       this.executionWeatherHint = '执行天气刷新失败，已降级使用节点天气/缓存。';
+      this.executionWeatherDisplaySource = 'UNKNOWN';
       this.executionWeatherCollabBadge = '';
       this.executionWeatherCollabSummary = '';
       hilog.warn(0x0000, TAG, `[WEATHER_EXEC][refresh_failed] trigger=${trigger}, reason=${JSON.stringify(error)}`);
@@ -2519,15 +2542,43 @@ export class TimelineViewModel {
       summary: '无可用建议',
       riskDelta: 0
     };
+    const failWithLog = (
+      errorCode: '' | 'REPLAN_CONFLICT' | 'REPLAN_IMMUTABLE' | 'REPLAN_NO_CANDIDATE' | 'REPLAN_TIMEOUT' | 'REPLAN_INVALID' | 'REPLAN_BUSY',
+      reasonCode: string,
+      startFromEventId: number,
+      preview: SoftReplanPreview,
+      rolledBack: boolean,
+      actionType: WeatherSuggestionActionType = 'NONE'
+    ): SoftReplanApplyResult => {
+      this.logSoftReplanFailure(
+        planId,
+        suggestionId,
+        mode,
+        this.getCurrentPlanStatus(),
+        errorCode,
+        reasonCode,
+        startFromEventId,
+        actionType,
+        preview.affectedNodeIds.length
+      );
+      return {
+        success: false,
+        rolledBack: rolledBack,
+        errorCode: errorCode,
+        reasonCode: reasonCode,
+        startFromEventId: startFromEventId,
+        preview: preview
+      };
+    };
     if (planId <= 0 || this.planId !== planId || !suggestionId || suggestionId.trim().length === 0) {
-      return { success: false, rolledBack: false, errorCode: 'REPLAN_INVALID', reasonCode: 'invalid_input', startFromEventId: 0, preview: emptyPreview };
+      return failWithLog('REPLAN_INVALID', 'invalid_input', 0, emptyPreview, false);
     }
     const status = this.getCurrentPlanStatus();
     if (!(status === PlanStatus.READY || status === PlanStatus.IN_PROGRESS || status === PlanStatus.PAUSED)) {
-      return { success: false, rolledBack: false, errorCode: 'REPLAN_INVALID', reasonCode: 'status_blocked', startFromEventId: 0, preview: emptyPreview };
+      return failWithLog('REPLAN_INVALID', 'status_blocked', 0, emptyPreview, false);
     }
     if (this.executionReplanBusy) {
-      return { success: false, rolledBack: false, errorCode: 'REPLAN_BUSY', reasonCode: 'busy', startFromEventId: 0, preview: emptyPreview };
+      return failWithLog('REPLAN_BUSY', 'busy', 0, emptyPreview, false);
     }
     const activeEvent = this.findCurrentActiveEvent();
     const softGate = this.planStateMachine.requestSoftReplan({
@@ -2539,18 +2590,17 @@ export class TimelineViewModel {
       useWeatherConstraint: true
     });
     if (!softGate.success) {
-      return {
-        success: false,
-        rolledBack: false,
-        errorCode: 'REPLAN_INVALID',
-        reasonCode: softGate.reasonCode ?? 'status_blocked',
-        startFromEventId: softGate.startFromEventId ?? 0,
-        preview: emptyPreview
-      };
+      return failWithLog(
+        'REPLAN_INVALID',
+        softGate.reasonCode ?? 'status_blocked',
+        softGate.startFromEventId ?? 0,
+        emptyPreview,
+        false
+      );
     }
     const suggestion = this.executionSuggestionMap.get(suggestionId);
     if (!suggestion) {
-      return { success: false, rolledBack: false, errorCode: 'REPLAN_INVALID', reasonCode: 'suggestion_missing', startFromEventId: 0, preview: emptyPreview };
+      return failWithLog('REPLAN_INVALID', 'suggestion_missing', 0, emptyPreview, false);
     }
     const preview = this.buildSoftReplanPreview(suggestion, softGate.reasonCode, softGate.startFromEventId ?? 0);
     if (mode === 'PREVIEW') {
@@ -2579,26 +2629,26 @@ export class TimelineViewModel {
           after: 'blocked',
           deltaMinutes: 0
         }];
-        return {
-          success: false,
-          rolledBack: false,
-          errorCode: 'REPLAN_IMMUTABLE',
-          reasonCode: preview.reasonCode,
-          startFromEventId: preview.startFromEventId,
-          preview: preview
-        };
+        return failWithLog(
+          'REPLAN_IMMUTABLE',
+          preview.reasonCode ?? 'immutable_blocked',
+          preview.startFromEventId ?? 0,
+          preview,
+          false,
+          suggestion.actionType
+        );
       }
       const applyOk = await this.applySuggestionAction(suggestion);
       if (!applyOk) {
         this.restoreEventSnapshot(snapshot);
-        return {
-          success: false,
-          rolledBack: true,
-          errorCode: 'REPLAN_CONFLICT',
-          reasonCode: 'apply_failed',
-          startFromEventId: preview.startFromEventId,
-          preview: preview
-        };
+        return failWithLog(
+          'REPLAN_CONFLICT',
+          'apply_failed',
+          preview.startFromEventId ?? 0,
+          preview,
+          true,
+          suggestion.actionType
+        );
       }
       const startFromEventId = softGate.startFromEventId && softGate.startFromEventId > 0
         ? softGate.startFromEventId
@@ -2610,14 +2660,14 @@ export class TimelineViewModel {
       }
       if (Date.now() - startedAt > 10_000) {
         this.restoreEventSnapshot(snapshot);
-        return {
-          success: false,
-          rolledBack: true,
-          errorCode: 'REPLAN_TIMEOUT',
-          reasonCode: 'timeout',
-          startFromEventId: startFromEventId,
-          preview: preview
-        };
+        return failWithLog(
+          'REPLAN_TIMEOUT',
+          'timeout',
+          startFromEventId,
+          preview,
+          true,
+          suggestion.actionType
+        );
       }
       const afterNodes = this.snapshotScheduleNodes();
       const structuredSummary = this.buildStructuredReplanSummary(beforeNodes, afterNodes, preview.affectedNodeIds);
@@ -2648,18 +2698,36 @@ export class TimelineViewModel {
     } catch (error) {
       this.restoreEventSnapshot(snapshot);
       hilog.warn(0x0000, TAG, `[WEATHER_REPLAN][apply_failed] suggestionId=${suggestionId}, rolledBack=true, result=FAILED, reason=${JSON.stringify(error)}`);
-      return {
-        success: false,
-        rolledBack: true,
-        errorCode: 'REPLAN_CONFLICT',
-        reasonCode: 'exception',
-        startFromEventId: preview.startFromEventId,
-        preview: preview
-      };
+      return failWithLog(
+        'REPLAN_CONFLICT',
+        'exception',
+        preview.startFromEventId ?? 0,
+        preview,
+        true,
+        suggestion.actionType
+      );
     } finally {
       this.executionReplanBusy = false;
       this.executionWeatherApplying = false;
     }
+  }
+
+  private logSoftReplanFailure(
+    planId: number,
+    suggestionId: string,
+    mode: SoftReplanMode,
+    status: PlanStatus,
+    errorCode: string,
+    reasonCode: string,
+    startFromEventId: number,
+    actionType: WeatherSuggestionActionType,
+    affectedNodeCount: number
+  ): void {
+    hilog.warn(
+      0x0000,
+      TAG,
+      `[WEATHER_REPLAN][apply_fail] planId=${planId}, suggestionId=${suggestionId}, mode=${mode}, status=${status}, errorCode=${errorCode}, reasonCode=${reasonCode}, startFromEventId=${startFromEventId}, actionType=${actionType}, affectedNodeCount=${affectedNodeCount}`
+    );
   }
 
   public dismissExecutionSuggestion(suggestionId: string): void {
@@ -4191,6 +4259,80 @@ export class TimelineViewModel {
     return this.weatherFeatureEnabled;
   }
 
+  public buildWeatherScoreExplanation(score: number): string {
+    if (!Number.isFinite(score) || score < 0) {
+      return '暂无可用天气评分。评分范围 0-100，分值越高代表路线受天气影响越小。';
+    }
+    const safeScore = Math.max(0, Math.min(100, Math.floor(score)));
+    let level = '低风险';
+    let desc = '天气条件较稳定，可按当前计划执行。';
+    if (safeScore < 70) {
+      level = '高风险';
+      desc = '天气对路线影响明显，建议优先室内点位或减少暴露时长。';
+    } else if (safeScore < 85) {
+      level = '中风险';
+      desc = '部分节点受天气影响，建议关注时段变化并准备替代方案。';
+    }
+    const riskMeaning = safeScore < 70
+      ? '含义：后续节点更容易发生顺序变化、停留压缩或替代建议。'
+      : (safeScore < 85
+        ? '含义：计划可执行，但部分时段可能触发轻量调整。'
+        : '含义：总体稳定，通常不需要对行程做结构性改动。');
+    return `天气评分：${safeScore}\n等级：${level}\n区间：0-69 高风险，70-84 中风险，85-100 低风险。\n说明：评分会综合降雨/温度风险、你的怕热/怕雨/风险容忍偏好，以及多日多城协同结果。\n${riskMeaning}\n建议：${desc}`;
+  }
+
+  public buildWeatherHintExplanation(): string {
+    const sourceText = this.executionWeatherDisplaySource === 'CURRENT'
+      ? '当前定位天气'
+      : (this.executionWeatherDisplaySource === 'NEXT_FALLBACK' ? '下一节点天气估算' : '当前定位缺失');
+    const hint = this.executionWeatherHint && this.executionWeatherHint.trim().length > 0
+      ? this.executionWeatherHint
+      : this.weatherPlanningHint;
+    const safeHint = hint && hint.trim().length > 0 ? hint : '当前暂无额外天气提示。';
+    const collab = this.weatherCollabSummary && this.weatherCollabSummary.trim().length > 0
+      ? this.weatherCollabSummary
+      : this.executionWeatherCollabSummary;
+    const collabExplain = collab && collab.trim().length > 0
+      ? `多日/多城说明：${collab}\n作用：表示系统在跨城市、跨日期对天气趋势做了联合评估，用于提前发现“后续转差/转好”。`
+      : '多日/多城说明：当前无跨日跨城协同摘要。';
+    return `提示来源：${sourceText}\n当前提示：${safeHint}\n${collabExplain}\n该提示仅用于辅助决策，不会自动修改行程。`;
+  }
+
+  public buildPlanningWeatherHintExplanation(): string {
+    const sourceText = '计划节点天气（已按地点批量计算）';
+    const safeHint = this.weatherPlanningHint && this.weatherPlanningHint.trim().length > 0
+      ? this.weatherPlanningHint
+      : '当前暂无额外天气提示。';
+    const collabExplain = this.weatherCollabSummary && this.weatherCollabSummary.trim().length > 0
+      ? `多日/多城说明：${this.weatherCollabSummary}\n作用：用于提前判断跨日跨城趋势变化，减少后续被动改计划。`
+      : '多日/多城说明：当前无跨日跨城协同摘要。';
+    return `提示来源：${sourceText}\n当前提示：${safeHint}\n${collabExplain}\n该提示仅用于辅助决策，不会自动修改行程。`;
+  }
+
+  public getExecutionWeatherDisplaySource(): 'CURRENT' | 'NEXT_FALLBACK' | 'UNKNOWN' {
+    return this.executionWeatherDisplaySource;
+  }
+
+  public shouldAutoRefreshPlanningWeather(maxAgeMs: number = 24 * 60 * 60 * 1000): boolean {
+    if (this.planId <= 0) {
+      return true;
+    }
+    let latestTs = this.weatherLastRefreshAt;
+    this.events.forEach((event: EventEntity) => {
+      if (event.status !== 1) {
+        return;
+      }
+      const fetchTs = Number(event.weather_fetch_time ?? 0);
+      if (Number.isFinite(fetchTs) && fetchTs > latestTs) {
+        latestTs = fetchTs;
+      }
+    });
+    if (!Number.isFinite(latestTs) || latestTs <= 0) {
+      return true;
+    }
+    return Date.now() - latestTs >= maxAgeMs;
+  }
+
   public async setWeatherFeatureEnabled(enabled: boolean): Promise<void> {
     const manager = PreferenceManager.getInstance();
     await manager.setWeatherFeatureEnabled(enabled);
@@ -4290,6 +4432,7 @@ export class TimelineViewModel {
     this.weatherCollabLabel = '';
     this.executionWeatherHint = '';
     this.executionWeatherCurrentText = '';
+    this.executionWeatherDisplaySource = 'UNKNOWN';
     this.executionWeatherNextText = '';
     this.executionWeatherScore = -1;
     this.executionWeatherErrorCode = '';
@@ -4298,6 +4441,41 @@ export class TimelineViewModel {
     this.executionWeatherCollabBadge = '';
     this.executionWeatherCollabSummary = '';
     this.weatherStrategyAppliedKey = '';
+  }
+
+  private getPlanningWeatherSnapshotKey(planId: number): string {
+    return `PlanningWeatherSnapshot_${planId}`;
+  }
+
+  private persistPlanningWeatherSnapshot(): void {
+    if (this.planId <= 0) {
+      return;
+    }
+    const snapshot: PlanningWeatherSnapshot = {
+      hint: this.weatherPlanningHint,
+      score: this.weatherRouteScore,
+      collabSummary: this.weatherCollabSummary,
+      strategyHint: this.weatherStrategyHint,
+      refreshedAt: this.weatherLastRefreshAt
+    };
+    AppStorage.setOrCreate(this.getPlanningWeatherSnapshotKey(this.planId), JSON.stringify(snapshot));
+  }
+
+  private restorePlanningWeatherSnapshot(planId: number): void {
+    const raw = AppStorage.get<string>(this.getPlanningWeatherSnapshotKey(planId)) ?? '';
+    if (!raw || raw.trim().length === 0) {
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as PlanningWeatherSnapshot;
+      this.weatherPlanningHint = parsed.hint ?? '';
+      this.weatherRouteScore = Number.isFinite(parsed.score) ? parsed.score : -1;
+      this.weatherCollabSummary = parsed.collabSummary ?? '';
+      this.weatherCollabLabel = this.weatherCollabSummary.trim().length > 0 ? '多日/多城' : '';
+      this.weatherStrategyHint = parsed.strategyHint ?? '';
+      this.weatherLastRefreshAt = Number.isFinite(parsed.refreshedAt) ? parsed.refreshedAt : 0;
+    } catch (_error) {
+    }
   }
 
   private isAutoRouteEnabled(): boolean {

@@ -50,6 +50,7 @@ export struct AddItemDialog {
     preTravel?: number, isHardLock?: boolean, note?: string, isMustVisit?: boolean, lat?: number,
     lng?: number) => Promise<void> = async () => {
   };
+  onDateChangedRecommendTime: (dayOffset: number, currentTime: string) => string = (_dayOffset: number, currentTime: string): string => currentTime;
   @StorageProp('defaultDuration') globalDefaultDuration: number = 60;
   @State showTip: boolean = false;
   // =================== 地图选点回传监听 ===================
@@ -120,7 +121,7 @@ export struct AddItemDialog {
     }
 
     let targetDate = TimelineDatePolicy.dayOffsetToDate(this.planStartDate, this.initDayOffset);
-    let timeStr = this.initFixedTime || this.initSuggestedTime || '09:00';
+    let timeStr = this.initFixedTime || this.initSuggestedTime || '08:00';
     const parts = timeStr.split(':');
     if (parts.length === 2) {
       targetDate.setHours(parseInt(parts[0]), parseInt(parts[1]), 0, 0);
@@ -146,6 +147,25 @@ export struct AddItemDialog {
     const h = date.getHours().toString().padStart(2, '0');
     const m = date.getMinutes().toString().padStart(2, '0');
     return `${h}:${m}`;
+  }
+
+  private applyTimeString(target: Date, timeText: string): Date {
+    const pure = DateUtil.extractPureTime(timeText);
+    if (!pure || !DateUtil.isValidTimeString(pure)) {
+      return target;
+    }
+    const parts = pure.split(':');
+    if (parts.length !== 2) {
+      return target;
+    }
+    const hour = Number.parseInt(parts[0], 10);
+    const minute = Number.parseInt(parts[1], 10);
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
+      return target;
+    }
+    const next = new Date(target.getTime());
+    next.setHours(hour, minute, 0, 0);
+    return next;
   }
 
   private isValidCoordinate(lat: number, lng: number): boolean {
@@ -422,12 +442,13 @@ export struct AddItemDialog {
                 end: endRange,
                 selected: this.startTime,
                 onAccept: (value: DatePickerResult) => {
-                  const newDate = new Date(this.startTime);
+                  const newDate = new Date(this.startTime.getTime());
                   newDate.setFullYear(value.year, value.month, value.day);
-                  this.startTime = newDate;
-                  const endNew = new Date(this.endTime);
-                  endNew.setFullYear(value.year, value.month, value.day);
-                  this.endTime = endNew;
+                  const offset = TimelineDatePolicy.timestampToDayOffset(this.planStartDate, newDate.getTime());
+                  const currentTime = this.formatTime(this.startTime);
+                  const recommended = this.onDateChangedRecommendTime(offset, currentTime);
+                  this.startTime = this.applyTimeString(newDate, recommended);
+                  this.recalculateEndTime();
                 }
               })
             })
@@ -623,8 +644,6 @@ export struct AddItemDialog {
     .width('95%')
   }
 }
-
-
 
 
 

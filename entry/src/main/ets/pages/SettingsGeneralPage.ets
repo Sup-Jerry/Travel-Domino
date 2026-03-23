@@ -1,0 +1,295 @@
+﻿import { promptAction } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
+import { PreferenceManager } from '../common/utils/PreferenceManager';
+import { AppStorageKeys } from '../common/constants/AppStorageKeys';
+import { ThemeCenter, ThemeMode } from '../common/utils/ThemeCenter';
+import { SettingSelectItem, SettingsSubPageHeader, SettingSwitchItem } from './components/views/SettingsItems';
+
+@Entry
+@Component
+struct SettingsGeneralPage {
+  @State weatherFeatureEnabled: boolean = true;
+  @State enableIdleGapDetection: boolean = true;
+  @State idleGapTriggerMinutes: number = 45;
+  @State idleGapTriggerInput: string = '45';
+  @State minEventDuration: number = 30;
+  @State minEventDurationInput: string = '30';
+  @State loading: boolean = true;
+  @State themeMode: ThemeMode = 'system';
+  @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
+
+  private getThemePalette() {
+    return ThemeCenter.getPalette(this.effectiveTheme);
+  }
+
+  aboutToAppear(): void {
+    void this.reload();
+  }
+
+  private safeShowToast(message: string): void {
+    try {
+      promptAction.openToast({ message: message });
+    } catch (_error) {
+    }
+  }
+
+  private getThemeModeText(): string {
+    if (this.themeMode === 'dark') return '深色';
+    if (this.themeMode === 'light') return '浅色';
+    return '跟随系统';
+  }
+
+  private showThemeModeDialog(): void {
+    this.getUIContext().showAlertDialog({
+      title: '主题模式',
+      message: '选择应用主题模式',
+      buttons: [
+        { value: '跟随系统', action: () => { void this.applyThemeMode('system'); } },
+        { value: '浅色', action: () => { void this.applyThemeMode('light'); } },
+        { value: '深色', action: () => { void this.applyThemeMode('dark'); } }
+      ],
+      autoCancel: true,
+      alignment: DialogAlignment.Center
+    });
+  }
+
+  private async applyThemeMode(mode: ThemeMode): Promise<void> {
+    const pref = PreferenceManager.getInstance();
+    await pref.setThemeMode(mode);
+    this.themeMode = mode;
+    const context = this.getUIContext().getHostContext() as common.Context;
+    const effective = ThemeCenter.applyThemeMode(context, mode);
+    this.effectiveTheme = effective;
+    this.safeShowToast(`主题已切换为${this.getThemeModeText()}`);
+  }
+
+  private async reload(): Promise<void> {
+    this.loading = true;
+    try {
+      const pref = PreferenceManager.getInstance();
+      this.themeMode = ThemeCenter.normalizeThemeMode(await pref.getThemeMode());
+      const context = this.getUIContext().getHostContext() as common.Context;
+      this.effectiveTheme = ThemeCenter.applyThemeMode(context, this.themeMode);
+
+      this.weatherFeatureEnabled = await pref.isWeatherFeatureEnabled();
+      this.enableIdleGapDetection = await pref.getIdleGapDetectionEnabled();
+      this.idleGapTriggerMinutes = await pref.getIdleGapTriggerMinutes();
+      this.idleGapTriggerInput = `${this.idleGapTriggerMinutes}`;
+      this.minEventDuration = await pref.getMinEventDuration();
+      this.minEventDurationInput = `${this.minEventDuration}`;
+      AppStorage.setOrCreate(AppStorageKeys.MIN_EVENT_DURATION, this.minEventDuration);
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  private async onWeatherFeatureChanged(value: boolean): Promise<void> {
+    const old = this.weatherFeatureEnabled;
+    this.weatherFeatureEnabled = value;
+    try {
+      const pref = PreferenceManager.getInstance();
+      await pref.setWeatherFeatureEnabled(value);
+      this.weatherFeatureEnabled = await pref.isWeatherFeatureEnabled();
+      this.safeShowToast(this.weatherFeatureEnabled ? '已开启天气功能' : '已关闭天气功能');
+    } catch (_error) {
+      this.weatherFeatureEnabled = old;
+      this.safeShowToast('天气功能开关保存失败');
+    }
+  }
+
+  private async onIdleGapDetectionChanged(value: boolean): Promise<void> {
+    const old = this.enableIdleGapDetection;
+    this.enableIdleGapDetection = value;
+    try {
+      const pref = PreferenceManager.getInstance();
+      await pref.setIdleGapDetectionEnabled(value);
+      this.enableIdleGapDetection = await pref.getIdleGapDetectionEnabled();
+      this.safeShowToast(this.enableIdleGapDetection ? '已开启空闲时间检测' : '已关闭空闲时间检测');
+    } catch (_error) {
+      this.enableIdleGapDetection = old;
+      this.safeShowToast('空闲时间检测开关保存失败');
+    }
+  }
+
+  private async saveIdleGapTriggerMinutes(): Promise<void> {
+    const oldValue = this.idleGapTriggerMinutes;
+    const raw = parseInt(this.idleGapTriggerInput, 10);
+    const nextValue = PreferenceManager.normalizeIdleGapTriggerMinutes(isNaN(raw) ? oldValue : raw);
+
+    this.idleGapTriggerMinutes = nextValue;
+    this.idleGapTriggerInput = `${nextValue}`;
+
+    try {
+      const pref = PreferenceManager.getInstance();
+      await pref.setIdleGapTriggerMinutes(nextValue);
+      const stored = await pref.getIdleGapTriggerMinutes();
+      this.idleGapTriggerMinutes = stored;
+      this.idleGapTriggerInput = `${stored}`;
+      this.safeShowToast(`空闲检测触发阈值已设置为 ${stored} 分钟`);
+    } catch (_error) {
+      this.idleGapTriggerMinutes = oldValue;
+      this.idleGapTriggerInput = `${oldValue}`;
+      this.safeShowToast('空闲检测触发阈值保存失败');
+    }
+  }
+
+  private async saveMinEventDuration(): Promise<void> {
+    const oldValue = this.minEventDuration;
+    const raw = parseInt(this.minEventDurationInput, 10);
+    const nextValue = PreferenceManager.normalizeMinEventDuration(isNaN(raw) ? oldValue : raw);
+
+    this.minEventDuration = nextValue;
+    this.minEventDurationInput = `${nextValue}`;
+
+    try {
+      const pref = PreferenceManager.getInstance();
+      await pref.setMinEventDuration(nextValue);
+      const stored = await pref.getMinEventDuration();
+      this.minEventDuration = stored;
+      this.minEventDurationInput = `${stored}`;
+      AppStorage.setOrCreate(AppStorageKeys.MIN_EVENT_DURATION, stored);
+      this.safeShowToast(`已设置最小时长 ${stored} 分钟`);
+    } catch (_error) {
+      this.minEventDuration = oldValue;
+      this.minEventDurationInput = `${oldValue}`;
+      this.safeShowToast('最小时长保存失败');
+    }
+  }
+
+  build() {
+    Column({ space: 10 }) {
+      SettingsSubPageHeader({ title: '通用与外观' });
+
+      SettingSelectItem({
+        title: '主题模式',
+        desc: '支持浅色、深色与跟随系统。',
+        valueText: this.getThemeModeText(),
+        textPrimary: this.getThemePalette().textPrimary,
+        textSecondary: this.getThemePalette().textSecondary,
+        cardBg: this.getThemePalette().cardBg,
+        actionColor: this.getThemePalette().primary,
+        onClickItem: () => this.showThemeModeDialog()
+      });
+
+      SettingSwitchItem({
+        title: '启用天气功能',
+        desc: '关闭后隐藏天气展示、刷新与提醒能力。',
+        loading: this.loading,
+        checked: this.weatherFeatureEnabled,
+        textPrimary: this.getThemePalette().textPrimary,
+        textSecondary: this.getThemePalette().textSecondary,
+        cardBg: this.getThemePalette().cardBg,
+        onToggle: async (value: boolean) => {
+          await this.onWeatherFeatureChanged(value);
+        }
+      });
+
+      SettingSwitchItem({
+        title: '启用空闲时间检测',
+        desc: '关闭后不再触发空闲时间优化提示。',
+        loading: this.loading,
+        checked: this.enableIdleGapDetection,
+        textPrimary: this.getThemePalette().textPrimary,
+        textSecondary: this.getThemePalette().textSecondary,
+        cardBg: this.getThemePalette().cardBg,
+        onToggle: async (value: boolean) => {
+          await this.onIdleGapDetectionChanged(value);
+        }
+      });
+
+      Row() {
+        TextInput({ text: this.idleGapTriggerInput, placeholder: '空闲阈值(分钟)' })
+          .type(InputType.Number)
+          .fontSize(14)
+          .textAlign(TextAlign.Center)
+          .layoutWeight(1)
+          .height(40)
+          .backgroundColor(this.getThemePalette().cardBgSoft)
+          .borderRadius(8)
+          .enabled(this.enableIdleGapDetection)
+          .onChange((value: string) => {
+            this.idleGapTriggerInput = value;
+          });
+
+        Button('保存')
+          .height(40)
+          .margin({ left: 10 })
+          .padding({ left: 14, right: 14 })
+          .borderRadius(8)
+          .backgroundColor(this.getThemePalette().primary)
+          .fontColor(Color.White)
+          .enabled(this.enableIdleGapDetection)
+          .opacity(this.enableIdleGapDetection ? 1 : 0.5)
+          .onClick(async () => {
+            await this.saveIdleGapTriggerMinutes();
+          });
+      }
+      .width('100%')
+      .padding(12)
+      .backgroundColor(this.getThemePalette().cardBg)
+      .borderRadius(12);
+
+      Column({ space: 8 }) {
+        Text('压缩方案最小时长')
+          .fontSize(15)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.getThemePalette().textPrimary)
+          .width('100%');
+
+        Text('用于约束智能压缩时单个地点可被压缩到的最小时长。')
+          .fontSize(12)
+          .fontColor(this.getThemePalette().textSecondary)
+          .width('100%');
+
+        Row() {
+          TextInput({ text: this.minEventDurationInput, placeholder: '压缩最小时长(分钟)' })
+            .type(InputType.Number)
+            .fontSize(14)
+            .textAlign(TextAlign.Center)
+            .layoutWeight(1)
+            .height(40)
+            .backgroundColor(this.getThemePalette().cardBgSoft)
+            .borderRadius(8)
+            .onChange((value: string) => {
+              this.minEventDurationInput = value;
+            });
+
+          Button('保存')
+            .height(40)
+            .margin({ left: 10 })
+            .padding({ left: 14, right: 14 })
+            .borderRadius(8)
+            .backgroundColor(this.getThemePalette().primary)
+            .fontColor(Color.White)
+            .onClick(async () => {
+              await this.saveMinEventDuration();
+            });
+        }
+        .width('100%');
+      }
+      .width('100%')
+      .padding(12)
+      .backgroundColor(this.getThemePalette().cardBg)
+      .borderRadius(12);
+
+      Column() {
+        Text('这里是通用设置页，适合放应用级开关与外观配置。')
+          .fontSize(13)
+          .fontColor(this.getThemePalette().textSecondary)
+          .width('100%');
+      }
+      .width('100%')
+      .padding(16)
+      .backgroundColor(this.getThemePalette().cardBg)
+      .borderRadius(12);
+
+      Blank().layoutWeight(1);
+    }
+    .width('100%')
+    .height('100%')
+    .justifyContent(FlexAlign.Start)
+    .alignItems(HorizontalAlign.Start)
+    .padding({ left: 16, right: 16, bottom: 20 })
+    .backgroundColor(this.getThemePalette().pageBg);
+  }
+}

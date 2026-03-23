@@ -1,4 +1,4 @@
-﻿import localUnitTest from './LocalUnit.test';
+import localUnitTest from './LocalUnit.test';
 import automatedTest from './AutomatedTest.test';
 import conflictCompressionTest from './ConflictCompression.test';
 import planJsonTransferServiceTest from './PlanJsonTransferService.test';

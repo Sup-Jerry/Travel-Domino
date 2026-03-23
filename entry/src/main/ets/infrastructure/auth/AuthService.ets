@@ -70,6 +70,10 @@ export class AuthService {
   public getMe(accessToken: string): AuthApiResponse<AuthMeResult> {
     const session = this.sessions.find((item: SessionRecord) => item.accessToken === accessToken) || null;
     if (!session || Date.now() >= session.expireAt) {
+      const guestFallback = this.buildGuestFallbackByToken(accessToken);
+      if (guestFallback) {
+        return this.ok(guestFallback);
+      }
       return this.fail<AuthMeResult>(AuthErrorCode.SESSION_EXPIRED, 'session_expired', new AuthMeResult());
     }
     const user = this.users.find((item: UserRecord) => item.userId === session.userId) || null;
@@ -83,6 +87,18 @@ export class AuthService {
     me.isGuest = user.isGuest;
     me.defaultLoginMethod = 'GUEST';
     return this.ok(me);
+  }
+
+  private buildGuestFallbackByToken(accessToken: string): AuthMeResult | null {
+    if (!accessToken || !accessToken.startsWith('guest_access_')) {
+      return null;
+    }
+    const me = new AuthMeResult();
+    me.userId = 'guest_local';
+    me.nickname = '游客用户';
+    me.isGuest = true;
+    me.defaultLoginMethod = 'GUEST';
+    return me;
   }
 
   private nextId(): number {

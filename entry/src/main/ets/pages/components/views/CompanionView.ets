@@ -98,6 +98,11 @@ export struct CompanionView {
   @State safeBottomInset: number = 0;
   @State safeLeftInset: number = 0;
   @State safeRightInset: number = 0;
+  @State weatherExpanded: boolean = false;
+  @State showWeatherScorePopup: boolean = false;
+  @State showWeatherHintPopup: boolean = false;
+  @State showWeatherSuggestionPopup: boolean = false;
+  @State weatherSuggestionPopupText: string = '';
 
   private timelineScroller: Scroller = new Scroller();
   private cachedScheduleVersion: number = -1;
@@ -146,6 +151,11 @@ export struct CompanionView {
     this.selectedHistoryPlaceName = '';
     this.showSearchPage = false;
     this.showFilterPage = false;
+    this.weatherExpanded = false;
+    this.showWeatherScorePopup = false;
+    this.showWeatherHintPopup = false;
+    this.showWeatherSuggestionPopup = false;
+    this.weatherSuggestionPopupText = '';
     this.searchKeyword = '';
     this.searchResults = [];
     this.companionFilterState = 'ALL';
@@ -176,6 +186,167 @@ export struct CompanionView {
 
   private getThemePalette() {
     return ThemeCenter.getPalette(this.effectiveTheme);
+  }
+
+  private getWeatherScoreSummary(): string {
+    if (!Number.isFinite(this.vm.executionWeatherScore) || this.vm.executionWeatherScore < 0) {
+      return '暂无评分';
+    }
+    const score = this.vm.executionWeatherScore;
+    if (score < 70) {
+      return `评分 ${score} · 高风险`;
+    }
+    if (score < 85) {
+      return `评分 ${score} · 中风险`;
+    }
+    return `评分 ${score} · 低风险`;
+  }
+
+  private buildExecutionSuggestionExplanation(item: WeatherSuggestion): string {
+    const reason = item.reason && item.reason.trim().length > 0 ? item.reason : '系统根据天气风险自动生成。';
+    const benefit = item.expectedBenefit && item.expectedBenefit.trim().length > 0 ? item.expectedBenefit : '用于降低执行中断风险。';
+    const rollback = item.canRollback ? '可回滚' : '不可回滚';
+    const actionTypeText = item.actionType === 'REORDER'
+      ? '重排行程顺序'
+      : (item.actionType === 'SHORTEN_STAY'
+        ? '缩短停留时长'
+        : (item.actionType === 'REPLACE_NODE'
+          ? '替换为更稳妥节点'
+          : (item.actionType === 'SKIP_NODE'
+            ? '跳过当前高风险节点'
+            : '提示类建议')));
+    return `建议：${item.title}\n动作类型：${actionTypeText}\n原因：${reason}\n收益：${benefit}\n回滚：${rollback}\n按钮说明：可选应用=立即尝试按建议调整；稍后=本次先不处理但后续仍可再看；忽略=移除该建议，不会自动执行。`;
+  }
+
+  @Builder
+  private WeatherScorePopupBuilder() {
+    Scroll() {
+      Column({ space: 2 }) {
+        Text(this.getWeatherScoreLine(0))
+          .fontSize(12)
+          .lineHeight(20)
+          .fontColor('#1565C0')
+          .fontWeight(FontWeight.Bold)
+        Text(this.getWeatherScoreLine(1))
+          .fontSize(12)
+          .lineHeight(20)
+          .fontColor('#2E7D32')
+          .fontWeight(FontWeight.Medium)
+        Text(this.getWeatherScoreLine(2))
+          .fontSize(12)
+          .lineHeight(20)
+          .fontColor('#6A1B9A')
+          .fontWeight(FontWeight.Medium)
+        Text(this.getWeatherScoreLine(3))
+          .fontSize(12)
+          .lineHeight(20)
+          .fontColor('#455A64')
+          .fontWeight(FontWeight.Medium)
+        Text(this.getWeatherScoreLine(4))
+          .fontSize(12)
+          .lineHeight(20)
+          .fontColor('#EF6C00')
+          .fontWeight(FontWeight.Medium)
+        Text(this.getWeatherScoreLine(5))
+          .fontSize(12)
+          .lineHeight(20)
+          .fontColor('#1B5E20')
+          .fontWeight(FontWeight.Medium)
+      }
+      .padding(10)
+      .width('100%');
+    }
+    .height(230)
+    .width(280);
+  }
+
+  @Builder
+  private WeatherHintPopupBuilder() {
+    Scroll() {
+      Column({ space: 2 }) {
+        Text(this.getWeatherHintLine(0))
+          .fontSize(12)
+          .lineHeight(20)
+          .fontColor('#1565C0')
+          .fontWeight(FontWeight.Medium)
+        Text(this.getWeatherHintLine(1))
+          .fontSize(12)
+          .lineHeight(20)
+          .fontColor('#2E7D32')
+          .fontWeight(FontWeight.Medium)
+        Text(this.getWeatherHintLine(2))
+          .fontSize(12)
+          .lineHeight(20)
+          .fontColor('#6A1B9A')
+          .fontWeight(FontWeight.Medium)
+        Text(this.getWeatherHintLine(3))
+          .fontSize(12)
+          .lineHeight(20)
+          .fontColor('#455A64')
+          .fontWeight(FontWeight.Medium)
+      }
+      .padding(10)
+      .width('100%');
+    }
+    .height(230)
+    .width(280);
+  }
+
+  @Builder
+  private WeatherSuggestionPopupBuilder() {
+    Scroll() {
+      Column({ space: 2 }) {
+        Text(this.getWeatherSuggestionLine(0))
+          .fontSize(12)
+          .lineHeight(20)
+          .fontColor('#1565C0')
+          .fontWeight(FontWeight.Bold)
+        Text(this.getWeatherSuggestionLine(1))
+          .fontSize(12)
+          .lineHeight(20)
+          .fontColor('#2E7D32')
+          .fontWeight(FontWeight.Medium)
+        Text(this.getWeatherSuggestionLine(2))
+          .fontSize(12)
+          .lineHeight(20)
+          .fontColor('#6A1B9A')
+          .fontWeight(FontWeight.Medium)
+        Text(this.getWeatherSuggestionLine(3))
+          .fontSize(12)
+          .lineHeight(20)
+          .fontColor('#EF6C00')
+          .fontWeight(FontWeight.Medium)
+        Text(this.getWeatherSuggestionLine(4))
+          .fontSize(12)
+          .lineHeight(20)
+          .fontColor('#455A64')
+          .fontWeight(FontWeight.Medium)
+        Text(this.getWeatherSuggestionLine(5))
+          .fontSize(12)
+          .lineHeight(20)
+          .fontColor('#D32F2F')
+          .fontWeight(FontWeight.Bold)
+      }
+      .padding(10)
+      .width('100%');
+    }
+    .height(240)
+    .width(290);
+  }
+
+  private getWeatherScoreLine(index: number): string {
+    const lines = this.vm.buildWeatherScoreExplanation(this.vm.executionWeatherScore).split('\n');
+    return lines[index] ?? '';
+  }
+
+  private getWeatherHintLine(index: number): string {
+    const lines = this.vm.buildWeatherHintExplanation().split('\n');
+    return lines[index] ?? '';
+  }
+
+  private getWeatherSuggestionLine(index: number): string {
+    const lines = this.weatherSuggestionPopupText.split('\n');
+    return lines[index] ?? '';
   }
 
   private bindImmersiveWindowContext(): void {
@@ -2247,11 +2418,11 @@ export struct CompanionView {
     Column({ space: 8 }) {
       Row() {
         Text('执行天气')
-          .fontSize(13)
+          .fontSize(14)
           .fontColor(this.getThemePalette().textSecondary);
         if (this.vm.executionWeatherCollabBadge.trim().length > 0) {
           Text(this.vm.executionWeatherCollabBadge)
-            .fontSize(10)
+            .fontSize(11)
             .fontColor(this.getThemePalette().primary)
             .backgroundColor(this.getThemePalette().cardBgSoft)
             .padding({ left: 6, right: 6, top: 2, bottom: 2 })
@@ -2260,134 +2431,211 @@ export struct CompanionView {
         }
         Blank();
         Text(this.vm.executionWeatherLoading ? '刷新中...' : '刷新')
-          .fontSize(11)
+          .fontSize(12)
           .fontColor(this.getThemePalette().primary)
           .onClick(() => {
             void this.vm.refreshExecutionWeather(true, 'MANUAL');
           });
-      }
-      .width('100%');
-
-      Row() {
-        Text(`当前位置：${this.vm.executionWeatherCurrentText || '天气未知'}`)
+        Text(this.weatherExpanded ? '收起' : '展开')
           .fontSize(12)
-          .fontColor(this.getThemePalette().textPrimary)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .layoutWeight(1);
-      }
-      .width('100%');
-
-      Row() {
-        Text(`下一节点：${this.vm.executionWeatherNextText || '天气未知'}`)
-          .fontSize(12)
-          .fontColor(this.getThemePalette().textPrimary)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .layoutWeight(1);
-        if (this.vm.executionWeatherScore >= 0) {
-          Text(`评分 ${this.vm.executionWeatherScore}`)
-            .fontSize(11)
-            .fontColor(this.getThemePalette().textSecondary);
-        }
-      }
-      .width('100%');
-
-      if (this.vm.executionWeatherHint) {
-        Text(this.vm.executionWeatherHint)
-          .fontSize(12)
-          .fontColor(
-            this.vm.executionWeatherLevel === 'WARNING'
-              ? this.getThemePalette().danger
-              : (this.vm.executionWeatherLevel === 'NOTICE'
-                ? this.getThemePalette().warning
-                : this.getThemePalette().textSecondary)
-          )
-          .maxLines(2)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .width('100%');
-      }
-
-      if (this.vm.executionWeatherCollabSummary.trim().length > 0) {
-        Text(`多日/多城：${this.vm.executionWeatherCollabSummary}`)
-          .fontSize(11)
-          .fontColor(this.getThemePalette().textSecondary)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .width('100%');
-      }
-
-      if (this.vm.executionWeatherAppliedSummary && this.vm.executionWeatherAppliedSummary.trim().length > 0) {
-        Text(`调整结果：${this.vm.executionWeatherAppliedSummary}`)
-          .fontSize(11)
           .fontColor(this.getThemePalette().primary)
-          .maxLines(2)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .width('100%');
+          .margin({ left: 10 })
+          .onClick(() => {
+            this.weatherExpanded = !this.weatherExpanded;
+          });
       }
+      .width('100%');
 
-      if (this.vm.executionWeatherSuggestions.length > 0) {
-        Column({ space: 8 }) {
-          Text('调整建议（可选）')
+      if (!this.weatherExpanded) {
+        Row() {
+          Text(this.getWeatherScoreSummary())
             .fontSize(12)
-            .fontWeight(FontWeight.Medium)
             .fontColor(this.getThemePalette().textSecondary)
-            .width('100%');
-
-          ForEach(this.vm.executionWeatherSuggestions, (item: WeatherSuggestion) => {
-            Column({ space: 6 }) {
-              Text(item.title)
-                .fontSize(12)
-                .fontWeight(FontWeight.Medium)
-                .fontColor(this.getThemePalette().textPrimary)
-                .maxLines(1)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-                .width('100%');
-
-              Text(item.message)
-                .fontSize(11)
-                .fontColor(this.getThemePalette().textSecondary)
-                .maxLines(2)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-                .width('100%');
-
-              Row({ space: 8 }) {
-                Text('可选应用')
-                  .fontSize(11)
-                  .fontColor(this.getThemePalette().primary)
-                  .onClick(() => {
-                    if (this.vm.executionWeatherApplying) {
-                      this.safeShowToast('正在应用建议，请稍候');
-                      return;
-                    }
-                    void this.vm.requestSoftReplan(this.vm.planId, item.suggestionId, 'APPLY').then((result) => {
-                      this.safeShowToast(result.success ? '已按可选建议调整行程' : `可选建议应用失败：${result.errorCode || 'REPLAN_CONFLICT'}`);
-                    });
-                  });
-                Text('稍后')
-                  .fontSize(11)
-                  .fontColor(this.getThemePalette().warning)
-                  .onClick(() => {
-                    this.vm.dismissExecutionSuggestion(item.suggestionId);
-                    this.safeShowToast('已暂不处理该建议');
-                  });
-                Text('忽略')
-                  .fontSize(11)
-                  .fontColor(this.getThemePalette().textTertiary)
-                  .onClick(() => {
-                    this.vm.dismissExecutionSuggestion(item.suggestionId);
-                    this.safeShowToast('已忽略该可选建议');
-                  });
-              }
-              .width('100%');
-            }
-            .width('100%')
-            .padding(8)
-            .backgroundColor(this.getThemePalette().cardBgSoft)
-            .borderRadius(8);
-          }, (item: WeatherSuggestion) => item.suggestionId);
+            .layoutWeight(1);
+          Text(this.vm.executionWeatherHint || '天气建议已收起，请用上方“展开”查看')
+            .fontSize(12)
+            .fontColor(this.getThemePalette().textSecondary)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .layoutWeight(2);
         }
         .width('100%');
+      } else {
+        Row() {
+          Text(`当前位置：${this.vm.executionWeatherCurrentText || '天气未知'}`)
+            .fontSize(13)
+            .fontColor(this.getThemePalette().textPrimary)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .layoutWeight(1);
+        }
+        .width('100%');
+
+        Row() {
+          Text(`下一节点：${this.vm.executionWeatherNextText || '天气未知'}`)
+            .fontSize(13)
+            .fontColor(this.getThemePalette().textPrimary)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .layoutWeight(1);
+          if (this.vm.executionWeatherScore >= 0) {
+            Text(`评分 ${this.vm.executionWeatherScore} ⓘ`)
+              .fontSize(12)
+              .fontColor(this.getThemePalette().primary)
+              .onClick(() => {
+                this.showWeatherScorePopup = !this.showWeatherScorePopup;
+              })
+              .bindPopup(this.showWeatherScorePopup, {
+                builder: this.WeatherScorePopupBuilder,
+                placement: Placement.BottomLeft,
+                mask: false,
+                popupColor: this.getThemePalette().cardBgSoft,
+                onStateChange: (e) => {
+                  if (!e.isVisible) {
+                    this.showWeatherScorePopup = false;
+                  }
+                }
+              });
+          }
+        }
+        .width('100%');
+
+        if (this.vm.executionWeatherHint) {
+          Text(`${this.vm.executionWeatherHint}  ⓘ`)
+            .fontSize(13)
+            .fontColor(
+              this.vm.executionWeatherLevel === 'WARNING'
+                ? this.getThemePalette().danger
+                : (this.vm.executionWeatherLevel === 'NOTICE'
+                  ? this.getThemePalette().warning
+                  : this.getThemePalette().textSecondary)
+            )
+            .maxLines(2)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .width('100%')
+            .onClick(() => {
+              this.showWeatherHintPopup = !this.showWeatherHintPopup;
+            })
+            .bindPopup(this.showWeatherHintPopup, {
+              builder: this.WeatherHintPopupBuilder,
+              placement: Placement.BottomLeft,
+              mask: false,
+              popupColor: this.getThemePalette().cardBgSoft,
+              onStateChange: (e) => {
+                if (!e.isVisible) {
+                  this.showWeatherHintPopup = false;
+                }
+              }
+            });
+        }
+
+        if (this.vm.executionWeatherCollabSummary.trim().length > 0) {
+          Text(`多日/多城：${this.vm.executionWeatherCollabSummary}`)
+            .fontSize(12)
+            .fontColor(this.getThemePalette().textSecondary)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .width('100%');
+        }
+
+        if (this.vm.executionWeatherAppliedSummary && this.vm.executionWeatherAppliedSummary.trim().length > 0) {
+          Text(`调整结果：${this.vm.executionWeatherAppliedSummary}`)
+            .fontSize(12)
+            .fontColor(this.getThemePalette().primary)
+            .maxLines(2)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .width('100%');
+        }
+
+        if (this.vm.executionWeatherSuggestions.length > 0) {
+          Column({ space: 8 }) {
+            Text('调整建议（可选）')
+              .fontSize(13)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(this.getThemePalette().primary)
+              .width('100%')
+              .onClick(() => {
+                this.weatherSuggestionPopupText = '调整建议（用途）\n在天气不利时，尽量保持计划可执行并降低中断概率。\n可做动作\n重排顺序、缩短停留、跳过高风险点、替代节点。\n按钮说明\n可选应用=立即尝试调整；稍后=先不处理，下次可再看；忽略=移除该建议。\n仅作为建议，不会自动改行程。';
+                this.showWeatherSuggestionPopup = !this.showWeatherSuggestionPopup;
+              })
+              .bindPopup(this.showWeatherSuggestionPopup, {
+                builder: this.WeatherSuggestionPopupBuilder,
+                placement: Placement.BottomLeft,
+                mask: false,
+                popupColor: this.getThemePalette().cardBgSoft,
+                onStateChange: (e) => {
+                  if (!e.isVisible) {
+                    this.showWeatherSuggestionPopup = false;
+                  }
+                }
+              });
+
+            ForEach(this.vm.executionWeatherSuggestions, (item: WeatherSuggestion) => {
+              Column({ space: 6 }) {
+                Text(`${item.title}  ⓘ`)
+                  .fontSize(13)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor(this.getThemePalette().primary)
+                  .maxLines(1)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+                  .width('100%')
+                  .onClick(() => {
+                    this.weatherSuggestionPopupText = this.buildExecutionSuggestionExplanation(item);
+                    this.showWeatherSuggestionPopup = true;
+                  });
+
+                Text(item.message)
+                  .fontSize(12)
+                  .fontColor(this.getThemePalette().textSecondary)
+                  .maxLines(2)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+                  .width('100%');
+
+                Row({ space: 8 }) {
+                  Text('可选应用')
+                    .fontSize(12)
+                    .fontColor(this.getThemePalette().primary)
+                    .onClick(() => {
+                      if (this.vm.executionWeatherApplying) {
+                        this.safeShowToast('正在应用建议，请稍候');
+                        return;
+                      }
+                      void this.vm.requestSoftReplan(this.vm.planId, item.suggestionId, 'APPLY').then((result) => {
+                        if (!result.success) {
+                          hilog.warn(
+                            0x0000,
+                            'CompanionView',
+                            `[WEATHER_REPLAN][ui_apply_fail] planId=${this.vm.planId}, suggestionId=${item.suggestionId}, actionType=${item.actionType}, errorCode=${result.errorCode}, reasonCode=${result.reasonCode ?? ''}, startFromEventId=${result.startFromEventId ?? 0}, rolledBack=${result.rolledBack ? 1 : 0}`
+                          );
+                        }
+                        this.safeShowToast(result.success ? '已按可选建议调整行程' : `可选建议应用失败：${result.errorCode || 'REPLAN_CONFLICT'}`);
+                      });
+                    });
+                  Text('稍后')
+                    .fontSize(12)
+                    .fontColor(this.getThemePalette().warning)
+                    .onClick(() => {
+                      this.vm.dismissExecutionSuggestion(item.suggestionId);
+                      this.safeShowToast('已暂不处理该建议');
+                    });
+                  Text('忽略')
+                    .fontSize(12)
+                    .fontColor(this.getThemePalette().textTertiary)
+                    .onClick(() => {
+                      this.vm.dismissExecutionSuggestion(item.suggestionId);
+                      this.safeShowToast('已忽略该可选建议');
+                    });
+                }
+                .width('100%');
+              }
+              .width('100%')
+              .padding(8)
+              .backgroundColor(this.getThemePalette().cardBgSoft)
+              .borderRadius(8);
+            }, (item: WeatherSuggestion) => item.suggestionId);
+          }
+          .width('100%');
+        }
       }
     }
     .width('100%')

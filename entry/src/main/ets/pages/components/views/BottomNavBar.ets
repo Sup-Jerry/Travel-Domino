@@ -2,7 +2,7 @@
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { ThemeCenter } from '../../../common/utils/ThemeCenter';
 
-export type AppNavTab = 'search' | 'trash' | 'home' | 'archive' | 'settings';
+export type AppNavTab = 'search' | 'trash' | 'home' | 'archive' | 'profile';
 
 interface TabMeta {
   key: AppNavTab;
@@ -66,11 +66,11 @@ export struct GlobalBottomNavBar {
     activeIcon: $r('app.media.nav_archive_a')
   };
 
-  private settingsTab: TabMeta = {
-    key: 'settings',
-    label: '设置',
-    normalIcon: $r('app.media.nav_settings_n'),
-    activeIcon: $r('app.media.nav_settings_a')
+  private profileTab: TabMeta = {
+    key: 'profile',
+    label: '我的',
+    normalIcon: $r('app.media.nav_profile_n'),
+    activeIcon: $r('app.media.nav_profile_a')
   };
 
   private createRouteOptions(url: string): RouterUrlOptions {
@@ -122,8 +122,8 @@ export struct GlobalBottomNavBar {
       return;
     }
 
-    await this.safeReplaceUrl(this.createRouteOptions('pages/SettingsPage'), 'pages/SettingsPage');
-    hilog.info(0x0000, NAV_TAG, '[BOTTOM_NAV][route] to=pages/SettingsPage');
+    await this.safeReplaceUrl(this.createRouteOptions('pages/MyPage'), 'pages/MyPage');
+    hilog.info(0x0000, NAV_TAG, '[BOTTOM_NAV][route] to=pages/MyPage');
   }
 
   private isVisualActive(tab: AppNavTab): boolean {
@@ -278,7 +278,7 @@ export struct GlobalBottomNavBar {
       this.NormalTabCell(this.trashTab);
       this.HomeTabCell();
       this.NormalTabCell(this.archiveTab);
-      this.NormalTabCell(this.settingsTab);
+      this.NormalTabCell(this.profileTab);
     }
     .width('100%')
     .height(80)
