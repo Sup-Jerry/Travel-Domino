@@ -3,6 +3,23 @@ import { PlanTransitionEvent } from './ExecutionContext';
 import { PlanStatus } from './PlanStatus';
 
 export class NotificationBridge {
+  private static readonly IN_PROGRESS_SHOWN_KEY_PREFIX = 'WeatherInProgressShown_';
+
+  private hasInProgressShown(planIdNum: number): boolean {
+    const key = `${NotificationBridge.IN_PROGRESS_SHOWN_KEY_PREFIX}${planIdNum}`;
+    return (AppStorage.get<number>(key) ?? 0) === 1;
+  }
+
+  private markInProgressShown(planIdNum: number): void {
+    const key = `${NotificationBridge.IN_PROGRESS_SHOWN_KEY_PREFIX}${planIdNum}`;
+    AppStorage.setOrCreate(key, 1);
+  }
+
+  private clearInProgressShown(planIdNum: number): void {
+    const key = `${NotificationBridge.IN_PROGRESS_SHOWN_KEY_PREFIX}${planIdNum}`;
+    AppStorage.setOrCreate(key, 0);
+  }
+
   public handlePlanTransitionNotification(event: PlanTransitionEvent): void {
     const planIdNum = Number(event.planId);
     if (!Number.isFinite(planIdNum) || planIdNum <= 0) {
@@ -25,6 +42,10 @@ export class NotificationBridge {
     }
 
     if (event.toStatus === PlanStatus.IN_PROGRESS) {
+      if (event.triggerReason === 'resume_by_user' || this.hasInProgressShown(planIdNum)) {
+        return;
+      }
+      this.markInProgressShown(planIdNum);
       WeatherReminderStore.writePayload({
         seq: WeatherReminderStore.nextSeq(),
         planId: planIdNum,
@@ -56,6 +77,7 @@ export class NotificationBridge {
 
     if (event.toStatus === PlanStatus.COMPLETED || event.toStatus === PlanStatus.CANCELLED || event.toStatus === PlanStatus.EXPIRED) {
       WeatherReminderStore.clearPayload(planIdNum);
+      this.clearInProgressShown(planIdNum);
     }
   }
 }

@@ -29,8 +29,6 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { PreferenceManager } from '../common/utils/PreferenceManager';
 import { ThemeCenter } from '../common/utils/ThemeCenter';
 import { NavigationHelper } from '../common/utils/NavigationHelper';
-import { ArrivalReminderPayload } from '../infrastructure/services/ArrivalReminderEngine';
-import { ArrivalReminderCoordinator } from '../infrastructure/services/ArrivalReminderCoordinator';
 import { WeatherReminderCoordinator } from '../infrastructure/services/WeatherReminderCoordinator';
 import { WeatherReminderPayload } from '../common/utils/weather/WeatherReminderStore';
 import { PlanAppService } from '../viewmodel/PlanAppService';
@@ -89,14 +87,13 @@ struct Index {
   @State currentStrategyExplanation: string = '';
   @State showPlanningWeatherHintPopup: boolean = false;
   @State showPlanningWeatherScorePopup: boolean = false;
+  @State hasManualPlanningWeatherRefresh: boolean = false;
+  @State isPageRefreshing: boolean = false;
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
   @StorageLink('TrafficDataUpdated') @Watch('onTrafficSignal') trafficSignal: number = 0;
-  private arrivalReminderUnsubscribe: (() => void) | null = null;
   private weatherReminderUnsubscribe: (() => void) | null = null;
-  @State isArrivalDialogOpen: boolean = false;
   @State isWeatherDialogOpen: boolean = false;
   private readonly planService: PlanAppService = PlanAppService.getInstance();
-  private readonly arrivalCoordinator: ArrivalReminderCoordinator = ArrivalReminderCoordinator.getInstance();
   private readonly weatherCoordinator: WeatherReminderCoordinator = WeatherReminderCoordinator.getInstance();
   private strategyAdaptationCheckTimer: number = -1;
   dialogController: CustomDialogController | null = null;
@@ -233,14 +230,6 @@ struct Index {
       return;
     }
 
-    this.arrivalReminderUnsubscribe = this.arrivalCoordinator.subscribePlan(this.currentPlanId, {
-      isDialogOpen: (): boolean => this.isArrivalDialogOpen,
-      resolveEvents: (): EventEntity[] => this.vm.events,
-      onShowPlan: (payload: ArrivalReminderPayload): void => {
-        this.showArrivalReminderDialog(payload);
-      }
-    });
-
     this.weatherReminderUnsubscribe = this.weatherCoordinator.subscribePlan(this.currentPlanId, {
       isDialogOpen: (): boolean => this.isWeatherDialogOpen,
       onShow: (payload: WeatherReminderPayload): void => {
@@ -256,46 +245,26 @@ struct Index {
   }
 
   private unbindReminderSubscriptions(): void {
-    if (this.arrivalReminderUnsubscribe) {
-      this.arrivalReminderUnsubscribe();
-      this.arrivalReminderUnsubscribe = null;
-    }
     if (this.weatherReminderUnsubscribe) {
       this.weatherReminderUnsubscribe();
       this.weatherReminderUnsubscribe = null;
     }
   }
 
-  private showArrivalReminderDialog(payload: ArrivalReminderPayload): void {
-    this.isArrivalDialogOpen = true;
-    this.getUIContext().showAlertDialog({
-      title: '到达提醒',
-      message: `你已到达【${payload.placeName}】附近（约${Math.max(1, payload.distanceMeters)}米）`,
-      autoCancel: false,
-      alignment: DialogAlignment.Center,
-      primaryButton: {
-        value: '进入行程页',
-        action: () => {
-          this.isCompanionMode = true;
-          this.isArrivalDialogOpen = false;
-          this.arrivalCoordinator.acknowledge(payload.eventId, 'open_page');
-        }
-      },
-      secondaryButton: {
-        value: '立即开始',
-        action: () => {
-          this.isCompanionMode = true;
-          this.isArrivalDialogOpen = false;
-          void this.tryStartEventWithConflictPrompt(payload.eventId).then((started: boolean) => {
-            if (started) {
-              this.arrivalCoordinator.acknowledge(payload.eventId, 'start');
-            } else {
-              this.arrivalCoordinator.acknowledge(payload.eventId, 'open_page');
-            }
-          });
-        }
+  private async handlePagePullRefresh(): Promise<void> {
+    if (this.isPageRefreshing || this.currentPlanId <= 0) {
+      return;
+    }
+    this.isPageRefreshing = true;
+    try {
+      await this.vm.loadData(this.currentPlanId);
+      this.planService.requestArrivalCheckNow('plan_manual_refresh');
+      if (this.vm.isWeatherFeatureEnabled()) {
+        this.hasManualPlanningWeatherRefresh = true;
       }
-    });
+    } finally {
+      this.isPageRefreshing = false;
+    }
   }
 
   private showWeatherReminderDialog(payload: WeatherReminderPayload): void {
@@ -328,7 +297,7 @@ struct Index {
         }
       },
       secondaryButton: {
-        value: payload.suggestionId ? '去伴游查看建议' : '可选：刷新天气',
+        value: payload.suggestionId ? '去伴游' : '刷新天气',
         action: () => {
           this.isWeatherDialogOpen = false;
           this.weatherCoordinator.clear(this.currentPlanId);
@@ -1254,9 +1223,6 @@ struct Index {
     // ✅ 改用 this.settingsDialogController
     this.settingsDialogController = new CustomDialogController({
       builder: PlanSettingsDialog({
-        autoRouteEnabled: this.vm.enableAutoAmapRoute,
-        currentStrategyMode: this.vm.getStrategyMode(),
-        hasAiHistory: this.vm.hasAiHistory(),
         onRename: () => {
           setTimeout((): void => this.openRenameDialog(), 100);
         },
@@ -1274,53 +1240,6 @@ struct Index {
               }
             });
           }, 100);
-        },
-        onAutoRouteChange: (enabled: boolean) => {
-          this.vm.updatePlanAutoAmapRoute(enabled);
-        },
-        onStrategyChange: async (mode: number) => {
-          try {
-            await this.vm.updateStrategyMode(mode);
-            this.strategyMode = mode;
-            this.currentStrategyExplanation = StrategyService.buildStrategyExplanation(mode);
-            const modeName = mode === 1 ? '特种兵' : mode === 2 ? '休闲' : '默认';
-            this.safeShowToast(`已切换为${modeName}模式`);
-          } catch (error) {
-            this.safeShowToast('策略更新失败');
-          }
-        },
-        onRegenerateWithStrategy: async (mode: number) => {
-          try {
-            await this.vm.changeStrategyAndRegenerate(mode);
-            this.strategyMode = mode;
-            this.currentStrategyExplanation = StrategyService.buildStrategyExplanation(mode);
-            const modeName = mode === 1 ? '特种兵' : mode === 2 ? '休闲' : '默认';
-            this.safeShowToast(`已切换为${modeName}模式并重新生成`);
-          } catch (error) {
-            const msg = error instanceof Error ? error.message : '重新生成失败';
-            this.safeShowToast(msg);
-          }
-        },
-        onCustomStrategyChange: async (strategy: ComposableStrategy) => {
-          try {
-            await this.vm.switchToCustomStrategy(strategy);
-            this.strategyMode = -1;
-            this.currentStrategyExplanation = StrategyService.buildComposableExplanation(strategy);
-            this.safeShowToast('已应用自定义策略');
-          } catch (error) {
-            this.safeShowToast('策略更新失败');
-          }
-        },
-        onRegenerateWithCustomStrategy: async (strategy: ComposableStrategy) => {
-          try {
-            await this.vm.regenerateWithCustomStrategy(strategy);
-            this.strategyMode = -1;
-            this.currentStrategyExplanation = StrategyService.buildComposableExplanation(strategy);
-            this.safeShowToast('已应用自定义策略并重新生成');
-          } catch (error) {
-            const msg = error instanceof Error ? error.message : '重新生成失败';
-            this.safeShowToast(msg);
-          }
         },
         weatherUserPreference: this.vm.getWeatherUserPreference(),
         onWeatherPreferenceChange: async (preference: WeatherUserPreference) => {
@@ -1375,6 +1294,7 @@ struct Index {
       const reminderEventId = Number(params['reminderEventId'] as number) || -1;
 
       this.currentPlanId = planId;
+      this.hasManualPlanningWeatherRefresh = false;
       this.vm.setHasUnsavedPostponeStorageKey(this.scopedStorageKey(AppStorageKeys.HAS_UNSAVED_POSTPONE));
       this.refreshUnsavedFlag();
       this.planTitle = params['title'] as string || '行程详情';
@@ -1498,7 +1418,8 @@ struct Index {
         },
         secondaryButton: {
           value: '删除',
-          fontColor: '#D32F2F',
+          fontColor: Color.White,
+          backgroundColor: '#2F7DFF',
           action: () => {
             // 确认后才执行删除
             this.vm.hardDelete(item);
@@ -1756,6 +1677,7 @@ struct Index {
                 .fontColor(this.getThemePalette().textPrimary)
                 .enabled(!this.vm.weatherLoading)
                 .onClick(() => {
+                  this.hasManualPlanningWeatherRefresh = true;
                   void this.vm.refreshPlanningWeather(true).then(() => {
                     this.safeShowToast('天气已刷新');
                   }).catch((_error: Object) => {
@@ -1770,7 +1692,7 @@ struct Index {
         .padding(16)
         .backgroundColor(Color.Transparent)
 
-        if (this.vm.isWeatherFeatureEnabled() && this.vm.weatherPlanningHint) {
+        if (this.vm.isWeatherFeatureEnabled() && this.hasManualPlanningWeatherRefresh && this.vm.weatherPlanningHint) {
           Row() {
             Text(`天气建议（可选） ⓘ ${this.vm.weatherCollabLabel ? `· ${this.vm.weatherCollabLabel}` : ''}：${this.vm.weatherPlanningHint}${this.vm.weatherCollabSummary ? `（${this.vm.weatherCollabSummary}）` : ''}${this.vm.weatherStrategyHint ? `；策略联动：${this.vm.weatherStrategyHint}` : ''}`)
               .fontSize(13)
@@ -1901,10 +1823,11 @@ struct Index {
         Divider().color(this.getThemePalette().divider)
 
         // --- 区域 2: 底部日程表 ---
-        List({ space: 0 }) { // space 设为 0，由 Group 内间距控制
+        Refresh({ refreshing: this.isPageRefreshing }) {
+          List({ space: 0 }) { // space 设为 0，由 Group 内间距控制
 
-          // [第一层循环] 遍历日期组
-          ForEach(this.vm.groupedEvents, (group: import('../viewmodel/TimelineViewModel').DateGroup) => {
+            // [第一层循环] 遍历日期组
+            ForEach(this.vm.groupedEvents, (group: import('../viewmodel/TimelineViewModel').DateGroup) => {
 
             // [新增] 日期组组件
             ListItemGroup({ header: this.BuildDateHeader(group.dateHeader, group.dayOffset) }) {
@@ -1976,9 +1899,9 @@ struct Index {
           }, (group: import('../viewmodel/TimelineViewModel').DateGroup) =>
             `${group.dayOffset}_${group.actualDateMs}_${group.events.length}`)
 
-          if (!this.vm.isArchived && this.vm.getSortedGaps().length > 0) {
-            ListItem() {
-              Row() {
+            if (!this.vm.isArchived && this.vm.getSortedGaps().length > 0) {
+              ListItem() {
+                Row() {
 
                 Text('→')
                   .fontSize(14)
@@ -1989,19 +1912,24 @@ struct Index {
                   .fontColor(this.getThemePalette().textSecondary)
                   .layoutWeight(1) // 👈 报错点：确保这行上面没有分号
 
+                }
+                .width('100%')
+                .padding({ top: 12, bottom: 12, left: 16, right: 16 })
+                .justifyContent(FlexAlign.Center)
+                .onClick(() => {
+                  // 这里的逻辑已按你的要求修改
+                  this.gapItem = null
+                  this.gapDialogController?.open()
+                })
               }
-              .width('100%')
-              .padding({ top: 12, bottom: 12, left: 16, right: 16 })
-              .justifyContent(FlexAlign.Center)
-              .onClick(() => {
-                // 这里的逻辑已按你的要求修改
-                this.gapItem = null
-                this.gapDialogController?.open()
-              })
             }
+            ListItem().height(this.isCompanionMode ? 24 : 100)
           }
-          ListItem().height(this.isCompanionMode ? 24 : 100)
+          .sticky(StickyStyle.Header) // 效果：日期标题吸顶
         }
+        .onRefreshing(() => {
+          void this.handlePagePullRefresh();
+        })
         .layoutWeight(1)
         .padding({
           top: 0,
@@ -2010,7 +1938,6 @@ struct Index {
           right: 12
         })
         .backgroundColor(this.getThemePalette().pageBg)
-        .sticky(StickyStyle.Header) // 效果：日期标题吸顶
       }
       .width('100%').height('100%').backgroundColor(this.getThemePalette().pageBg)
 

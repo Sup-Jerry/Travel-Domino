@@ -2,6 +2,7 @@
 
 import { router, promptAction } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 // 补全所有必需的 SDK 强类型类和接口
 import {
   AMap,
@@ -112,9 +113,17 @@ struct MapPickerPage {
     // ✅ 修复 3：通过全局单例捕获地图，解决 getMap 和 mapReadyCallback 不存在的报错
     MapViewManager.getInstance().registerMapViewCreatedCallback((mapview?: MapView) => {
       if (mapview) {
+        hilog.info(0x0000, 'MapPickerPage', '[MAP_PICKER][map_created]');
+        try {
+          mapview.onCreate();
+          hilog.info(0x0000, 'MapPickerPage', '[MAP_PICKER][map_on_create_called]');
+        } catch (_error) {
+          hilog.warn(0x0000, 'MapPickerPage', '[MAP_PICKER][map_on_create_failed]');
+        }
         // 调用异步方法获取真实的 AMap 控制对象
         mapview.getMapAsync((map: AMap) => {
           this.map = map;
+          hilog.info(0x0000, 'MapPickerPage', '[MAP_PICKER][map_ready]');
           this.onMapReady();
         });
       }
