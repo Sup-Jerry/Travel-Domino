@@ -16,7 +16,7 @@ import { CompanionBottomActionBar } from './BottomNavBar';
 import { ThemeCenter } from '../../../common/utils/ThemeCenter';
 import { CompanionEventState, CompanionPresentationHelper } from './CompanionPresentationHelper';
 import { TimelineExecutionState } from '../../../domain/policy/TimelineExecutionState';
-import { WeatherSuggestion } from '../../../domain/services/WeatherModels';
+import { SoftReplanApplyResult, WeatherSuggestion } from '../../../domain/services/WeatherModels';
 
 type CompanionSubMode = 'immersive' | 'control';
 type CompanionInteractionMode = 'immersive' | 'control' | 'both';
@@ -216,6 +216,40 @@ export struct CompanionView {
             ? '跳过当前高风险节点'
             : '提示类建议')));
     return `建议：${item.title}\n动作类型：${actionTypeText}\n原因：${reason}\n收益：${benefit}\n回滚：${rollback}\n按钮说明：可选应用=立即尝试按建议调整；稍后=本次先不处理但后续仍可再看；忽略=移除该建议，不会自动执行。`;
+  }
+
+  private buildReplanToastMessage(result: SoftReplanApplyResult): string {
+    if (result.success) {
+      const summary = result.preview?.summary && result.preview.summary.trim().length > 0
+        ? result.preview.summary
+        : '已按可选建议调整行程';
+      return summary;
+    }
+    if (result.errorCode === 'REPLAN_INVALID') {
+      if (result.reasonCode === 'status_blocked') {
+        return '当前计划状态不可调整（如已过期/已完成）';
+      }
+      if (result.reasonCode === 'suggestion_missing') {
+        return '建议已失效，请先刷新天气后重试';
+      }
+      return '参数或状态不满足应用条件';
+    }
+    if (result.errorCode === 'REPLAN_BUSY') {
+      return '系统正在处理上一条建议，请稍后再试';
+    }
+    if (result.errorCode === 'REPLAN_IMMUTABLE') {
+      return '命中已完成或锁定节点保护，未执行调整';
+    }
+    if (result.errorCode === 'REPLAN_TIMEOUT') {
+      return '调整超时，已自动回滚';
+    }
+    if (result.errorCode === 'REPLAN_CONFLICT') {
+      if (result.reasonCode === 'apply_failed') {
+        return '建议未命中可调整节点，已回滚';
+      }
+      return result.rolledBack ? '执行冲突，已回滚未改动行程' : '执行冲突，未应用建议';
+    }
+    return '可选建议应用失败，请稍后重试';
   }
 
   @Builder
@@ -2596,19 +2630,56 @@ export struct CompanionView {
                     .fontSize(12)
                     .fontColor(this.getThemePalette().primary)
                     .onClick(() => {
+                      hilog.info(
+                        0x0000,
+                        'CompanionView',
+                        `[WEATHER_REPLAN][ui_apply_click] planId=${this.vm.planId}, suggestionId=${item.suggestionId}, actionType=${item.actionType}, applying=${this.vm.executionWeatherApplying ? 1 : 0}`
+                      );
                       if (this.vm.executionWeatherApplying) {
+                        hilog.warn(
+                          0x0000,
+                          'CompanionView',
+                          `[WEATHER_REPLAN][ui_apply_blocked] reason=applying_busy, suggestionId=${item.suggestionId}`
+                        );
                         this.safeShowToast('正在应用建议，请稍候');
                         return;
                       }
-                      void this.vm.requestSoftReplan(this.vm.planId, item.suggestionId, 'APPLY').then((result) => {
-                        if (!result.success) {
-                          hilog.warn(
-                            0x0000,
-                            'CompanionView',
-                            `[WEATHER_REPLAN][ui_apply_fail] planId=${this.vm.planId}, suggestionId=${item.suggestionId}, actionType=${item.actionType}, errorCode=${result.errorCode}, reasonCode=${result.reasonCode ?? ''}, startFromEventId=${result.startFromEventId ?? 0}, rolledBack=${result.rolledBack ? 1 : 0}`
-                          );
+                      this.getUIContext().showAlertDialog({
+                        title: '确认应用可选建议',
+                        message: `建议：${item.title}\n动作：${item.actionType}\n\n应用后将尝试调整后续行程。`,
+                        autoCancel: true,
+                        alignment: DialogAlignment.Center,
+                        primaryButton: {
+                          value: '先不应用',
+                          action: () => {}
+                        },
+                        secondaryButton: {
+                          value: '确认应用',
+                          action: () => {
+                            void this.vm.requestSoftReplan(this.vm.planId, item.suggestionId, 'APPLY').then((result) => {
+                              hilog.info(
+                                0x0000,
+                                'CompanionView',
+                                `[WEATHER_REPLAN][ui_apply_result] planId=${this.vm.planId}, suggestionId=${item.suggestionId}, actionType=${item.actionType}, success=${result.success ? 1 : 0}, errorCode=${result.errorCode || 'NONE'}, reasonCode=${result.reasonCode ?? ''}, startFromEventId=${result.startFromEventId ?? 0}, rolledBack=${result.rolledBack ? 1 : 0}`
+                              );
+                              if (!result.success) {
+                                hilog.warn(
+                                  0x0000,
+                                  'CompanionView',
+                                  `[WEATHER_REPLAN][ui_apply_fail] planId=${this.vm.planId}, suggestionId=${item.suggestionId}, actionType=${item.actionType}, errorCode=${result.errorCode}, reasonCode=${result.reasonCode ?? ''}, startFromEventId=${result.startFromEventId ?? 0}, rolledBack=${result.rolledBack ? 1 : 0}`
+                                );
+                              }
+                              this.safeShowToast(this.buildReplanToastMessage(result));
+                            }).catch((error: Object) => {
+                              hilog.error(
+                                0x0000,
+                                'CompanionView',
+                                `[WEATHER_REPLAN][ui_apply_exception] planId=${this.vm.planId}, suggestionId=${item.suggestionId}, actionType=${item.actionType}, reason=${JSON.stringify(error)}`
+                              );
+                              this.safeShowToast('可选建议应用失败：执行异常');
+                            });
+                          }
                         }
-                        this.safeShowToast(result.success ? '已按可选建议调整行程' : `可选建议应用失败：${result.errorCode || 'REPLAN_CONFLICT'}`);
                       });
                     });
                   Text('稍后')

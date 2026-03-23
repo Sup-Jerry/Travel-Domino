@@ -2438,6 +2438,15 @@ export class TimelineViewModel {
         this.weatherUserPreference
       );
       this.executionWeatherSuggestions = this.filterActiveExecutionSuggestions(suggestions);
+      this.executionSuggestionMap.clear();
+      this.executionWeatherSuggestions.forEach((item: WeatherSuggestion) => {
+        this.executionSuggestionMap.set(item.suggestionId, item);
+      });
+      hilog.info(
+        0x0000,
+        TAG,
+        `[WEATHER_REPLAN][suggestion_sync] listSize=${this.executionWeatherSuggestions.length}, mapSize=${this.executionSuggestionMap.size}`
+      );
       if (this.executionWeatherSuggestions.length > 0) {
         this.applyExecutionSuggestion(this.executionWeatherSuggestions[0], trigger);
       } else {
@@ -2574,6 +2583,13 @@ export class TimelineViewModel {
       return failWithLog('REPLAN_INVALID', 'invalid_input', 0, emptyPreview, false);
     }
     const status = this.getCurrentPlanStatus();
+    const suggestionInList = this.executionWeatherSuggestions.some((item: WeatherSuggestion) => item.suggestionId === suggestionId);
+    const mapHasSuggestion = this.executionSuggestionMap.has(suggestionId);
+    hilog.info(
+      0x0000,
+      TAG,
+      `[WEATHER_REPLAN][apply_begin] planId=${planId}, suggestionId=${suggestionId}, mode=${mode}, status=${status}, busy=${this.executionReplanBusy ? 1 : 0}, listSize=${this.executionWeatherSuggestions.length}, mapSize=${this.executionSuggestionMap.size}, suggestionInList=${suggestionInList ? 1 : 0}, mapHasSuggestion=${mapHasSuggestion ? 1 : 0}`
+    );
     if (!(status === PlanStatus.READY || status === PlanStatus.IN_PROGRESS || status === PlanStatus.PAUSED)) {
       return failWithLog('REPLAN_INVALID', 'status_blocked', 0, emptyPreview, false);
     }
