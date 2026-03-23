@@ -61,7 +61,7 @@ export class WeatherRiskEvaluator {
     const pref = preference ?? DEFAULT_WEATHER_USER_PREFERENCE;
     if (!bindings || bindings.length === 0) {
       const emptyResult: RouteWeatherSuitability = {
-        routeScore: 100,
+        routeScore: -1,
         riskTags: [],
         summaryText: '暂无天气约束，路线可正常规划'
       };

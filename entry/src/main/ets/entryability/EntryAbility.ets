@@ -73,7 +73,6 @@ export default class EntryAbility extends UIAbility {
     AppStorage.setOrCreate(AppStorageKeys.ARRIVAL_LIVE_ACTIVITY_PAYLOAD, '');
     AppStorage.setOrCreate(AppStorageKeys.NOTIFICATION_NAV_SEQ, 0);
     AppStorage.setOrCreate(AppStorageKeys.NOTIFICATION_NAV_PAYLOAD, '');
-    AppStorage.setOrCreate(AppStorageKeys.AUTH_SESSION_JSON, '');
     hilog.info(DOMAIN, TAG, '%{public}s', 'Ability onCreate');
     this.handleNotificationLaunchWant(want);
 
@@ -116,10 +115,13 @@ export default class EntryAbility extends UIAbility {
       if (!mapview) {
         return;
       }
+      hilog.info(DOMAIN, TAG, '[MAP_INIT][map_created_callback]');
       const mapView = mapview;
       mapView.onCreate();
+      hilog.info(DOMAIN, TAG, '[MAP_INIT][map_on_create_called]');
       mapView.getMapAsync((map) => {
         const aMap: AMap = map;
+        hilog.info(DOMAIN, TAG, '[MAP_INIT][map_ready]');
       });
     });
   }

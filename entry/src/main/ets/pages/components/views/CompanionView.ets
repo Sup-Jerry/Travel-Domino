@@ -1333,17 +1333,11 @@ export struct CompanionView {
           .borderRadius(16);
 
         Row({ space: 10 }) {
-          if (this.isCurrentEventPending() || this.isCurrentEventActive() || this.context.runtimeState === 'PAUSED') {
-            Button(this.context.runtimeState === 'PAUSED' ? '继续' : (this.isCurrentEventActive() ? '暂停' : '开始'))
+          if (this.isCurrentEventPending()) {
+            Button('开始')
               .layoutWeight(2)
               .height(50)
-              .enabled(
-                this.context.runtimeState === 'PAUSED'
-                  ? this.context.actions.canResume
-                  : (this.isCurrentEventActive()
-                    ? this.context.actions.canPause
-                    : (this.context.currentEvent ? this.canStartFocused(this.context.currentEvent) : false))
-              )
+              .enabled(this.context.currentEvent ? this.canStartFocused(this.context.currentEvent) : false)
               .backgroundColor(this.getThemePalette().success)
               .fontColor(Color.White)
               .onClick(async () => {
@@ -1368,7 +1362,7 @@ export struct CompanionView {
               });
           }
           Button('导航')
-            .layoutWeight(this.isCurrentEventPending() || this.isCurrentEventActive() || this.context.runtimeState === 'PAUSED' ? 1 : 3)
+            .layoutWeight(1)
             .height(50)
             .backgroundColor(this.getThemePalette().primary)
             .fontColor(Color.White)
@@ -1507,15 +1501,6 @@ export struct CompanionView {
               await this.handleFocusedSkip();
             });
         } else if (this.getEventState(event) === 'ACTIVE') {
-          Button('暂停')
-            .layoutWeight(1)
-            .height(42)
-            .enabled(this.context.actions.canPause)
-            .backgroundColor(this.getThemePalette().success)
-            .fontColor(Color.White)
-            .onClick(async () => {
-              await this.handleFocusedPrimaryAction();
-            });
           Button('结束')
             .layoutWeight(1)
             .height(42)
@@ -1527,15 +1512,6 @@ export struct CompanionView {
               this.refreshContext();
             });
         } else if (this.context.runtimeState === 'PAUSED' && this.context.currentEvent && this.context.currentEvent.id === event.id) {
-          Button('继续')
-            .layoutWeight(1)
-            .height(42)
-            .enabled(this.context.actions.canResume)
-            .backgroundColor(this.getThemePalette().success)
-            .fontColor(Color.White)
-            .onClick(async () => {
-              await this.handleFocusedPrimaryAction();
-            });
           Button('结束')
             .layoutWeight(1)
             .height(42)
@@ -1580,6 +1556,11 @@ export struct CompanionView {
         }
       }
       .width('100%');
+
+      Text('点击此卡片进入沉浸模式')
+        .fontSize(11)
+        .fontColor(this.getThemePalette().primary)
+        .padding({ top: 2 });
     }
     .alignItems(HorizontalAlign.Start)
     .width('100%')
@@ -1593,6 +1574,9 @@ export struct CompanionView {
     .scale({
       x: this.getCardScale(phase),
       y: this.getCardScale(phase)
+    })
+    .onClick(() => {
+      this.enterImmersiveMode();
     });
   }
 
