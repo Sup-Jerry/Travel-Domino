@@ -1,7 +1,6 @@
 ﻿// 文件路径: ets/pages/components/CreatePlanDialog.ets
 import { ThemeCenter } from '../../../common/utils/ThemeCenter';
 import { DomainConstants } from '../../../common/constants/DomainConstants';
-import { PlanRepositoryImpl } from '../../../infrastructure/persistence/PlanRepositoryImpl';
 
 @CustomDialog
 export struct CreatePlanDialog {
@@ -12,7 +11,6 @@ export struct CreatePlanDialog {
   @State title: string = '';
   // [Phase 2] 默认为今天
   @State selectedDate: Date = new Date();
-  @State selectedStrategy: number = 0;
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
 
   private getPalette() {
@@ -72,43 +70,6 @@ export struct CreatePlanDialog {
         })
       })
 
-      // 策略选择
-      Text('旅行策略（可选）')
-        .fontSize(14)
-        .fontColor(this.getPalette().textSecondary)
-        .margin({ bottom: 8 })
-        .alignSelf(ItemAlign.Start)
-
-      Row() {
-        Button() { Text('✨ 默认').fontSize(13) }
-          .height(34)
-          .backgroundColor(this.selectedStrategy === 0 ? this.getPalette().primary : this.getPalette().cardBgSoft)
-          .fontColor(this.selectedStrategy === 0 ? Color.White : this.getPalette().textPrimary)
-          .borderRadius(8)
-          .layoutWeight(1)
-          .onClick(() => { this.selectedStrategy = 0; })
-
-        Button() { Text('⚡ 特种兵').fontSize(13) }
-          .height(34)
-          .backgroundColor(this.selectedStrategy === 1 ? this.getPalette().primary : this.getPalette().cardBgSoft)
-          .fontColor(this.selectedStrategy === 1 ? Color.White : this.getPalette().textPrimary)
-          .borderRadius(8)
-          .layoutWeight(1)
-          .margin({ left: 6 })
-          .onClick(() => { this.selectedStrategy = 1; })
-
-        Button() { Text('☕ 休闲').fontSize(13) }
-          .height(34)
-          .backgroundColor(this.selectedStrategy === 2 ? this.getPalette().primary : this.getPalette().cardBgSoft)
-          .fontColor(this.selectedStrategy === 2 ? Color.White : this.getPalette().textPrimary)
-          .borderRadius(8)
-          .layoutWeight(1)
-          .margin({ left: 6 })
-          .onClick(() => { this.selectedStrategy = 2; })
-      }
-      .width('100%')
-      .margin({ bottom: 20 })
-
       // 3. 按钮组
       Row() {
         Button('取消')
@@ -128,10 +89,6 @@ export struct CreatePlanDialog {
             if (this.title.length > 0) {
               const newPlanId = await this.onCreatePlan(this.title, this.selectedDate.getTime());
               if (newPlanId > 0) {
-                // 如果选择了非默认策略，设置策略模式
-                if (this.selectedStrategy > 0) {
-                  await PlanRepositoryImpl.updateStrategyMode(newPlanId, this.selectedStrategy);
-                }
                 this.onPlanCreated(newPlanId, this.title);
                 this.controller.close();
               }

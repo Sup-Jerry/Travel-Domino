@@ -50,6 +50,12 @@ type AiRequester = (url: string, options: http.HttpRequestOptions) => Promise<Ht
 export class AiService {
   private static readonly TAG = 'AiService';
   private static requesterForTest: AiRequester | null = null;
+  private static readonly SCENIC_MIN_DURATION = 30;
+  private static readonly SCENIC_MAX_DURATION = 180;
+  private static readonly FOOD_MIN_DURATION = 20;
+  private static readonly FOOD_MAX_DURATION = 120;
+  private static readonly HOTEL_MIN_DURATION = 480;
+  private static readonly HOTEL_MAX_DURATION = 720;
 
   public static setRequesterForTest(requester: AiRequester | null): void {
     AiService.requesterForTest = requester;
@@ -91,6 +97,7 @@ export class AiService {
       throw new Error('AI 返回内容不是数组');
     }
     const items = parsed as AiRawItem[];
+    const normalizedItems: AiRawItem[] = [];
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       const validName = typeof item.name === 'string' && item.name.trim().length > 0;
@@ -98,8 +105,69 @@ export class AiService {
       if (!validName || !validDuration) {
         throw new Error(`AI 返回项格式错误:index=${i}`);
       }
+      normalizedItems.push(AiService.normalizeItem(item));
     }
-    return items;
+    return normalizedItems;
+  }
+
+  private static normalizeItem(item: AiRawItem): AiRawItem {
+    const type = AiService.normalizeItemType(item.type);
+    const duration = AiService.normalizeDurationByType(Number(item.duration), type);
+    const name = item.name.trim();
+    const reason = typeof item.ai_reasoning === 'string' && item.ai_reasoning.trim().length > 0
+      ? item.ai_reasoning.trim()
+      : 'AI 智能推荐';
+    return {
+      name: name,
+      duration: duration,
+      ai_reasoning: reason,
+      type: type
+    };
+  }
+
+  private static normalizeItemType(type: number): number {
+    if (type === 0 || type === 1 || type === 2) {
+      return type;
+    }
+    return 0;
+  }
+
+  private static normalizeDurationByType(duration: number, type: number): number {
+    if (!Number.isFinite(duration)) {
+      return 60;
+    }
+    const rounded = Math.round(duration);
+    if (type === 0) {
+      return Math.min(AiService.SCENIC_MAX_DURATION, Math.max(AiService.SCENIC_MIN_DURATION, rounded));
+    }
+    if (type === 1) {
+      return Math.min(AiService.FOOD_MAX_DURATION, Math.max(AiService.FOOD_MIN_DURATION, rounded));
+    }
+    if (type === 2) {
+      return Math.min(AiService.HOTEL_MAX_DURATION, Math.max(AiService.HOTEL_MIN_DURATION, rounded));
+    }
+    return Math.max(10, rounded);
+  }
+
+  private static resolveStrategyMaxItems(request: AiGenerateRequest): number {
+    if (request.customStrategy) {
+      return StrategyBuilder.buildProfile(request.customStrategy).dailyPoiTarget.max;
+    }
+    if (request.strategyMode === 1) {
+      return 8;
+    }
+    if (request.strategyMode === 2) {
+      return 4;
+    }
+    return 5;
+  }
+
+  private static enforceMaxItems(items: AiRawItem[], maxItems: number): AiRawItem[] {
+    const safeMax = Number.isFinite(maxItems) ? Math.max(1, Math.floor(maxItems)) : 5;
+    if (items.length <= safeMax) {
+      return items;
+    }
+    return items.slice(0, safeMax);
   }
 
   public static parseItemsForTest(contentRaw: string): AiRawItem[] {
@@ -219,12 +287,7 @@ ${strategyFragment}
     };
 
     try {
-      const response = await HttpRequestHelper.request(
-        'AiService',
-        'generateItineraryWithStrategy',
-        AppConfig.AI_API_URL,
-        options
-      );
+      const response = await AiService.doRequest(AppConfig.AI_API_URL, options);
 
       if (response.responseCode !== 200) {
         throw new Error('网络请求失败');
@@ -233,7 +296,9 @@ ${strategyFragment}
       const resultStr = typeof response.result === 'string'
         ? response.result
         : JSON.stringify(response.result);
-      return AiService.parseModelResponseForTest(resultStr);
+      const parsedItems = AiService.parseModelResponseForTest(resultStr);
+      const maxItems = AiService.resolveStrategyMaxItems(request);
+      return AiService.enforceMaxItems(parsedItems, maxItems);
     } catch (error) {
       const rethrowMessage = error instanceof Error ? error.message : 'AI 请求失败';
       throw new Error(rethrowMessage);

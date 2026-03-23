@@ -27,6 +27,10 @@ interface GeneratedObjectLiteralInterface_1 {
   lng: number;
 }
 
+interface AMapNativeBridgeModule {
+  __placeholder?: string;
+}
+
 class MapPickerRouteParams {
   lat: number;
   lng: number;
@@ -187,13 +191,11 @@ export struct AddItemDialog {
     return AppConfig.AMAP_SDK_API_KEY.trim().length > 0;
   }
 
-  private isMapNativeRuntimeReady(): boolean {
+  private async isMapNativeRuntimeReady(): Promise<boolean> {
     try {
+      await import('libAMapOpenMapJNI.so') as AMapNativeBridgeModule;
       const version = (MapsInitializer.getVersion() ?? '').trim();
-      if (version.length === 0) {
-        hilog.error(0x0000, 'AddItemDialog', '[MAP_NATIVE_GUARD] getVersion empty');
-        return false;
-      }
+      hilog.info(0x0000, 'AddItemDialog', `[MAP_NATIVE_GUARD] load_ok, version=${version.length > 0 ? version : 'unknown'}`);
       return true;
     } catch (error) {
       hilog.error(0x0000, 'AddItemDialog', `[MAP_NATIVE_GUARD] runtime unavailable, reason=${JSON.stringify(error)}`);
@@ -337,12 +339,12 @@ export struct AddItemDialog {
             .backgroundColor(this.getPalette().cardBgSoft)
             .fontColor(this.getPalette().primary)
             .height(48)
-            .onClick(async() => {
+          .onClick(async() => {
               if (!this.canUseMapPicker()) {
                 this.safeShowToast('地图能力未配置，可直接填写名称后保存');
                 return;
               }
-              if (!this.isMapNativeRuntimeReady()) {
+              if (!await this.isMapNativeRuntimeReady()) {
                 this.safeShowToast('地图组件未就绪，请先修复高德 native 依赖');
                 return;
               }
@@ -644,8 +646,6 @@ export struct AddItemDialog {
     .width('95%')
   }
 }
-
-
 
 
 

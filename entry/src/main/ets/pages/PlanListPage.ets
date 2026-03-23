@@ -29,6 +29,7 @@ interface NotificationNavPayload {
 @Component
 struct PlanListPage {
   @State planList: PlanItem[] = [];
+  @State isRefreshing: boolean = false;
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
   @StorageLink('NotificationNavSeq') @Watch('onNotificationNavSignal') notificationNavSeq: number = 0;
   private arrivalReminderUnsubscribe: (() => void) | null = null;
@@ -361,6 +362,29 @@ struct PlanListPage {
     this.planList = await this.planService.loadVisiblePlans();
   }
 
+  private async handlePullRefresh(): Promise<void> {
+    if (this.isRefreshing) {
+      return;
+    }
+    this.isRefreshing = true;
+    try {
+      await this.loadPlans();
+      await this.planService.requestArrivalCheckNow('home_manual_refresh');
+      this.arrivalCoordinator.consumeOnHome({
+        isDialogOpen: this.isArrivalDialogOpen,
+        resolvePlanTitle: (planId: number): string => {
+          const plan = this.planList.find((item: PlanItem) => item.id === planId);
+          return plan ? plan.title : '行程详情';
+        },
+        onShow: (payload: ArrivalReminderPayload, title: string): void => {
+          this.showArrivalReminderOnHome(payload, title);
+        }
+      });
+    } finally {
+      this.isRefreshing = false;
+    }
+  }
+
   async handleArchive(item: PlanItem) {
     const isSkip = await PreferenceManager.getInstance().getValue(PreferenceManager.KEY_HIDE_ARCHIVE_TIP, false);
     if (isSkip) {
@@ -489,64 +513,69 @@ struct PlanListPage {
         .padding({ left: 16, top: 10, bottom: 10, right: 16 })
         .backgroundColor(this.getThemePalette().cardBg);
 
-        List({ space: 12 }) {
-          ForEach(this.planList, (item: PlanItem) => {
-            ListItem() {
-              Row() {
-                Column() {
-                  Row() {
-                    Text(item.title)
-                      .fontSize(18)
-                      .fontWeight(FontWeight.Medium)
-                      .fontColor(this.getThemePalette().textPrimary)
-                      .maxLines(1)
-                      .textOverflow({ overflow: TextOverflow.Ellipsis })
-                      .layoutWeight(1);
-                  }.width('100%');
+        Refresh({ refreshing: this.isRefreshing }) {
+          List({ space: 12 }) {
+            ForEach(this.planList, (item: PlanItem) => {
+              ListItem() {
+                Row() {
+                  Column() {
+                    Row() {
+                      Text(item.title)
+                        .fontSize(18)
+                        .fontWeight(FontWeight.Medium)
+                        .fontColor(this.getThemePalette().textPrimary)
+                        .maxLines(1)
+                        .textOverflow({ overflow: TextOverflow.Ellipsis })
+                        .layoutWeight(1);
+                    }.width('100%');
 
-                  Text(`出发日期: ${DateUtil.formatPlanDate(item.startDate)}`)
-                    .fontSize(12).fontColor(this.getThemePalette().primary).margin({ top: 4 });
+                    Text(`出发日期: ${DateUtil.formatPlanDate(item.startDate)}`)
+                      .fontSize(12).fontColor(this.getThemePalette().primary).margin({ top: 4 });
 
-                  Text(`创建于: ${DateUtil.formatLocalDate(item.createdAt)}`)
-                    .fontSize(10)
-                    .fontColor(this.getThemePalette().textTertiary)
-                    .margin({ top: 2 });
-                }
-                .alignItems(HorizontalAlign.Start).layoutWeight(1);
-
-                Blank();
-
-                Text('进入 >')
-                  .fontSize(14)
-                  .fontColor(this.getThemePalette().textSecondary)
-                  .margin({ left: 8 });
-              }
-              .width('100%')
-              .padding(16)
-              .backgroundColor(this.getThemePalette().cardBg)
-              .borderRadius(12)
-              .onClick(() => {
-                this.getUIContext().getRouter().pushUrl({
-                  url: 'pages/Index',
-                  params: {
-                    planId: item.id,
-                    title: item.title,
-                    isNewPlan: false
+                    Text(`创建于: ${DateUtil.formatLocalDate(item.createdAt)}`)
+                      .fontSize(10)
+                      .fontColor(this.getThemePalette().textTertiary)
+                      .margin({ top: 2 });
                   }
+                  .alignItems(HorizontalAlign.Start).layoutWeight(1);
+
+                  Blank();
+
+                  Text('进入 >')
+                    .fontSize(14)
+                    .fontColor(this.getThemePalette().textSecondary)
+                    .margin({ left: 8 });
+                }
+                .width('100%')
+                .padding(16)
+                .backgroundColor(this.getThemePalette().cardBg)
+                .borderRadius(12)
+                .onClick(() => {
+                  this.getUIContext().getRouter().pushUrl({
+                    url: 'pages/Index',
+                    params: {
+                      planId: item.id,
+                      title: item.title,
+                      isNewPlan: false
+                    }
+                  });
                 });
-              });
-            }
-            .swipeAction({
-              end: {
-                builder: () => {
-                  this.PlanSwipeMenu(item);
-                },
-                actionAreaDistance: 210
               }
+              .swipeAction({
+                end: {
+                  builder: () => {
+                    this.PlanSwipeMenu(item);
+                  },
+                  actionAreaDistance: 210
+                }
+              });
             });
-          });
-          ListItem().height(12);
+            ListItem().height(12);
+          }
         }
+        .onRefreshing(() => {
+          void this.handlePullRefresh();
+        })
         .layoutWeight(1)
         .padding({ top: 16, left: 16, right: 16, bottom: 90 });
       }

@@ -2,7 +2,16 @@ import { describe, it, expect } from '@ohos/hypium';
 import { TimeConstraintSolver } from '../main/ets/domain/solver/TimeConstraintSolver';
 import { TravelPlanItem } from '../main/ets/model/interface/IStandardEvent';
 
-function buildScheduleItem(id: number, name: string, duration: number, dayOffset: number, fixedStart: string = '', lock: number = 0): TravelPlanItem {
+function buildScheduleItem(
+  id: number,
+  name: string,
+  duration: number,
+  dayOffset: number,
+  fixedStart: string = '',
+  lock: number = 0,
+  source: number = 0,
+  itemType: number = 0
+): TravelPlanItem {
   return {
     id: id,
     name: name,
@@ -15,12 +24,12 @@ function buildScheduleItem(id: number, name: string, duration: number, dayOffset
     lockStatus: lock,
     fixedStartTime: fixedStart,
     dayOffset: dayOffset,
-    itemType: 0,
+    itemType: itemType,
     priority: 0,
     transportMode: 2,
     travelMode: 2,
     isTravelManual: 1,
-    source: 0,
+    source: source,
     delFlag: 0,
     groupId: 0,
     address: '',
@@ -116,6 +125,24 @@ export default function timeConstraintSolverTest() {
       expect(result[0].id ?? 0).assertEqual(11);
       expect(result[1].id ?? 0).assertEqual(99);
       expect(result[2].id ?? 0).assertEqual(12);
+    });
+
+    it('solver_should_move_ai_scenic_out_of_night_window', 0, () => {
+      const planStart = new Date('2026-01-01T00:00:00').getTime();
+      const input = [
+        buildScheduleItem(1, '王府井', 60, 0, '', 0, 1, 0),
+        buildScheduleItem(2, '故宫', 60, 0, '', 0, 1, 0)
+      ];
+      const result = TimeConstraintSolver.calculateTimeline(input, '23:00', planStart, {
+        autoRouteEnabled: false,
+        slackRatio: 0
+      });
+
+      const first = result[0];
+      const second = result[1];
+      expect(first.dynamicDayOffset ?? -1).assertEqual(1);
+      expect(first.computedStartTime ?? '').assertEqual('01-02 08:00');
+      expect(second.computedStartTime ?? '').assertEqual('09:00');
     });
   });
 }

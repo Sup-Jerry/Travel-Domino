@@ -406,6 +406,22 @@ export class ArrivalReminderEngine {
     }
   }
 
+  public async requestImmediateDetection(reason: string = 'manual_refresh'): Promise<void> {
+    await this.refreshFencesNow(reason);
+    this.ensureReminderConsistency();
+    if (!this.lastLocation) {
+      return;
+    }
+
+    const geofenceReady = this.collectReadyCandidateIds();
+    const directReady = this.collectDirectReadyCandidateIds(this.lastLocation);
+    const readyIds = [...geofenceReady, ...directReady];
+    for (let i = 0; i < readyIds.length; i++) {
+      this.pendingCandidateIds.add(readyIds[i]);
+    }
+    this.evaluateCandidates(reason);
+  }
+
   private clearMonitoredStateAfterRefreshFailure(): void {
     this.monitoredEvents = [];
     this.eventPlanIdMap.clear();

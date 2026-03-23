@@ -38,6 +38,8 @@ import { AppStorageKeys } from '../common/constants/AppStorageKeys';
 import { DomainConstants } from '../common/constants/DomainConstants';
 import { PlanRepositoryImpl } from '../infrastructure/persistence/PlanRepositoryImpl';
 import { WeatherUserPreference } from '../domain/services/WeatherModels';
+import { ArrivalReminderPayload } from '../infrastructure/services/ArrivalReminderEngine';
+import { ArrivalReminderCoordinator } from '../infrastructure/services/ArrivalReminderCoordinator';
 
 interface InitDialogData {
   name: string;
@@ -92,9 +94,12 @@ struct Index {
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
   @StorageLink('TrafficDataUpdated') @Watch('onTrafficSignal') trafficSignal: number = 0;
   private weatherReminderUnsubscribe: (() => void) | null = null;
+  private arrivalReminderUnsubscribe: (() => void) | null = null;
   @State isWeatherDialogOpen: boolean = false;
+  @State isArrivalDialogOpen: boolean = false;
   private readonly planService: PlanAppService = PlanAppService.getInstance();
   private readonly weatherCoordinator: WeatherReminderCoordinator = WeatherReminderCoordinator.getInstance();
+  private readonly arrivalCoordinator: ArrivalReminderCoordinator = ArrivalReminderCoordinator.getInstance();
   private strategyAdaptationCheckTimer: number = -1;
   dialogController: CustomDialogController | null = null;
 
@@ -242,12 +247,24 @@ struct Index {
         this.isWeatherDialogOpen = false;
       }
     });
+
+    this.arrivalReminderUnsubscribe = this.arrivalCoordinator.subscribePlan(this.currentPlanId, {
+      isDialogOpen: (): boolean => this.isArrivalDialogOpen,
+      resolveEvents: (): EventEntity[] => this.vm.events,
+      onShowPlan: (payload: ArrivalReminderPayload): void => {
+        this.showArrivalReminderDialog(payload);
+      }
+    });
   }
 
   private unbindReminderSubscriptions(): void {
     if (this.weatherReminderUnsubscribe) {
       this.weatherReminderUnsubscribe();
       this.weatherReminderUnsubscribe = null;
+    }
+    if (this.arrivalReminderUnsubscribe) {
+      this.arrivalReminderUnsubscribe();
+      this.arrivalReminderUnsubscribe = null;
     }
   }
 
@@ -258,7 +275,15 @@ struct Index {
     this.isPageRefreshing = true;
     try {
       await this.vm.loadData(this.currentPlanId);
-      this.planService.requestArrivalCheckNow('plan_manual_refresh');
+      await this.planService.requestArrivalCheckNow('plan_manual_refresh');
+      this.arrivalCoordinator.consumeOnPlan({
+        isDialogOpen: this.isArrivalDialogOpen,
+        currentPlanId: this.currentPlanId,
+        events: this.vm.events,
+        onShow: (payload: ArrivalReminderPayload): void => {
+          this.showArrivalReminderDialog(payload);
+        }
+      });
       if (this.vm.isWeatherFeatureEnabled()) {
         this.hasManualPlanningWeatherRefresh = true;
       }
@@ -312,6 +337,34 @@ struct Index {
           } else {
             void this.vm.refreshExecutionWeather(true, 'MANUAL');
           }
+        }
+      }
+    });
+  }
+
+  private showArrivalReminderDialog(payload: ArrivalReminderPayload): void {
+    this.isArrivalDialogOpen = true;
+    this.getUIContext().showAlertDialog({
+      title: '到达提醒',
+      message: `你已到达【${payload.placeName}】附近（约${Math.max(1, payload.distanceMeters)}米）`,
+      autoCancel: false,
+      alignment: DialogAlignment.Center,
+      primaryButton: {
+        value: '稍后',
+        action: () => {
+          this.isArrivalDialogOpen = false;
+          this.arrivalCoordinator.acknowledge(payload.eventId, 'dismiss');
+        }
+      },
+      secondaryButton: {
+        value: '开始打卡',
+        action: () => {
+          this.isArrivalDialogOpen = false;
+          void this.tryStartEventWithConflictPrompt(payload.eventId).then((started: boolean) => {
+            this.arrivalCoordinator.acknowledge(payload.eventId, started ? 'start' : 'dismiss');
+          }).catch(() => {
+            this.arrivalCoordinator.acknowledge(payload.eventId, 'dismiss');
+          });
         }
       }
     });

@@ -40,6 +40,10 @@ class MapPickerRouteParams {
   queryName: string = '';
 }
 
+interface AMapNativeBridgeModule {
+  __placeholder?: string;
+}
+
 @Entry
 @Component
 struct MapPickerPage {
@@ -62,6 +66,9 @@ struct MapPickerPage {
   @State hasPresetCoordinate: boolean = false;
   @State centerHint: string = '';
   @State storageScopePlanId: number = 0;
+  @State mapRuntimeReady: boolean = false;
+  @State mapRuntimeChecked: boolean = false;
+  @State mapRuntimeError: string = '';
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
 
   private getThemePalette() {
@@ -110,6 +117,19 @@ struct MapPickerPage {
       }
     }
 
+    void this.prepareMapRuntime();
+  }
+
+  private async prepareMapRuntime(): Promise<void> {
+    const runtimeReady = await this.isMapNativeRuntimeReady();
+    this.mapRuntimeReady = runtimeReady;
+    this.mapRuntimeChecked = true;
+    if (!runtimeReady) {
+      this.mapRuntimeError = '地图运行环境不可用，请在真机 arm64 环境重试';
+      this.safeShowToast('地图组件不可用，请检查设备架构或地图 SDK 配置');
+      return;
+    }
+
     // ✅ 修复 3：通过全局单例捕获地图，解决 getMap 和 mapReadyCallback 不存在的报错
     MapViewManager.getInstance().registerMapViewCreatedCallback((mapview?: MapView) => {
       if (mapview) {
@@ -128,6 +148,17 @@ struct MapPickerPage {
         });
       }
     });
+  }
+
+  private async isMapNativeRuntimeReady(): Promise<boolean> {
+    try {
+      await import('libAMapOpenMapJNI.so') as AMapNativeBridgeModule;
+      hilog.info(0x0000, 'MapPickerPage', '[MAP_NATIVE_GUARD] native module load ok');
+      return true;
+    } catch (error) {
+      hilog.error(0x0000, 'MapPickerPage', `[MAP_NATIVE_GUARD] runtime unavailable, reason=${JSON.stringify(error)}`);
+      return false;
+    }
   }
 
   aboutToDisappear(): void {
@@ -310,170 +341,194 @@ struct MapPickerPage {
 
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
+      if (this.mapRuntimeReady) {
+        // ✅ 修复 6：移除不合法的 mapReadyCallback 属性，只保留名字
+        MapViewComponent({
+          mapViewName: "MapPicker"
+        })
+          .width('100%')
+          .height('100%')
 
-      // ✅ 修复 6：移除不合法的 mapReadyCallback 属性，只保留名字
-      MapViewComponent({
-        mapViewName: "MapPicker"
-      })
-        .width('100%')
-        .height('100%')
-
-      Column() {
-        Text('📍')
-          .fontSize(48)
-          .offset({ y: this.isDragging ? -20 : 0 })
-          .animation({ duration: 250, curve: Curve.Friction })
-      }
-      .position({ x: '50%', y: '50%' })
-      .translate({ x: '-50%', y: '-100%' })
-
-      Row() {
-        Button('< 返回')
-          .type(ButtonType.Capsule)
-          .backgroundColor(this.getThemePalette().cardBgSoft)
-          .fontColor(this.getThemePalette().textPrimary)
-          .border({ width: 1, color: this.getThemePalette().border })
-          .shadow({ radius: 8, color: this.effectiveTheme === 'dark' ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.1)' })
-          .onClick(() => this.getUIContext().getRouter().back())
-
-        TextInput({ text: this.searchKeyword, placeholder: '搜索地点（例如：东京塔）' })
-          .layoutWeight(1)
-          .height(40)
-          .backgroundColor(this.getThemePalette().cardBg)
-          .borderRadius(20)
-          .fontSize(14)
-          .fontColor(this.getThemePalette().textPrimary)
-          .placeholderColor(this.getThemePalette().textTertiary)
-          .padding({ left: 14, right: 14 })
-          .margin({ left: 10, right: 6 })
-          .onChange((value: string) => {
-            this.scheduleSearch(value);
-          })
-
-        Button(this.searching ? '搜索中' : '搜索')
-          .type(ButtonType.Capsule)
-          .height(36)
-          .backgroundColor(this.getThemePalette().primary)
-          .fontColor(Color.White)
-          .enabled(!this.searching)
-          .onClick(() => {
-            this.searchNow();
-          })
-      }
-      .width('100%')
-      .padding({ top: 50, left: 16, right: 16 })
-      .position({ x: 0, y: 0 })
-
-      if (this.searchPanelVisible) {
         Column() {
-          if (this.searching) {
-            Text('搜索中...')
-              .fontSize(13)
-              .fontColor(this.getThemePalette().textSecondary)
-              .width('100%')
-              .textAlign(TextAlign.Center)
-              .padding({ top: 16, bottom: 16 });
-          } else if (this.searchKeyword.trim().length > 0 && this.searchResults.length === 0) {
-            Text('未找到匹配地点')
-              .fontSize(13)
-              .fontColor(this.getThemePalette().textSecondary)
-              .width('100%')
-              .textAlign(TextAlign.Center)
-              .padding({ top: 16, bottom: 16 });
-          } else {
-            List({ space: 8 }) {
-              ForEach(this.searchResults, (item: PoiSearchItem) => {
-                ListItem() {
-                  Row() {
-                    Column({ space: 4 }) {
-                      Text(item.name)
-                        .fontSize(15)
-                        .fontWeight(FontWeight.Medium)
-                        .fontColor(this.getThemePalette().textPrimary)
-                        .maxLines(1)
-                        .textOverflow({ overflow: TextOverflow.Ellipsis });
-                      Text(item.address || `${item.lat.toFixed(5)}, ${item.lng.toFixed(5)}`)
-                        .fontSize(12)
-                        .fontColor(this.getThemePalette().textSecondary)
-                        .maxLines(1)
-                        .textOverflow({ overflow: TextOverflow.Ellipsis });
-                    }
-                    .layoutWeight(1)
-                    .alignItems(HorizontalAlign.Start);
+          Text('📍')
+            .fontSize(48)
+            .offset({ y: this.isDragging ? -20 : 0 })
+            .animation({ duration: 250, curve: Curve.Friction })
+        }
+        .position({ x: '50%', y: '50%' })
+        .translate({ x: '-50%', y: '-100%' })
 
-                    Text(this.formatDistance(item.distance))
-                      .fontSize(12)
-                      .fontColor(this.getThemePalette().textTertiary);
-                  }
-                  .width('100%')
-                  .padding({ left: 12, right: 12, top: 10, bottom: 10 })
-                  .backgroundColor(this.getThemePalette().cardBg)
-                  .borderRadius(10)
-                  .onClick(() => {
-                    this.focusPoi(item);
-                  });
-                };
-              }, (item: PoiSearchItem) => `${item.name}-${item.lat.toFixed(6)}-${item.lng.toFixed(6)}`);
-              ListItem().height(4);
-            }
-            .width('100%')
-            .constraintSize({ maxHeight: 260 })
-            .padding({ left: 8, right: 8, top: 8, bottom: 8 });
-          }
+        Row() {
+          Button('< 返回')
+            .type(ButtonType.Capsule)
+            .backgroundColor(this.getThemePalette().cardBgSoft)
+            .fontColor(this.getThemePalette().textPrimary)
+            .border({ width: 1, color: this.getThemePalette().border })
+            .shadow({ radius: 8, color: this.effectiveTheme === 'dark' ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.1)' })
+            .onClick(() => this.getUIContext().getRouter().back())
+
+          TextInput({ text: this.searchKeyword, placeholder: '搜索地点（例如：东京塔）' })
+            .layoutWeight(1)
+            .height(40)
+            .backgroundColor(this.getThemePalette().cardBg)
+            .borderRadius(20)
+            .fontSize(14)
+            .fontColor(this.getThemePalette().textPrimary)
+            .placeholderColor(this.getThemePalette().textTertiary)
+            .padding({ left: 14, right: 14 })
+            .margin({ left: 10, right: 6 })
+            .onChange((value: string) => {
+              this.scheduleSearch(value);
+            })
+
+          Button(this.searching ? '搜索中' : '搜索')
+            .type(ButtonType.Capsule)
+            .height(36)
+            .backgroundColor(this.getThemePalette().primary)
+            .fontColor(Color.White)
+            .enabled(!this.searching)
+            .onClick(() => {
+              this.searchNow();
+            })
         }
         .width('100%')
-        .padding({ left: 16, right: 16 })
-        .position({ x: 0, y: 98 })
-        .backgroundColor(this.getThemePalette().cardBg)
-        .border({ width: 1, color: this.getThemePalette().divider, radius: 14 })
-        .borderRadius(14)
-        .shadow({
-          radius: 16,
-          color: this.effectiveTheme === 'dark' ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0.12)',
-          offsetY: 4
-        });
-      }
+        .padding({ top: 50, left: 16, right: 16 })
+        .position({ x: 0, y: 0 })
 
-      Column() {
-        Text(this.currentAddress)
-          .fontSize(20)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.getThemePalette().textPrimary)
-          .maxLines(2)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .margin({ bottom: 20 })
-          .opacity(this.isDragging ? 0.3 : 1.0)
-          .animation({ duration: 200 })
+        if (this.searchPanelVisible) {
+          Column() {
+            if (this.searching) {
+              Text('搜索中...')
+                .fontSize(13)
+                .fontColor(this.getThemePalette().textSecondary)
+                .width('100%')
+                .textAlign(TextAlign.Center)
+                .padding({ top: 16, bottom: 16 });
+            } else if (this.searchKeyword.trim().length > 0 && this.searchResults.length === 0) {
+              Text('未找到匹配地点')
+                .fontSize(13)
+                .fontColor(this.getThemePalette().textSecondary)
+                .width('100%')
+                .textAlign(TextAlign.Center)
+                .padding({ top: 16, bottom: 16 });
+            } else {
+              List({ space: 8 }) {
+                ForEach(this.searchResults, (item: PoiSearchItem) => {
+                  ListItem() {
+                    Row() {
+                      Column({ space: 4 }) {
+                        Text(item.name)
+                          .fontSize(15)
+                          .fontWeight(FontWeight.Medium)
+                          .fontColor(this.getThemePalette().textPrimary)
+                          .maxLines(1)
+                          .textOverflow({ overflow: TextOverflow.Ellipsis });
+                        Text(item.address || `${item.lat.toFixed(5)}, ${item.lng.toFixed(5)}`)
+                          .fontSize(12)
+                          .fontColor(this.getThemePalette().textSecondary)
+                          .maxLines(1)
+                          .textOverflow({ overflow: TextOverflow.Ellipsis });
+                      }
+                      .layoutWeight(1)
+                      .alignItems(HorizontalAlign.Start);
 
-        if (this.centerHint.length > 0) {
-          Text(this.centerHint)
-            .fontSize(12)
-            .fontColor(this.getThemePalette().textSecondary)
+                      Text(this.formatDistance(item.distance))
+                        .fontSize(12)
+                        .fontColor(this.getThemePalette().textTertiary);
+                    }
+                    .width('100%')
+                    .padding({ left: 12, right: 12, top: 10, bottom: 10 })
+                    .backgroundColor(this.getThemePalette().cardBg)
+                    .borderRadius(10)
+                    .onClick(() => {
+                      this.focusPoi(item);
+                    });
+                  };
+                }, (item: PoiSearchItem) => `${item.name}-${item.lat.toFixed(6)}-${item.lng.toFixed(6)}`);
+                ListItem().height(4);
+              }
+              .width('100%')
+              .constraintSize({ maxHeight: 260 })
+              .padding({ left: 8, right: 8, top: 8, bottom: 8 });
+            }
+          }
+          .width('100%')
+          .padding({ left: 16, right: 16 })
+          .position({ x: 0, y: 98 })
+          .backgroundColor(this.getThemePalette().cardBg)
+          .border({ width: 1, color: this.getThemePalette().divider, radius: 14 })
+          .borderRadius(14)
+          .shadow({
+            radius: 16,
+            color: this.effectiveTheme === 'dark' ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0.12)',
+            offsetY: 4
+          });
+        }
+
+        Column() {
+          Text(this.currentAddress)
+            .fontSize(20)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.getThemePalette().textPrimary)
             .maxLines(2)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .margin({ bottom: 12 })
+            .margin({ bottom: 20 })
             .opacity(this.isDragging ? 0.3 : 1.0)
             .animation({ duration: 200 })
-        }
 
-        Button('确认选点')
-          .width('100%')
-          .height(48)
-          .backgroundColor(this.getThemePalette().primary)
-          .fontColor(Color.White)
-          .fontSize(16)
-          .shadow({
-            radius: 8,
-            color: this.effectiveTheme === 'dark' ? 'rgba(102,163,255,0.42)' : 'rgba(47,125,255,0.28)',
-            offsetY: 4
-          })
-          .onClick(() => this.confirmSelection())
+          if (this.centerHint.length > 0) {
+            Text(this.centerHint)
+              .fontSize(12)
+              .fontColor(this.getThemePalette().textSecondary)
+              .maxLines(2)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .margin({ bottom: 12 })
+              .opacity(this.isDragging ? 0.3 : 1.0)
+              .animation({ duration: 200 })
+          }
+
+          Button('确认选点')
+            .width('100%')
+            .height(48)
+            .backgroundColor(this.getThemePalette().primary)
+            .fontColor(Color.White)
+            .fontSize(16)
+            .shadow({
+              radius: 8,
+              color: this.effectiveTheme === 'dark' ? 'rgba(102,163,255,0.42)' : 'rgba(47,125,255,0.28)',
+              offsetY: 4
+            })
+            .onClick(() => this.confirmSelection())
+        }
+        .width('100%')
+        .backgroundColor(this.getThemePalette().cardBg)
+        .borderRadius({ topLeft: 24, topRight: 24 })
+        .padding({ left: 24, right: 24, top: 24, bottom: 40 })
+        .shadow({ radius: 30, color: 'rgba(0,0,0,0.15)', offsetY: -5 })
+      } else {
+        Column({ space: 16 }) {
+          Text(this.mapRuntimeChecked ? '地图暂不可用' : '正在初始化地图环境...')
+            .fontSize(20)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.getThemePalette().textPrimary);
+          if (this.mapRuntimeError.length > 0) {
+            Text(this.mapRuntimeError)
+              .fontSize(13)
+              .fontColor(this.getThemePalette().textSecondary)
+              .textAlign(TextAlign.Center);
+          }
+          Button('< 返回')
+            .type(ButtonType.Capsule)
+            .backgroundColor(this.getThemePalette().cardBgSoft)
+            .fontColor(this.getThemePalette().textPrimary)
+            .border({ width: 1, color: this.getThemePalette().border })
+            .onClick(() => this.getUIContext().getRouter().back());
+        }
+        .width('100%')
+        .height('100%')
+        .justifyContent(FlexAlign.Center)
+        .padding({ left: 24, right: 24 });
       }
-      .width('100%')
-      .backgroundColor(this.getThemePalette().cardBg)
-      .borderRadius({ topLeft: 24, topRight: 24 })
-      .padding({ left: 24, right: 24, top: 24, bottom: 40 })
-      .shadow({ radius: 30, color: 'rgba(0,0,0,0.15)', offsetY: -5 })
 
     }
     .width('100%')

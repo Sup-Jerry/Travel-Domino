@@ -18,6 +18,10 @@ export class TimeConstraintSolver {
   private static readonly MINUTE_MS: number = 60 * 1000;
   private static readonly FALLBACK_START_MIN: number = 8 * 60;
   private static readonly DEFAULT_IDLE_GAP_TRIGGER_MINUTES: number = 45;
+  private static readonly AI_SCENIC_START_MIN: number = 8 * 60;
+  private static readonly AI_SCENIC_END_MIN: number = 20 * 60;
+  private static readonly AI_FOOD_START_MIN: number = 6 * 60;
+  private static readonly AI_FOOD_END_MIN: number = 21 * 60;
 
   private static getDayStart(timestamp: number): number {
     const d = new Date(timestamp);
@@ -49,6 +53,36 @@ export class TimeConstraintSolver {
     }
 
     return TimeConstraintSolver.FALLBACK_START_MIN;
+  }
+
+  private static applyAiTimeWindow(baseTimestamp: number, startTimestamp: number, itemType?: number): number {
+    if (itemType === 2) {
+      return startTimestamp;
+    }
+
+    let minStart = -1;
+    let maxStart = -1;
+    if (itemType === 0) {
+      minStart = TimeConstraintSolver.AI_SCENIC_START_MIN;
+      maxStart = TimeConstraintSolver.AI_SCENIC_END_MIN;
+    } else if (itemType === 1) {
+      minStart = TimeConstraintSolver.AI_FOOD_START_MIN;
+      maxStart = TimeConstraintSolver.AI_FOOD_END_MIN;
+    } else {
+      return startTimestamp;
+    }
+
+    const startObj = new Date(startTimestamp);
+    const minuteOfDay = startObj.getHours() * 60 + startObj.getMinutes();
+    const dayOffset = TimeConstraintSolver.calcDayOffset(baseTimestamp, startTimestamp);
+
+    if (minuteOfDay < minStart) {
+      return TimeConstraintSolver.buildTimestamp(baseTimestamp, dayOffset, minStart);
+    }
+    if (minuteOfDay > maxStart) {
+      return TimeConstraintSolver.buildTimestamp(baseTimestamp, dayOffset + 1, minStart);
+    }
+    return startTimestamp;
   }
 
   public static calculateTimeline(
@@ -289,6 +323,10 @@ export class TimeConstraintSolver {
         if (finalDayOffset < originalOffset) {
           finalDayOffset = originalOffset;
         }
+      }
+
+      if ((item.source ?? 0) === 1 && !hasFixedTime) {
+        finalStartTimestamp = TimeConstraintSolver.applyAiTimeWindow(baseTimestamp, finalStartTimestamp, item.itemType);
       }
 
       // 以最终开始时间反推最终归属日（仅写入动态字段，不污染用户基准 dayOffset）
