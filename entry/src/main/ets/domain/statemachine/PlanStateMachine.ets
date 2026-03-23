@@ -42,6 +42,11 @@ export interface PlanStateDiagnosticsSnapshot {
   transitions: PlanTransitionEvent[];
 }
 
+interface PlanTimeWindow {
+  startTime: number;
+  endTime: number;
+}
+
 export class PlanStateMachine {
   private static instance: PlanStateMachine | null = null;
   private static readonly MOTION_TRIGGER_THRESHOLD_METERS: number = 120;
@@ -288,11 +293,23 @@ export class PlanStateMachine {
   }
 
   public buildEvaluationInput(planId: string, events: EventEntity[], now: number = Date.now()): StateEvaluationInput {
-    const current = this.getOrCreateContext(planId, now);
+    let current = this.getOrCreateContext(planId, now);
     const scheduled = (events || []).filter((item: EventEntity) => item.status === 1);
     const pending = scheduled.filter((item: EventEntity) => item.completion_status === EventEntity.STATE_PENDING);
     const first = pending.length > 0 ? pending[0] : undefined;
     const allCompleted = scheduled.length > 0 && scheduled.every((item: EventEntity) => item.completion_status === EventEntity.STATE_COMPLETED);
+    const plannedWindow = this.resolvePlannedWindowByEvents(scheduled, current.plannedStartTime, current.plannedEndTime);
+    if (plannedWindow.startTime !== current.plannedStartTime || plannedWindow.endTime !== current.plannedEndTime) {
+      const next = this.cloneContext(current);
+      next.plannedStartTime = plannedWindow.startTime;
+      next.plannedEndTime = plannedWindow.endTime;
+      next.updatedAt = now;
+      this.store.writeContext(next);
+      current = next;
+      console.info(
+        `[PLAN_STATE][window_sync] planId=${planId}, start=${plannedWindow.startTime}, end=${plannedWindow.endTime}, eventCount=${scheduled.length}`
+      );
+    }
 
     let lastLat = current.lastKnownLatitude;
     let lastLng = current.lastKnownLongitude;
@@ -337,8 +354,56 @@ export class PlanStateMachine {
       hasReachedFirstNode: reachedFirst,
       motionDetected: accuracyPass && (speedPass || distancePass),
       allNodesCompleted: allCompleted,
-      isPlanExpired: current.plannedEndTime > 0 && now > current.plannedEndTime
+      isPlanExpired: plannedWindow.endTime > 0 && now > plannedWindow.endTime
     };
+  }
+
+  private resolvePlannedWindowByEvents(
+    scheduled: EventEntity[],
+    fallbackStart: number,
+    fallbackEnd: number
+  ): PlanTimeWindow {
+    if (!scheduled || scheduled.length === 0) {
+      return {
+        startTime: fallbackStart,
+        endTime: fallbackEnd
+      };
+    }
+    let minStart = Number.MAX_SAFE_INTEGER;
+    let maxEnd = 0;
+    for (let i = 0; i < scheduled.length; i++) {
+      const event = scheduled[i];
+      const start = this.resolveEventStartTime(event);
+      const end = this.resolveEventEndTime(event, start);
+      if (start > 0 && start < minStart) {
+        minStart = start;
+      }
+      if (end > 0 && end > maxEnd) {
+        maxEnd = end;
+      }
+    }
+    return {
+      startTime: minStart === Number.MAX_SAFE_INTEGER ? fallbackStart : minStart,
+      endTime: maxEnd > 0 ? maxEnd : fallbackEnd
+    };
+  }
+
+  private resolveEventStartTime(event: EventEntity): number {
+    if (event.dynamic_start_time > 0) {
+      return event.dynamic_start_time;
+    }
+    return 0;
+  }
+
+  private resolveEventEndTime(event: EventEntity, startTime: number): number {
+    if (event.dynamic_end_time > 0) {
+      return event.dynamic_end_time;
+    }
+    if (startTime > 0) {
+      const durationMinutes = Number.isFinite(event.duration) && event.duration > 0 ? event.duration : 0;
+      return durationMinutes > 0 ? startTime + durationMinutes * 60 * 1000 : startTime;
+    }
+    return 0;
   }
 
   public subscribePlanTransition(planId: string, listener: (event: PlanTransitionEvent) => void): () => void {

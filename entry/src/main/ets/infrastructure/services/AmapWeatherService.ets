@@ -199,14 +199,20 @@ export class AmapWeatherService implements IWeatherAdapter {
       }
       return (firstA?.order ?? 0) - (firstB?.order ?? 0);
     });
-    const cityCappedCount = cityEntries.length > AmapWeatherService.MAX_BATCH_CITY_GROUPS
+    const hasCurrentLocationTarget = entries.some((entry: [string, WeatherGeoPointRequest]) =>
+      (entry[1].sourceType ?? 'PLAN_LOCATION') === 'CURRENT_LOCATION'
+    );
+    const applyCityCap = hasCurrentLocationTarget;
+    const cityCappedCount = applyCityCap && cityEntries.length > AmapWeatherService.MAX_BATCH_CITY_GROUPS
       ? cityEntries.length - AmapWeatherService.MAX_BATCH_CITY_GROUPS
       : 0;
-    const selectedCities = cityEntries.slice(0, AmapWeatherService.MAX_BATCH_CITY_GROUPS);
+    const selectedCities = applyCityCap
+      ? cityEntries.slice(0, AmapWeatherService.MAX_BATCH_CITY_GROUPS)
+      : cityEntries;
     hilog.info(
       0x0000,
       TAG,
-      `[WEATHER_CITY][batch] cityGroupCount=${cityEntries.length}, cityCappedCount=${cityCappedCount}, cityMissCount=${cityMissCount}`
+      `[WEATHER_CITY][batch] cityGroupCount=${cityEntries.length}, cityCappedCount=${cityCappedCount}, cityMissCount=${cityMissCount}, capEnabled=${applyCityCap ? 1 : 0}`
     );
 
     for (let i = 0; i < selectedCities.length; i++) {

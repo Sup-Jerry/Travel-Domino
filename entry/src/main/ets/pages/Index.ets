@@ -318,39 +318,28 @@ struct Index {
     this.getUIContext().showAlertDialog({
       title: dialogTitle,
       message: dialogMessage,
-      autoCancel: true,
+      autoCancel: false,
       alignment: DialogAlignment.Center,
       primaryButton: {
-        value: '知道了',
+        value: payload.suggestionId ? '稍后处理' : '知道了',
         action: () => {
           this.isWeatherDialogOpen = false;
           this.weatherCoordinator.clear(this.currentPlanId);
         }
       },
       secondaryButton: {
-        value: payload.suggestionId ? '应用建议+调整策略' : '可选：刷新天气',
+        value: payload.suggestionId ? '去伴游查看建议' : '可选：刷新天气',
         action: () => {
           this.isWeatherDialogOpen = false;
           this.weatherCoordinator.clear(this.currentPlanId);
           if (payload.suggestionId) {
-            void this.vm.applyExecutionSuggestionWithStrategy(
-              this.currentPlanId,
-              payload.suggestionId || '',
-              payload.strategyAdjustment,
-              payload.strategyHint
-            ).then((applyResult) => {
-              if (applyResult.replanSuccess) {
-                if (applyResult.strategyApplied) {
-                  this.safeShowToast('已应用建议并调整策略');
-                } else {
-                  this.safeShowToast('已按可选建议调整行程');
-                }
-              } else if (applyResult.strategyApplied) {
-                this.safeShowToast('策略已应用，行程重排失败，可稍后重试。');
-              } else {
-                this.safeShowToast(`可选建议未应用：${applyResult.errorCode}`);
-              }
-            });
+            hilog.info(
+              0x0000,
+              'Index',
+              `[WEATHER_REPLAN][dialog_view_only] planId=${this.currentPlanId}, suggestionId=${payload.suggestionId}, actionType=${payload.actionType ?? 'NONE'}`
+            );
+            this.isCompanionMode = true;
+            this.safeShowToast('已进入伴游，请先查看建议，确认后再应用');
           } else {
             void this.vm.refreshExecutionWeather(true, 'MANUAL');
           }
