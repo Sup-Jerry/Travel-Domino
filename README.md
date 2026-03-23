@@ -1,137 +1,107 @@
-﻿# Travel Domino
+# Travel Domino
 
-一个面向 HarmonyOS 的行程规划应用，支持时间线编排、地图选点、AI 辅助输入、冲突消解与到达提醒。
+Travel Domino 是一个面向 HarmonyOS 的行程规划项目，聚焦“时间线排程 + 地图联动 + 智能辅助 + 提醒执行”的旅行计划管理体验。
 
-## 项目亮点
+## 1. 当前能力清单（按实现状态分级）
 
-- 时间线驱动：围绕 `Plan + Event` 组织行程，支持拖拽/调整与冲突处理。
-- 地图联动：集成高德能力，支持地点选取、地理编码与路线相关能力。
-- AI 辅助：支持自然语言输入转结构化建议（依赖本地配置的 AI Key）。
-- 到达提醒：包含到达提醒引擎与协调器，支持提醒弹窗与流程接续。
-- 测试覆盖：包含 `src/test` 与 `src/ohosTest` 测试入口。
+### 已实现
 
-## 技术栈
+- HarmonyOS 客户端主流程：计划列表、计划详情、设置、搜索、归档、回收站等页面基础结构。
+- 时间线核心能力：`Plan + Event` 的增删改查、冲突检测与部分冲突处理流程。
+- 地图与位置基础能力：已接入高德 Harmony SDK 相关依赖，包含地图/搜索/定位服务代码。
+- AI 与提醒相关模块：已存在 AI 服务、到达提醒引擎与协调器等实现入口。
+- 自动化测试基础：客户端单元测试与设备测试已接入（见“测试与质量”章节）。
+
+### 部分实现（进行中）
+
+- 后端认证服务已落地最小闭环接口：当前代码中可见 `POST /auth/guest/create`、`GET /auth/me`。
+- 后端健康检查接口可用：`GET /admin-health`。
+- 客户端与后端联动能力处于迭代中，接口覆盖范围以当前控制器实现为准。
+
+### 计划中
+
+- 云端数据能力（跨设备同步/恢复）在仓库内有规划文档与拆解材料，但不应视为已完整交付。
+- 更完整的认证方式（手机号/第三方登录等）已在后端文档中规划，当前仓库代码未全部实现。
+
+## 2. 技术栈与仓库结构
+
+### 技术栈
 
 | 维度 | 方案 |
 | --- | --- |
-| 平台 | HarmonyOS (API 20) |
-| 语言 | ArkTS |
-| UI | ArkUI |
+| 客户端平台 | HarmonyOS（API 20） |
+| 客户端语言/UI | ArkTS + ArkUI |
 | 构建 | Hvigor |
-| 地图 | AMap Harmony SDK |
+| 地图能力 | AMap Harmony SDK |
+| 后端 | NestJS + PostgreSQL |
 
-## 架构速览
-
-```mermaid
-flowchart LR
-  UI["pages/*\ncomponents/*"] --> VM["viewmodel/*"]
-  VM --> Domain["model/logic/*"]
-  VM --> Data["model/entity + dao"]
-  VM --> Services["common/utils/*"]
-  Services --> Map["AMap SDK"]
-  Services --> AI["AI API"]
-```
-
-## 目录结构
+### 仓库结构（核心）
 
 ```text
 E:\Travel12.19
-├─ AppScope/                     # 应用级配置与资源
-├─ entry/
-│  ├─ src/main/ets/
-│  │  ├─ pages/                  # 页面与组件
-│  │  ├─ viewmodel/              # 视图模型与交互编排
-│  │  ├─ model/                  # 实体、DAO、业务逻辑
-│  │  └─ common/utils/           # 服务与基础能力（含配置模板）
-│  ├─ src/test/                  # 单元测试
-│  └─ src/ohosTest/              # 设备测试
-├─ hvigor*/                      # 构建相关
-└─ build-profile.json5           # 构建配置
+├─ entry/                    # HarmonyOS 客户端主模块（ArkTS）
+│  ├─ src/main/ets/          # 页面、领域、服务、持久化、ViewModel
+│  ├─ src/test/              # 客户端单元测试
+│  └─ src/ohosTest/          # 设备侧测试
+├─ AppScope/                 # 应用级配置与资源
+├─ backend/                  # NestJS 认证后端子项目
+│  ├─ src/modules/           # auth/health 等模块
+│  ├─ migrations/            # 数据库初始化 SQL
+│  └─ docs/                  # 后端运维与测试跟踪文档
+└─ scripts/ci/               # 质量门禁与 CI 脚本
 ```
 
-## 快速开始
+## 3. 快速开始
 
-### 1) 环境准备
+### 客户端（HarmonyOS）
 
-- DevEco Studio（推荐最新稳定版）
-- HarmonyOS SDK（与项目 `targetSdkVersion 6.0.0(20)` 对齐）
+1. 环境准备
+   - DevEco Studio（建议使用稳定版本）
+   - HarmonyOS SDK（与项目 `6.0.0(20)` 对齐）
+2. 本地配置密钥
+   - 复制 `entry/src/main/ets/common/utils/AppConfig.example.ets`
+   - 重命名为 `entry/src/main/ets/common/utils/AppConfig.ets`
+   - 按需填写：`AI_API_KEY`、`AMAP_WEB_API_KEY`、`AMAP_SDK_API_KEY`
+3. 运行方式
+   - 推荐：DevEco Studio 打开项目后直接运行
+   - 可选：命令行在仓库根目录执行 `hvigorw.bat` 对应任务
 
-### 2) 配置本地密钥（必做）
+### 后端（NestJS）
 
-1. 复制文件：
-   - `entry/src/main/ets/common/utils/AppConfig.example.ets`
-2. 重命名为：
-   - `entry/src/main/ets/common/utils/AppConfig.ets`
-3. 填写你自己的密钥：
-   - `AI_API_KEY`
-   - `AMAP_WEB_API_KEY`
-   - `AMAP_SDK_API_KEY`
+1. 安装与启动
 
-> `AppConfig.ets` 已在 `.gitignore` 中，默认不会提交。
+```bash
+cd backend
+npm install
+npm run start:dev
+```
 
-### 3) 运行项目
+2. 最小环境变量（当前实现必需）
+   - `DATABASE_URL`
+   - `JWT_SECRET`
+   - 可选：`AUTH_ACCESS_TTL_SECONDS`、`AUTH_REFRESH_TTL_SECONDS`、`AUTH_USE_STUB_PROVIDERS`
 
-- 方式 A（推荐）：使用 DevEco Studio 打开 `E:\Travel12.19`，选择设备后直接 Run。
-- 方式 B（命令行，可选）：在项目根目录执行 `hvigorw.bat` 对应任务进行构建。
+## 4. 测试与质量
 
-## 测试
+- 客户端单元测试目录：`entry/src/test`（当前 28 个 `.test.ets` 文件）。
+- 客户端设备测试目录：`entry/src/ohosTest`（当前 4 个 `.test.ets` 文件）。
+- 后端测试目录：`backend/test`（当前含基础认证相关测试）。
+- 仓库含 CI/门禁脚本：`scripts/ci/`（如 `quality-gate.ps1`、`full-gate.ps1`、`secret-scan.ps1`）。
 
-- 单元测试目录：`entry/src/test`
-- 设备测试目录：`entry/src/ohosTest`
-- 建议优先在 DevEco Studio 内执行测试任务，便于查看日志与断点。
+## 5. 现状说明（请在协作前先阅读）
 
-## 安全说明
+- 本仓库为“客户端主工程 + 后端子项目并行迭代”状态。
+- 后端 `backend/README.md` 中列出的部分接口仍属目标清单，不代表当前全部可用。
+- 对外协作时请优先以实际代码为准：
+  - 控制器位置：`backend/src/modules/*/*.controller.ts`
+  - 客户端能力入口：`entry/src/main/ets/`
 
-- 不要提交任何真实密钥或账号凭据。
-- `AppConfig.ets` 为本地私有文件，仅保留 `AppConfig.example.ets` 作为模板。
-- 如果密钥已泄露，请立即在服务端轮换。
+## 6. 安全与配置
 
-## 开发建议
+- 严禁提交任何真实密钥、令牌、凭据。
+- `entry/src/main/ets/common/utils/AppConfig.ets` 为本地私有配置，已在 `.gitignore` 中忽略。
+- 若密钥泄露，请立即在服务端完成轮换，不要仅在仓库中删除明文。
 
-- 小步提交，保持 PR 可审查。
-- 修改时间/冲突逻辑时，优先补充对应测试。
-- 与地图、AI 相关的失败路径要显式处理（超时、空结果、鉴权失败）。
+## 7. License 状态
 
-## 项目展示
-
-> 图片来源：`C:\Users\Reaper\Pictures\travel`，已整理并提交到 `docs/showcase/`。
-
-![showcase-01](docs/showcase/showcase-01.jpg)
-![showcase-02](docs/showcase/showcase-02.jpg)
-![showcase-03](docs/showcase/showcase-03.jpg)
-![showcase-04](docs/showcase/showcase-04.jpg)
-![showcase-05](docs/showcase/showcase-05.jpg)
-![showcase-06](docs/showcase/showcase-06.jpg)
-![showcase-07](docs/showcase/showcase-07.jpg)
-![showcase-08](docs/showcase/showcase-08.jpg)
-![showcase-09](docs/showcase/showcase-09.jpg)
-![showcase-10](docs/showcase/showcase-10.jpg)
-![showcase-11](docs/showcase/showcase-11.jpg)
-![showcase-12](docs/showcase/showcase-12.jpg)
-![showcase-13](docs/showcase/showcase-13.jpg)
-![showcase-14](docs/showcase/showcase-14.jpg)
-![showcase-15](docs/showcase/showcase-15.jpg)
-![showcase-16](docs/showcase/showcase-16.jpg)
-![showcase-17](docs/showcase/showcase-17.jpg)
-![showcase-18](docs/showcase/showcase-18.jpg)
-![showcase-19](docs/showcase/showcase-19.jpg)
-![showcase-20](docs/showcase/showcase-20.jpg)
-![showcase-21](docs/showcase/showcase-21.jpg)
-![showcase-22](docs/showcase/showcase-22.jpg)
-![showcase-23](docs/showcase/showcase-23.jpg)
-![showcase-24](docs/showcase/showcase-24.jpg)
-![showcase-25](docs/showcase/showcase-25.jpg)
-![showcase-26](docs/showcase/showcase-26.jpg)
-![showcase-27](docs/showcase/showcase-27.jpg)
-![showcase-28](docs/showcase/showcase-28.jpg)
-![showcase-29](docs/showcase/showcase-29.jpg)
-![showcase-30](docs/showcase/showcase-30.jpg)
-![showcase-31](docs/showcase/showcase-31.jpg)
-![showcase-32](docs/showcase/showcase-32.jpg)
-![showcase-33](docs/showcase/showcase-33.jpg)
-![showcase-34](docs/showcase/showcase-34.jpg)
-![showcase-35](docs/showcase/showcase-35.jpg)
-
-## License
-
-当前仓库未声明开源许可证；如需开源，请先补充 `LICENSE`。
+当前仓库尚未声明开源许可证。若计划公开发布，请先补充 `LICENSE` 文件并明确使用条款。
