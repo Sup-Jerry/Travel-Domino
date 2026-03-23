@@ -1,4 +1,5 @@
-import { promptAction, router } from '@kit.ArkUI';
+import { promptAction } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
 import { AuthLoginResult, AuthSessionPayload, DeviceInfo } from '../domain/auth/AuthModels';
 import { AuthGateway } from '../infrastructure/auth/AuthGateway';
 import { AuthSessionStore } from '../infrastructure/auth/AuthSessionStore';
@@ -25,6 +26,10 @@ struct LoginPage {
     return new DeviceInfo('device-local', 'HarmonyDevice', 'HARMONY');
   }
 
+  private async replaceUrl(url: string): Promise<void> {
+    await this.getUIContext().getRouter().replaceUrl({ url: url });
+  }
+
   private saveSession(session: AuthSessionPayload): void {
     const normalized = new AuthSessionPayload();
     normalized.accessToken = session.accessToken;
@@ -48,8 +53,10 @@ struct LoginPage {
 
     const payload = result.data as AuthLoginResult;
     this.saveSession(payload.session);
+    const hostContext = this.getUIContext().getHostContext() as common.Context;
+    await AuthSessionStore.markGuestChosenPersisted(hostContext);
     this.toast('已进入游客模式');
-    router.pushUrl({ url: 'pages/PlanListPage' });
+    await this.replaceUrl('pages/PlanListPage');
   }
 
   build() {

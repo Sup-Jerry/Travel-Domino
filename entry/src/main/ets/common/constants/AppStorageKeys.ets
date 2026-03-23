@@ -23,5 +23,6 @@
   static readonly HAS_UNSAVED_POSTPONE = 'hasUnsavedPostpone';
   static readonly MIN_EVENT_DURATION = 'MinEventDuration';
   static readonly AUTH_SESSION_JSON = 'AuthSessionJson';
+  static readonly AUTH_GUEST_CHOSEN = 'AuthGuestChosen';
 }
 

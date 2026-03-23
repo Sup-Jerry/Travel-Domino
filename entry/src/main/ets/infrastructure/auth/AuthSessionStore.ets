@@ -1,4 +1,6 @@
-﻿import { AppStorageKeys } from '../../common/constants/AppStorageKeys';
+import { common } from '@kit.AbilityKit';
+import { AppStorageKeys } from '../../common/constants/AppStorageKeys';
+import { PreferenceManager } from '../../common/utils/PreferenceManager';
 import { AuthSessionPayload } from '../../domain/auth/AuthModels';
 
 class StoredSession {
@@ -47,5 +49,33 @@ export class AuthSessionStore {
 
   public static clear(): void {
     AppStorage.setOrCreate(AppStorageKeys.AUTH_SESSION_JSON, '');
+  }
+
+  public static markGuestChosen(): void {
+    AppStorage.setOrCreate(AppStorageKeys.AUTH_GUEST_CHOSEN, true);
+  }
+
+  public static hasGuestChosen(): boolean {
+    return AppStorage.get<boolean>(AppStorageKeys.AUTH_GUEST_CHOSEN) ?? false;
+  }
+
+  public static async markGuestChosenPersisted(context: common.Context): Promise<void> {
+    AuthSessionStore.markGuestChosen();
+    const pref = PreferenceManager.getInstance();
+    await pref.init(context);
+    await pref.setGuestChosen(true);
+  }
+
+  public static async hasGuestChosenPersisted(context: common.Context): Promise<boolean> {
+    if (AuthSessionStore.hasGuestChosen()) {
+      return true;
+    }
+    const pref = PreferenceManager.getInstance();
+    await pref.init(context);
+    const chosen = await pref.isGuestChosen();
+    if (chosen) {
+      AuthSessionStore.markGuestChosen();
+    }
+    return chosen;
   }
 }

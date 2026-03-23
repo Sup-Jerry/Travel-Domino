@@ -1,36 +1,72 @@
-﻿import { router } from '@kit.ArkUI';
+import { AuthLoginResult, DeviceInfo } from '../domain/auth/AuthModels';
 import { AuthGateway } from '../infrastructure/auth/AuthGateway';
 import { AuthSessionStore } from '../infrastructure/auth/AuthSessionStore';
+import { common } from '@kit.AbilityKit';
 
 @Entry
 @Component
 struct AuthGatePage {
   @State private checking: boolean = true;
-  private routed: boolean = false;
+  private checkingInProgress: boolean = false;
+
+  private makeDeviceInfo(): DeviceInfo {
+    return new DeviceInfo('device-local', 'HarmonyDevice', 'HARMONY');
+  }
+
+  private async replaceUrl(url: string): Promise<void> {
+    await this.getUIContext().getRouter().replaceUrl({ url: url });
+  }
 
   onPageShow(): void {
-    if (this.routed) {
+    if (this.checkingInProgress) {
       return;
     }
-    this.routed = true;
-    void this.checkAndRoute();
+    this.checkingInProgress = true;
+    this.checking = true;
+    void this.checkAndRoute().finally(() => {
+      this.checkingInProgress = false;
+      this.checking = false;
+    });
+  }
+
+  private async trySilentGuestLogin(): Promise<boolean> {
+    const result = await AuthGateway.createGuest(this.makeDeviceInfo());
+    if (result.code !== 0) {
+      return false;
+    }
+    const payload = result.data as AuthLoginResult;
+    AuthSessionStore.save(payload.session);
+    AuthSessionStore.markGuestChosen();
+    return true;
   }
 
   private async checkAndRoute(): Promise<void> {
-    const session = AuthSessionStore.load();
-    if (!session || Date.now() >= session.expireAt) {
-      router.pushUrl({ url: 'pages/LoginPage' });
-      return;
-    }
+    try {
+      const session = AuthSessionStore.load();
+      if (session && Date.now() < session.expireAt) {
+        const me = await AuthGateway.me(session.accessToken);
+        if (me.code === 0) {
+          await this.replaceUrl('pages/PlanListPage');
+          return;
+        }
+        AuthSessionStore.clear();
+      }
 
-    const me = await AuthGateway.me(session.accessToken);
-    if (me.code === 0) {
-      router.pushUrl({ url: 'pages/PlanListPage' });
-      return;
-    }
+      const hostContext = this.getUIContext().getHostContext() as common.Context;
+      const hasGuestChosen = await AuthSessionStore.hasGuestChosenPersisted(hostContext);
+      if (hasGuestChosen) {
+        const autoGuestOk = await this.trySilentGuestLogin();
+        if (autoGuestOk) {
+          await this.replaceUrl('pages/PlanListPage');
+          return;
+        }
+      }
 
-    AuthSessionStore.clear();
-    router.pushUrl({ url: 'pages/LoginPage' });
+      await this.replaceUrl('pages/LoginPage');
+    } catch (_error) {
+      AuthSessionStore.clear();
+      await this.replaceUrl('pages/LoginPage');
+    }
   }
 
   build() {

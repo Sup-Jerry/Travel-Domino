@@ -80,7 +80,7 @@ struct PlanListPage {
 
   onPageShow() {
     if (!AuthSessionStore.getAccessToken()) {
-      this.getUIContext().getRouter().pushUrl({ url: 'pages/LoginPage' });
+      void this.getUIContext().getRouter().replaceUrl({ url: 'pages/LoginPage' });
       return;
     }
     void this.loadPlans();
