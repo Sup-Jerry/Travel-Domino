@@ -94,8 +94,11 @@ export default class EntryAbility extends UIAbility {
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');
 
     try {
+      const sdkKeyLength = AppConfig.AMAP_SDK_API_KEY.trim().length;
+      hilog.info(DOMAIN, TAG, `[MAP_INIT][config] sdkKeyConfigured=${sdkKeyLength > 0}, sdkKeyLen=${sdkKeyLength}`);
       AppConfig.validateAmapSdkConfig();
       MapsInitializer.setApiKey(AppConfig.AMAP_SDK_API_KEY);
+      hilog.info(DOMAIN, TAG, '[MAP_INIT][set_api_key] success');
     } catch (error) {
       hilog.error(DOMAIN, TAG, `地图 SDK Key 配置无效: ${JSON.stringify(error)}`);
     }
