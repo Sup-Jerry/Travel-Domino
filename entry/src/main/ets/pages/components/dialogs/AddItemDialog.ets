@@ -28,7 +28,8 @@ interface GeneratedObjectLiteralInterface_1 {
 }
 
 interface AMapNativeBridgeModule {
-  __placeholder?: string;
+  nativeSetAMapXComponentCallback?: (callback: object) => void;
+  default?: AMapNativeBridgeModule;
 }
 
 class MapPickerRouteParams {
@@ -188,17 +189,36 @@ export struct AddItemDialog {
   }
 
   private canUseMapPicker(): boolean {
-    return AppConfig.AMAP_SDK_API_KEY.trim().length > 0;
+    const keyLength = AppConfig.AMAP_SDK_API_KEY.trim().length;
+    const enabled = keyLength > 0;
+    hilog.info(0x0000, 'AddItemDialog', `[MAP_ENTRY][config] sdkKeyConfigured=${enabled}, sdkKeyLen=${keyLength}`);
+    return enabled;
   }
 
   private async isMapNativeRuntimeReady(): Promise<boolean> {
     try {
-      await import('libAMapOpenMapJNI.so') as AMapNativeBridgeModule;
+      const nativeModule = await import('libAMapOpenMapJNI.so') as AMapNativeBridgeModule;
+      const moduleDefined = nativeModule !== undefined && nativeModule !== null;
+      const namedCallbackReady = typeof nativeModule?.nativeSetAMapXComponentCallback === 'function';
+      const defaultCallbackReady = typeof nativeModule?.default?.nativeSetAMapXComponentCallback === 'function';
+      const callbackReady = namedCallbackReady || defaultCallbackReady;
+      const exportKeys = moduleDefined ? Object.keys(nativeModule as object) : [];
+      hilog.info(
+        0x0000,
+        'AddItemDialog',
+        `[MAP_NATIVE_GUARD] probe moduleDefined=${moduleDefined}, callbackReady=${callbackReady}, named=${namedCallbackReady}, default=${defaultCallbackReady}, keyCount=${exportKeys.length}, keys=${exportKeys.join('|')}`
+      );
+      if (!callbackReady) {
+        hilog.error(0x0000, 'AddItemDialog',
+          '[MAP_NATIVE_GUARD] runtime unavailable, missing nativeSetAMapXComponentCallback export');
+        return false;
+      }
       const version = (MapsInitializer.getVersion() ?? '').trim();
       hilog.info(0x0000, 'AddItemDialog', `[MAP_NATIVE_GUARD] load_ok, version=${version.length > 0 ? version : 'unknown'}`);
       return true;
     } catch (error) {
-      hilog.error(0x0000, 'AddItemDialog', `[MAP_NATIVE_GUARD] runtime unavailable, reason=${JSON.stringify(error)}`);
+      const errorDetail = error instanceof Error ? `${error.name}:${error.message}` : JSON.stringify(error);
+      hilog.error(0x0000, 'AddItemDialog', `[MAP_NATIVE_GUARD] runtime unavailable, reason=${errorDetail}`);
       return false;
     }
   }
@@ -340,6 +360,11 @@ export struct AddItemDialog {
             .fontColor(this.getPalette().primary)
             .height(48)
           .onClick(async() => {
+              hilog.info(
+                0x0000,
+                'AddItemDialog',
+                `[MAP_ENTRY][tap] planId=${this.storageScopePlanId}, hasCoord=${this.isValidCoordinate(this.latitude, this.longitude)}`
+              );
               if (!this.canUseMapPicker()) {
                 this.safeShowToast('地图能力未配置，可直接填写名称后保存');
                 return;
@@ -359,6 +384,11 @@ export struct AddItemDialog {
               if (this.isValidCoordinate(routeLat, routeLng)) {
                 centerSource = 'existing';
               }
+              hilog.info(
+                0x0000,
+                'AddItemDialog',
+                `[MAP_ENTRY][route] planId=${this.storageScopePlanId}, centerSource=${centerSource}, lat=${routeLat}, lng=${routeLng}`
+              );
 
               // 1. 给当前的表单数据拍个“快照”存起来
               let tempState: GeneratedObjectLiteralInterface_1 = {
@@ -646,9 +676,6 @@ export struct AddItemDialog {
     .width('95%')
   }
 }
-
-
-
 
 
 

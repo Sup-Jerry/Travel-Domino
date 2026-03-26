@@ -41,7 +41,8 @@ class MapPickerRouteParams {
 }
 
 interface AMapNativeBridgeModule {
-  __placeholder?: string;
+  nativeSetAMapXComponentCallback?: (callback: object) => void;
+  default?: AMapNativeBridgeModule;
 }
 
 @Entry
@@ -94,10 +95,17 @@ struct MapPickerPage {
   aboutToAppear(): void {
     this.uiContext = this.getUIContext().getHostContext() as common.UIAbilityContext;
     const params = this.getUIContext().getRouter().getParams() as MapPickerRouteParams;
+    const hasParams = params !== undefined && params !== null;
+    hilog.info(0x0000, 'MapPickerPage', `[MAP_PICKER][about_to_appear] hasParams=${hasParams}`);
     if (params) {
       const routeLat = params.lat ?? 0;
       const routeLng = params.lng ?? 0;
       this.storageScopePlanId = Number(params.planId ?? 0);
+      hilog.info(
+        0x0000,
+        'MapPickerPage',
+        `[MAP_PICKER][route_params] planId=${this.storageScopePlanId}, centerSource=${params.centerSource ?? 'current'}, lat=${routeLat}, lng=${routeLng}`
+      );
       if (this.isValidCoordinate(routeLat, routeLng)) {
         this.currentLat = routeLat;
         this.currentLng = routeLng;
@@ -124,6 +132,7 @@ struct MapPickerPage {
     const runtimeReady = await this.isMapNativeRuntimeReady();
     this.mapRuntimeReady = runtimeReady;
     this.mapRuntimeChecked = true;
+    hilog.info(0x0000, 'MapPickerPage', `[MAP_PICKER][prepare_runtime] ready=${runtimeReady}`);
     if (!runtimeReady) {
       this.mapRuntimeError = '地图运行环境不可用，请在真机 arm64 环境重试';
       this.safeShowToast('地图组件不可用，请检查设备架构或地图 SDK 配置');
@@ -152,11 +161,27 @@ struct MapPickerPage {
 
   private async isMapNativeRuntimeReady(): Promise<boolean> {
     try {
-      await import('libAMapOpenMapJNI.so') as AMapNativeBridgeModule;
+      const nativeModule = await import('libAMapOpenMapJNI.so') as AMapNativeBridgeModule;
+      const moduleDefined = nativeModule !== undefined && nativeModule !== null;
+      const namedCallbackReady = typeof nativeModule?.nativeSetAMapXComponentCallback === 'function';
+      const defaultCallbackReady = typeof nativeModule?.default?.nativeSetAMapXComponentCallback === 'function';
+      const callbackReady = namedCallbackReady || defaultCallbackReady;
+      const exportKeys = moduleDefined ? Object.keys(nativeModule as object) : [];
+      hilog.info(
+        0x0000,
+        'MapPickerPage',
+        `[MAP_NATIVE_GUARD] probe moduleDefined=${moduleDefined}, callbackReady=${callbackReady}, named=${namedCallbackReady}, default=${defaultCallbackReady}, keyCount=${exportKeys.length}, keys=${exportKeys.join('|')}`
+      );
+      if (!callbackReady) {
+        hilog.error(0x0000, 'MapPickerPage',
+          '[MAP_NATIVE_GUARD] runtime unavailable, missing nativeSetAMapXComponentCallback export');
+        return false;
+      }
       hilog.info(0x0000, 'MapPickerPage', '[MAP_NATIVE_GUARD] native module load ok');
       return true;
     } catch (error) {
-      hilog.error(0x0000, 'MapPickerPage', `[MAP_NATIVE_GUARD] runtime unavailable, reason=${JSON.stringify(error)}`);
+      const errorDetail = error instanceof Error ? `${error.name}:${error.message}` : JSON.stringify(error);
+      hilog.error(0x0000, 'MapPickerPage', `[MAP_NATIVE_GUARD] runtime unavailable, reason=${errorDetail}`);
       return false;
     }
   }
