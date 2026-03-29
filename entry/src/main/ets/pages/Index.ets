@@ -545,8 +545,9 @@ struct Index {
           await this.vm.generateByAi(text, strategy, customStrategy);
           this.safeShowToast('AI 生成成功，已加入暂存池！');
           this.aiDialogController.close();
-        } catch {
-          this.safeShowToast('生成失败');
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : '生成失败';
+          this.safeShowToast(msg);
           this.aiDialogController.close();
         }
       },

@@ -40,5 +40,52 @@ export default function aiServiceTest() {
       expect(items[1].type).assertEqual(0);
     });
 
+    it('resolve_requested_days_should_support_arabic_and_chinese', 0, () => {
+      expect(AiService.resolveRequestedDaysFromPrompt('帮我规划三日游')).assertEqual(3);
+      expect(AiService.resolveRequestedDaysFromPrompt('想要2天旅行')).assertEqual(2);
+      expect(AiService.resolveRequestedDaysFromPrompt('安排五日游')).assertEqual(5);
+      expect(AiService.resolveRequestedDaysFromPrompt('随便逛逛')).assertEqual(1);
+    });
+
+    it('resolve_strategy_max_items_should_scale_by_requested_days', 0, () => {
+      const oneDay = AiService.resolveStrategyMaxItemsForTest({
+        userPrompt: '北京一日游',
+        strategyMode: 0
+      });
+      const threeDays = AiService.resolveStrategyMaxItemsForTest({
+        userPrompt: '北京三日游',
+        strategyMode: 0
+      });
+      expect(oneDay).assertEqual(5);
+      expect(threeDays).assertEqual(15);
+    });
+
+    it('generate_with_strategy_should_throw_on_empty_items', 0, async () => {
+      AiService.setRequesterForTest(async () => {
+        return {
+          responseCode: 200,
+          result: '{"choices":[{"message":{"content":"[]"}}]}'
+        };
+      });
+      let message = '';
+      try {
+        await AiService.generateItineraryWithStrategy({
+          userPrompt: '三日游',
+          strategyMode: -1,
+          customStrategy: {
+            density: 1,
+            pace: 1,
+            preference: 0,
+            energy: 1
+          }
+        });
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
+      } finally {
+        AiService.setRequesterForTest(null);
+      }
+      expect(message).assertEqual('AI 未返回可用地点，请调整描述后重试');
+    });
+
   });
 }
