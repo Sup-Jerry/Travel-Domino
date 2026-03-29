@@ -50,6 +50,8 @@ type AiRequester = (url: string, options: http.HttpRequestOptions) => Promise<Ht
 export class AiService {
   private static readonly TAG = 'AiService';
   private static requesterForTest: AiRequester | null = null;
+  private static readonly DEFAULT_REQUESTED_DAYS = 1;
+  private static readonly MAX_REQUESTED_DAYS = 30;
   private static readonly SCENIC_MIN_DURATION = 30;
   private static readonly SCENIC_MAX_DURATION = 180;
   private static readonly FOOD_MIN_DURATION = 20;
@@ -149,17 +151,79 @@ export class AiService {
     return Math.max(10, rounded);
   }
 
+  private static parseSimpleChineseNumber(raw: string): number {
+    const text = (raw || '').trim();
+    if (text.length === 0) {
+      return 0;
+    }
+    const map: Record<string, number> = {
+      '零': 0,
+      '一': 1,
+      '二': 2,
+      '两': 2,
+      '俩': 2,
+      '三': 3,
+      '四': 4,
+      '五': 5,
+      '六': 6,
+      '七': 7,
+      '八': 8,
+      '九': 9
+    };
+    if (text === '十') {
+      return 10;
+    }
+    if (text.indexOf('十') >= 0) {
+      const parts = text.split('十');
+      const leftRaw = (parts[0] || '').trim();
+      const rightRaw = (parts[1] || '').trim();
+      const left = leftRaw.length === 0 ? 1 : (map[leftRaw] ?? 0);
+      const right = rightRaw.length === 0 ? 0 : (map[rightRaw] ?? 0);
+      return left * 10 + right;
+    }
+    return map[text] ?? 0;
+  }
+
+  public static resolveRequestedDaysFromPrompt(prompt: string): number {
+    const normalized = (prompt || '').replace(/\s+/g, '');
+    if (normalized.length === 0) {
+      return AiService.DEFAULT_REQUESTED_DAYS;
+    }
+
+    const arabicMatch = normalized.match(/([1-9]\d{0,2})(?:天|日)/);
+    if (arabicMatch && arabicMatch[1]) {
+      const parsed = Number(arabicMatch[1]);
+      if (Number.isFinite(parsed)) {
+        return Math.min(AiService.MAX_REQUESTED_DAYS, Math.max(AiService.DEFAULT_REQUESTED_DAYS, Math.floor(parsed)));
+      }
+    }
+
+    const zhMatch = normalized.match(/([零一二两俩三四五六七八九十]{1,3})(?:天|日)/);
+    if (zhMatch && zhMatch[1]) {
+      const parsed = AiService.parseSimpleChineseNumber(zhMatch[1]);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return Math.min(AiService.MAX_REQUESTED_DAYS, Math.max(AiService.DEFAULT_REQUESTED_DAYS, Math.floor(parsed)));
+      }
+    }
+
+    return AiService.DEFAULT_REQUESTED_DAYS;
+  }
+
   private static resolveStrategyMaxItems(request: AiGenerateRequest): number {
+    const requestedDays = AiService.resolveRequestedDaysFromPrompt(request.userPrompt);
+    let dailyMax = 5;
     if (request.customStrategy) {
-      return StrategyBuilder.buildProfile(request.customStrategy).dailyPoiTarget.max;
+      dailyMax = StrategyBuilder.buildProfile(request.customStrategy).dailyPoiTarget.max;
+    } else if (request.strategyMode === 1) {
+      dailyMax = 8;
+    } else if (request.strategyMode === 2) {
+      dailyMax = 4;
     }
-    if (request.strategyMode === 1) {
-      return 8;
-    }
-    if (request.strategyMode === 2) {
-      return 4;
-    }
-    return 5;
+    return Math.max(1, Math.floor(dailyMax)) * requestedDays;
+  }
+
+  public static resolveStrategyMaxItemsForTest(request: AiGenerateRequest): number {
+    return AiService.resolveStrategyMaxItems(request);
   }
 
   private static enforceMaxItems(items: AiRawItem[], maxItems: number): AiRawItem[] {
@@ -298,7 +362,11 @@ ${strategyFragment}
         : JSON.stringify(response.result);
       const parsedItems = AiService.parseModelResponseForTest(resultStr);
       const maxItems = AiService.resolveStrategyMaxItems(request);
-      return AiService.enforceMaxItems(parsedItems, maxItems);
+      const finalItems = AiService.enforceMaxItems(parsedItems, maxItems);
+      if (finalItems.length === 0) {
+        throw new Error('AI 未返回可用地点，请调整描述后重试');
+      }
+      return finalItems;
     } catch (error) {
       const rethrowMessage = error instanceof Error ? error.message : 'AI 请求失败';
       throw new Error(rethrowMessage);

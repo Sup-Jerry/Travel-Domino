@@ -278,6 +278,7 @@ interface PlanningWeatherSnapshot {
 
 @Observed
 export class TimelineViewModel {
+  private static readonly AUTO_DISTRIBUTION_MAX_DURATION: number = 240;
   @Track public events: EventEntity[] = [];
   @Track public planId: number = -1;
   @Track public planName: string = '';
@@ -359,6 +360,55 @@ export class TimelineViewModel {
     forceRefreshOnEnter: true
   };
   private readonly executionSuggestionCooldownMs: number = 30 * 60 * 1000;
+
+  private static clampDistributionAdd(currentDuration: number, requestedAdd: number): number {
+    const safeCurrent = Number.isFinite(currentDuration) ? Math.max(0, Math.floor(currentDuration)) : 0;
+    const safeRequested = Number.isFinite(requestedAdd) ? Math.max(0, Math.floor(requestedAdd)) : 0;
+    if (safeRequested <= 0) {
+      return 0;
+    }
+    const remaining = Math.max(0, TimelineViewModel.AUTO_DISTRIBUTION_MAX_DURATION - safeCurrent);
+    return Math.min(safeRequested, remaining);
+  }
+
+  public static clampDistributionAddForTest(currentDuration: number, requestedAdd: number): number {
+    return TimelineViewModel.clampDistributionAdd(currentDuration, requestedAdd);
+  }
+
+  private static buildAiDayOffsets(totalItems: number, requestedDays: number, baseDayOffset: number): number[] {
+    const safeTotal = Number.isFinite(totalItems) ? Math.max(0, Math.floor(totalItems)) : 0;
+    const safeDays = Number.isFinite(requestedDays) ? Math.max(1, Math.floor(requestedDays)) : 1;
+    const safeBase = Number.isFinite(baseDayOffset) ? Math.floor(baseDayOffset) : 0;
+    if (safeTotal === 0) {
+      return [];
+    }
+
+    const quotas: number[] = [];
+    const baseCount = Math.floor(safeTotal / safeDays);
+    const remainder = safeTotal % safeDays;
+    for (let d = 0; d < safeDays; d++) {
+      quotas.push(baseCount + (d < remainder ? 1 : 0));
+    }
+
+    const offsets: number[] = [];
+    for (let i = 0; i < safeTotal; i++) {
+      let remain = i;
+      let targetDay = 0;
+      for (let d = 0; d < quotas.length; d++) {
+        if (remain < quotas[d]) {
+          targetDay = d;
+          break;
+        }
+        remain -= quotas[d];
+      }
+      offsets.push(safeBase + targetDay);
+    }
+    return offsets;
+  }
+
+  public static buildAiDayOffsetsForTest(totalItems: number, requestedDays: number, baseDayOffset: number): number[] {
+    return TimelineViewModel.buildAiDayOffsets(totalItems, requestedDays, baseDayOffset);
+  }
   private readonly executionSuggestionCooldownMap: Map<string, number> = new Map<string, number>();
   private readonly executionSuggestionMap: Map<string, WeatherSuggestion> = new Map<string, WeatherSuggestion>();
   private executionReplanBusy: boolean = false;
@@ -885,10 +935,25 @@ export class TimelineViewModel {
     const target = this.events.find(e => e.id === item.id);
     if (target) {
       const previousIndex = this.events.indexOf(target);
+      const previousStatus = target.status;
+      const previousDayOffset = target.day_offset;
+      const previousDynamicDayOffset = target.dynamic_day_offset;
+      hilog.info(
+        0x0000,
+        TAG,
+        `[SCHEDULE][move_to_backlog_begin] itemId=${target.id}, fromStatus=${previousStatus}, index=${previousIndex}, dayOffset=${previousDayOffset}, dynamicDayOffset=${previousDynamicDayOffset}`
+      );
       target.status = 0;
       target.sort_order = 0;
       this.recalculateFromIndex(previousIndex > 0 ? previousIndex - 1 : 0);
       this.save();
+      hilog.info(
+        0x0000,
+        TAG,
+        `[SCHEDULE][move_to_backlog_done] itemId=${target.id}, toStatus=${target.status}, recalcFrom=${previousIndex > 0 ? previousIndex - 1 : 0}`
+      );
+    } else {
+      hilog.warn(0x0000, TAG, `[SCHEDULE][move_to_backlog_skip] reason=item_not_found, itemId=${item.id}`);
     }
   }
 
@@ -1104,6 +1169,11 @@ export class TimelineViewModel {
 
       const target = this.events.find(e => e.id === id);
       if (target) {
+        hilog.info(
+          0x0000,
+          TAG,
+          `[SCHEDULE][conflict_move_to_backlog] itemId=${target.id}, fromStatus=${target.status}, dayOffset=${target.day_offset}, dynamicDayOffset=${target.dynamic_day_offset}`
+        );
         target.status = 0; // 回归暂存
         target.day_offset = 0;
         target.dynamic_day_offset = 0;
@@ -1695,6 +1765,16 @@ export class TimelineViewModel {
    * 彻底从数据库移除
    */
   public async hardDelete(item: EventEntity) {
+    const previousStatus = item.status;
+    const previousDayOffset = item.day_offset;
+    const previousDynamicDayOffset = item.dynamic_day_offset;
+    const previousIndex = this.events.indexOf(item);
+    hilog.info(
+      0x0000,
+      TAG,
+      `[SCHEDULE][hard_delete_begin] itemId=${item.id}, status=${previousStatus}, index=${previousIndex}, dayOffset=${previousDayOffset}, dynamicDayOffset=${previousDynamicDayOffset}`
+    );
+
     // 1. 内存移除
     const index = this.events.indexOf(item);
     if (index !== -1) {
@@ -1704,6 +1784,8 @@ export class TimelineViewModel {
 
     if (item.id) {
       await EventRepositoryImpl.hardDeleteEvent(item.id);
+    } else {
+      hilog.warn(0x0000, TAG, '[SCHEDULE][hard_delete_skip_db] reason=missing_item_id');
     }
 
     // 3. 触发刷新
@@ -1716,6 +1798,11 @@ export class TimelineViewModel {
         await this.triggerStrategyAdaptation();
       }
     }
+    hilog.info(
+      0x0000,
+      TAG,
+      `[SCHEDULE][hard_delete_done] itemId=${item.id}, fromStatus=${previousStatus}, dbDeleted=${item.id ? 'yes' : 'no'}, recalcFrom=${index > 0 ? index - 1 : 0}`
+    );
   }
 
   // 文件路径: ets/viewmodel/TimelineViewModel.ets
@@ -3441,7 +3528,7 @@ export class TimelineViewModel {
       });
 
       if (!aiItems || aiItems.length === 0) {
-        return;
+        throw new Error('AI 未返回可用地点，请调整描述后重试');
       }
 
       // 保存AI上下文到数据库
@@ -3463,13 +3550,17 @@ export class TimelineViewModel {
       // 记录用户策略偏好（用于个性化推荐）
       UserProfileService.recordStrategyUsage(strategyMode, customStrategy).catch(() => {});
 
-      // 计算新事件的dayOffset（如果已有行程，新事件应该在下一天）
+      // 计算新事件的dayOffset：按用户输入天数均分到多天
       const existingSchedule = this.events.filter(e => e.status === 1);
-      const newDayOffset = existingSchedule.length > 0
+      const baseDayOffset = existingSchedule.length > 0
         ? Math.max(...existingSchedule.map(e => e.day_offset || 0)) + 1
         : 0;
+      const requestedDays = AiService.resolveRequestedDaysFromPrompt(userPrompt);
+      const allocatedDayOffsets = TimelineViewModel.buildAiDayOffsets(aiItems.length, requestedDays, baseDayOffset);
 
-      for (const item of aiItems) {
+      for (let i = 0; i < aiItems.length; i++) {
+        const item = aiItems[i];
+        const allocatedDayOffset = allocatedDayOffsets[i] ?? baseDayOffset;
         const newItemInterface: import('../model/interface/IStandardEvent').TravelPlanItem = {
           name: item.name,
           duration: item.duration,
@@ -3479,7 +3570,7 @@ export class TimelineViewModel {
           status: 0,
           lockStatus: 0,
           fixedStartTime: undefined,
-          dayOffset: newDayOffset,
+          dayOffset: allocatedDayOffset,
           itemType: item.type,
           priority: item.type === 1 ? 0 : 1,  // 美食=普通(0), 景点/住宿=必去(1)
           isTravelManual: 0,
@@ -3974,11 +4065,14 @@ export class TimelineViewModel {
         add += remainder;
       }
 
-      item.duration += add;
-
+      const cappedAdd = TimelineViewModel.clampDistributionAdd(item.duration, add);
+      if (cappedAdd <= 0) {
+        return;
+      }
+      item.duration += cappedAdd;
 
       if (item.id) {
-        EventRepositoryImpl.updateSingleField(item.id, 'duration', item.duration, this.planId);
+        void EventRepositoryImpl.updateSingleField(item.id, 'duration', item.duration, this.planId);
       }
     });
 
@@ -4942,7 +5036,8 @@ export class TimelineViewModel {
       }
     }
 
-    return minBuffer;
+    const durationCap = Math.max(0, TimelineViewModel.AUTO_DISTRIBUTION_MAX_DURATION - candidate.duration);
+    return Math.min(minBuffer, durationCap);
   }
 
   public calculateDistributionPreview(gapItem: EventEntity, candidates: EventEntity[], selectedIds: Set<number>,
@@ -5083,11 +5178,15 @@ export class TimelineViewModel {
       const addMin = entries[i][1];
       const item = this.events.find(e => e.id === id);
       if (item && addMin > 0) {
+        const cappedAdd = TimelineViewModel.clampDistributionAdd(item.duration, addMin);
+        if (cappedAdd <= 0) {
+          continue;
+        }
         const idx = this.events.indexOf(item);
         if (idx >= 0 && idx < startIndex) {
           startIndex = idx;
         }
-        item.duration += addMin;
+        item.duration += cappedAdd;
         await EventRepositoryImpl.updateSingleField(item.id, 'duration', item.duration, this.planId);
       }
     }

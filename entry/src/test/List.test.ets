@@ -11,6 +11,7 @@ import arrivalReminderEngineTest from './ArrivalReminderEngine.test';
 import scheduleOrchestratorTest from './ScheduleOrchestrator.test';
 import reminderFacadeTest from './ReminderFacade.test';
 import timelineDatePolicyTest from './TimelineDatePolicy.test';
+import timelineViewModelAiDistributionTest from './TimelineViewModelAiDistribution.test';
 import weatherCacheTest from './WeatherCache.test';
 import weatherRiskEvaluatorTest from './WeatherRiskEvaluator.test';
 import weatherExecutionTest from './WeatherExecution.test';
@@ -34,6 +35,7 @@ export default function testsuite() {
   scheduleOrchestratorTest();
   reminderFacadeTest();
   timelineDatePolicyTest();
+  timelineViewModelAiDistributionTest();
   weatherCacheTest();
   weatherRiskEvaluatorTest();
   weatherExecutionTest();
