@@ -1155,6 +1155,12 @@ struct Index {
         onConfirm: async (name, duration, isSchedule, fixedTime, dayOffset, preTravel, isHardLock, note, isMustVisit, lat, lng) => {
           const hasCoordinate = Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0;
           hilog.info(0x0000, 'IndexPage', `[DIALOG_SAVE] has_coordinate=${hasCoordinate}`);
+          if (this.editingItemId !== -1 && !this.vm.events.find(e => e.id === this.editingItemId)) {
+            hilog.warn(0x0000, 'IndexPage', `[DIALOG_SAVE_SKIP] reason=item_not_found, itemId=${this.editingItemId}`);
+            this.safeShowToast('该地点已不存在，请刷新后重试');
+            this.editingItemId = -1;
+            return;
+          }
           if (this.vm.planStartDate <= 0 || (dayOffset !== undefined && dayOffset >= 0)) {
             await TimelineInteractionHelper.handleSaveItem(
               this.vm, this.editingItemId, name, duration, isSchedule,
@@ -1457,7 +1463,11 @@ struct Index {
     .width(60).height('100%')
     .backgroundColor('#FF9800') // 橙色
     .onClick(() => {
-      this.vm.moveToBacklog(item);
+      if (item.status !== 1) {
+        this.safeShowToast('该地点不在日程表中');
+        return;
+      }
+      void this.vm.moveToBacklog(item);
     })
   }
 
