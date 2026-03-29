@@ -7,7 +7,6 @@
 } from '@amap/amap_lbs_search';
 import { IMapService, LocationInfo, DriveStrategy } from '../interface/IMapService';
 import { BusinessError } from '@kit.BasicServicesKit';
-import ArrayList from '@ohos.util.ArrayList';
 import { common } from '@kit.AbilityKit';
 import { promptAction } from '@kit.ArkUI';
 import { PreferenceManager } from '../../common/utils/PreferenceManager';
@@ -67,6 +66,8 @@ interface MapServiceTestHooks {
 export class MapServiceImpl implements IMapService {
   private static readonly TAG = 'MapServiceImpl';
   private static readonly GEO_FIX_PREFIX = '[ROUTE_GEO_FIX]';
+  private static readonly ROUTE_DIAG_PREFIX = '[ROUTE_DIAG]';
+  private static readonly ROUTE_TRACE_PREFIX = '[AMAP_ROUTE_TRACE]';
   private static testHooks: MapServiceTestHooks | null = null;
 
   public static setTestHooks(hooks: MapServiceTestHooks | null): void {
@@ -202,37 +203,65 @@ export class MapServiceImpl implements IMapService {
     return new ResolvedRouteEndpoints(fromResolved.lat, fromResolved.lng, toResolved.lat, toResolved.lng, ok);
   }
 
-  private async canUseAmapRouteApi(): Promise<boolean> {
+  private async canUseAmapRouteApi(traceId?: string): Promise<boolean> {
+    const tid = traceId ?? 'no_trace';
     if (MapServiceImpl.testHooks?.routeApiEnabledResolver) {
-      return MapServiceImpl.testHooks.routeApiEnabledResolver();
+      const enabled = await MapServiceImpl.testHooks.routeApiEnabledResolver();
+      this.logRouteTrace(tid, 'switch_test_hook', `enabled=${enabled}`);
+      return enabled;
     }
     try {
       const pref = PreferenceManager.getInstance();
       const enabled = await pref.isAmapRouteApiEnabled();
       console.info(`[AMAP_SWITCH] enableAmapRouteApi = ${enabled}`);
+      this.logRouteTrace(tid, 'switch_pref', `enabled=${enabled}`);
       return enabled;
     } catch (error) {
       console.error(`[AMAP_SWITCH] read failed: ${this.sanitizeError(error)}`);
+      this.errorRouteTrace(tid, 'switch_pref_failed', `reason=${this.sanitizeError(error)}`);
       this.reportRouteApiFailure('高德路线开关读取失败，已按 60 分钟处理');
       return false;
     }
   }
 
   async getDurationByMode(origin: LocationInfo, destination: LocationInfo, mode: number, startTime?: string): Promise<number> {
+    const traceId = this.buildRouteTraceId(mode);
+    this.logRouteTrace(
+      traceId,
+      'entry',
+      `mode=${mode} startTime=${startTime ?? ''} from_name_len=${origin.name?.length ?? 0} to_name_len=${destination.name?.length ?? 0}`
+    );
     hilog.info(
       0x0000,
       MapServiceImpl.TAG,
       `${MapServiceImpl.GEO_FIX_PREFIX}[route] mode=${mode} startTime=${startTime ?? ''} from_len=${origin.name?.length ?? 0} to_len=${destination.name?.length ?? 0}`
     );
 
-    const routeApiEnabled = await this.canUseAmapRouteApi();
+    const routeApiEnabled = await this.canUseAmapRouteApi(traceId);
     if (!routeApiEnabled) {
+      this.warnRouteTrace(traceId, 'fallback', 'reason=route_api_disabled');
+      hilog.warn(
+        0x0000,
+        MapServiceImpl.TAG,
+        `${MapServiceImpl.ROUTE_DIAG_PREFIX}[switch] mode=${mode} enabled=false from_len=${origin.name?.length ?? 0} to_len=${destination.name?.length ?? 0}`
+      );
       this.reportRouteApiFailure('高德路线 API 已关闭，已按 60 分钟处理');
       return 60;
     }
 
     const resolved = await this.resolveRouteEndpoints(origin, destination);
+    this.logRouteTrace(
+      traceId,
+      'resolved',
+      `ok=${resolved.ok} from=(${this.maskCoordinate(resolved.fromLat)},${this.maskCoordinate(resolved.fromLng)}) to=(${this.maskCoordinate(resolved.toLat)},${this.maskCoordinate(resolved.toLng)})`
+    );
     if (!resolved.ok) {
+      this.errorRouteTrace(traceId, 'fallback', 'reason=invalid_resolved_coordinate');
+      hilog.error(
+        0x0000,
+        MapServiceImpl.TAG,
+        `${MapServiceImpl.ROUTE_DIAG_PREFIX}[coord] mode=${mode} resolved=false from=(${this.maskCoordinate(resolved.fromLat)},${this.maskCoordinate(resolved.fromLng)}) to=(${this.maskCoordinate(resolved.toLat)},${this.maskCoordinate(resolved.toLng)})`
+      );
       return this.fallbackDurationWithError('高德路线计算失败：坐标无效且补偿失败，已按 60 分钟处理');
     }
 
@@ -252,8 +281,10 @@ export class MapServiceImpl implements IMapService {
           startTime ?? ''
         );
         if (hookSeconds > 0) {
+          this.logRouteTrace(traceId, 'hook_result', `seconds=${hookSeconds}`);
           return Math.ceil(hookSeconds / 60);
         }
+        this.warnRouteTrace(traceId, 'fallback', `reason=hook_invalid_seconds value=${hookSeconds}`);
         return this.fallbackDurationWithError('高德路线计算无有效结果，已按 60 分钟处理');
       }
 
@@ -261,22 +292,39 @@ export class MapServiceImpl implements IMapService {
       let seconds = 0;
 
       if (mode === 0 || mode === 4) {
+        this.logRouteTrace(traceId, 'call_walk_start', `mode=${mode}`);
         const search = this.getSearch();
         if (mode === 0) {
           const distance = this.calculateAirDistance(fromLat, fromLng, toLat, toLng);
-          if (distance > 5000) return -5;
+          if (distance > 5000) {
+            this.warnRouteTrace(traceId, 'fallback', `reason=walk_air_distance_too_far distance=${Math.round(distance)}`);
+            hilog.warn(
+              0x0000,
+              MapServiceImpl.TAG,
+              `${MapServiceImpl.ROUTE_DIAG_PREFIX}[walk] air_distance_too_far mode=${mode} distance=${Math.round(distance)}`
+            );
+            return -5;
+          }
         }
         const res = await search.calculateWalkRoute(new WalkRouteQueryV2(fromAndTo));
-        if (res.getPaths()?.length > 0) {
+        const pathCount = res.getPaths()?.length ?? 0;
+        this.logRouteTrace(traceId, 'call_walk_done', `mode=${mode} pathCount=${pathCount}`);
+        hilog.info(0x0000, MapServiceImpl.TAG, `${MapServiceImpl.ROUTE_DIAG_PREFIX}[walk] mode=${mode} path_count=${pathCount}`);
+        if (pathCount > 0) {
           seconds = res.getPaths()[0].getDuration();
         }
       } else if (mode === 1) {
+        this.logRouteTrace(traceId, 'call_ride_start', 'mode=1');
         const search = this.getSearch();
         const res = await search.calculateRideRoute(new RideRouteQueryV2(fromAndTo));
-        if (res.getPaths()?.length > 0) {
+        const pathCount = res.getPaths()?.length ?? 0;
+        this.logRouteTrace(traceId, 'call_ride_done', `pathCount=${pathCount}`);
+        hilog.info(0x0000, MapServiceImpl.TAG, `${MapServiceImpl.ROUTE_DIAG_PREFIX}[ride] mode=${mode} path_count=${pathCount}`);
+        if (pathCount > 0) {
           seconds = res.getPaths()[0].getDuration();
         }
       } else if (mode === 3) {
+        this.logRouteTrace(traceId, 'call_bus_prepare', 'mode=3');
         const cityCodeResolver = MapServiceImpl.testHooks?.cityCodeResolver;
         const originCityCode = cityCodeResolver
           ? await cityCodeResolver(fromLat, fromLng)
@@ -294,6 +342,7 @@ export class MapServiceImpl implements IMapService {
         );
 
         if (!city || !cityd) {
+          this.warnRouteTrace(traceId, 'fallback', 'reason=bus_city_code_missing');
           return this.fallbackDurationWithError('高德公交路线计算失败：城市编码缺失，已按 60 分钟处理');
         }
 
@@ -302,21 +351,36 @@ export class MapServiceImpl implements IMapService {
         query.setCityd(cityd);
 
         const res = await search.calculateBusRoute(query);
-        if (!res.getPaths() || res.getPaths().length === 0) {
+        const pathCount = res.getPaths()?.length ?? 0;
+        this.logRouteTrace(traceId, 'call_bus_done', `pathCount=${pathCount} city=${city} cityd=${cityd}`);
+        hilog.info(
+          0x0000,
+          MapServiceImpl.TAG,
+          `${MapServiceImpl.ROUTE_DIAG_PREFIX}[bus] mode=3 path_count=${pathCount} city=${city} cityd=${cityd}`
+        );
+        if (pathCount === 0) {
+          this.warnRouteTrace(traceId, 'fallback', 'reason=bus_path_empty');
           return this.fallbackDurationWithError('高德公交路线为空，已按 60 分钟处理');
         }
 
         const firstPath = res.getPaths()[0];
         seconds = firstPath.getDuration();
       } else {
+        this.logRouteTrace(traceId, 'call_drive_start', `mode=${mode}`);
         const search = this.getSearch();
-        const emptyPoiList = new ArrayList<LatLonPoint>();
-        const emptyPolygonList = new ArrayList<ArrayList<LatLonPoint>>();
-
-        const query = new DriveRouteQueryV2(fromAndTo, 0, emptyPoiList, emptyPolygonList, "");
+        const query = new DriveRouteQueryV2(
+          fromAndTo,
+          RouteSearch.DRIVING_SINGLE_DEFAULT,
+          undefined,
+          undefined,
+          ""
+        );
         const res = await search.calculateDriveRoute(query);
 
-        if (res.getPaths()?.length > 0) {
+        const pathCount = res.getPaths()?.length ?? 0;
+        this.logRouteTrace(traceId, 'call_drive_done', `mode=${mode} pathCount=${pathCount}`);
+        hilog.info(0x0000, MapServiceImpl.TAG, `${MapServiceImpl.ROUTE_DIAG_PREFIX}[drive] mode=${mode} path_count=${pathCount}`);
+        if (pathCount > 0) {
           const firstPath = res.getPaths()[0];
           seconds = firstPath.getDuration();
 
@@ -330,36 +394,73 @@ export class MapServiceImpl implements IMapService {
       }
 
       console.info(`[AMAP_RESULT] Mode: ${mode}, 最终秒数: ${seconds}s`);
+      this.logRouteTrace(traceId, 'result', `mode=${mode} seconds=${seconds}`);
       hilog.info(0x0000, MapServiceImpl.TAG, `${MapServiceImpl.GEO_FIX_PREFIX}[result] mode=${mode} seconds=${seconds}`);
 
       if (seconds > 0) {
         return Math.ceil(seconds / 60);
       }
 
+      hilog.warn(0x0000, MapServiceImpl.TAG, `${MapServiceImpl.ROUTE_DIAG_PREFIX}[result] mode=${mode} invalid_seconds=${seconds}`);
+      this.warnRouteTrace(traceId, 'fallback', `reason=invalid_seconds value=${seconds}`);
       return this.fallbackDurationWithError('高德路线计算无有效结果，已按 60 分钟处理');
     } catch (e) {
       const err = e as BusinessError;
       console.error(`[MapService] 高德抓取崩溃! Mode: ${mode}, ErrorCode: ${err?.code}, Msg: ${err?.message}`);
+      this.errorRouteTrace(
+        traceId,
+        'exception',
+        `mode=${mode} code=${err?.code} msg=${err?.message ?? ''} reason=${this.sanitizeError(e)}`
+      );
       hilog.error(
         0x0000,
         MapServiceImpl.TAG,
         `${MapServiceImpl.GEO_FIX_PREFIX}[error] mode=${mode} code=${err?.code} msg=${err?.message}`
       );
+      hilog.error(
+        0x0000,
+        MapServiceImpl.TAG,
+        `${MapServiceImpl.ROUTE_DIAG_PREFIX}[exception] mode=${mode} code=${err?.code} msg=${err?.message} startTime=${startTime ?? ''} from=(${this.maskCoordinate(fromLat)},${this.maskCoordinate(fromLng)}) to=(${this.maskCoordinate(toLat)},${this.maskCoordinate(toLng)})`
+      );
       return this.fallbackDurationWithError('高德路线请求失败，已按 60 分钟处理');
     }
+  }
+
+  private buildRouteTraceId(modeOrStrategy: number): string {
+    return `${Date.now()}_${modeOrStrategy}_${Math.floor(Math.random() * 1000)}`;
+  }
+
+  private logRouteTrace(traceId: string, stage: string, detail: string): void {
+    hilog.info(0x0000, MapServiceImpl.TAG, `${MapServiceImpl.ROUTE_TRACE_PREFIX}[${traceId}] ${stage} ${detail}`);
+  }
+
+  private warnRouteTrace(traceId: string, stage: string, detail: string): void {
+    hilog.warn(0x0000, MapServiceImpl.TAG, `${MapServiceImpl.ROUTE_TRACE_PREFIX}[${traceId}] ${stage} ${detail}`);
+  }
+
+  private errorRouteTrace(traceId: string, stage: string, detail: string): void {
+    hilog.error(0x0000, MapServiceImpl.TAG, `${MapServiceImpl.ROUTE_TRACE_PREFIX}[${traceId}] ${stage} ${detail}`);
   }
 
   private getSearch(): RouteSearchV2 {
     if (!this.routeSearch) {
       if (!this.context) {
+        hilog.error(0x0000, MapServiceImpl.TAG, `${MapServiceImpl.ROUTE_DIAG_PREFIX}[search] context_unavailable`);
         throw new Error('context_unavailable');
       }
+      hilog.info(0x0000, MapServiceImpl.TAG, `${MapServiceImpl.ROUTE_DIAG_PREFIX}[search] create_route_search`);
       this.routeSearch = new RouteSearchV2(this.context);
     }
     return this.routeSearch;
   }
 
   async getDriveDuration(origin: LocationInfo, destination: LocationInfo, strategy: DriveStrategy): Promise<number> {
+    const traceId = this.buildRouteTraceId(strategy);
+    this.logRouteTrace(
+      traceId,
+      'drive_entry',
+      `strategy=${strategy} from_name_len=${origin.name?.length ?? 0} to_name_len=${destination.name?.length ?? 0}`
+    );
     console.info(`[AMAP_TEST] 准备计算路程: [${origin.name}] -> [${destination.name}]`);
     console.info(`[AMAP_TEST] 原始坐标(脱敏): 起点(${this.maskCoordinate(origin.latitude ?? 0)}, ${this.maskCoordinate(origin.longitude ?? 0)}) 终点(${this.maskCoordinate(destination.latitude ?? 0)}, ${this.maskCoordinate(destination.longitude ?? 0)})`);
     hilog.info(
@@ -368,14 +469,21 @@ export class MapServiceImpl implements IMapService {
       `${MapServiceImpl.GEO_FIX_PREFIX}[drive] strategy=${strategy} from_len=${origin.name?.length ?? 0} to_len=${destination.name?.length ?? 0}`
     );
 
-    const routeApiEnabled = await this.canUseAmapRouteApi();
+    const routeApiEnabled = await this.canUseAmapRouteApi(traceId);
     if (!routeApiEnabled) {
+      this.warnRouteTrace(traceId, 'fallback', 'reason=route_api_disabled');
       this.reportRouteApiFailure('高德路线 API 已关闭，已按 60 分钟处理');
       return 60;
     }
 
     const resolved = await this.resolveRouteEndpoints(origin, destination);
+    this.logRouteTrace(
+      traceId,
+      'drive_resolved',
+      `ok=${resolved.ok} from=(${this.maskCoordinate(resolved.fromLat)},${this.maskCoordinate(resolved.fromLng)}) to=(${this.maskCoordinate(resolved.toLat)},${this.maskCoordinate(resolved.toLng)})`
+    );
     if (!resolved.ok) {
+      this.errorRouteTrace(traceId, 'fallback', 'reason=invalid_resolved_coordinate');
       return this.fallbackDurationWithError('高德驾车路线计算失败：坐标无效且补偿失败，已按 60 分钟处理');
     }
 
@@ -398,8 +506,10 @@ export class MapServiceImpl implements IMapService {
     const query = new DriveRouteQueryV2(fromAndTo, amapMode, undefined, undefined, "");
 
     try {
+      this.logRouteTrace(traceId, 'drive_call_start', `amapMode=${amapMode}`);
       const result = await this.getSearch().calculateDriveRoute(query);
       const paths = result.getPaths();
+      this.logRouteTrace(traceId, 'drive_call_done', `pathCount=${paths?.length ?? 0}`);
 
       if (paths !== null && paths.length > 0) {
         const firstPath = paths[0];
@@ -414,6 +524,7 @@ export class MapServiceImpl implements IMapService {
         }
 
         console.info(`[AMAP_RESULT] 最终秒数: ${seconds}s, 转换分钟: ${Math.ceil(seconds / 60)}min`);
+        this.logRouteTrace(traceId, 'drive_result', `seconds=${seconds}`);
         hilog.info(
           0x0000,
           MapServiceImpl.TAG,
@@ -425,10 +536,16 @@ export class MapServiceImpl implements IMapService {
         }
       }
 
+      this.warnRouteTrace(traceId, 'fallback', 'reason=drive_invalid_or_empty_path');
       return this.fallbackDurationWithError('高德驾车路线无有效结果，已按 60 分钟处理');
     } catch (error) {
       const err = error as BusinessError;
       console.error(`[AMAP_ERROR] 调用失败: ${err.code}, ${err.message}`);
+      this.errorRouteTrace(
+        traceId,
+        'drive_exception',
+        `code=${err?.code} msg=${err?.message ?? ''} reason=${this.sanitizeError(error)}`
+      );
       hilog.error(
         0x0000,
         MapServiceImpl.TAG,
