@@ -296,6 +296,8 @@ export class TimelineViewModel {
   
   private hasLoggedLifecycleDetach: boolean = false;
   private actualTimeMutationInFlight: boolean = false;
+  private saveQueue: Promise<void> = Promise.resolve();
+  private readonly mutatingItemIds: Set<number> = new Set<number>();
   private hasUnsavedPostponeStorageKey: string = AppStorageKeys.HAS_UNSAVED_POSTPONE;
   private minEventDurationLimit: number = 30;
   private readonly scheduleOrchestrator: ScheduleOrchestrator = new ScheduleOrchestrator();
@@ -931,9 +933,30 @@ export class TimelineViewModel {
   }
 
   // 兼容 Backlog 移除逻辑
-  public moveToBacklog(item: TravelPlanItem | EventEntity): void {
-    const target = this.events.find(e => e.id === item.id);
-    if (target) {
+  public async moveToBacklog(item: TravelPlanItem | EventEntity): Promise<void> {
+    if (!item || !item.id) {
+      hilog.warn(0x0000, TAG, '[SCHEDULE][move_to_backlog_skip] reason=invalid_item');
+      return;
+    }
+    if (this.mutatingItemIds.has(item.id)) {
+      hilog.warn(0x0000, TAG, `[SCHEDULE][move_to_backlog_skip] reason=mutation_in_flight, itemId=${item.id}`);
+      return;
+    }
+    this.mutatingItemIds.add(item.id);
+    try {
+      const target = this.events.find(e => e.id === item.id);
+      if (!target) {
+        hilog.warn(0x0000, TAG, `[SCHEDULE][move_to_backlog_skip] reason=item_not_found, itemId=${item.id}`);
+        this.generateGroups();
+        this.events = [...this.events];
+        return;
+      }
+      if (target.status !== 1) {
+        hilog.warn(0x0000, TAG, `[SCHEDULE][move_to_backlog_skip] reason=not_schedule, itemId=${item.id}, status=${target.status}`);
+        this.generateGroups();
+        this.events = [...this.events];
+        return;
+      }
       const previousIndex = this.events.indexOf(target);
       const previousStatus = target.status;
       const previousDayOffset = target.day_offset;
@@ -946,14 +969,14 @@ export class TimelineViewModel {
       target.status = 0;
       target.sort_order = 0;
       this.recalculateFromIndex(previousIndex > 0 ? previousIndex - 1 : 0);
-      this.save();
+      await this.save();
       hilog.info(
         0x0000,
         TAG,
         `[SCHEDULE][move_to_backlog_done] itemId=${target.id}, toStatus=${target.status}, recalcFrom=${previousIndex > 0 ? previousIndex - 1 : 0}`
       );
-    } else {
-      hilog.warn(0x0000, TAG, `[SCHEDULE][move_to_backlog_skip] reason=item_not_found, itemId=${item.id}`);
+    } finally {
+      this.mutatingItemIds.delete(item.id);
     }
   }
 
@@ -1146,16 +1169,24 @@ export class TimelineViewModel {
 
     this.recalculateFromEventId(newEntity.id);
   }
-  public async save(): Promise<void> {
+  public save(): Promise<void> {
     if (this.planId === -1) {
-      return;
+      return Promise.resolve();
     }
 
-    const payload = this.events.map(e => e.toInterface());
-    const idPreview = payload.map(item => item.id || -1).slice(0, 20).join(',');
-    const idSuffix = payload.length > 20 ? `...(+${payload.length - 20})` : '';
-    hilog.info(0x0000, TAG, `[ID_FIX][VM_SAVE_TRIGGER] planId=${this.planId} count=${payload.length} ids=[${idPreview}]${idSuffix}`);
-    await EventRepositoryImpl.saveAllEvents(this.planId, payload);
+    const task = async (): Promise<void> => {
+      const payload = this.events.map(e => e.toInterface());
+      const idPreview = payload.map(item => item.id || -1).slice(0, 20).join(',');
+      const idSuffix = payload.length > 20 ? `...(+${payload.length - 20})` : '';
+      hilog.info(0x0000, TAG, `[ID_FIX][VM_SAVE_TRIGGER] planId=${this.planId} count=${payload.length} ids=[${idPreview}]${idSuffix}`);
+      await EventRepositoryImpl.saveAllEvents(this.planId, payload);
+    };
+
+    const queued = this.saveQueue.then(task);
+    this.saveQueue = queued.catch(() => {
+      hilog.error(0x0000, TAG, '[ID_FIX][VM_SAVE_QUEUE_FAIL] reason=queued_save_failed');
+    });
+    return queued;
   }
 
   // TimelineViewModel.ets 内部修改/替换原有冲突处理方法
@@ -1765,6 +1796,15 @@ export class TimelineViewModel {
    * 彻底从数据库移除
    */
   public async hardDelete(item: EventEntity) {
+    if (!item || !item.id) {
+      hilog.warn(0x0000, TAG, '[SCHEDULE][hard_delete_skip] reason=invalid_item');
+      return;
+    }
+    if (this.mutatingItemIds.has(item.id)) {
+      hilog.warn(0x0000, TAG, `[SCHEDULE][hard_delete_skip] reason=mutation_in_flight, itemId=${item.id}`);
+      return;
+    }
+    this.mutatingItemIds.add(item.id);
     const previousStatus = item.status;
     const previousDayOffset = item.day_offset;
     const previousDynamicDayOffset = item.dynamic_day_offset;
@@ -1775,34 +1815,33 @@ export class TimelineViewModel {
       `[SCHEDULE][hard_delete_begin] itemId=${item.id}, status=${previousStatus}, index=${previousIndex}, dayOffset=${previousDayOffset}, dynamicDayOffset=${previousDynamicDayOffset}`
     );
 
-    // 1. 内存移除
-    const index = this.events.indexOf(item);
-    if (index !== -1) {
-      this.events.splice(index, 1);
-    }
-
-
-    if (item.id) {
-      await EventRepositoryImpl.hardDeleteEvent(item.id);
-    } else {
-      hilog.warn(0x0000, TAG, '[SCHEDULE][hard_delete_skip_db] reason=missing_item_id');
-    }
-
-    // 3. 触发刷新
-    this.recalculateFromIndex(index > 0 ? index - 1 : 0);
-
-    // 4. 记录删除行为并检查策略调整
-    if (item.source === 1) {
-      this.behaviorTracker.recordDeletion(item.type, item.duration, item.pre_travel_min);
-      if (this.behaviorTracker.shouldTriggerAdaptation()) {
-        await this.triggerStrategyAdaptation();
+    try {
+      // 1. 内存移除
+      const index = this.events.indexOf(item);
+      if (index !== -1) {
+        this.events.splice(index, 1);
       }
+
+      await EventRepositoryImpl.hardDeleteEvent(item.id);
+
+      // 3. 触发刷新
+      this.recalculateFromIndex(index > 0 ? index - 1 : 0);
+
+      // 4. 记录删除行为并检查策略调整
+      if (item.source === 1) {
+        this.behaviorTracker.recordDeletion(item.type, item.duration, item.pre_travel_min);
+        if (this.behaviorTracker.shouldTriggerAdaptation()) {
+          await this.triggerStrategyAdaptation();
+        }
+      }
+      hilog.info(
+        0x0000,
+        TAG,
+        `[SCHEDULE][hard_delete_done] itemId=${item.id}, fromStatus=${previousStatus}, dbDeleted=yes, recalcFrom=${index > 0 ? index - 1 : 0}`
+      );
+    } finally {
+      this.mutatingItemIds.delete(item.id);
     }
-    hilog.info(
-      0x0000,
-      TAG,
-      `[SCHEDULE][hard_delete_done] itemId=${item.id}, fromStatus=${previousStatus}, dbDeleted=${item.id ? 'yes' : 'no'}, recalcFrom=${index > 0 ? index - 1 : 0}`
-    );
   }
 
   // 文件路径: ets/viewmodel/TimelineViewModel.ets
