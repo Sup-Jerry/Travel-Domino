@@ -8,6 +8,7 @@ import { DomainConstants } from '../../common/constants/DomainConstants';
 const TAG = 'TrafficEngine';
 const ROUTE_GEO_FIX_PREFIX = '[ROUTE_GEO_FIX]';
 const CACHE_GUARD_PREFIX = '[CACHE_GUARD]';
+const ROUTE_DIAG_PREFIX = '[ROUTE_DIAG]';
 
 export class TrafficEngine {
   private static instance: TrafficEngine;
@@ -77,7 +78,14 @@ export class TrafficEngine {
    * @param mode 出行模式
    */
   public getCommuteMinutes(from: LocationInfo, to: LocationInfo, mode: number = 0, startTime?: string): number {
-    if (!from.name || !to.name) return 0;
+    if (!from.name || !to.name) {
+      hilog.warn(
+        0x0000,
+        TAG,
+        `${ROUTE_DIAG_PREFIX}[entry] skip_empty_name mode=${mode} from_len=${from.name?.length ?? 0} to_len=${to.name?.length ?? 0}`
+      );
+      return 0;
+    }
 
     if (!this.mapService) {
       hilog.warn(0x0000, TAG, '[LIFECYCLE_GUARD] map service not initialized. Fallback to 60 minutes.');
@@ -85,6 +93,11 @@ export class TrafficEngine {
     }
 
     const key = `${from.name}->${to.name}_M${mode}`;
+    hilog.info(
+      0x0000,
+      TAG,
+      `${ROUTE_DIAG_PREFIX}[entry] key=${key} mode=${mode} startTime=${startTime ?? ''} from_coord=${Number.isFinite(from.latitude ?? NaN) && Number.isFinite(from.longitude ?? NaN)} to_coord=${Number.isFinite(to.latitude ?? NaN) && Number.isFinite(to.longitude ?? NaN)}`
+    );
     const now = Date.now();
     const blockedUntil = this.transientFailureUntil.get(key) ?? 0;
 
@@ -99,7 +112,10 @@ export class TrafficEngine {
 
     if (this.cache.has(key)) {
       const val = this.cache.get(key);
-      if (val === -1) return -2;
+      if (val === -1) {
+        hilog.info(0x0000, TAG, `${ROUTE_DIAG_PREFIX}[cache] loading_hit key=${key}`);
+        return -2;
+      }
 
       // 兼容旧版本遗留的毒缓存值
       if (val === DomainConstants.COMMUTE_FALLBACK_UNKNOWN) {
@@ -110,10 +126,12 @@ export class TrafficEngine {
           `${CACHE_GUARD_PREFIX} legacy_dirty_cache_evicted key=${key} value=${DomainConstants.COMMUTE_FALLBACK_UNKNOWN}`
         );
       } else {
+        hilog.info(0x0000, TAG, `${ROUTE_DIAG_PREFIX}[cache] value_hit key=${key} value=${val ?? 0}`);
         return val ?? 0;
       }
     }
 
+    hilog.info(0x0000, TAG, `${ROUTE_DIAG_PREFIX}[cache] miss key=${key} trigger_async=true`);
     this.fetchMultiModalTrafficAsync(from, to, mode, key, startTime);
     return -2;
   }
@@ -142,6 +160,13 @@ export class TrafficEngine {
       this.cache.set(key, duration);
       this.clearTransientFailure(key);
       hilog.info(0x0000, TAG, `${ROUTE_GEO_FIX_PREFIX}[engine] fetch_done key=${key} mode=${mode} duration=${duration}`);
+      if (duration <= 0 || duration === TrafficEngine.FALLBACK_MINUTES) {
+        hilog.warn(
+          0x0000,
+          TAG,
+          `${ROUTE_DIAG_PREFIX}[engine] suspicious_duration key=${key} mode=${mode} duration=${duration}`
+        );
+      }
       this.emitTrafficDataUpdated();
     } catch (e) {
       this.cache.delete(key);

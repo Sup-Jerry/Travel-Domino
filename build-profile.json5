@@ -5,13 +5,13 @@
         "name": "default",
         "type": "HarmonyOS",
         "material": {
-          "certpath": "C:/Users/Reaper/.ohos/config/default_Travel12.19_8okEyJNwmJgVpIkO597yQZLjadA8cxrIFG95S8r22wg=.cer",
+          "certpath": "C:\\Users\\Reaper\\.ohos\\config\\default_T_XhWaGdx5p8Db3pJQJYbsJUAWnTX6OAYdVw0StI7Ob1Q=.cer",
           "keyAlias": "debugKey",
-          "keyPassword": "0000001B2624D95B3BD4429267A2EABCE6F8FB789EB6CD2D0E1216D9DB54614FF516BCF5C359B3A5AFB335",
-          "profile": "C:/Users/Reaper/.ohos/config/default_Travel12.19_8okEyJNwmJgVpIkO597yQZLjadA8cxrIFG95S8r22wg=.p7b",
+          "keyPassword": "0000001BA0CAF03AF06D3FEF53E31B4D614882FFCD46741200CE6EE99683490EC7EE59A1D6E5F8678861D1",
+          "profile": "C:\\Users\\Reaper\\.ohos\\config\\default_T_XhWaGdx5p8Db3pJQJYbsJUAWnTX6OAYdVw0StI7Ob1Q=.p7b",
           "signAlg": "SHA256withECDSA",
-          "storeFile": "C:/Users/Reaper/.ohos/config/default_Travel12.19_8okEyJNwmJgVpIkO597yQZLjadA8cxrIFG95S8r22wg=.p12",
-          "storePassword": "0000001BF971D4A58C0DE2949D626027B77B723190D6C77A9D19FF599967E9568096069DF5134FBB25B28B"
+          "storeFile": "C:\\Users\\Reaper\\.ohos\\config\\default_T_XhWaGdx5p8Db3pJQJYbsJUAWnTX6OAYdVw0StI7Ob1Q=.p12",
+          "storePassword": "0000001B01A19F974F06B900EBAA052B66798EE11A8AEA78D2CD33E0BDAF99AD45EEBD7CDF140A999D8F9B"
         }
       }
     ],
