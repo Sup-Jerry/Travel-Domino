@@ -1100,6 +1100,16 @@ struct Index {
     const initDayOffset = initData?.dayOffset !== undefined
       ? initData.dayOffset
       : (isCreateMode ? createDefaults.dayOffset : 0);
+    const initLat = initData?.lat || 0;
+    const initLng = initData?.lng || 0;
+    const initCoordValid = Number.isFinite(initLat) && Number.isFinite(initLng) &&
+      Math.abs(initLat) <= 90 && Math.abs(initLng) <= 180 &&
+      !(initLat === 0 && initLng === 0);
+    hilog.info(
+      0x0000,
+      'Index',
+      `[MAP_TRACE][open_dialog] editId=${this.editingItemId}, createMode=${isCreateMode}, nameLen=${(initData?.name || '').length}, initCoordValid=${initCoordValid}, lat=${initLat}, lng=${initLng}`
+    );
     let currentPreTravel = 0;
 
     // ✅ 准备 Priority 数据
@@ -1130,8 +1140,8 @@ struct Index {
         storageScopePlanId: this.currentPlanId,
         planStartDate: this.vm.planStartDate,
 
-        initLat: initData?.lat || 0, // ✅ 确保把坐标传给弹窗
-        initLng: initData?.lng || 0,
+        initLat: initLat, // ✅ 确保把坐标传给弹窗
+        initLng: initLng,
         onDateChangedRecommendTime: (dayOffset: number, currentTime: string): string => {
           if (!isCreateMode) {
             return currentTime;
@@ -1483,6 +1493,14 @@ struct Index {
   }
 
   openEditDialog(item: EventEntity) {
+    const coordValid = Number.isFinite(item.latitude) && Number.isFinite(item.longitude) &&
+      Math.abs(item.latitude) <= 90 && Math.abs(item.longitude) <= 180 &&
+      !(item.latitude === 0 && item.longitude === 0);
+    hilog.info(
+      0x0000,
+      'Index',
+      `[MAP_TRACE][edit_entry] itemId=${item.id}, source=${item.source}, nameLen=${(item.name || '').length}, coordValid=${coordValid}, lat=${item.latitude}, lng=${item.longitude}`
+    );
     this.editingItemId = item.id;
     const effectiveDayOffset = TimelineDatePolicy.resolveEventDayOffset(item);
     this.openDialog({

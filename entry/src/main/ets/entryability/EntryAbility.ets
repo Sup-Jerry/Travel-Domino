@@ -8,7 +8,7 @@ import wantAgent, { WantAgent } from '@ohos.app.ability.wantAgent';
 import { PreferenceManager } from '../common/utils/PreferenceManager';
 import { TrafficEngine } from '../infrastructure/services/TrafficEngine';
 import { bundleManager } from '@kit.AbilityKit';
-import { AMap, MapsInitializer, MapView, MapViewManager } from '@amap/amap_lbs_map3d';
+import { MapsInitializer, MapView, MapViewManager } from '@amap/amap_lbs_map3d';
 import {
   AMapPrivacyShowStatus,
   AMapPrivacyAgreeStatus,
@@ -114,18 +114,12 @@ export default class EntryAbility extends UIAbility {
       this.context
     );
 
-    MapViewManager.getInstance().registerMapViewCreatedCallback((mapview?: MapView, _mapViewName?: string) => {
+    MapViewManager.getInstance().registerMapViewCreatedCallback((mapview?: MapView, mapViewName?: string) => {
       if (!mapview) {
         return;
       }
-      hilog.info(DOMAIN, TAG, '[MAP_INIT][map_created_callback]');
-      const mapView = mapview;
-      mapView.onCreate();
-      hilog.info(DOMAIN, TAG, '[MAP_INIT][map_on_create_called]');
-      mapView.getMapAsync((map) => {
-        const aMap: AMap = map;
-        hilog.info(DOMAIN, TAG, '[MAP_INIT][map_ready]');
-      });
+      // MapView 生命周期由 MapViewComponent/页面自身管理，避免在 Ability 层重复初始化导致渲染异常。
+      hilog.info(DOMAIN, TAG, `[MAP_INIT][map_created_callback] name=${mapViewName ?? ''}`);
     });
   }
 

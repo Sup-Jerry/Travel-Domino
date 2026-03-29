@@ -1,5 +1,6 @@
 import { describe, it, expect } from '@ohos/hypium';
 import { AmapService, PoiSearchItem } from '../main/ets/infrastructure/services/AmapService';
+import { PageDraftRecovery } from '../main/ets/common/utils/PageDraftRecovery';
 
 export default function localUnitTest() {
   describe('localUnitTest', () => {
@@ -47,6 +48,17 @@ export default function localUnitTest() {
       expect(AmapService.shouldFallbackToNationwide(2, 5)).assertEqual(true);
       expect(AmapService.shouldFallbackToNationwide(5, 5)).assertEqual(false);
       expect(AmapService.shouldFallbackToNationwide(8, 5)).assertEqual(false);
+    });
+
+    it('draft_recover_should_use_coordinate_fallback_when_picked_address_empty', 0, () => {
+      const tempState =
+        '{"name":"东京塔","note":"","duration":60,"isAnchor":false,"fixedTime":"10:00","dayOffset":0,"isSchedule":true,"lat":35.65858,"lng":139.74543}';
+      const pickedState = '{"lat":35.71006,"lng":139.8107,"address":""}';
+      const recovered = PageDraftRecovery.recover(tempState, pickedState);
+      expect(recovered.shouldRestore).assertEqual(true);
+      expect(recovered.restored?.name).assertEqual('已选位置(35.71006, 139.81070)');
+      expect(recovered.restored?.lat).assertEqual(35.71006);
+      expect(recovered.restored?.lng).assertEqual(139.8107);
     });
   });
 }

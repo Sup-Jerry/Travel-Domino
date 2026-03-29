@@ -8,6 +8,7 @@ import { ThemeCenter } from '../../../common/utils/ThemeCenter';
 import { DateUtil } from '../../../common/utils/DateUtil';
 import { TimelineDatePolicy } from '../../../domain/policy/TimelineDatePolicy';
 import { AppConfig } from '../../../common/utils/AppConfig';
+import { AmapService } from '../../../infrastructure/services/AmapService';
 
 interface PickedLocationData {
   lat: number;
@@ -108,6 +109,12 @@ export struct AddItemDialog {
   aboutToAppear() {
     this.latitude = this.initLat; // ✅ 读入坐标
     this.longitude = this.initLng; // ✅ 读入坐标
+    const initCoordValid = this.isValidCoordinate(this.initLat, this.initLng);
+    hilog.info(
+      0x0000,
+      'AddItemDialog',
+      `[MAP_TRACE][dialog_appear] planId=${this.storageScopePlanId}, initNameLen=${(this.initName || '').length}, initCoordValid=${initCoordValid}, initLat=${this.initLat}, initLng=${this.initLng}`
+    );
     if (this.initName) {
       this.mode = this.initIsSchedule ? 1 : 0;
     }
@@ -334,6 +341,8 @@ export struct AddItemDialog {
               if (this.name === value) {
                 return;
               }
+              const prevLat = this.latitude;
+              const prevLng = this.longitude;
 
               // 更新名称状态
               this.name = value;
@@ -345,10 +354,20 @@ export struct AddItemDialog {
                 // 这里恢复成 0 后，底部的保存逻辑依然会拦截并强制去高德查一次！
                 this.latitude = this.initLat;
                 this.longitude = this.initLng;
+                hilog.info(
+                  0x0000,
+                  'AddItemDialog',
+                  `[MAP_TRACE][name_change_restore_coord] planId=${this.storageScopePlanId}, valueLen=${value.length}, prevLat=${prevLat}, prevLng=${prevLng}, nextLat=${this.latitude}, nextLng=${this.longitude}`
+                );
               } else {
                 // 3. 只有发生真正的改变，才清空坐标，要求系统在保存时重新解析
                 this.latitude = 0;
                 this.longitude = 0;
+                hilog.info(
+                  0x0000,
+                  'AddItemDialog',
+                  `[MAP_TRACE][name_change_clear_coord] planId=${this.storageScopePlanId}, valueLen=${value.length}, initNameLen=${(this.initName || '').length}, prevLat=${prevLat}, prevLng=${prevLng}`
+                );
               }
             })
 
@@ -380,15 +399,49 @@ export struct AddItemDialog {
               let routeLat = this.latitude;
               let routeLng = this.longitude;
               let centerSource = 'current';
+              const queryName = (this.name || '').trim();
 
               if (this.isValidCoordinate(routeLat, routeLng)) {
                 centerSource = 'existing';
+              } else if (queryName.length > 0) {
+                try {
+                  const geocode = await AmapService.getGeocode(queryName);
+                  if (geocode && this.isValidCoordinate(geocode.lat, geocode.lng)) {
+                    routeLat = geocode.lat;
+                    routeLng = geocode.lng;
+                    centerSource = 'geocode';
+                    hilog.info(
+                      0x0000,
+                      'AddItemDialog',
+                      `[MAP_TRACE][geocode_for_map_center] planId=${this.storageScopePlanId}, ok=true, nameLen=${queryName.length}, lat=${routeLat}, lng=${routeLng}`
+                    );
+                  } else {
+                    hilog.warn(
+                      0x0000,
+                      'AddItemDialog',
+                      `[MAP_TRACE][geocode_for_map_center] planId=${this.storageScopePlanId}, ok=false, reason=empty_result, nameLen=${queryName.length}`
+                    );
+                  }
+                } catch (error) {
+                  hilog.warn(
+                    0x0000,
+                    'AddItemDialog',
+                    `[MAP_TRACE][geocode_for_map_center] planId=${this.storageScopePlanId}, ok=false, reason=${JSON.stringify(error)}, nameLen=${queryName.length}`
+                  );
+                }
               }
               hilog.info(
                 0x0000,
                 'AddItemDialog',
-                `[MAP_ENTRY][route] planId=${this.storageScopePlanId}, centerSource=${centerSource}, lat=${routeLat}, lng=${routeLng}`
+                `[MAP_ENTRY][route] planId=${this.storageScopePlanId}, centerSource=${centerSource}, lat=${routeLat}, lng=${routeLng}, nameLen=${queryName.length}`
               );
+              if (centerSource === 'current' && queryName.length > 0) {
+                hilog.warn(
+                  0x0000,
+                  'AddItemDialog',
+                  `[MAP_TRACE][route_current_with_name] planId=${this.storageScopePlanId}, reason=no_valid_coord, nameLen=${queryName.length}`
+                );
+              }
 
               // 1. 给当前的表单数据拍个“快照”存起来
               let tempState: GeneratedObjectLiteralInterface_1 = {
@@ -410,7 +463,7 @@ export struct AddItemDialog {
               // 3. 跳转到地图页
               this.getUIContext().getRouter().pushUrl({
                 url: 'pages/MapPickerPage',
-                params: new MapPickerRouteParams(routeLat, routeLng, this.storageScopePlanId, centerSource, '')
+                params: new MapPickerRouteParams(routeLat, routeLng, this.storageScopePlanId, centerSource, queryName)
               });
             })
         }.width('100%').margin({ bottom: 6 })
@@ -676,7 +729,5 @@ export struct AddItemDialog {
     .width('95%')
   }
 }
-
-
 
 
