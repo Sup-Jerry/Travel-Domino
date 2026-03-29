@@ -1,17 +1,15 @@
-import { AuthLoginResult, DeviceInfo } from '../domain/auth/AuthModels';
-import { AuthGateway } from '../infrastructure/auth/AuthGateway';
-import { AuthSessionStore } from '../infrastructure/auth/AuthSessionStore';
 import { common } from '@kit.AbilityKit';
+import { LoginStatus } from '../domain/auth/AuthTypes';
+import { AppStartupCoordinator } from '../infrastructure/auth/AppStartupCoordinator';
+import { AuthFacade } from '../infrastructure/auth/AuthFacade';
 
 @Entry
 @Component
 struct AuthGatePage {
   @State private checking: boolean = true;
   private checkingInProgress: boolean = false;
-
-  private makeDeviceInfo(): DeviceInfo {
-    return new DeviceInfo('device-local', 'HarmonyDevice', 'HARMONY');
-  }
+  private readonly startupCoordinator: AppStartupCoordinator = AppStartupCoordinator.getInstance();
+  private readonly authFacade: AuthFacade = AuthFacade.getInstance();
 
   private async replaceUrl(url: string): Promise<void> {
     await this.getUIContext().getRouter().replaceUrl({ url: url });
@@ -23,48 +21,24 @@ struct AuthGatePage {
     }
     this.checkingInProgress = true;
     this.checking = true;
+    const hostContext = this.getUIContext().getHostContext() as common.Context;
+    this.authFacade.bindContext(hostContext);
     void this.checkAndRoute().finally(() => {
       this.checkingInProgress = false;
       this.checking = false;
     });
   }
 
-  private async trySilentGuestLogin(): Promise<boolean> {
-    const result = await AuthGateway.createGuest(this.makeDeviceInfo());
-    if (result.code !== 0) {
-      return false;
-    }
-    const payload = result.data as AuthLoginResult;
-    AuthSessionStore.save(payload.session);
-    AuthSessionStore.markGuestChosen();
-    return true;
-  }
-
   private async checkAndRoute(): Promise<void> {
     try {
-      const session = AuthSessionStore.load();
-      if (session && Date.now() < session.expireAt) {
-        const me = await AuthGateway.me(session.accessToken);
-        if (me.code === 0) {
-          await this.replaceUrl('pages/PlanListPage');
-          return;
-        }
-        AuthSessionStore.clear();
+      const startup = await this.startupCoordinator.checkStartupAuth();
+      if (startup.success && startup.status === LoginStatus.AUTHENTICATED) {
+        await this.replaceUrl('pages/PlanListPage');
+        return;
       }
-
-      const hostContext = this.getUIContext().getHostContext() as common.Context;
-      const hasGuestChosen = await AuthSessionStore.hasGuestChosenPersisted(hostContext);
-      if (hasGuestChosen) {
-        const autoGuestOk = await this.trySilentGuestLogin();
-        if (autoGuestOk) {
-          await this.replaceUrl('pages/PlanListPage');
-          return;
-        }
-      }
-
       await this.replaceUrl('pages/LoginPage');
     } catch (_error) {
-      AuthSessionStore.clear();
+      await this.authFacade.logout();
       await this.replaceUrl('pages/LoginPage');
     }
   }

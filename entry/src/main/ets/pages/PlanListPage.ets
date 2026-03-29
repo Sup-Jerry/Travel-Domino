@@ -17,7 +17,7 @@ import { PlanAppService } from '../viewmodel/PlanAppService';
 import { DateUtil } from '../common/utils/DateUtil';
 import { AppTexts } from '../common/constants/AppTexts';
 import { AppStorageKeys } from '../common/constants/AppStorageKeys';
-import { AuthSessionStore } from '../infrastructure/auth/AuthSessionStore';
+import { AuthFacade } from '../infrastructure/auth/AuthFacade';
 
 interface NotificationNavPayload {
   planId: number;
@@ -38,6 +38,7 @@ struct PlanListPage {
   private arrivalVm: TimelineViewModel = new TimelineViewModel();
   private readonly planService: PlanAppService = PlanAppService.getInstance();
   private readonly arrivalCoordinator: ArrivalReminderCoordinator = ArrivalReminderCoordinator.getInstance();
+  private readonly authFacade: AuthFacade = AuthFacade.getInstance();
   private lastNotifyPermissionPromptAt: number = 0;
   private lastLocationPermissionPromptAt: number = 0;
   private readonly permissionRepromptCooldownMs: number = 10 * 60 * 1000;
@@ -80,7 +81,9 @@ struct PlanListPage {
   importJsonDialogController: CustomDialogController | null = null;
 
   onPageShow() {
-    if (!AuthSessionStore.getAccessToken()) {
+    const hostContext = this.getUIContext().getHostContext() as common.Context;
+    this.authFacade.bindContext(hostContext);
+    if (!this.authFacade.getCurrentSession()) {
       void this.getUIContext().getRouter().replaceUrl({ url: 'pages/LoginPage' });
       return;
     }
