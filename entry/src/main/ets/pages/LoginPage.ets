@@ -1,5 +1,6 @@
 import { promptAction } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import { HuaweiCredential } from '../domain/auth/AuthTypes';
 import { AuthFacade } from '../infrastructure/auth/AuthFacade';
 import { HuaweiAccountLoginButton } from './components/auth/HuaweiAccountLoginButton';
@@ -7,6 +8,8 @@ import { HuaweiAccountLoginButton } from './components/auth/HuaweiAccountLoginBu
 @Entry
 @Component
 struct LoginPage {
+  private static readonly LOG_DOMAIN: number = 0x0000;
+  private static readonly LOG_TAG: string = 'LoginPage';
   @State private agreementAccepted: boolean = false;
   @State private loading: boolean = false;
   private readonly authFacade: AuthFacade = AuthFacade.getInstance();
@@ -28,7 +31,13 @@ struct LoginPage {
   }
 
   private async loginWithHuaweiButton(credential: HuaweiCredential): Promise<void> {
+    hilog.info(
+      LoginPage.LOG_DOMAIN,
+      LoginPage.LOG_TAG,
+      `[LOGIN_TRACE][page] click agreement=${this.agreementAccepted ? 1 : 0}, authCodeLen=${credential.authorizationCode.length}, openIdLen=${credential.openId.length}, unionIdLen=${credential.unionId.length}`
+    );
     if (!this.ensureAgreement()) {
+      hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, '[LOGIN_TRACE][page] blocked by agreement');
       return;
     }
     const hostContext = this.getUIContext().getHostContext() as common.Context;
@@ -37,9 +46,39 @@ struct LoginPage {
     const result = await this.authFacade.explicitLoginByButton(credential);
     this.loading = false;
     if (!result.success) {
+      hilog.warn(
+        LoginPage.LOG_DOMAIN,
+        LoginPage.LOG_TAG,
+        `[LOGIN_TRACE][page] login fail code=${result.code}, message=${result.message}, source=${result.source}`
+      );
       this.toast(`登录失败：${result.message}`);
       return;
     }
+    hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] login success source=${result.source}`);
+    this.toast('登录成功');
+    await this.replaceUrl('pages/PlanListPage');
+  }
+
+  private async loginWithHuaweiApiFallback(): Promise<void> {
+    if (!this.ensureAgreement()) {
+      hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, '[LOGIN_TRACE][page] api_fallback blocked by agreement');
+      return;
+    }
+    const hostContext = this.getUIContext().getHostContext() as common.Context;
+    this.authFacade.bindContext(hostContext);
+    this.loading = true;
+    const result = await this.authFacade.explicitLoginByButton();
+    this.loading = false;
+    if (!result.success) {
+      hilog.warn(
+        LoginPage.LOG_DOMAIN,
+        LoginPage.LOG_TAG,
+        `[LOGIN_TRACE][page] api_fallback fail code=${result.code}, message=${result.message}, source=${result.source}`
+      );
+      this.toast(`登录失败：${result.message}`);
+      return;
+    }
+    hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] api_fallback success source=${result.source}`);
     this.toast('登录成功');
     await this.replaceUrl('pages/PlanListPage');
   }
@@ -92,6 +131,14 @@ struct LoginPage {
             void this.loginWithHuaweiButton(credential);
           },
           onError: (message: string) => {
+            const codeText = message.replace('huawei_login_error_', '').split('_')[0];
+            const code = Number(codeText);
+            hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] button error message=${message}, code=${code}`);
+            if (code === 1001502003) {
+              hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, '[LOGIN_TRACE][page] trigger api_fallback by code=1001502003');
+              void this.loginWithHuaweiApiFallback();
+              return;
+            }
             this.toast(`华为账号登录失败：${message}`);
           }
         })

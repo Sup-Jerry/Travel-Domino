@@ -1,4 +1,5 @@
 import { common } from '@kit.AbilityKit';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AuthLoginResult, DeviceInfo, SocialCredential } from '../../domain/auth/AuthModels';
 import { AuthResult, HuaweiCredential, LoginStatus, UserSession } from '../../domain/auth/AuthTypes';
 import { AuthGateway } from './AuthGateway';
@@ -6,6 +7,8 @@ import { HuaweiAccountProvider } from './HuaweiAccountProvider';
 import { SessionManager } from './SessionManager';
 
 export class AuthFacade {
+  private static readonly LOG_DOMAIN: number = 0x0000;
+  private static readonly LOG_TAG: string = 'AuthFacade';
   private static instance: AuthFacade = new AuthFacade();
   private readonly sessionManager: SessionManager = SessionManager.getInstance();
   private readonly huaweiProvider: HuaweiAccountProvider = HuaweiAccountProvider.getInstance();
@@ -37,6 +40,7 @@ export class AuthFacade {
   }
 
   public async silentLogin(): Promise<AuthResult<UserSession>> {
+    hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] silentLogin start');
     const local = this.sessionManager.load();
     if (local) {
       const me = await AuthGateway.me(local.accessToken);
@@ -44,28 +48,37 @@ export class AuthFacade {
         local.userId = me.data.userId || '';
         local.isGuest = Boolean(me.data.isGuest);
         local.loginMethod = me.data.defaultLoginMethod || '';
+        hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] silentLogin local_session ok');
         return this.success(local, 'LOCAL_SESSION');
       }
+      hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, `[LOGIN_TRACE][facade] silentLogin local_session invalid code=${me.code}`);
       this.sessionManager.clear();
     }
 
     try {
       const credential = await this.huaweiProvider.silentLogin(this.appContext || undefined);
+      hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] silentLogin provider ok');
       return this.exchangeHuaweiCredential(credential, 'HUAWEI_SILENT');
     } catch (error) {
+      hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, `[LOGIN_TRACE][facade] silentLogin fail message=${this.normalizeError(error)}`);
       return this.failure(-1, this.normalizeError(error), 'HUAWEI_SILENT', LoginStatus.UNAUTHENTICATED);
     }
   }
 
   public async explicitLoginByButton(credential?: HuaweiCredential): Promise<AuthResult<UserSession>> {
+    hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] explicitLoginByButton start');
     try {
       const finalCredential = credential || await this.huaweiProvider.explicitLogin(this.appContext || undefined);
+      hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] explicit provider ok');
       return this.exchangeHuaweiCredential(finalCredential, 'HUAWEI_BUTTON');
     } catch (error) {
+      hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, `[LOGIN_TRACE][facade] explicit provider fail message=${this.normalizeError(error)}`);
       const guestResult = await this.tryGuestFallback();
       if (guestResult.success) {
+        hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] explicit fallback guest ok');
         return guestResult;
       }
+      hilog.error(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] explicit fallback guest fail');
       return this.failure(-1, this.normalizeError(error), 'HUAWEI_BUTTON', LoginStatus.LOGIN_FAILED);
     }
   }
@@ -81,28 +94,39 @@ export class AuthFacade {
     socialCredential.openId = credential.openId;
     socialCredential.unionId = credential.unionId;
 
+    hilog.info(
+      AuthFacade.LOG_DOMAIN,
+      AuthFacade.LOG_TAG,
+      `[LOGIN_TRACE][facade] exchange start source=${source}, authCodeLen=${credential.authorizationCode.length}, openIdLen=${credential.openId.length}, unionIdLen=${credential.unionId.length}`
+    );
     const result = await AuthGateway.loginWithSocial('HUAWEI', socialCredential, this.makeDeviceInfo());
     if (result.code !== 0) {
+      hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, `[LOGIN_TRACE][facade] exchange fail code=${result.code}, message=${result.message}`);
       return this.failure(result.code, result.message || 'social_login_failed', source, LoginStatus.LOGIN_FAILED);
     }
 
     const payload = result.data as AuthLoginResult;
     const session = this.convertSession(payload);
     if (!session) {
+      hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] exchange fail session_empty');
       return this.failure(-1, 'session_empty', source, LoginStatus.LOGIN_FAILED);
     }
     this.onLoginSuccess(session);
+    hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, `[LOGIN_TRACE][facade] exchange success source=${source}, isGuest=${session.isGuest ? 1 : 0}`);
     return this.success(session, source);
   }
 
   private async tryGuestFallback(): Promise<AuthResult<UserSession>> {
+    hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] guestFallback start');
     const guest = await AuthGateway.createGuest(this.makeDeviceInfo());
     if (guest.code !== 0) {
+      hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, `[LOGIN_TRACE][facade] guestFallback fail code=${guest.code}`);
       return this.failure(guest.code, guest.message || 'guest_login_failed', 'GUEST_FALLBACK', LoginStatus.LOGIN_FAILED);
     }
     const payload = guest.data as AuthLoginResult;
     const session = this.convertSession(payload);
     if (!session) {
+      hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] guestFallback fail session_empty');
       return this.failure(-1, 'guest_session_empty', 'GUEST_FALLBACK', LoginStatus.LOGIN_FAILED);
     }
     session.isGuest = true;
@@ -110,6 +134,7 @@ export class AuthFacade {
     if (this.appContext) {
       await this.sessionManager.markGuestChosen(this.appContext);
     }
+    hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] guestFallback success');
     return this.success(session, 'GUEST_FALLBACK');
   }
 
