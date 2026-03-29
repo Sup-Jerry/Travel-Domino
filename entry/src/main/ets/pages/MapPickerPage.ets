@@ -49,6 +49,8 @@ interface AMapNativeBridgeModule {
 @Component
 struct MapPickerPage {
   private map?: AMap;
+  private mapView?: MapView;
+  private mapViewCreateCallback?: (mapView?: MapView, mapViewName?: string) => void;
   private searchDebounceTimer: number = -1;
   private addressDebounceTimer: number = -1;
   private addressRequestSeq: number = 0;
@@ -91,6 +93,17 @@ struct MapPickerPage {
       !(lat === 0 && lng === 0);
   }
 
+  private isAddressResolving(address: string): boolean {
+    const text = (address || '').trim();
+    return text.length === 0 ||
+      text.indexOf('正在解析') >= 0 ||
+      text.indexOf('正在获取') >= 0;
+  }
+
+  private buildCoordinateFallbackAddress(lat: number, lng: number): string {
+    return `已选位置(${lat.toFixed(5)}, ${lng.toFixed(5)})`;
+  }
+
   // ✅ 修复 2：所有函数必须显式声明返回类型 (void)，解决 arkts-no-implicit-return-types
   aboutToAppear(): void {
     this.uiContext = this.getUIContext().getHostContext() as common.UIAbilityContext;
@@ -101,10 +114,11 @@ struct MapPickerPage {
       const routeLat = params.lat ?? 0;
       const routeLng = params.lng ?? 0;
       this.storageScopePlanId = Number(params.planId ?? 0);
+      const queryName = (params.queryName ?? '').trim();
       hilog.info(
         0x0000,
         'MapPickerPage',
-        `[MAP_PICKER][route_params] planId=${this.storageScopePlanId}, centerSource=${params.centerSource ?? 'current'}, lat=${routeLat}, lng=${routeLng}`
+        `[MAP_PICKER][route_params] planId=${this.storageScopePlanId}, centerSource=${params.centerSource ?? 'current'}, lat=${routeLat}, lng=${routeLng}, queryNameLen=${queryName.length}`
       );
       if (this.isValidCoordinate(routeLat, routeLng)) {
         this.currentLat = routeLat;
@@ -113,7 +127,6 @@ struct MapPickerPage {
       }
 
       const centerSource = params.centerSource ?? 'current';
-      const queryName = (params.queryName ?? '').trim();
       if (centerSource === 'geocode') {
         this.centerHint = queryName.length > 0
           ? `已按“${queryName}”定位到附近，可拖动微调`
@@ -123,6 +136,11 @@ struct MapPickerPage {
       } else {
         this.centerHint = '已定位到当前位置，可拖动选点';
       }
+      hilog.info(
+        0x0000,
+        'MapPickerPage',
+        `[MAP_TRACE][route_apply] hasPreset=${this.hasPresetCoordinate}, currentLat=${this.currentLat}, currentLng=${this.currentLng}, centerSource=${centerSource}`
+      );
     }
 
     void this.prepareMapRuntime();
@@ -139,24 +157,27 @@ struct MapPickerPage {
       return;
     }
 
-    // ✅ 修复 3：通过全局单例捕获地图，解决 getMap 和 mapReadyCallback 不存在的报错
-    MapViewManager.getInstance().registerMapViewCreatedCallback((mapview?: MapView) => {
-      if (mapview) {
-        hilog.info(0x0000, 'MapPickerPage', '[MAP_PICKER][map_created]');
-        try {
-          mapview.onCreate();
-          hilog.info(0x0000, 'MapPickerPage', '[MAP_PICKER][map_on_create_called]');
-        } catch (_error) {
-          hilog.warn(0x0000, 'MapPickerPage', '[MAP_PICKER][map_on_create_failed]');
-        }
-        // 调用异步方法获取真实的 AMap 控制对象
-        mapview.getMapAsync((map: AMap) => {
-          this.map = map;
-          hilog.info(0x0000, 'MapPickerPage', '[MAP_PICKER][map_ready]');
-          this.onMapReady();
-        });
+    const manager = MapViewManager.getInstance();
+    if (this.mapViewCreateCallback) {
+      manager.unregisterMapViewCreatedCallback(this.mapViewCreateCallback);
+      this.mapViewCreateCallback = undefined;
+    }
+    this.mapViewCreateCallback = (mapview?: MapView, mapViewName?: string): void => {
+      if (!mapview) {
+        return;
       }
-    });
+      if (mapViewName !== 'MapPicker') {
+        return;
+      }
+      this.mapView = mapview;
+      hilog.info(0x0000, 'MapPickerPage', `[MAP_PICKER][map_created] name=${mapViewName}`);
+      mapview.getMapAsync((map: AMap) => {
+        this.map = map;
+        hilog.info(0x0000, 'MapPickerPage', '[MAP_PICKER][map_ready]');
+        this.onMapReady();
+      });
+    };
+    manager.registerMapViewCreatedCallback(this.mapViewCreateCallback);
   }
 
   private async isMapNativeRuntimeReady(): Promise<boolean> {
@@ -197,6 +218,14 @@ struct MapPickerPage {
     }
     this.searchToken++;
     this.addressRequestSeq++;
+    const manager = MapViewManager.getInstance();
+    if (this.mapViewCreateCallback) {
+      manager.unregisterMapViewCreatedCallback(this.mapViewCreateCallback);
+      this.mapViewCreateCallback = undefined;
+      hilog.info(0x0000, 'MapPickerPage', '[MAP_PICKER][callback_unregister]');
+    }
+    this.map = undefined;
+    this.mapView = undefined;
   }
 
   private scheduleSearch(value: string): void {
@@ -303,9 +332,15 @@ struct MapPickerPage {
     if (this.hasPresetCoordinate) {
       let latlng = new LatLng(this.currentLat, this.currentLng);
       this.map?.moveCamera(CameraUpdateFactory.newLatLngZoom(latlng, 16));
+      hilog.info(
+        0x0000,
+        'MapPickerPage',
+        `[MAP_TRACE][map_ready_center] mode=preset, lat=${this.currentLat}, lng=${this.currentLng}`
+      );
       this.scheduleFetchAddress(this.currentLat, this.currentLng);
     } else {
       this.currentAddress = '正在获取当前位置...';
+      hilog.info(0x0000, 'MapPickerPage', '[MAP_TRACE][map_ready_center] mode=current_location');
     }
 
     // 4. 监听视角变动 (保持不变)
@@ -352,8 +387,15 @@ struct MapPickerPage {
       this.safeShowToast('请选择有效位置');
       return;
     }
-
-    let finalAddress = (this.currentAddress === '未知坐标点' || this.currentAddress.includes('解析')) ? '' : this.currentAddress;
+    if (this.isAddressResolving(this.currentAddress)) {
+      this.safeShowToast('正在解析地点名称，请稍候再确认');
+      return;
+    }
+    const normalizedAddress = (this.currentAddress || '').trim();
+    let finalAddress = normalizedAddress;
+    if (normalizedAddress.length === 0 || normalizedAddress === '未知坐标点') {
+      finalAddress = this.buildCoordinateFallbackAddress(this.currentLat, this.currentLng);
+    }
 
     // 实例化我们刚才定义的明确结构类
     const resultObj = new PickedLocation(this.currentLat, this.currentLng, finalAddress);

@@ -36,6 +36,10 @@ export interface DraftRecoveryResult {
 }
 
 export class PageDraftRecovery {
+  private static buildCoordinateFallbackAddress(lat: number, lng: number): string {
+    return `已选位置(${lat.toFixed(5)}, ${lng.toFixed(5)})`;
+  }
+
   public static parseTempDialogState(raw: string): TempDialogState | null {
     try {
       const parsed = JSON.parse(raw) as TempDialogState;
@@ -133,13 +137,17 @@ export class PageDraftRecovery {
         reason: 'picked_invalid'
       };
     }
+    const normalizedAddress = (picked.address || '').trim();
+    const mergedName = normalizedAddress.length > 0
+      ? normalizedAddress
+      : PageDraftRecovery.buildCoordinateFallbackAddress(picked.lat, picked.lng);
 
     return {
       shouldClear: true,
       shouldRestore: true,
       reason: 'restore_merged',
       restored: {
-        name: picked.address && picked.address.length > 0 ? picked.address : temp.name,
+        name: mergedName,
         note: temp.note,
         duration: temp.duration,
         isAnchor: temp.isAnchor,
