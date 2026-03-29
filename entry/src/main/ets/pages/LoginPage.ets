@@ -1,14 +1,15 @@
 import { promptAction } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
-import { AuthLoginResult, AuthSessionPayload, DeviceInfo } from '../domain/auth/AuthModels';
-import { AuthGateway } from '../infrastructure/auth/AuthGateway';
-import { AuthSessionStore } from '../infrastructure/auth/AuthSessionStore';
+import { HuaweiCredential } from '../domain/auth/AuthTypes';
+import { AuthFacade } from '../infrastructure/auth/AuthFacade';
+import { HuaweiAccountLoginButton } from './components/auth/HuaweiAccountLoginButton';
 
 @Entry
 @Component
 struct LoginPage {
   @State private agreementAccepted: boolean = false;
   @State private loading: boolean = false;
+  private readonly authFacade: AuthFacade = AuthFacade.getInstance();
 
   private toast(message: string): void {
     promptAction.openToast({ message });
@@ -22,40 +23,24 @@ struct LoginPage {
     return true;
   }
 
-  private makeDeviceInfo(): DeviceInfo {
-    return new DeviceInfo('device-local', 'HarmonyDevice', 'HARMONY');
-  }
-
   private async replaceUrl(url: string): Promise<void> {
     await this.getUIContext().getRouter().replaceUrl({ url: url });
   }
 
-  private saveSession(session: AuthSessionPayload): void {
-    const normalized = new AuthSessionPayload();
-    normalized.accessToken = session.accessToken;
-    normalized.refreshToken = session.refreshToken;
-    normalized.expireAt = Number(session.expireAt);
-    normalized.sessionId = session.sessionId;
-    AuthSessionStore.save(normalized);
-  }
-
-  private async loginAsGuest(): Promise<void> {
+  private async loginWithHuaweiButton(credential: HuaweiCredential): Promise<void> {
     if (!this.ensureAgreement()) {
       return;
     }
+    const hostContext = this.getUIContext().getHostContext() as common.Context;
+    this.authFacade.bindContext(hostContext);
     this.loading = true;
-    const result = await AuthGateway.createGuest(this.makeDeviceInfo());
+    const result = await this.authFacade.explicitLoginByButton(credential);
     this.loading = false;
-    if (result.code !== 0) {
-      this.toast(`游客登录失败：${result.message}`);
+    if (!result.success) {
+      this.toast(`登录失败：${result.message}`);
       return;
     }
-
-    const payload = result.data as AuthLoginResult;
-    this.saveSession(payload.session);
-    const hostContext = this.getUIContext().getHostContext() as common.Context;
-    await AuthSessionStore.markGuestChosenPersisted(hostContext);
-    this.toast('已进入游客模式');
+    this.toast('登录成功');
     await this.replaceUrl('pages/PlanListPage');
   }
 
@@ -82,7 +67,7 @@ struct LoginPage {
           .width('100%')
           .textAlign(TextAlign.Start)
 
-        Text('当前仅支持游客模式')
+        Text('优先使用华为账号登录')
           .fontSize(13)
           .fontColor('#6B7280')
           .width('100%')
@@ -101,17 +86,15 @@ struct LoginPage {
         .width('100%')
         .margin({ top: 2, bottom: 6 })
 
-        Button('进入游客模式')
-          .width('100%')
-          .height(48)
-          .enabled(!this.loading)
-          .backgroundColor('#2563EB')
-          .fontColor('#FFFFFF')
-          .fontSize(16)
-          .borderRadius(14)
-          .onClick(() => {
-            void this.loginAsGuest();
-          })
+        HuaweiAccountLoginButton({
+          agreementAccepted: this.agreementAccepted,
+          onCredential: (credential: HuaweiCredential) => {
+            void this.loginWithHuaweiButton(credential);
+          },
+          onError: (message: string) => {
+            this.toast(`华为账号登录失败：${message}`);
+          }
+        })
 
         if (this.loading) {
           Text('处理中，请稍候...')
@@ -129,7 +112,7 @@ struct LoginPage {
 
       Blank().layoutWeight(1)
 
-      Text('游客模式可直接开始规划行程')
+      Text('华为登录失败时将自动切换游客模式')
         .fontSize(12)
         .fontColor('#9CA3AF')
         .margin({ bottom: 12 })

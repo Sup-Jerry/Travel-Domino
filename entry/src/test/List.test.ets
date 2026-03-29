@@ -21,6 +21,7 @@ import weatherFacadeTest from './WeatherFacade.test';
 import weatherStrategyLinkageTest from './WeatherStrategyLinkage.test';
 import timelineWeatherLinkageIntegrationTest from './TimelineWeatherLinkageIntegration.test';
 import authServiceTest from './AuthService.test';
+import authFacadeSessionManagerTest from './AuthFacadeSessionManager.test';
 export default function testsuite() {
   localUnitTest();
   automatedTest();
@@ -45,5 +46,6 @@ export default function testsuite() {
   weatherStrategyLinkageTest();
   timelineWeatherLinkageIntegrationTest();
   authServiceTest();
+  authFacadeSessionManagerTest();
 }
 

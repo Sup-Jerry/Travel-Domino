@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsObject, IsString } from 'class-validator';
+import { IsNotEmpty, IsObject, IsOptional, IsString } from 'class-validator';
 
 export class DeviceInfoDto {
   @IsString()
@@ -15,6 +15,40 @@ export class DeviceInfoDto {
 }
 
 export class GuestCreateDto {
+  @IsObject()
+  deviceInfo!: DeviceInfoDto;
+}
+
+export class SocialCredentialDto {
+  @IsString()
+  @IsOptional()
+  authCode?: string;
+
+  @IsString()
+  @IsOptional()
+  idToken?: string;
+
+  @IsString()
+  @IsOptional()
+  accessToken?: string;
+
+  @IsString()
+  @IsOptional()
+  openId?: string;
+
+  @IsString()
+  @IsOptional()
+  unionId?: string;
+}
+
+export class SocialLoginDto {
+  @IsString()
+  @IsNotEmpty()
+  providerType!: string;
+
+  @IsObject()
+  credential!: SocialCredentialDto;
+
   @IsObject()
   deviceInfo!: DeviceInfoDto;
 }

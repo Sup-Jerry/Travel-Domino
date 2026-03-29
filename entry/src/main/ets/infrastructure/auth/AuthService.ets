@@ -4,6 +4,7 @@ import {
   AuthLoginResult,
   AuthMeResult,
   AuthSessionPayload,
+  SocialCredential,
   AuthUserProfile,
   DeviceInfo
 } from '../../domain/auth/AuthModels';
@@ -18,6 +19,8 @@ interface UserRecord {
   userId: string;
   nickname: string;
   isGuest: boolean;
+  providerUid?: string;
+  providerType?: string;
 }
 
 export class AuthService {
@@ -87,6 +90,57 @@ export class AuthService {
     me.isGuest = user.isGuest;
     me.defaultLoginMethod = 'GUEST';
     return this.ok(me);
+  }
+
+  public loginWithSocial(
+    providerType: string,
+    credential: SocialCredential,
+    deviceInfo: DeviceInfo
+  ): AuthApiResponse<AuthLoginResult> {
+    const uid = (credential.unionId || credential.openId || credential.authCode || credential.idToken || '').trim();
+    if (uid.length === 0) {
+      return this.fail<AuthLoginResult>(AuthErrorCode.THIRD_PARTY_AUTH_FAILED, 'social_credential_invalid', new AuthLoginResult());
+    }
+
+    const now = Date.now();
+    const providerKey = `${providerType}:${uid}`;
+    let user = this.users.find((item: UserRecord) => `${item.providerType || ''}:${item.providerUid || ''}` === providerKey) || null;
+    const isNewUser = !user;
+    if (!user) {
+      user = {
+        userId: `u_${this.nextId()}`,
+        nickname: `华为用户${this.idSeq}`,
+        isGuest: false,
+        providerUid: uid,
+        providerType: providerType
+      };
+      this.users.push(user);
+    }
+
+    const accessToken = `social_access_${uid}_${now}`;
+    const refreshToken = `social_refresh_${uid}_${now}`;
+    const expireAt = now + 7 * 24 * 3600 * 1000;
+    const sessionId = `s_${this.nextId()}`;
+    this.sessions.push({ userId: user.userId, accessToken, expireAt });
+
+    const session = new AuthSessionPayload();
+    session.accessToken = accessToken;
+    session.refreshToken = refreshToken;
+    session.expireAt = expireAt;
+    session.sessionId = sessionId;
+
+    const profile = new AuthUserProfile();
+    profile.userId = user.userId;
+    profile.nickname = user.nickname;
+    profile.isGuest = false;
+    profile.profileCompleted = true;
+    profile.defaultLoginMethod = 'CUSTOM';
+
+    const result = new AuthLoginResult();
+    result.isNewUser = isNewUser;
+    result.user = profile;
+    result.session = session;
+    return this.ok(result);
   }
 
   private buildGuestFallbackByToken(accessToken: string): AuthMeResult | null {

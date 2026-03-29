@@ -1,7 +1,7 @@
 import { GlobalBottomNavBar } from './components/views/BottomNavBar';
 import { ThemeCenter } from '../common/utils/ThemeCenter';
-import { AuthGateway } from '../infrastructure/auth/AuthGateway';
-import { AuthSessionStore } from '../infrastructure/auth/AuthSessionStore';
+import { common } from '@kit.AbilityKit';
+import { AuthFacade } from '../infrastructure/auth/AuthFacade';
 
 const DEFAULT_USER_NAME = '游客用户';
 
@@ -11,6 +11,7 @@ struct MyPage {
   @State userName: string = DEFAULT_USER_NAME;
   @State loadingProfile: boolean = false;
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
+  private readonly authFacade: AuthFacade = AuthFacade.getInstance();
 
   private getThemePalette() {
     return ThemeCenter.getPalette(this.effectiveTheme);
@@ -24,20 +25,11 @@ struct MyPage {
     if (this.loadingProfile) {
       return;
     }
+    const hostContext = this.getUIContext().getHostContext() as common.Context;
+    this.authFacade.bindContext(hostContext);
     this.loadingProfile = true;
     try {
-      const token = AuthSessionStore.getAccessToken();
-      if (!token || token.trim().length === 0) {
-        this.userName = DEFAULT_USER_NAME;
-        return;
-      }
-      const result = await AuthGateway.me(token);
-      if (result.code !== 0) {
-        this.userName = DEFAULT_USER_NAME;
-        return;
-      }
-      const nickname = (result.data.nickname || '').trim();
-      this.userName = nickname.length > 0 ? nickname : DEFAULT_USER_NAME;
+      this.userName = await this.authFacade.getCurrentNickname(DEFAULT_USER_NAME);
     } catch (_error) {
       this.userName = DEFAULT_USER_NAME;
     } finally {

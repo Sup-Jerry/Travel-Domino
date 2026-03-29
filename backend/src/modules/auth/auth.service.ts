@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/
 import * as jwt from 'jsonwebtoken';
 import { AppConfigService } from '../../config/app-config.service';
 import { PgService } from '../../config/pg.service';
-import { GuestCreateDto } from './dto/auth.dto';
+import { GuestCreateDto, SocialLoginDto } from './dto/auth.dto';
 
 interface SessionTokenPayload {
   userId: string;
@@ -57,6 +57,68 @@ export class AuthService {
   async me(accessToken: string): Promise<unknown> {
     const session = await this.mustSession(accessToken);
     return this.loadProfile(session.userId);
+  }
+
+  async socialLogin(dto: SocialLoginDto, ip: string): Promise<unknown> {
+    return this.pg.withTransaction(async (query) => {
+      const providerType = String(dto.providerType || '').trim().toUpperCase();
+      const credential = dto.credential || {};
+      const providerUid = String(
+        credential.unionId || credential.openId || credential.authCode || credential.idToken || ''
+      ).trim();
+      if (!providerType || !providerUid) {
+        throw new BadRequestException('THIRD_PARTY_AUTH_FAILED');
+      }
+
+      const identityRes = await query(
+        `select user_id from auth_identity where provider_type=$1 and provider_uid=$2 and bind_status='BOUND' limit 1`,
+        [providerType, providerUid]
+      );
+
+      let userId = '';
+      if (identityRes.rowCount > 0) {
+        userId = String(identityRes.rows[0].user_id || '');
+        await query(
+          `update auth_identity set last_used_time=now() where provider_type=$1 and provider_uid=$2 and bind_status='BOUND'`,
+          [providerType, providerUid]
+        );
+      } else {
+        userId = this.nextId('u');
+        await query(
+          `insert into user_account(user_id,nickname,avatar_url,mobile_masked,status,is_guest,profile_completed,default_login_method,register_time,last_login_time,mobile_bind_time)
+           values($1,$2,'','','ACTIVE',false,true,$3,now(),now(),null)`,
+          [userId, `用户${Date.now() % 100000}`, providerType]
+        );
+        await query(
+          `insert into auth_identity(identity_id,user_id,provider_type,provider_uid,provider_open_id,provider_union_id,phone_number,bind_status,bind_time,last_used_time)
+           values($1,$2,$3,$4,$5,$6,'','BOUND',now(),now())`,
+          [
+            this.nextId('idn'),
+            userId,
+            providerType,
+            providerUid,
+            String(credential.openId || ''),
+            String(credential.unionId || '')
+          ]
+        );
+      }
+
+      await query(
+        `update user_account set last_login_time=now(), default_login_method=$2 where user_id=$1`,
+        [userId, providerType]
+      );
+
+      const session = await this.issueSession(
+        userId,
+        dto.deviceInfo.deviceId,
+        dto.deviceInfo.deviceName,
+        dto.deviceInfo.platform,
+        providerType,
+        ip
+      );
+      const profile = await this.loadProfile(userId);
+      return { user: profile, session };
+    });
   }
 
   private async issueSession(
