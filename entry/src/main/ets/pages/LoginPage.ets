@@ -19,8 +19,9 @@ struct LoginPage {
   }
 
   private ensureAgreement(): boolean {
+    hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] ensureAgreement accepted=${this.agreementAccepted ? 1 : 0}`);
     if (!this.agreementAccepted) {
-      this.toast('请先勾选用户协议与隐私政策');
+      this.toast('请先勾选《用户协议》和《隐私政策》');
       return false;
     }
     return true;
@@ -43,7 +44,7 @@ struct LoginPage {
     const hostContext = this.getUIContext().getHostContext() as common.Context;
     this.authFacade.bindContext(hostContext);
     this.loading = true;
-    const result = await this.authFacade.explicitLoginByButton(credential);
+    const result = await this.authFacade.explicitLoginByButton(credential, false);
     this.loading = false;
     if (!result.success) {
       hilog.warn(
@@ -67,7 +68,7 @@ struct LoginPage {
     const hostContext = this.getUIContext().getHostContext() as common.Context;
     this.authFacade.bindContext(hostContext);
     this.loading = true;
-    const result = await this.authFacade.explicitLoginByButton();
+    const result = await this.authFacade.explicitLoginByButton(undefined, false);
     this.loading = false;
     if (!result.success) {
       hilog.warn(
@@ -80,6 +81,30 @@ struct LoginPage {
     }
     hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] api_fallback success source=${result.source}`);
     this.toast('登录成功');
+    await this.replaceUrl('pages/PlanListPage');
+  }
+
+  private async loginAsGuest(): Promise<void> {
+    if (!this.ensureAgreement()) {
+      hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, '[LOGIN_TRACE][page] guest_login blocked by agreement');
+      return;
+    }
+    const hostContext = this.getUIContext().getHostContext() as common.Context;
+    this.authFacade.bindContext(hostContext);
+    this.loading = true;
+    const result = await this.authFacade.explicitGuestLogin();
+    this.loading = false;
+    if (!result.success) {
+      hilog.warn(
+        LoginPage.LOG_DOMAIN,
+        LoginPage.LOG_TAG,
+        `[LOGIN_TRACE][page] guest_login fail code=${result.code}, message=${result.message}, source=${result.source}`
+      );
+      this.toast(`游客登录失败：${result.message}`);
+      return;
+    }
+    hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] guest_login success source=${result.source}`);
+    this.toast('游客登录成功');
     await this.replaceUrl('pages/PlanListPage');
   }
 
@@ -117,6 +142,7 @@ struct LoginPage {
             .select(this.agreementAccepted)
             .onChange((value: boolean) => {
               this.agreementAccepted = value;
+              hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] agreement checkbox changed=${value ? 1 : 0}`);
             })
           Text('我已阅读并同意《用户协议》《隐私政策》')
             .fontSize(12)
@@ -134,6 +160,10 @@ struct LoginPage {
             const codeText = message.replace('huawei_login_error_', '').split('_')[0];
             const code = Number(codeText);
             hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] button error message=${message}, code=${code}`);
+            if (!this.ensureAgreement()) {
+              hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, '[LOGIN_TRACE][page] block fallback by agreement');
+              return;
+            }
             if (code === 1001502003) {
               hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, '[LOGIN_TRACE][page] trigger api_fallback by code=1001502003');
               void this.loginWithHuaweiApiFallback();
@@ -142,6 +172,16 @@ struct LoginPage {
             this.toast(`华为账号登录失败：${message}`);
           }
         })
+
+        Button('游客登录')
+          .width('100%')
+          .height(44)
+          .backgroundColor('#EEF2FF')
+          .fontColor('#1F2937')
+          .borderRadius(10)
+          .onClick(() => {
+            void this.loginAsGuest();
+          })
 
         if (this.loading) {
           Text('处理中，请稍候...')
@@ -159,7 +199,7 @@ struct LoginPage {
 
       Blank().layoutWeight(1)
 
-      Text('华为登录失败时将自动切换游客模式')
+      Text('可通过上方按钮使用游客模式继续。')
         .fontSize(12)
         .fontColor('#9CA3AF')
         .margin({ bottom: 12 })
@@ -172,3 +212,5 @@ struct LoginPage {
     .alignItems(HorizontalAlign.Center)
   }
 }
+
+

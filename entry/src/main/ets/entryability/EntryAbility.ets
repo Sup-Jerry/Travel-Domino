@@ -90,7 +90,10 @@ export default class EntryAbility extends UIAbility {
     const flag = bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_SIGNATURE_INFO;
     const bundleInfo = bundleManager.getBundleInfoForSelfSync(flag);
     const appId = bundleInfo.signatureInfo.appId;
+    const signatureDump = JSON.stringify(bundleInfo.signatureInfo);
     console.info('appId:' + appId);
+    hilog.info(DOMAIN, TAG, `[LOGIN_TRACE][runtime] bundle=${bundleInfo.name}, appId=${appId}`);
+    hilog.info(DOMAIN, TAG, `[LOGIN_TRACE][runtime] signature=${signatureDump}`);
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');
 
     try {

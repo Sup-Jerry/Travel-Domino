@@ -32,7 +32,7 @@ struct SettingsAccountSecurityPage {
           .fontWeight(FontWeight.Medium)
           .fontColor(this.getThemePalette().textPrimary);
 
-        Text('已接入华为账号登录，支持显式登录与静默登录。')
+        Text('支持显式登录与启动静默登录策略控制。')
           .fontSize(13)
           .fontColor(this.getThemePalette().textSecondary)
           .maxLines(3)
@@ -64,4 +64,3 @@ struct SettingsAccountSecurityPage {
     .backgroundColor(this.getThemePalette().pageBg);
   }
 }
-
