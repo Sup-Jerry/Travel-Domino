@@ -59,6 +59,18 @@ export class AuthSessionStore {
     return AppStorage.get<boolean>(AppStorageKeys.AUTH_GUEST_CHOSEN) ?? false;
   }
 
+  public static markSilentLoginBlockedAfterLogout(): void {
+    AppStorage.setOrCreate(AppStorageKeys.AUTH_BLOCK_SILENT_AFTER_LOGOUT, true);
+  }
+
+  public static clearSilentLoginBlockedAfterLogout(): void {
+    AppStorage.setOrCreate(AppStorageKeys.AUTH_BLOCK_SILENT_AFTER_LOGOUT, false);
+  }
+
+  public static isSilentLoginBlockedAfterLogout(): boolean {
+    return AppStorage.get<boolean>(AppStorageKeys.AUTH_BLOCK_SILENT_AFTER_LOGOUT) ?? false;
+  }
+
   public static async markGuestChosenPersisted(context: common.Context): Promise<void> {
     AuthSessionStore.markGuestChosen();
     const pref = PreferenceManager.getInstance();
@@ -77,5 +89,32 @@ export class AuthSessionStore {
       AuthSessionStore.markGuestChosen();
     }
     return chosen;
+  }
+
+  public static async markSilentLoginBlockedAfterLogoutPersisted(context: common.Context): Promise<void> {
+    AuthSessionStore.markSilentLoginBlockedAfterLogout();
+    const pref = PreferenceManager.getInstance();
+    await pref.init(context);
+    await pref.setSilentLoginBlockedAfterLogout(true);
+  }
+
+  public static async clearSilentLoginBlockedAfterLogoutPersisted(context: common.Context): Promise<void> {
+    AuthSessionStore.clearSilentLoginBlockedAfterLogout();
+    const pref = PreferenceManager.getInstance();
+    await pref.init(context);
+    await pref.setSilentLoginBlockedAfterLogout(false);
+  }
+
+  public static async isSilentLoginBlockedAfterLogoutPersisted(context: common.Context): Promise<boolean> {
+    if (AuthSessionStore.isSilentLoginBlockedAfterLogout()) {
+      return true;
+    }
+    const pref = PreferenceManager.getInstance();
+    await pref.init(context);
+    const blocked = await pref.isSilentLoginBlockedAfterLogout();
+    if (blocked) {
+      AuthSessionStore.markSilentLoginBlockedAfterLogout();
+    }
+    return blocked;
   }
 }

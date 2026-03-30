@@ -41,6 +41,13 @@ export class AuthFacade {
 
   public async silentLogin(): Promise<AuthResult<UserSession>> {
     hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] silentLogin start');
+    if (this.appContext) {
+      const blocked = await this.sessionManager.isSilentLoginBlockedAfterLogoutPersisted(this.appContext);
+      if (blocked) {
+        hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] silentLogin blocked by logout marker');
+        return this.failure(-1, 'silent_login_blocked_after_logout', 'HUAWEI_SILENT', LoginStatus.UNAUTHENTICATED);
+      }
+    }
     const local = this.sessionManager.load();
     if (local) {
       const me = await AuthGateway.me(local.accessToken);
@@ -65,7 +72,7 @@ export class AuthFacade {
     }
   }
 
-  public async explicitLoginByButton(credential?: HuaweiCredential): Promise<AuthResult<UserSession>> {
+  public async explicitLoginByButton(credential?: HuaweiCredential, allowGuestFallback: boolean = true): Promise<AuthResult<UserSession>> {
     hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] explicitLoginByButton start');
     try {
       const finalCredential = credential || await this.huaweiProvider.explicitLogin(this.appContext || undefined);
@@ -73,6 +80,10 @@ export class AuthFacade {
       return this.exchangeHuaweiCredential(finalCredential, 'HUAWEI_BUTTON');
     } catch (error) {
       hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, `[LOGIN_TRACE][facade] explicit provider fail message=${this.normalizeError(error)}`);
+      if (!allowGuestFallback) {
+        hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] explicit guestFallback disabled');
+        return this.failure(-1, this.normalizeError(error), 'HUAWEI_BUTTON', LoginStatus.LOGIN_FAILED);
+      }
       const guestResult = await this.tryGuestFallback();
       if (guestResult.success) {
         hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] explicit fallback guest ok');
@@ -83,8 +94,19 @@ export class AuthFacade {
     }
   }
 
+  public async explicitGuestLogin(): Promise<AuthResult<UserSession>> {
+    return this.tryGuestFallback();
+  }
+
   public async logout(): Promise<void> {
     this.sessionManager.clear();
+    if (this.appContext) {
+      await this.sessionManager.markSilentLoginBlockedAfterLogoutPersisted(this.appContext);
+      hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] logout set silent_block=1');
+      return;
+    }
+    this.sessionManager.markSilentLoginBlockedAfterLogout();
+    hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] logout set silent_block=1(memory_only)');
   }
 
   private async exchangeHuaweiCredential(credential: HuaweiCredential, source: 'HUAWEI_BUTTON' | 'HUAWEI_SILENT'): Promise<AuthResult<UserSession>> {
@@ -110,6 +132,14 @@ export class AuthFacade {
     if (!session) {
       hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] exchange fail session_empty');
       return this.failure(-1, 'session_empty', source, LoginStatus.LOGIN_FAILED);
+    }
+    if (source === 'HUAWEI_BUTTON') {
+      if (this.appContext) {
+        await this.sessionManager.clearSilentLoginBlockedAfterLogoutPersisted(this.appContext);
+      } else {
+        this.sessionManager.clearSilentLoginBlockedAfterLogout();
+      }
+      hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] explicit success clear silent_block=0');
     }
     this.onLoginSuccess(session);
     hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, `[LOGIN_TRACE][facade] exchange success source=${source}, isGuest=${session.isGuest ? 1 : 0}`);

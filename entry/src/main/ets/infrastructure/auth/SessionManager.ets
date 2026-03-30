@@ -47,5 +47,24 @@ export class SessionManager {
   public async hasGuestChosen(context: common.Context): Promise<boolean> {
     return AuthSessionStore.hasGuestChosenPersisted(context);
   }
-}
 
+  public markSilentLoginBlockedAfterLogout(): void {
+    AuthSessionStore.markSilentLoginBlockedAfterLogout();
+  }
+
+  public clearSilentLoginBlockedAfterLogout(): void {
+    AuthSessionStore.clearSilentLoginBlockedAfterLogout();
+  }
+
+  public async markSilentLoginBlockedAfterLogoutPersisted(context: common.Context): Promise<void> {
+    await AuthSessionStore.markSilentLoginBlockedAfterLogoutPersisted(context);
+  }
+
+  public async clearSilentLoginBlockedAfterLogoutPersisted(context: common.Context): Promise<void> {
+    await AuthSessionStore.clearSilentLoginBlockedAfterLogoutPersisted(context);
+  }
+
+  public async isSilentLoginBlockedAfterLogoutPersisted(context: common.Context): Promise<boolean> {
+    return AuthSessionStore.isSilentLoginBlockedAfterLogoutPersisted(context);
+  }
+}

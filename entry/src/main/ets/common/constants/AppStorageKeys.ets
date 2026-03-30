@@ -24,5 +24,6 @@
   static readonly MIN_EVENT_DURATION = 'MinEventDuration';
   static readonly AUTH_SESSION_JSON = 'AuthSessionJson';
   static readonly AUTH_GUEST_CHOSEN = 'AuthGuestChosen';
+  static readonly AUTH_BLOCK_SILENT_AFTER_LOGOUT = 'AuthBlockSilentAfterLogout';
 }
 

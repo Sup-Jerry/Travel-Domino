@@ -37,6 +37,7 @@ export class PreferenceManager {
   static readonly KEY_WEATHER_FEATURE_ENABLED = 'weatherFeatureEnabled';
   static readonly KEY_USER_STRATEGY_PROFILE = 'userStrategyProfile';
   static readonly KEY_AUTH_GUEST_CHOSEN = 'authGuestChosen';
+  static readonly KEY_AUTH_BLOCK_SILENT_AFTER_LOGOUT = 'authBlockSilentAfterLogout';
 
   // 新增：是否允许调用高德路线 API
   static readonly KEY_ENABLE_AMAP_ROUTE_API = 'enableAmapRouteApi';
@@ -260,6 +261,15 @@ export class PreferenceManager {
 
   public async setGuestChosen(chosen: boolean): Promise<void> {
     await this.setValue(PreferenceManager.KEY_AUTH_GUEST_CHOSEN, chosen);
+  }
+
+  public async isSilentLoginBlockedAfterLogout(): Promise<boolean> {
+    const value = await this.getValue(PreferenceManager.KEY_AUTH_BLOCK_SILENT_AFTER_LOGOUT, false);
+    return value === true;
+  }
+
+  public async setSilentLoginBlockedAfterLogout(blocked: boolean): Promise<void> {
+    await this.setValue(PreferenceManager.KEY_AUTH_BLOCK_SILENT_AFTER_LOGOUT, blocked);
   }
 
   private cloneDefaultUserProfile(): UserStrategyProfile {
