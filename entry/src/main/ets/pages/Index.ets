@@ -732,7 +732,7 @@ struct Index {
     }
   }
 
-  private handleEventConflictAction(item: EventEntity, strategy: 'delay' | 'compress' | 'smart', gapMinutes: number,
+  private handleEventConflictAction(item: EventEntity, strategy: 'delay' | 'compress' | 'advance' | 'smart', gapMinutes: number,
     onDone?: () => void) {
     const index = this.vm.events.indexOf(item);
     if (index < 0) {
@@ -758,6 +758,11 @@ struct Index {
     if (strategy === 'delay') {
       const plan = this.vm.calculateDelayPlan(index);
       this.openPreview(index, item, targetTime, plan, saveCallback, reopenConflictMenu);
+      return;
+    }
+
+    if (strategy === 'advance') {
+      this.openAdvanceAdjustDialog(index, item, targetTime, saveCallback);
       return;
     }
 
@@ -1950,7 +1955,7 @@ struct Index {
                       onCommuteChange: (m) => {
                         TimelineInteractionHelper.handleCommuteChange(this.vm, item, m,this.onGapFoundCallback);
                       },
-                      onConflictAction: (targetItem: EventEntity, strategy: 'delay' | 'compress' | 'smart', gapMinutes: number) => {
+                      onConflictAction: (targetItem: EventEntity, strategy: 'delay' | 'compress' | 'advance' | 'smart', gapMinutes: number) => {
                         if (this.vm.isArchived) {
                           return;
                         }

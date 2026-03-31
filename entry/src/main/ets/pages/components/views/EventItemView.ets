@@ -31,7 +31,7 @@ export struct EventItemView {
   onEditClick: () => void = () => {};
   onTravelModeChange: (mode: number) => void = () => {};
   onManualTravelInput: (minutes: number) => void = () => {};
-  onConflictAction: (item: EventEntity, strategy: 'delay' | 'compress' | 'smart', gapMinutes: number) => void = () => {};
+  onConflictAction: (item: EventEntity, strategy: 'delay' | 'compress' | 'advance' | 'smart', gapMinutes: number) => void = () => {};
   private conflictSelectionController: CustomDialogController | null = null;
   @State isReasonPopupShow: boolean = false;
   @State tempCommuteVal: string = '';
@@ -291,6 +291,10 @@ export struct EventItemView {
         onCompressX: () => {
           hilog.info(0x0000, 'EventItemView', `[CONFLICT_UI][choose_compress] id=${this.event.id}, gap=${gapMinutes}`);
           this.onConflictAction(this.event, 'compress', gapMinutes);
+        },
+        onAdvanceAdjust: () => {
+          hilog.info(0x0000, 'EventItemView', `[CONFLICT_UI][choose_advance] id=${this.event.id}, gap=${gapMinutes}`);
+          this.onConflictAction(this.event, 'advance', gapMinutes);
         },
         onSmartAdjust: () => {
           hilog.info(0x0000, 'EventItemView', `[CONFLICT_UI][choose_smart] id=${this.event.id}, gap=${gapMinutes}`);

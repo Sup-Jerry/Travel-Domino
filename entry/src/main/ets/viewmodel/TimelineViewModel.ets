@@ -2249,9 +2249,6 @@ export class TimelineViewModel {
     if (!Number.isFinite(raw) || raw <= 0) {
       return 0;
     }
-    if (item.is_travel_manual === 1) {
-      return Math.floor(raw);
-    }
     return Math.floor(raw);
   }
 
