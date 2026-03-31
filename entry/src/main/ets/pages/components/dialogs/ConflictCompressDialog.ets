@@ -280,7 +280,8 @@ export struct ConflictCompressDialog {
 
           Button('确认压缩', { type: ButtonType.Capsule })
             .width('45%')
-            .backgroundColor($r('app.color.card_bg'))
+            .backgroundColor($r('app.color.accent_primary'))
+            .fontColor(Color.White)
             .onClick(() => {
               if (this.selectedIds.size === 0) {
                 this.safeShowToast('请先选择至少一个可压缩地点', 2000);

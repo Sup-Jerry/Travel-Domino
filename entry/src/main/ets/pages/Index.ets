@@ -21,6 +21,7 @@ import { StrategyService } from '../domain/strategy/StrategyService';
 import { SuggestionDialog } from './components/dialogs/SuggestionDialog';
 import { ConflictSelectionDialog } from './components/dialogs/ConflictSelectionDialog';
 import { ConflictCompressDialog } from './components/dialogs/ConflictCompressDialog';
+import { AdvanceAdjustDialog } from './components/dialogs/AdvanceAdjustDialog';
 import { TimelineInteractionHelper } from '../viewmodel/TimelineInteractionHelper';
 import { GapResolutionDialog } from './components/dialogs/GapResolutionDialog';
 import { CompanionView } from './components/views/CompanionView';
@@ -107,6 +108,7 @@ struct Index {
   dateFilterController: CustomDialogController | null = null;
   conflictSelectionController: CustomDialogController | null = null;
   conflictCompressController: CustomDialogController | null = null;
+  conflictAdvanceController: CustomDialogController | null = null;
   timeDialogController: CustomDialogController | null = null;
   suggestionDialogController: CustomDialogController | null = null;
 
@@ -762,49 +764,42 @@ struct Index {
     this.openCompressSelectionDialog(index, item, targetTime, saveCallback, reopenConflictMenu);
   }
 
-  private handleSameDayShiftConflict(index: number, item: EventEntity, targetTime: string, gap: number,
-    saveCallback: (t?: string) => void): void {
-    const requestedShift = this.resolveConflictGapMinutes(item, gap);
-    const preview = this.vm.previewSameDayFixedShiftBeforeTarget(index, requestedShift);
-    if (preview.appliedShiftMinutes <= 0 || preview.affectedItems.length === 0) {
-      this.safeShowToast(preview.message);
+  private openAdvanceAdjustDialog(index: number, item: EventEntity, targetTime: string, saveCallback: (t?: string) => void): void {
+    const context = this.vm.buildAdvanceAdjustContext(index);
+    if (!context || context.candidates.length === 0) {
+      this.safeShowToast('当前冲突前不存在可调整区间');
       return;
     }
 
-    const remainText = preview.remainingGapMinutes > 0
-      ? `\n前移后仍预计剩余 ${preview.remainingGapMinutes} 分钟冲突。`
-      : '\n前移后预计可消除本次冲突。';
-
-    this.getUIContext().showAlertDialog({
-      title: '同日整体前移',
-      message: `${preview.message}${remainText}\n仅作用于当前 DayX，不影响其他 DayX。`,
-      primaryButton: {
-        value: '取消',
-        action: () => {}
-      },
-      secondaryButton: {
-        value: '确认前移',
-        action: () => {
-          void this.vm.applySameDayFixedShiftBeforeTarget(preview).then((result) => {
-            if (result.appliedShiftMinutes <= 0) {
-              this.safeShowToast('整体前移未生效');
+    this.conflictAdvanceController = new CustomDialogController({
+      builder: AdvanceAdjustDialog({
+        vm: this.vm,
+        targetIndex: index,
+        targetName: item.name,
+        onCancel: () => {},
+        onConfirm: (selectedIds: number[], nextStartTime: string) => {
+          void this.vm.applyAdvanceAdjust(index, new Set<number>(selectedIds), nextStartTime).then((result) => {
+            if (!result.success) {
+              this.safeShowToast(result.message || '前移调整失败');
+              this.openAdvanceAdjustDialog(index, item, targetTime, saveCallback);
               return;
             }
+            saveCallback(targetTime);
             if (result.remainingGapMinutes > 0) {
               this.safeShowToast(`已前移 ${result.appliedShiftMinutes} 分钟，仍有 ${result.remainingGapMinutes} 分钟冲突`);
-              const latestGap = this.resolveConflictGapMinutes(item, result.remainingGapMinutes);
-              this.openConflictMenu(index, item, targetTime, latestGap, saveCallback);
+              this.openConflictMenu(index, item, targetTime, result.remainingGapMinutes, saveCallback);
               return;
             }
-            this.safeShowToast(`已整体前移 ${result.appliedShiftMinutes} 分钟`);
+            this.safeShowToast(`已前移 ${result.appliedShiftMinutes} 分钟`);
           }).catch((_error: Object) => {
-            this.safeShowToast('整体前移失败');
+            this.safeShowToast('前移调整失败');
           });
         }
-      },
+      }),
       alignment: DialogAlignment.Center,
       autoCancel: false
     });
+    this.conflictAdvanceController.open();
   }
 
   private showCompressionBlockedDialog(index: number, item: EventEntity, targetTime: string, plan: import('../viewmodel/TimelineViewModel').CompressionPlan,
@@ -947,9 +942,13 @@ struct Index {
           });
         },
 
+        onAdvanceAdjust: () => {
+          hilog.info(0x0000, 'Index', `[CONFLICT_UI][menu_advance_adjust] itemId=${item.id}`);
+          this.openAdvanceAdjustDialog(index, item, targetTime, saveCallback);
+        },
         onShiftSameDay: () => {
-          hilog.info(0x0000, 'Index', `[CONFLICT_UI][menu_shift_same_day] itemId=${item.id}`);
-          this.handleSameDayShiftConflict(index, item, targetTime, gap, saveCallback);
+          hilog.info(0x0000, 'Index', `[CONFLICT_UI][menu_shift_same_day_compat] itemId=${item.id}`);
+          this.openAdvanceAdjustDialog(index, item, targetTime, saveCallback);
         },
 
         // 兼容入口：智能均衡并入压缩前序

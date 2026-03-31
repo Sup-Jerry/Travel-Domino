@@ -125,6 +125,7 @@ export class TimeConstraintSolver {
     const slackRatio = options?.slackRatio ?? 0.25;
 
     let cursorTimestamp = baseTimestamp + (globalStartMin * TimeConstraintSolver.MINUTE_MS);
+    let naturalCursorTimestamp = cursorTimestamp;
     let previousItem: TravelPlanItem | null = null;
     let previousFinalDayOffset: number = -999999;
 
@@ -140,6 +141,7 @@ export class TimeConstraintSolver {
         cursorTimestamp = TimeConstraintSolver.buildTimestamp(baseTimestamp, prevDayOffset, prevStartMin) +
           (previousItem.duration * TimeConstraintSolver.MINUTE_MS);
       }
+      naturalCursorTimestamp = cursorTimestamp;
       previousFinalDayOffset = previousItem.dynamicDayOffset ?? previousItem.dayOffset ?? 0;
     }
 
@@ -215,14 +217,17 @@ export class TimeConstraintSolver {
       const travelMs = (item.preTravelMinutes ?? 0) * TimeConstraintSolver.MINUTE_MS;
 
       let idealStartTimeFromCursor = 0;
+      let idealStartTimeWithoutSlack = 0;
       if (previousItem) {
         idealStartTimeFromCursor = cursorTimestamp + travelMs;
+        idealStartTimeWithoutSlack = naturalCursorTimestamp + travelMs;
       } else {
         idealStartTimeFromCursor = TimeConstraintSolver.buildTimestamp(
           baseTimestamp,
           originalOffset,
           globalStartMin
         );
+        idealStartTimeWithoutSlack = idealStartTimeFromCursor;
       }
 
       let finalStartTimestamp = 0;
@@ -266,8 +271,8 @@ export class TimeConstraintSolver {
 
         if (item.lockStatus === 1) {
           // 刚性时间：同一天内迟到仍报冲突；跨天推进时允许整体迁移到新的自然日
-          if (!crossedToFutureDay && anchorTimestamp < idealStartTimeFromCursor - TimeConstraintSolver.MINUTE_MS) {
-            const diffMin = Math.floor((idealStartTimeFromCursor - anchorTimestamp) / TimeConstraintSolver.MINUTE_MS);
+          if (!crossedToFutureDay && anchorTimestamp < idealStartTimeWithoutSlack - TimeConstraintSolver.MINUTE_MS) {
+            const diffMin = Math.floor((idealStartTimeWithoutSlack - anchorTimestamp) / TimeConstraintSolver.MINUTE_MS);
             item.isConflict = true;
             item.conflictMsg = `冲突 ${diffMin} min`;
             item.gapMinutes = diffMin;
@@ -362,6 +367,7 @@ export class TimeConstraintSolver {
         item.computedEndTime = `+${diffDays}天 ${endTimeStr}`;
       }
 
+      naturalCursorTimestamp = endObj.getTime();
       cursorTimestamp = endObj.getTime() + (60 * slackRatio * TimeConstraintSolver.MINUTE_MS);
       previousItem = item;
       previousFinalDayOffset = finalDayOffset;

@@ -9,7 +9,8 @@ export struct ConflictSelectionDialog {
   // 回调
   onDelayY: () => void = () => {};        // 方案1: 延迟自己
   onCompressX: () => void = () => {};     // 方案2: 选择前序地点压缩
-  onShiftSameDay: () => void = () => {};  // 方案3: 同日整体前移
+  onShiftSameDay: () => void = () => {};  // 兼容回调
+  onAdvanceAdjust: () => void = () => {}; // 方案3: 前移调整
   onSmartAdjust: () => void = () => {};   // 兼容保留，不再展示入口
   onCancel: () => void = () => {};        // 关闭
 
@@ -44,10 +45,17 @@ export struct ConflictSelectionDialog {
         () => { this.controller.close(); this.onCompressX(); }
       )
 
-      // 选项 C: 同日整体前移
+      // 选项 C: 前移调整
       this.OptionCard(
-        '⏪', '整体前移（同日）', '将冲突点之前同 DayX 的固定地点整体提前，不影响其他 DayX', '#E8F5E9', '#2E7D32',
-        () => { this.controller.close(); this.onShiftSameDay(); }
+        '⏪', '前移调整', '选择同 DayX 前序连续地点并设置新的开始时间', '#E8F5E9', '#2E7D32',
+        () => {
+          this.controller.close();
+          if (this.onAdvanceAdjust) {
+            this.onAdvanceAdjust();
+            return;
+          }
+          this.onShiftSameDay();
+        }
       )
     }
     .padding(24)

@@ -19,3 +19,7 @@ A skill is a set of local instructions to follow that is stored in a `SKILL.md` 
   2. Resolve relative paths from the skill directory first.
   3. Load only referenced files needed for the task.
   4. Reuse scripts/templates/assets provided by the skill whenever possible.
+
+## User preferences
+- GitHub submissions must go directly to `main`.
+- Do not create or submit feature branches unless the user explicitly asks for it.

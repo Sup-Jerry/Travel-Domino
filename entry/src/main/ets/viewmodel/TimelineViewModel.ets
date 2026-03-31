@@ -96,6 +96,50 @@ export interface CompressionSelectionContext {
   candidates: CompressionSelectionCandidate[];
 }
 
+export interface AdvanceAdjustCandidate {
+  id: number;
+  index: number;
+  name: string;
+  currentStartTime: string;
+  currentEndTime: string;
+  duration: number;
+}
+
+export interface AdvanceAdjustContext {
+  targetIndex: number;
+  targetId: number;
+  targetDayOffset: number;
+  candidates: AdvanceAdjustCandidate[];
+}
+
+export interface AdvanceAdjustPreviewItem {
+  id: number;
+  index: number;
+  name: string;
+  oldStartTime: string;
+  oldEndTime: string;
+  newStartTime: string;
+  newEndTime: string;
+}
+
+export interface AdvanceAdjustPreview {
+  valid: boolean;
+  message: string;
+  selectedCount: number;
+  shiftMinutes: number;
+  firstNewStartTime: string;
+  lastNewEndTime: string;
+  items: AdvanceAdjustPreviewItem[];
+}
+
+export interface AdvanceAdjustApplyResult {
+  success: boolean;
+  appliedCount: number;
+  appliedShiftMinutes: number;
+  remainingGapMinutes: number;
+  message: string;
+}
+
 export interface PlanDateShiftPreview {
   hasRigidConflict: boolean;
   conflictItemId: number;
@@ -988,131 +1032,66 @@ export class TimelineViewModel {
   }
 
   public previewSameDayFixedShiftBeforeTarget(targetIndex: number, requestedShiftMinutes: number): SameDayFixedShiftPreview {
-    const target = this.events[targetIndex];
     const safeRequested = Math.max(0, Math.floor(requestedShiftMinutes));
-    if (!target || target.status !== 1 || targetIndex <= 0) {
+    const context = this.buildAdvanceAdjustContext(targetIndex);
+    const target = this.events[targetIndex];
+    if (!target || !context || context.candidates.length === 0) {
       return {
         targetItemId: target?.id ?? -1,
         targetIndex: targetIndex,
-        targetDayOffset: 0,
+        targetDayOffset: context?.targetDayOffset ?? 0,
         requestedShiftMinutes: safeRequested,
         appliedShiftMinutes: 0,
         remainingGapMinutes: safeRequested,
         affectedItems: [],
-        message: '未找到可处理的冲突目标'
+        message: '当前无可前移地点'
       };
     }
-
-    const targetDayOffset = this.getEffectiveDayOffset(target);
-    const dayStartMin = this.resolveEffectiveGlobalStartMinutes();
-    const affectedItems: SameDayShiftAffectedItem[] = [];
-    let maxShift = Number.MAX_SAFE_INTEGER;
-
-    for (let i = 0; i < targetIndex; i++) {
-      const item = this.events[i];
-      if (item.status !== 1 || this.getEffectiveDayOffset(item) !== targetDayOffset) {
-        continue;
-      }
-      const fixed = DateUtil.extractPureTime(item.fixed_start_time || '');
-      if (!fixed || !DateUtil.isValidTimeString(fixed)) {
-        continue;
-      }
-
-      const oldMin = DateUtil.timeToMinutes(fixed);
-      const itemCap = Math.max(0, oldMin - dayStartMin);
-      if (itemCap < maxShift) {
-        maxShift = itemCap;
-      }
-
-      affectedItems.push({
-        id: item.id,
-        name: item.name,
-        oldTime: fixed,
-        newTime: fixed,
-        index: i
-      });
-    }
-
-    if (affectedItems.length === 0) {
-      return {
-        targetItemId: target.id,
-        targetIndex: targetIndex,
-        targetDayOffset: targetDayOffset,
-        requestedShiftMinutes: safeRequested,
-        appliedShiftMinutes: 0,
-        remainingGapMinutes: safeRequested,
-        affectedItems: [],
-        message: '当前 DayX 没有可整体前移的前序固定地点'
-      };
-    }
-
-    if (maxShift === Number.MAX_SAFE_INTEGER) {
-      maxShift = 0;
-    }
-    const appliedShift = Math.min(safeRequested, Math.max(0, maxShift));
-    const remainingGap = Math.max(0, safeRequested - appliedShift);
-
-    for (let i = 0; i < affectedItems.length; i++) {
-      const oldMin = DateUtil.timeToMinutes(affectedItems[i].oldTime);
-      affectedItems[i].newTime = DateUtil.minutesToTime(oldMin - appliedShift);
-    }
-
-    const message = appliedShift > 0
-      ? `将同日 ${affectedItems.length} 个前序固定地点整体提前 ${appliedShift} 分钟`
-      : '当前 DayX 的前序固定地点已到当天起点，无法继续前移';
-
+    const selectedIds = new Set<number>();
+    context.candidates.forEach((item: AdvanceAdjustCandidate): void => {
+      selectedIds.add(item.id);
+    });
+    const firstCandidate = context.candidates[0];
+    const firstStart = DateUtil.timeToMinutes(firstCandidate.currentStartTime);
+    const nextStart = this.formatMinuteOnDay(firstStart - safeRequested);
+    const preview = this.previewAdvanceAdjust(targetIndex, selectedIds, nextStart);
+    const affectedItems: SameDayShiftAffectedItem[] = preview.items.map((item: AdvanceAdjustPreviewItem): SameDayShiftAffectedItem => ({
+      id: item.id,
+      name: item.name,
+      oldTime: item.oldStartTime,
+      newTime: item.newStartTime,
+      index: item.index
+    }));
     return {
       targetItemId: target.id,
       targetIndex: targetIndex,
-      targetDayOffset: targetDayOffset,
+      targetDayOffset: context.targetDayOffset,
       requestedShiftMinutes: safeRequested,
-      appliedShiftMinutes: appliedShift,
-      remainingGapMinutes: remainingGap,
+      appliedShiftMinutes: preview.valid ? preview.shiftMinutes : 0,
+      remainingGapMinutes: preview.valid ? Math.max(0, safeRequested - preview.shiftMinutes) : safeRequested,
       affectedItems: affectedItems,
-      message: message
+      message: preview.message
     };
   }
 
   public async applySameDayFixedShiftBeforeTarget(preview: SameDayFixedShiftPreview): Promise<SameDayFixedShiftApplyResult> {
-    if (!preview || preview.appliedShiftMinutes <= 0 || preview.affectedItems.length === 0) {
+    if (!preview || preview.affectedItems.length === 0) {
       return {
         appliedShiftMinutes: 0,
         remainingGapMinutes: preview?.remainingGapMinutes ?? 0,
         affectedCount: 0
       };
     }
-
-    let minTouchedIndex = this.events.length;
-    for (let i = 0; i < preview.affectedItems.length; i++) {
-      const patch = preview.affectedItems[i];
-      const target = this.events.find((item) => item.id === patch.id);
-      if (!target || target.status !== 1) {
-        continue;
-      }
-      if (this.getEffectiveDayOffset(target) !== preview.targetDayOffset) {
-        continue;
-      }
-      target.fixed_start_time = patch.newTime;
-      const idx = this.events.indexOf(target);
-      if (idx >= 0 && idx < minTouchedIndex) {
-        minTouchedIndex = idx;
-      }
-      if (target.id > 0) {
-        await EventRepositoryImpl.updateSingleField(target.id, 'fixed_start_time', patch.newTime, this.planId);
-      }
-    }
-
-    if (minTouchedIndex < this.events.length) {
-      this.recalculateFromIndex(minTouchedIndex > 0 ? minTouchedIndex - 1 : 0);
-      await this.save();
-    }
-
-    const target = this.events.find((item) => item.id === preview.targetItemId);
-    const remainingGap = target && target.gap_minutes > 0 ? target.gap_minutes : 0;
+    const selectedIds = new Set<number>();
+    preview.affectedItems.forEach((item: SameDayShiftAffectedItem): void => {
+      selectedIds.add(item.id);
+    });
+    const first = preview.affectedItems.sort((a, b) => a.index - b.index)[0];
+    const result = await this.applyAdvanceAdjust(preview.targetIndex, selectedIds, first.newTime);
     return {
-      appliedShiftMinutes: preview.appliedShiftMinutes,
-      remainingGapMinutes: remainingGap,
-      affectedCount: preview.affectedItems.length
+      appliedShiftMinutes: result.appliedShiftMinutes,
+      remainingGapMinutes: result.remainingGapMinutes,
+      affectedCount: result.appliedCount
     };
   }
 
@@ -2255,6 +2234,299 @@ export class TimelineViewModel {
 
   public buildCompressionSelectionContext(targetIndex: number, targetTime: string): CompressionSelectionContext | null {
     return this.buildCompressionSelectionContextInternal(targetIndex, targetTime);
+  }
+
+  private formatMinuteOnDay(totalMinutes: number): string {
+    const normalized = ((Math.floor(totalMinutes) % (24 * 60)) + (24 * 60)) % (24 * 60);
+    return DateUtil.minutesToTime(normalized);
+  }
+
+  private resolveEffectiveTravelMinutes(item: EventEntity): number {
+    if (!item) {
+      return 0;
+    }
+    const raw = item.pre_travel_min;
+    if (!Number.isFinite(raw) || raw <= 0) {
+      return 0;
+    }
+    if (item.is_travel_manual === 1) {
+      return Math.floor(raw);
+    }
+    return Math.floor(raw);
+  }
+
+  private resolvePlannedStartMinutes(item: EventEntity): number {
+    if (!item) {
+      return 0;
+    }
+    const raw = DateUtil.extractPureTime(item.fixed_start_time || item.computed_time || '');
+    const minute = raw && DateUtil.isValidTimeString(raw) ? DateUtil.timeToMinutes(raw) : this.resolveEffectiveGlobalStartMinutes();
+    const dayOffset = this.getEffectiveDayOffset(item);
+    return dayOffset * 24 * 60 + minute;
+  }
+
+  public buildAdvanceAdjustContext(targetIndex: number): AdvanceAdjustContext | null {
+    const target = this.events[targetIndex];
+    if (!target || target.status !== 1 || targetIndex <= 0) {
+      return null;
+    }
+    const targetDayOffset = this.getEffectiveDayOffset(target);
+    let prevRigidIndex = -1;
+    for (let i = targetIndex - 1; i >= 0; i--) {
+      const item = this.events[i];
+      if (item.status !== 1 || this.getEffectiveDayOffset(item) !== targetDayOffset) {
+        continue;
+      }
+      if (item.lock_status === 1) {
+        prevRigidIndex = i;
+        break;
+      }
+    }
+
+    const candidates: AdvanceAdjustCandidate[] = [];
+    for (let i = prevRigidIndex + 1; i < targetIndex; i++) {
+      const item = this.events[i];
+      if (item.status !== 1 || this.getEffectiveDayOffset(item) !== targetDayOffset) {
+        continue;
+      }
+      if (item.lock_status === 1) {
+        continue;
+      }
+      const startMin = this.resolvePlannedStartMinutes(item);
+      const endMin = startMin + item.duration;
+      candidates.push({
+        id: item.id,
+        index: i,
+        name: item.name,
+        currentStartTime: this.formatMinuteOnDay(startMin),
+        currentEndTime: this.formatMinuteOnDay(endMin),
+        duration: item.duration
+      });
+    }
+
+    return {
+      targetIndex: targetIndex,
+      targetId: target.id,
+      targetDayOffset: targetDayOffset,
+      candidates: candidates
+    };
+  }
+
+  private isContinuousAdvanceSelection(candidates: AdvanceAdjustCandidate[], selectedIds: Set<number>): boolean {
+    const selected: number[] = candidates
+      .filter((item: AdvanceAdjustCandidate): boolean => selectedIds.has(item.id))
+      .map((item: AdvanceAdjustCandidate): number => item.index)
+      .sort((a: number, b: number): number => a - b);
+    if (selected.length === 0) {
+      return false;
+    }
+    for (let i = 1; i < selected.length; i++) {
+      if (selected[i] !== selected[i - 1] + 1) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  public previewAdvanceAdjust(targetIndex: number, selectedIds: Set<number>, targetStartTime: string): AdvanceAdjustPreview {
+    const context = this.buildAdvanceAdjustContext(targetIndex);
+    if (!context) {
+      return {
+        valid: false,
+        message: '当前无可前移地点',
+        selectedCount: 0,
+        shiftMinutes: 0,
+        firstNewStartTime: '',
+        lastNewEndTime: '',
+        items: []
+      };
+    }
+    if (!DateUtil.isValidTimeString(targetStartTime)) {
+      return {
+        valid: false,
+        message: '新开始时间格式无效',
+        selectedCount: 0,
+        shiftMinutes: 0,
+        firstNewStartTime: '',
+        lastNewEndTime: '',
+        items: []
+      };
+    }
+    if (!this.isContinuousAdvanceSelection(context.candidates, selectedIds)) {
+      return {
+        valid: false,
+        message: '仅支持选择连续地点',
+        selectedCount: selectedIds.size,
+        shiftMinutes: 0,
+        firstNewStartTime: '',
+        lastNewEndTime: '',
+        items: []
+      };
+    }
+
+    const selected: AdvanceAdjustCandidate[] = context.candidates
+      .filter((item: AdvanceAdjustCandidate): boolean => selectedIds.has(item.id))
+      .sort((a: AdvanceAdjustCandidate, b: AdvanceAdjustCandidate): number => a.index - b.index);
+    if (selected.length === 0) {
+      return {
+        valid: false,
+        message: '请至少选择一个地点',
+        selectedCount: 0,
+        shiftMinutes: 0,
+        firstNewStartTime: '',
+        lastNewEndTime: '',
+        items: []
+      };
+    }
+
+    const firstSelected = selected[0];
+    const firstEntity = this.events[firstSelected.index];
+    const firstCurrentStart = this.resolvePlannedStartMinutes(firstEntity);
+    const targetStartAbsolute = context.targetDayOffset * 24 * 60 + DateUtil.timeToMinutes(targetStartTime);
+    if (targetStartAbsolute >= firstCurrentStart) {
+      return {
+        valid: false,
+        message: '新开始时间必须早于当前计划开始时间',
+        selectedCount: selected.length,
+        shiftMinutes: 0,
+        firstNewStartTime: '',
+        lastNewEndTime: '',
+        items: []
+      };
+    }
+
+    let prevBoundaryIndex = -1;
+    for (let i = firstSelected.index - 1; i >= 0; i--) {
+      const item = this.events[i];
+      if (item.status !== 1 || this.getEffectiveDayOffset(item) !== context.targetDayOffset) {
+        continue;
+      }
+      prevBoundaryIndex = i;
+      break;
+    }
+    if (prevBoundaryIndex >= 0) {
+      const prevBoundary = this.events[prevBoundaryIndex];
+      const prevEnd = this.resolvePlannedStartMinutes(prevBoundary) + prevBoundary.duration;
+      const requiredStart = prevEnd + this.resolveEffectiveTravelMinutes(firstEntity);
+      if (targetStartAbsolute < requiredStart) {
+        return {
+          valid: false,
+          message: '调整后将与前序边界冲突',
+          selectedCount: selected.length,
+          shiftMinutes: 0,
+          firstNewStartTime: '',
+          lastNewEndTime: '',
+          items: []
+        };
+      }
+    }
+
+    const previewItems: AdvanceAdjustPreviewItem[] = [];
+    const newStartMap = new Map<number, number>();
+    const newEndMap = new Map<number, number>();
+    let cursor = targetStartAbsolute;
+    for (let i = 0; i < selected.length; i++) {
+      const candidate = selected[i];
+      const entity = this.events[candidate.index];
+      const oldStart = this.resolvePlannedStartMinutes(entity);
+      const oldEnd = oldStart + entity.duration;
+      const newStart = cursor;
+      const newEnd = newStart + entity.duration;
+      newStartMap.set(candidate.index, newStart);
+      newEndMap.set(candidate.index, newEnd);
+      previewItems.push({
+        id: candidate.id,
+        index: candidate.index,
+        name: candidate.name,
+        oldStartTime: this.formatMinuteOnDay(oldStart),
+        oldEndTime: this.formatMinuteOnDay(oldEnd),
+        newStartTime: this.formatMinuteOnDay(newStart),
+        newEndTime: this.formatMinuteOnDay(newEnd)
+      });
+      if (i < selected.length - 1) {
+        const nextEntity = this.events[selected[i + 1].index];
+        cursor = newEnd + this.resolveEffectiveTravelMinutes(nextEntity);
+      }
+    }
+
+    const lastSelected = selected[selected.length - 1];
+    let nextUnselectedIndex = -1;
+    for (let i = lastSelected.index + 1; i < context.targetIndex; i++) {
+      const item = this.events[i];
+      if (item.status !== 1 || this.getEffectiveDayOffset(item) !== context.targetDayOffset) {
+        continue;
+      }
+      nextUnselectedIndex = i;
+      break;
+    }
+    if (nextUnselectedIndex >= 0) {
+      const nextItem = this.events[nextUnselectedIndex];
+      const requiredArrival = (newEndMap.get(lastSelected.index) ?? 0) + this.resolveEffectiveTravelMinutes(nextItem);
+      const nextStart = this.resolvePlannedStartMinutes(nextItem);
+      if (requiredArrival > nextStart) {
+        return {
+          valid: false,
+          message: '调整后将与后续地点冲突',
+          selectedCount: selected.length,
+          shiftMinutes: 0,
+          firstNewStartTime: '',
+          lastNewEndTime: '',
+          items: previewItems
+        };
+      }
+    }
+
+    const shiftMinutes = Math.max(0, firstCurrentStart - targetStartAbsolute);
+    return {
+      valid: true,
+      message: '可应用前移调整',
+      selectedCount: selected.length,
+      shiftMinutes: shiftMinutes,
+      firstNewStartTime: previewItems[0]?.newStartTime ?? '',
+      lastNewEndTime: previewItems[previewItems.length - 1]?.newEndTime ?? '',
+      items: previewItems
+    };
+  }
+
+  public async applyAdvanceAdjust(targetIndex: number, selectedIds: Set<number>, targetStartTime: string): Promise<AdvanceAdjustApplyResult> {
+    const preview = this.previewAdvanceAdjust(targetIndex, selectedIds, targetStartTime);
+    if (!preview.valid || preview.items.length === 0) {
+      return {
+        success: false,
+        appliedCount: 0,
+        appliedShiftMinutes: 0,
+        remainingGapMinutes: this.events[targetIndex]?.gap_minutes ?? 0,
+        message: preview.message
+      };
+    }
+
+    let minIndex = Number.MAX_SAFE_INTEGER;
+    for (let i = 0; i < preview.items.length; i++) {
+      const patch = preview.items[i];
+      const item = this.events[patch.index];
+      if (!item || item.status !== 1) {
+        continue;
+      }
+      item.fixed_start_time = patch.newStartTime;
+      if (patch.index < minIndex) {
+        minIndex = patch.index;
+      }
+      if (item.id > 0) {
+        await EventRepositoryImpl.updateSingleField(item.id, 'fixed_start_time', patch.newStartTime, this.planId);
+      }
+    }
+
+    if (minIndex !== Number.MAX_SAFE_INTEGER) {
+      this.recalculateFromIndex(minIndex > 0 ? minIndex - 1 : 0);
+    }
+    const remaining = this.events[targetIndex]?.gap_minutes ?? 0;
+    return {
+      success: true,
+      appliedCount: preview.items.length,
+      appliedShiftMinutes: preview.shiftMinutes,
+      remainingGapMinutes: remaining,
+      message: remaining > 0 ? '前移已应用，仍存在部分冲突' : '前移调整已应用'
+    };
   }
 
   private buildCompressionAffectedItems(selected: CompressionSelectionCandidate[], reducedMap: Map<number, number>): GeneratedTypeLiteralInterface_7[] {
@@ -4038,28 +4310,14 @@ export class TimelineViewModel {
     let currentCursor = startMinutes;
     for (let i = chainStartIndex; i < targetIndex; i++) {
       const item = this.events[i];
-
-
       if (i > chainStartIndex) {
-        if (item.pre_travel_min > 0) {
-          currentCursor += item.pre_travel_min;
-        }
-      } else {
-
-        if (item.lock_status !== 1 && item.pre_travel_min > 0) {
-          currentCursor += item.pre_travel_min;
-        }
+        currentCursor += this.resolveEffectiveTravelMinutes(item);
       }
-
-
       currentCursor += item.duration;
     }
 
-
     const targetItem = this.events[targetIndex];
-    if (targetItem.pre_travel_min > 0) {
-      currentCursor += targetItem.pre_travel_min;
-    }
+    currentCursor += this.resolveEffectiveTravelMinutes(targetItem);
 
     return currentCursor;
   }
