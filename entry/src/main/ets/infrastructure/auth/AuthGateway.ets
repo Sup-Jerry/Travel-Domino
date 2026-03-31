@@ -1,5 +1,13 @@
 import { AppConfig } from '../../common/utils/AppConfig';
-import { AuthApiResponse, AuthLoginResult, AuthMeResult, DeviceInfo, SocialCredential } from '../../domain/auth/AuthModels';
+import {
+  AuthApiResponse,
+  AuthLoginResult,
+  AuthMeResult,
+  DeviceInfo,
+  SocialCredential,
+  UpdateUsernamePayload,
+  UpdateUsernameResult
+} from '../../domain/auth/AuthModels';
 import { AuthService } from './AuthService';
 import { AuthApiClient } from './AuthApiClient';
 
@@ -11,6 +19,10 @@ class SocialLoginPayload {
   providerType: string = 'HUAWEI';
   credential: SocialCredential = new SocialCredential();
   deviceInfo: DeviceInfo = new DeviceInfo('', '', '');
+}
+
+class UpdateUsernameRequestPayload {
+  username: string = '';
 }
 
 export class AuthGateway {
@@ -49,5 +61,16 @@ export class AuthGateway {
     payload.credential = credential;
     payload.deviceInfo = deviceInfo;
     return AuthGateway.apiClient.post<AuthLoginResult>('/auth/social/login', payload);
+  }
+
+  static async updateUsername(accessToken: string, username: string): Promise<AuthApiResponse<UpdateUsernameResult>> {
+    if (AuthGateway.useMock()) {
+      const payload = new UpdateUsernamePayload();
+      payload.username = username;
+      return AuthService.getInstance().updateUsername(accessToken, payload);
+    }
+    const payload = new UpdateUsernameRequestPayload();
+    payload.username = username;
+    return AuthGateway.apiClient.patch<UpdateUsernameResult>('/auth/profile/username', payload, accessToken);
   }
 }

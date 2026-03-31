@@ -97,6 +97,20 @@ export class AuthSessionListItem {
   current: boolean = false;
 }
 
+export class UpdateUsernamePayload {
+  username: string = '';
+}
+
+export class UpdateUsernameResult {
+  userId: string = '';
+  nickname: string = '';
+  avatarUrl: string = '';
+  mobileMasked: string = '';
+  profileCompleted: boolean = false;
+  isGuest: boolean = false;
+  defaultLoginMethod: AuthProviderType = 'GUEST';
+}
+
 export class AuthApiResponse<T> {
   code: number = 0;
   message: string = 'ok';

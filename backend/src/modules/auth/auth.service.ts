@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/
 import * as jwt from 'jsonwebtoken';
 import { AppConfigService } from '../../config/app-config.service';
 import { PgService } from '../../config/pg.service';
-import { GuestCreateDto, SocialLoginDto } from './dto/auth.dto';
+import { GuestCreateDto, SocialLoginDto, UpdateUsernameDto } from './dto/auth.dto';
 
 interface SessionTokenPayload {
   userId: string;
@@ -19,8 +19,21 @@ interface AuthProfile {
   defaultLoginMethod: string;
 }
 
+interface UsernameSyncPort {
+  onUsernameChanged(userId: string, username: string): Promise<void>;
+}
+
+class NoopUsernameSyncPort implements UsernameSyncPort {
+  async onUsernameChanged(_userId: string, _username: string): Promise<void> {
+    return;
+  }
+}
+
 @Injectable()
 export class AuthService {
+  private static readonly USERNAME_PATTERN: RegExp = /^[\u4E00-\u9FFFa-zA-Z0-9_ ]+$/;
+  private readonly usernameSyncPort: UsernameSyncPort = new NoopUsernameSyncPort();
+
   constructor(
     private readonly config: AppConfigService,
     private readonly pg: PgService
@@ -31,7 +44,7 @@ export class AuthService {
       const userId = this.nextId('g');
       await query(
         `insert into user_account(user_id,nickname,avatar_url,mobile_masked,status,is_guest,profile_completed,default_login_method,register_time,last_login_time,mobile_bind_time)
-         values($1,'游客','','','ACTIVE',true,false,'GUEST',now(),now(),null)`,
+         values($1,'','','','ACTIVE',true,false,'GUEST',now(),now(),null)`,
         [userId]
       );
 
@@ -87,7 +100,7 @@ export class AuthService {
         await query(
           `insert into user_account(user_id,nickname,avatar_url,mobile_masked,status,is_guest,profile_completed,default_login_method,register_time,last_login_time,mobile_bind_time)
            values($1,$2,'','','ACTIVE',false,true,$3,now(),now(),null)`,
-          [userId, `用户${Date.now() % 100000}`, providerType]
+          [userId, this.buildDefaultUsername(), providerType]
         );
         await query(
           `insert into auth_identity(identity_id,user_id,provider_type,provider_uid,provider_open_id,provider_union_id,phone_number,bind_status,bind_time,last_used_time)
@@ -119,6 +132,22 @@ export class AuthService {
       const profile = await this.loadProfile(userId);
       return { user: profile, session };
     });
+  }
+
+  async updateUsername(accessToken: string, dto: UpdateUsernameDto): Promise<unknown> {
+    const session = await this.mustSession(accessToken);
+    const profile = await this.loadProfile(session.userId);
+    if (profile.isGuest) {
+      throw new BadRequestException('GUEST_USERNAME_UNSUPPORTED');
+    }
+
+    const username = this.normalizeAndValidateUsername(dto.username);
+    await this.pg.query(
+      `update user_account set nickname=$2, updated_at=now() where user_id=$1`,
+      [session.userId, username]
+    );
+    await this.usernameSyncPort.onUsernameChanged(session.userId, username);
+    return this.loadProfile(session.userId);
   }
 
   private async issueSession(
@@ -202,7 +231,23 @@ export class AuthService {
     };
   }
 
+  private normalizeAndValidateUsername(rawValue: string): string {
+    const normalized = String(rawValue || '').trim();
+    if (!normalized || normalized.length > 32) {
+      throw new BadRequestException('USERNAME_INVALID');
+    }
+    if (!AuthService.USERNAME_PATTERN.test(normalized)) {
+      throw new BadRequestException('USERNAME_INVALID');
+    }
+    return normalized;
+  }
+
+  private buildDefaultUsername(): string {
+    return `user_${Date.now() % 100000}`;
+  }
+
   private nextId(prefix: string): string {
     return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
   }
 }
+

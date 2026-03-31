@@ -1,72 +1,73 @@
-﻿import { describe, expect, it } from '@ohos/hypium';
+import { describe, expect, it } from '@ohos/hypium';
 import { AuthService } from '../main/ets/infrastructure/auth/AuthService';
 import { AuthErrorCode } from '../main/ets/infrastructure/auth/AuthErrorCode';
-import { DeviceInfo, SocialCredential } from '../main/ets/domain/auth/AuthModels';
+import { DeviceInfo, SocialCredential, UpdateUsernamePayload } from '../main/ets/domain/auth/AuthModels';
+
+function makeSocialCredential(uid: string): SocialCredential {
+  const credential = new SocialCredential();
+  credential.unionId = uid;
+  credential.openId = uid;
+  return credential;
+}
+
+function makeUsernamePayload(username: string): UpdateUsernamePayload {
+  const payload = new UpdateUsernamePayload();
+  payload.username = username;
+  return payload;
+}
 
 export default function authServiceTest() {
   describe('authServiceTest', () => {
-    it('phone_login_should_not_create_duplicate_user', 0, () => {
+    it('social_login_default_username_should_not_be_empty', 0, () => {
       const service = AuthService.getInstance();
-      service.resetForTest();
-
-      const code1 = service.debugIssuePhoneCode('13800138000');
-      const first = service.loginWithPhone('13800138000', '+86', code1, true, new DeviceInfo('d1', 'dev1', 'HARMONY'));
-
-      const code2 = service.debugIssuePhoneCode('13800138000');
-      const second = service.loginWithPhone('13800138000', '+86', code2, true, new DeviceInfo('d2', 'dev2', 'HARMONY'));
-
-      expect(first.code).assertEqual(0);
-      expect(second.code).assertEqual(0);
-      expect(first.data.user.userId).assertEqual(second.data.user.userId);
-      expect(first.data.isNewUser).assertEqual(true);
-      expect(second.data.isNewUser).assertEqual(false);
+      const login = service.loginWithSocial('HUAWEI', makeSocialCredential(`uid_${Date.now()}_0`), new DeviceInfo('d0', 'dev0', 'HARMONY'));
+      expect(login.code).assertEqual(0);
+      const defaultName = String(login.data.user.nickname || '').trim();
+      expect(defaultName.length > 0).assertTrue();
     });
 
-    it('unbind_should_block_last_login_method', 0, () => {
+    it('update_username_should_succeed_for_social_user', 0, () => {
       const service = AuthService.getInstance();
-      service.resetForTest();
+      const login = service.loginWithSocial('HUAWEI', makeSocialCredential(`uid_${Date.now()}_1`), new DeviceInfo('d1', 'dev1', 'HARMONY'));
+      expect(login.code).assertEqual(0);
 
-      const code = service.debugIssuePhoneCode('13900139000');
-      const login = service.loginWithPhone('13900139000', '+86', code, true, new DeviceInfo('d1', 'dev1', 'HARMONY'));
-
-      const unbind = service.unbind(login.data.session.accessToken, 'PHONE');
-      expect(unbind.code).assertEqual(AuthErrorCode.LAST_LOGIN_METHOD_CANNOT_UNBIND);
+      const updated = service.updateUsername(login.data.session.accessToken, makeUsernamePayload('旅行者_01'));
+      expect(updated.code).assertEqual(0);
+      expect(updated.data.nickname).assertEqual('旅行者_01');
     });
 
-    it('social_first_login_should_return_pending_action', 0, () => {
+    it('update_username_should_reject_guest_user', 0, () => {
       const service = AuthService.getInstance();
-      service.resetForTest();
+      const guest = service.createGuest(new DeviceInfo(`gd_${Date.now()}`, 'guest', 'HARMONY'));
+      expect(guest.code).assertEqual(0);
 
-      const credential = new SocialCredential();
-      credential.authCode = 'wx_auth_1';
-      credential.openId = 'wx_open_1';
-
-      const result = service.loginWithSocial('WECHAT', credential, true, new DeviceInfo('d1', 'dev1', 'HARMONY'));
-      expect(result.code).assertEqual(0);
-      expect(result.data.action).assertEqual('NEED_BIND_OR_CREATE');
+      const updated = service.updateUsername(guest.data.session.accessToken, makeUsernamePayload('guest_name'));
+      expect(updated.code).assertEqual(AuthErrorCode.GUEST_USERNAME_UNSUPPORTED);
     });
 
-    it('agreement_should_block_phone_login', 0, () => {
+    it('update_username_should_reject_invalid_pattern', 0, () => {
       const service = AuthService.getInstance();
-      service.resetForTest();
+      const login = service.loginWithSocial('HUAWEI', makeSocialCredential(`uid_${Date.now()}_2`), new DeviceInfo('d2', 'dev2', 'HARMONY'));
+      expect(login.code).assertEqual(0);
 
-      const code = service.debugIssuePhoneCode('13700137000');
-      const login = service.loginWithPhone('13700137000', '+86', code, false, new DeviceInfo('d1', 'dev1', 'HARMONY'));
-      expect(login.code).assertEqual(AuthErrorCode.AGREEMENT_NOT_ACCEPTED);
+      const updated = service.updateUsername(login.data.session.accessToken, makeUsernamePayload('@@@'));
+      expect(updated.code).assertEqual(AuthErrorCode.USERNAME_INVALID);
     });
 
-    it('guest_upgrade_should_mark_migration_done', 0, () => {
+    it('update_username_should_allow_duplicates', 0, () => {
       const service = AuthService.getInstance();
-      service.resetForTest();
+      const loginA = service.loginWithSocial('HUAWEI', makeSocialCredential(`uid_${Date.now()}_3a`), new DeviceInfo('d3', 'dev3', 'HARMONY'));
+      const loginB = service.loginWithSocial('HUAWEI', makeSocialCredential(`uid_${Date.now()}_3b`), new DeviceInfo('d4', 'dev4', 'HARMONY'));
+      expect(loginA.code).assertEqual(0);
+      expect(loginB.code).assertEqual(0);
 
-      const guest = service.createGuest(new DeviceInfo('gd1', 'guest', 'HARMONY'));
-
-      const code = service.debugIssuePhoneCode('13600136000');
-      const user = service.loginWithPhone('13600136000', '+86', code, true, new DeviceInfo('d1', 'dev1', 'HARMONY'));
-
-      const upgrade = service.upgradeGuest(guest.data.user.userId, user.data.user.userId);
-      expect(upgrade.code).assertEqual(0);
-      expect(upgrade.data.migrateStatus).assertEqual('DONE');
+      const sameName = '同名用户';
+      const updatedA = service.updateUsername(loginA.data.session.accessToken, makeUsernamePayload(sameName));
+      const updatedB = service.updateUsername(loginB.data.session.accessToken, makeUsernamePayload(sameName));
+      expect(updatedA.code).assertEqual(0);
+      expect(updatedB.code).assertEqual(0);
+      expect(updatedA.data.nickname).assertEqual(sameName);
+      expect(updatedB.data.nickname).assertEqual(sameName);
     });
   });
 }

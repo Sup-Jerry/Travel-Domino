@@ -1,10 +1,12 @@
 import { common } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { AuthErrorCode } from './AuthErrorCode';
 import { AuthLoginResult, DeviceInfo, SocialCredential } from '../../domain/auth/AuthModels';
 import { AuthResult, HuaweiCredential, LoginStatus, UserSession } from '../../domain/auth/AuthTypes';
 import { AuthGateway } from './AuthGateway';
 import { HuaweiAccountProvider } from './HuaweiAccountProvider';
 import { SessionManager } from './SessionManager';
+import { NoopUsernameSyncPort, UsernameSyncPort } from './UsernameSyncPort';
 
 export class CurrentUserBasicProfile {
   userId: string = '';
@@ -16,9 +18,11 @@ export class CurrentUserBasicProfile {
 export class AuthFacade {
   private static readonly LOG_DOMAIN: number = 0x0000;
   private static readonly LOG_TAG: string = 'AuthFacade';
+  private static readonly USERNAME_PATTERN: RegExp = /^[\u4E00-\u9FFFa-zA-Z0-9_ ]+$/;
   private static instance: AuthFacade = new AuthFacade();
   private readonly sessionManager: SessionManager = SessionManager.getInstance();
   private readonly huaweiProvider: HuaweiAccountProvider = HuaweiAccountProvider.getInstance();
+  private readonly usernameSyncPort: UsernameSyncPort = new NoopUsernameSyncPort();
   private appContext: common.Context | null = null;
 
   public static getInstance(): AuthFacade {
@@ -139,6 +143,42 @@ export class AuthFacade {
     hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] logout set silent_block=1(memory_only)');
   }
 
+  public async updateUsername(username: string): Promise<AuthResult<CurrentUserBasicProfile>> {
+    const session = this.sessionManager.load();
+    if (!session) {
+      return this.profileFailure(AuthErrorCode.SESSION_EXPIRED, 'session_expired');
+    }
+    if (session.isGuest) {
+      return this.profileFailure(AuthErrorCode.GUEST_USERNAME_UNSUPPORTED, 'guest_username_unsupported');
+    }
+
+    const normalized = this.normalizeAndValidateUsername(username);
+    if (!normalized) {
+      return this.profileFailure(AuthErrorCode.USERNAME_INVALID, 'username_invalid');
+    }
+
+    const response = await AuthGateway.updateUsername(session.accessToken, normalized);
+    if (response.code !== 0) {
+      return this.profileFailure(response.code, response.message || 'update_username_failed');
+    }
+
+    const profile = new CurrentUserBasicProfile();
+    profile.userId = String(response.data.userId || session.userId || '');
+    profile.nickname = String((response.data.nickname || '').trim());
+    profile.avatarUrl = String(response.data.avatarUrl || '');
+    profile.isGuest = Boolean(response.data.isGuest);
+    await this.usernameSyncPort.onUsernameChanged(profile.userId, profile.nickname);
+
+    const result = new AuthResult<CurrentUserBasicProfile>();
+    result.success = true;
+    result.code = 0;
+    result.message = 'ok';
+    result.source = 'LOCAL_SESSION';
+    result.status = LoginStatus.AUTHENTICATED;
+    result.data = profile;
+    return result;
+  }
+
   private async exchangeHuaweiCredential(credential: HuaweiCredential, source: 'HUAWEI_BUTTON' | 'HUAWEI_SILENT'): Promise<AuthResult<UserSession>> {
     const socialCredential = new SocialCredential();
     socialCredential.authCode = credential.authorizationCode;
@@ -253,5 +293,27 @@ export class AuthFacade {
       return error.message || 'auth_error';
     }
     return 'auth_error';
+  }
+
+  private normalizeAndValidateUsername(rawValue: string): string {
+    const normalized = String(rawValue || '').trim();
+    if (!normalized || normalized.length > 32) {
+      return '';
+    }
+    if (!AuthFacade.USERNAME_PATTERN.test(normalized)) {
+      return '';
+    }
+    return normalized;
+  }
+
+  private profileFailure(code: number, message: string): AuthResult<CurrentUserBasicProfile> {
+    const result = new AuthResult<CurrentUserBasicProfile>();
+    result.success = false;
+    result.code = code;
+    result.message = message;
+    result.source = 'LOCAL_SESSION';
+    result.status = LoginStatus.LOGIN_FAILED;
+    result.data = null;
+    return result;
   }
 }

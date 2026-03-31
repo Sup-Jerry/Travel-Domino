@@ -15,6 +15,7 @@ const DEFAULT_USER_NAME = '游客用户';
 struct MyPage {
   private static readonly LOG_DOMAIN: number = 0x0000;
   private static readonly LOG_TAG: string = 'MyPage';
+  private static readonly USERNAME_PATTERN: RegExp = /^[\u4E00-\u9FFFa-zA-Z0-9_ ]+$/;
   @State userName: string = DEFAULT_USER_NAME;
   @State loadingProfile: boolean = false;
   @State actionLoading: boolean = false;
@@ -24,6 +25,8 @@ struct MyPage {
   @State avatarBusy: boolean = false;
   @State currentUserId: string = 'guest_local';
   @State currentRemoteAvatarUrl: string = '';
+  @State showUsernameEditor: boolean = false;
+  @State usernameDraft: string = '';
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
   private readonly authFacade: AuthFacade = AuthFacade.getInstance();
   private avatarService: AvatarService | null = null;
@@ -124,6 +127,46 @@ struct MyPage {
     }
   }
 
+  private normalizeAndValidateUsername(rawValue: string): string {
+    const normalized = rawValue.trim();
+    if (!normalized || normalized.length > 32) {
+      return '';
+    }
+    if (!MyPage.USERNAME_PATTERN.test(normalized)) {
+      return '';
+    }
+    return normalized;
+  }
+
+  private openUsernameEditor(): void {
+    this.usernameDraft = this.userName;
+    this.showUsernameEditor = true;
+  }
+
+  private async saveUsername(): Promise<void> {
+    if (this.actionLoading || this.loadingProfile || this.isGuestUser) {
+      return;
+    }
+    const username = this.normalizeAndValidateUsername(this.usernameDraft);
+    if (!username) {
+      this.toast('用户名仅支持中英文、数字、下划线和空格，长度 1-32');
+      return;
+    }
+
+    const hostContext = this.getUIContext().getHostContext() as common.Context;
+    this.authFacade.bindContext(hostContext);
+    this.actionLoading = true;
+    const result = await this.authFacade.updateUsername(username);
+    this.actionLoading = false;
+    if (!result.success || !result.data) {
+      this.toast(`修改用户名失败：${result.message}`);
+      return;
+    }
+    this.userName = result.data.nickname || DEFAULT_USER_NAME;
+    this.showUsernameEditor = false;
+    this.toast('用户名已更新');
+  }
+
   private async loginWithHuaweiFromMyPage(credential: HuaweiCredential): Promise<void> {
     if (!this.ensureAgreement()) {
       hilog.warn(MyPage.LOG_DOMAIN, MyPage.LOG_TAG, '[LOGIN_TRACE][my] blocked by agreement');
@@ -222,6 +265,49 @@ struct MyPage {
             .fontColor(this.getThemePalette().textPrimary)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis });
+
+          if (!this.isGuestUser) {
+            Button(this.showUsernameEditor ? '取消修改' : '修改用户名')
+              .height(32)
+              .padding({ left: 14, right: 14 })
+              .borderRadius(16)
+              .backgroundColor(this.getThemePalette().cardBgSoft)
+              .fontColor(this.getThemePalette().textPrimary)
+              .fontSize(12)
+              .onClick(() => {
+                if (this.showUsernameEditor) {
+                  this.showUsernameEditor = false;
+                  return;
+                }
+                this.openUsernameEditor();
+              });
+          }
+
+          if (this.showUsernameEditor && !this.isGuestUser) {
+            Column({ space: 8 }) {
+              TextInput({ text: this.usernameDraft, placeholder: '输入新用户名（1-32）' })
+                .maxLength(32)
+                .onChange((value: string) => {
+                  this.usernameDraft = value;
+                })
+                .height(40)
+                .width('100%')
+                .backgroundColor(this.getThemePalette().cardBgSoft)
+                .borderRadius(10)
+                .padding({ left: 10, right: 10 });
+
+              Button(this.actionLoading ? '保存中...' : '保存用户名')
+                .width('100%')
+                .height(38)
+                .backgroundColor(this.getThemePalette().primary)
+                .fontColor(Color.White)
+                .borderRadius(10)
+                .onClick(() => {
+                  void this.saveUsername();
+                });
+            }
+            .width('100%');
+          }
         }
         .width('100%')
         .padding({ top: 26, bottom: 26 })

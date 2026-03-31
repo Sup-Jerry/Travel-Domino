@@ -52,3 +52,9 @@ export class SocialLoginDto {
   @IsObject()
   deviceInfo!: DeviceInfoDto;
 }
+
+export class UpdateUsernameDto {
+  @IsString()
+  @IsNotEmpty()
+  username!: string;
+}

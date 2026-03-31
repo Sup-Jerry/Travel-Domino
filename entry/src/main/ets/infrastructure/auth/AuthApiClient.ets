@@ -48,4 +48,23 @@ export class AuthApiClient {
     const body = JSON.parse(String(response.result)) as ApiEnvelope<T>;
     return body;
   }
+
+  async patch<T>(path: string, payload: object, accessToken: string): Promise<ApiEnvelope<T>> {
+    const url = `${AppConfig.AUTH_API_BASE_URL}${path}`;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`
+    };
+
+    const response = await HttpRequestHelper.request(AuthApiClient.OWNER_TAG, `PATCH ${path}`, url, {
+      method: http.RequestMethod.POST,
+      header: headers,
+      extraData: JSON.stringify(payload),
+      readTimeout: 10000,
+      connectTimeout: 5000
+    });
+
+    const body = JSON.parse(String(response.result)) as ApiEnvelope<T>;
+    return body;
+  }
 }

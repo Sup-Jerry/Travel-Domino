@@ -4,6 +4,8 @@ import {
   AuthLoginResult,
   AuthMeResult,
   AuthSessionPayload,
+  UpdateUsernamePayload,
+  UpdateUsernameResult,
   SocialCredential,
   AuthUserProfile,
   DeviceInfo
@@ -25,6 +27,7 @@ interface UserRecord {
 
 export class AuthService {
   private static instance: AuthService = new AuthService();
+  private static readonly USERNAME_PATTERN: RegExp = /^[\u4E00-\u9FFFa-zA-Z0-9_ ]+$/;
 
   private idSeq: number = 1000;
   private users: UserRecord[] = [];
@@ -39,7 +42,7 @@ export class AuthService {
     const userId = `u_${this.nextId()}`;
     const user: UserRecord = {
       userId,
-      nickname: `游客${this.idSeq}`,
+      nickname: '',
       isGuest: true
     };
     this.users.push(user);
@@ -109,7 +112,7 @@ export class AuthService {
     if (!user) {
       user = {
         userId: `u_${this.nextId()}`,
-        nickname: `华为用户${this.idSeq}`,
+        nickname: this.buildDefaultUsername(),
         isGuest: false,
         providerUid: uid,
         providerType: providerType
@@ -143,13 +146,43 @@ export class AuthService {
     return this.ok(result);
   }
 
+  public updateUsername(accessToken: string, payload: UpdateUsernamePayload): AuthApiResponse<UpdateUsernameResult> {
+    const session = this.sessions.find((item: SessionRecord) => item.accessToken === accessToken) || null;
+    if (!session || Date.now() >= session.expireAt) {
+      return this.fail<UpdateUsernameResult>(AuthErrorCode.SESSION_EXPIRED, 'session_expired', new UpdateUsernameResult());
+    }
+    const user = this.users.find((item: UserRecord) => item.userId === session.userId) || null;
+    if (!user) {
+      return this.fail<UpdateUsernameResult>(AuthErrorCode.ACCOUNT_NOT_FOUND, 'user_not_found', new UpdateUsernameResult());
+    }
+    if (user.isGuest) {
+      return this.fail<UpdateUsernameResult>(AuthErrorCode.GUEST_USERNAME_UNSUPPORTED, 'guest_username_unsupported', new UpdateUsernameResult());
+    }
+
+    const username = this.normalizeAndValidateUsername(payload.username);
+    if (!username) {
+      return this.fail<UpdateUsernameResult>(AuthErrorCode.USERNAME_INVALID, 'username_invalid', new UpdateUsernameResult());
+    }
+    user.nickname = username;
+
+    const result = new UpdateUsernameResult();
+    result.userId = user.userId;
+    result.nickname = user.nickname;
+    result.avatarUrl = '';
+    result.mobileMasked = '';
+    result.profileCompleted = true;
+    result.isGuest = false;
+    result.defaultLoginMethod = 'CUSTOM';
+    return this.ok(result);
+  }
+
   private buildGuestFallbackByToken(accessToken: string): AuthMeResult | null {
     if (!accessToken || !accessToken.startsWith('guest_access_')) {
       return null;
     }
     const me = new AuthMeResult();
     me.userId = 'guest_local';
-    me.nickname = '游客用户';
+    me.nickname = '';
     me.isGuest = true;
     me.defaultLoginMethod = 'GUEST';
     return me;
@@ -158,6 +191,21 @@ export class AuthService {
   private nextId(): number {
     this.idSeq += 1;
     return this.idSeq;
+  }
+
+  private normalizeAndValidateUsername(rawValue: string): string {
+    const normalized = String(rawValue || '').trim();
+    if (!normalized || normalized.length > 32) {
+      return '';
+    }
+    if (!AuthService.USERNAME_PATTERN.test(normalized)) {
+      return '';
+    }
+    return normalized;
+  }
+
+  private buildDefaultUsername(): string {
+    return `user_${Date.now() % 100000}`;
   }
 
   private ok<T>(data: T): AuthApiResponse<T> {
@@ -176,3 +224,4 @@ export class AuthService {
     return response;
   }
 }
+
