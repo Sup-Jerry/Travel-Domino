@@ -26,5 +26,10 @@ export default function preferenceManagerTest() {
       expect(PreferenceManager.normalizeWeatherPreferenceLevel(-1)).assertEqual(0);
       expect(PreferenceManager.normalizeWeatherPreferenceLevel(99)).assertEqual(2);
     });
+
+    it('avatar_profile_key_should_be_scoped_by_userid', 0, () => {
+      expect(PreferenceManager.buildAvatarProfileKey('u_123')).assertEqual('avatarProfile:u_123');
+      expect(PreferenceManager.buildAvatarProfileKey('')).assertEqual('avatarProfile:guest_local');
+    });
   });
 }

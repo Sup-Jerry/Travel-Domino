@@ -4,6 +4,7 @@ import { common } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { DEFAULT_WEATHER_USER_PREFERENCE, WeatherPreferenceLevel, WeatherUserPreference } from '../../domain/services/WeatherModels';
 import { DEFAULT_USER_PROFILE, UserStrategyProfile } from '../../domain/strategy/UserStrategyProfile';
+import { AvatarProfile } from '../../domain/auth/AvatarModels';
 
 const TAG = 'PreferenceManager';
 
@@ -14,6 +15,15 @@ interface UserStrategyProfileSnapshot {
   avgEnergy?: number;
   modeFrequency?: string;
   sampleCount?: number;
+  updatedAt?: number;
+}
+
+interface AvatarProfileSnapshot {
+  userId?: string;
+  localUri?: string;
+  compressedUri?: string;
+  cloudUrl?: string;
+  uploadState?: string;
   updatedAt?: number;
 }
 
@@ -38,6 +48,7 @@ export class PreferenceManager {
   static readonly KEY_USER_STRATEGY_PROFILE = 'userStrategyProfile';
   static readonly KEY_AUTH_GUEST_CHOSEN = 'authGuestChosen';
   static readonly KEY_AUTH_BLOCK_SILENT_AFTER_LOGOUT = 'authBlockSilentAfterLogout';
+  static readonly KEY_AVATAR_PROFILE_PREFIX = 'avatarProfile:';
 
   // 新增：是否允许调用高德路线 API
   static readonly KEY_ENABLE_AMAP_ROUTE_API = 'enableAmapRouteApi';
@@ -270,6 +281,47 @@ export class PreferenceManager {
 
   public async setSilentLoginBlockedAfterLogout(blocked: boolean): Promise<void> {
     await this.setValue(PreferenceManager.KEY_AUTH_BLOCK_SILENT_AFTER_LOGOUT, blocked);
+  }
+
+  public static buildAvatarProfileKey(userId: string): string {
+    const safeUserId = (userId || '').trim().length > 0 ? userId.trim() : 'guest_local';
+    return `${PreferenceManager.KEY_AVATAR_PROFILE_PREFIX}${safeUserId}`;
+  }
+
+  public async getAvatarProfile(userId: string): Promise<AvatarProfile> {
+    const safeUserId = (userId || '').trim().length > 0 ? userId.trim() : 'guest_local';
+    const raw = await this.getValue(PreferenceManager.buildAvatarProfileKey(safeUserId), '');
+    const fallback = new AvatarProfile();
+    fallback.userId = safeUserId;
+    if (typeof raw !== 'string' || raw.length === 0) {
+      return fallback;
+    }
+    try {
+      const parsed = JSON.parse(raw) as AvatarProfileSnapshot;
+      const profile = new AvatarProfile();
+      profile.userId = typeof parsed.userId === 'string' && parsed.userId.length > 0 ? parsed.userId : safeUserId;
+      profile.localUri = typeof parsed.localUri === 'string' ? parsed.localUri : '';
+      profile.compressedUri = typeof parsed.compressedUri === 'string' ? parsed.compressedUri : '';
+      profile.cloudUrl = typeof parsed.cloudUrl === 'string' ? parsed.cloudUrl : '';
+      const state = typeof parsed.uploadState === 'string' ? parsed.uploadState : 'EMPTY';
+      profile.uploadState = state as 'EMPTY' | 'LOCAL_ONLY' | 'PENDING_IMPLEMENTATION' | 'SYNCED';
+      profile.updatedAt = Number.isFinite(Number(parsed.updatedAt)) ? Number(parsed.updatedAt) : 0;
+      return profile;
+    } catch (_error) {
+      return fallback;
+    }
+  }
+
+  public async setAvatarProfile(profile: AvatarProfile): Promise<void> {
+    const safeUserId = (profile.userId || '').trim().length > 0 ? profile.userId.trim() : 'guest_local';
+    const safe = new AvatarProfile();
+    safe.userId = safeUserId;
+    safe.localUri = profile.localUri || '';
+    safe.compressedUri = profile.compressedUri || '';
+    safe.cloudUrl = profile.cloudUrl || '';
+    safe.uploadState = profile.uploadState || 'EMPTY';
+    safe.updatedAt = Number(profile.updatedAt) > 0 ? Number(profile.updatedAt) : Date.now();
+    await this.setValue(PreferenceManager.buildAvatarProfileKey(safeUserId), JSON.stringify(safe));
   }
 
   private cloneDefaultUserProfile(): UserStrategyProfile {

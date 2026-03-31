@@ -6,6 +6,13 @@ import { AuthGateway } from './AuthGateway';
 import { HuaweiAccountProvider } from './HuaweiAccountProvider';
 import { SessionManager } from './SessionManager';
 
+export class CurrentUserBasicProfile {
+  userId: string = '';
+  nickname: string = '';
+  avatarUrl: string = '';
+  isGuest: boolean = true;
+}
+
 export class AuthFacade {
   private static readonly LOG_DOMAIN: number = 0x0000;
   private static readonly LOG_TAG: string = 'AuthFacade';
@@ -37,6 +44,29 @@ export class AuthFacade {
     }
     const nickname = (me.data.nickname || '').trim();
     return nickname.length > 0 ? nickname : defaultName;
+  }
+
+  public async getCurrentUserProfile(defaultName: string): Promise<CurrentUserBasicProfile> {
+    const profile = new CurrentUserBasicProfile();
+    const session = this.sessionManager.load();
+    if (!session) {
+      profile.userId = 'guest_local';
+      profile.nickname = defaultName;
+      profile.isGuest = true;
+      return profile;
+    }
+    const me = await AuthGateway.me(session.accessToken);
+    if (me.code !== 0) {
+      profile.userId = session.userId || 'guest_local';
+      profile.nickname = defaultName;
+      profile.isGuest = session.isGuest !== false;
+      return profile;
+    }
+    profile.userId = String(me.data.userId || session.userId || 'guest_local');
+    profile.nickname = String((me.data.nickname || '').trim() || defaultName);
+    profile.avatarUrl = String(me.data.avatarUrl || '');
+    profile.isGuest = Boolean(me.data.isGuest);
+    return profile;
   }
 
   public async silentLogin(): Promise<AuthResult<UserSession>> {
