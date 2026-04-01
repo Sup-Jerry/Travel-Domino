@@ -15,7 +15,7 @@ class StoredSession {
 }
 
 export class AuthSessionStore {
-  public static save(session: AuthSessionPayload): void {
+  private static toStoredSession(session: AuthSessionPayload): StoredSession {
     const raw = new StoredSession();
     raw.accountId = session.accountId || '';
     raw.userId = session.userId || '';
@@ -25,11 +25,10 @@ export class AuthSessionStore {
     raw.refreshToken = session.refreshToken;
     raw.sessionId = session.sessionId;
     raw.expireAt = session.expireAt;
-    AppStorage.setOrCreate(AppStorageKeys.AUTH_SESSION_JSON, JSON.stringify(raw));
+    return raw;
   }
 
-  public static load(): StoredSession | null {
-    const rawText = AppStorage.get<string>(AppStorageKeys.AUTH_SESSION_JSON) || '';
+  private static parseStoredSession(rawText: string): AuthSessionPayload | null {
     if (!rawText) {
       return null;
     }
@@ -38,10 +37,29 @@ export class AuthSessionStore {
       if (!parsed.accessToken || !parsed.refreshToken || !parsed.sessionId) {
         return null;
       }
-      return parsed;
+      const payload = new AuthSessionPayload();
+      payload.accountId = parsed.accountId || '';
+      payload.userId = parsed.userId || '';
+      payload.isGuest = parsed.isGuest === true;
+      payload.loginMethod = parsed.loginMethod || '';
+      payload.accessToken = parsed.accessToken;
+      payload.refreshToken = parsed.refreshToken;
+      payload.sessionId = parsed.sessionId;
+      payload.expireAt = Number(parsed.expireAt);
+      return payload;
     } catch (_error) {
       return null;
     }
+  }
+
+  public static save(session: AuthSessionPayload): void {
+    const raw = AuthSessionStore.toStoredSession(session);
+    AppStorage.setOrCreate(AppStorageKeys.AUTH_SESSION_JSON, JSON.stringify(raw));
+  }
+
+  public static load(): AuthSessionPayload | null {
+    const rawText = AppStorage.get<string>(AppStorageKeys.AUTH_SESSION_JSON) || '';
+    return AuthSessionStore.parseStoredSession(rawText);
   }
 
   public static getAccessToken(): string {
@@ -124,5 +142,25 @@ export class AuthSessionStore {
       AuthSessionStore.markSilentLoginBlockedAfterLogout();
     }
     return blocked;
+  }
+
+  public static async saveSessionPersisted(context: common.Context, session: AuthSessionPayload): Promise<void> {
+    const raw = AuthSessionStore.toStoredSession(session);
+    const pref = PreferenceManager.getInstance();
+    await pref.init(context);
+    await pref.setSessionCacheJson(JSON.stringify(raw));
+  }
+
+  public static async loadSessionPersisted(context: common.Context): Promise<AuthSessionPayload | null> {
+    const pref = PreferenceManager.getInstance();
+    await pref.init(context);
+    const rawText = await pref.getSessionCacheJson();
+    return AuthSessionStore.parseStoredSession(rawText);
+  }
+
+  public static async clearSessionPersisted(context: common.Context): Promise<void> {
+    const pref = PreferenceManager.getInstance();
+    await pref.init(context);
+    await pref.setSessionCacheJson('');
   }
 }

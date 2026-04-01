@@ -4,6 +4,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AuthResult, HuaweiCredential, UserSession } from '../domain/auth/AuthTypes';
 import { AuthFacade } from '../infrastructure/auth/AuthFacade';
 import { HuaweiAccountLoginButton } from './components/auth/HuaweiAccountLoginButton';
+import { ProfileViewModel } from '../viewmodel/ProfileViewModel';
 
 @Entry
 @Component
@@ -29,6 +30,36 @@ struct LoginPage {
 
   private async replaceUrl(url: string): Promise<void> {
     await this.getUIContext().getRouter().replaceUrl({ url: url });
+  }
+
+  private async ensureCloudProfile(hostContext: common.Context, session: UserSession | null): Promise<void> {
+    if (!session) {
+      return;
+    }
+    const accountId = String(session.accountId || '').trim();
+    if (!accountId) {
+      return;
+    }
+    try {
+      const profileViewModel = ProfileViewModel.getInstance();
+      profileViewModel.bindContext(hostContext);
+      const profile = await profileViewModel.ensureProfile(accountId);
+      if (profile) {
+        hilog.info(
+          LoginPage.LOG_DOMAIN,
+          LoginPage.LOG_TAG,
+          `[PROFILE_TRACE][page] ensureProfile ok accountId=${accountId}, username=${profile.username}`
+        );
+        return;
+      }
+      hilog.warn(
+        LoginPage.LOG_DOMAIN,
+        LoginPage.LOG_TAG,
+        `[PROFILE_TRACE][page] ensureProfile empty accountId=${accountId}, state=${profileViewModel.getState()}`
+      );
+    } catch (error) {
+      hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[PROFILE_TRACE][page] ensureProfile fail reason=${JSON.stringify(error)}`);
+    }
   }
 
   private async loginWithHuaweiButton(credential: HuaweiCredential): Promise<void> {
@@ -60,6 +91,7 @@ struct LoginPage {
       return;
     }
     hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] login success source=${result.source}`);
+    await this.ensureCloudProfile(hostContext, result.data);
     this.toast('登录成功');
     await this.replaceUrl('pages/PlanListPage');
   }
@@ -88,6 +120,7 @@ struct LoginPage {
       return;
     }
     hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] api_fallback success source=${result.source}`);
+    await this.ensureCloudProfile(hostContext, result.data);
     this.toast('登录成功');
     await this.replaceUrl('pages/PlanListPage');
   }

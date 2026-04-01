@@ -238,10 +238,10 @@ export class AuthService {
          ua.is_guest,
          ua.default_login_method,
          ua.status,
-         coalesce(nullif(ai.provider_union_id, ''), nullif(ai.provider_open_id, ''), '') as account_id
+         coalesce(nullif(ai.provider_union_id, ''), nullif(ai.provider_open_id, ''), nullif(ai.provider_uid, ''), '') as account_id
        from user_account ua
        left join lateral (
-         select provider_open_id, provider_union_id
+         select provider_open_id, provider_union_id, provider_uid
          from auth_identity
          where user_id = ua.user_id and provider_type='HUAWEI' and bind_status='BOUND'
          order by last_used_time desc, created_at desc

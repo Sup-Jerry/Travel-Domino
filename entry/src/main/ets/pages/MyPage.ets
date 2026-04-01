@@ -5,8 +5,10 @@ import { promptAction } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { HuaweiCredential } from '../domain/auth/AuthTypes';
 import { AuthFacade } from '../infrastructure/auth/AuthFacade';
+import { SessionManager } from '../infrastructure/auth/SessionManager';
 import { HuaweiAccountLoginButton } from './components/auth/HuaweiAccountLoginButton';
 import { AvatarService } from '../infrastructure/avatar/AvatarService';
+import { ProfileViewModel } from '../viewmodel/ProfileViewModel';
 
 const DEFAULT_USER_NAME = '游客用户';
 
@@ -22,6 +24,7 @@ struct MyPage {
   @State isGuestUser: boolean = true;
   @State agreementAccepted: boolean = false;
   @State avatarDisplayUri: string = '';
+  @State useDefaultAvatar: boolean = false;
   @State avatarBusy: boolean = false;
   @State currentUserId: string = 'guest_local';
   @State currentRemoteAvatarUrl: string = '';
@@ -57,18 +60,44 @@ struct MyPage {
     }
     const hostContext = this.getUIContext().getHostContext() as common.Context;
     this.authFacade.bindContext(hostContext);
+    const profileViewModel = ProfileViewModel.getInstance();
+    profileViewModel.bindContext(hostContext);
     if (!this.avatarService) {
       this.avatarService = AvatarService.createDefault(hostContext);
     }
     this.loadingProfile = true;
     try {
       const profile = await this.authFacade.getCurrentUserProfile(DEFAULT_USER_NAME);
+      const sessionAccountId = SessionManager.getInstance().getCurrentAccountId();
       this.isGuestUser = profile.isGuest;
       this.userName = profile.nickname;
-      this.currentUserId = profile.userId;
+      this.currentUserId = sessionAccountId || profile.accountId || profile.userId || 'guest_local';
       this.currentRemoteAvatarUrl = profile.avatarUrl;
+      this.useDefaultAvatar = false;
+
+      const accountId = String(sessionAccountId || profile.accountId || '').trim();
+      if (!profile.isGuest && accountId.length > 0) {
+        const cloudProfile = await profileViewModel.bootstrap(accountId);
+        if (cloudProfile) {
+          this.userName = cloudProfile.username || this.userName;
+          this.currentUserId = cloudProfile.accountId;
+          this.currentRemoteAvatarUrl = cloudProfile.avatarPath;
+          if (cloudProfile.avatarPath === ProfileViewModel.DEFAULT_AVATAR_PATH) {
+            this.useDefaultAvatar = true;
+            this.avatarDisplayUri = '';
+            return;
+          }
+          if (this.avatarService) {
+            const avatarProfile = await this.avatarService.loadAvatarProfile(cloudProfile.accountId, cloudProfile.avatarPath);
+            this.avatarDisplayUri = this.avatarService.resolveDisplayUri(avatarProfile);
+            this.useDefaultAvatar = false;
+            return;
+          }
+        }
+      }
+
       if (this.avatarService) {
-        const avatarProfile = await this.avatarService.loadAvatarProfile(profile.userId, profile.avatarUrl);
+        const avatarProfile = await this.avatarService.loadAvatarProfile(this.currentUserId, this.currentRemoteAvatarUrl);
         this.avatarDisplayUri = this.avatarService.resolveDisplayUri(avatarProfile);
       }
     } catch (_error) {
@@ -77,6 +106,7 @@ struct MyPage {
       this.currentUserId = 'guest_local';
       this.currentRemoteAvatarUrl = '';
       this.avatarDisplayUri = '';
+      this.useDefaultAvatar = false;
     } finally {
       this.loadingProfile = false;
     }
@@ -104,6 +134,7 @@ struct MyPage {
       }
       this.avatarDisplayUri = this.avatarService.resolveDisplayUri(profile);
       this.currentRemoteAvatarUrl = profile.cloudUrl;
+      this.useDefaultAvatar = false;
       this.toast('头像已更新（本地）');
     } catch (_error) {
       this.toast('头像选择失败，请稍后重试');
@@ -118,8 +149,10 @@ struct MyPage {
     this.actionLoading = true;
     try {
       await this.authFacade.logout();
+      ProfileViewModel.getInstance().reset();
       this.avatarDisplayUri = '';
       this.currentRemoteAvatarUrl = '';
+      this.useDefaultAvatar = false;
       this.toast('已退出登录');
       await this.getUIContext().getRouter().replaceUrl({ url: 'pages/LoginPage' });
     } finally {
@@ -161,6 +194,12 @@ struct MyPage {
     if (!result.success || !result.data) {
       this.toast(`修改用户名失败：${result.message}`);
       return;
+    }
+    const accountId = String(this.currentUserId || '').trim();
+    if (accountId.length > 0) {
+      const profileViewModel = ProfileViewModel.getInstance();
+      profileViewModel.bindContext(hostContext);
+      void profileViewModel.updateUsername(accountId, username);
     }
     this.userName = result.data.nickname || DEFAULT_USER_NAME;
     this.showUsernameEditor = false;
@@ -223,7 +262,13 @@ struct MyPage {
               .height(84)
               .fill(this.getThemePalette().cardBgSoft);
 
-            if (this.avatarDisplayUri) {
+            if (this.useDefaultAvatar) {
+              Image($r('app.media.headphoto'))
+                .width(84)
+                .height(84)
+                .borderRadius(42)
+                .objectFit(ImageFit.Cover);
+            } else if (this.avatarDisplayUri) {
               Image(this.avatarDisplayUri)
                 .width(84)
                 .height(84)

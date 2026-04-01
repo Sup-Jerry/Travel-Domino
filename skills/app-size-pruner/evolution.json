@@ -1,0 +1,15 @@
+{
+  "last_updated": "2026-03-15T20:34:42.344849",
+  "preferences": [
+    "When user asks to clean project, run preview first and explicitly explain MinSizeMB threshold impact before apply.",
+    "When user reports remaining size after cleanup, provide top directory size breakdown first, then offer safe second pass."
+  ],
+  "fixes": [
+    "Default MinSizeMB 20 can miss many 1-20MB build artifacts; run a second scan with MinSizeMB 1 for safe whitelist cleanup when user still needs more space.",
+    "After cleanup, explicitly explain that .git and dependency folders such as oh_modules or node_modules are expected remaining size and are not safe-garbage targets by default."
+  ],
+  "contexts": [
+    "Workspace is often a Git repo on Windows PowerShell; safe cleanup must keep Git-tracked files untouched."
+  ],
+  "custom_prompts": "For project cleanup tasks, always execute in this order: preview -> apply -> size breakdown verification. If user still needs more space, run a low-threshold safe pass with MinSizeMB 1 and report both per-round and cumulative freed space with report file paths."
+}

@@ -3,6 +3,7 @@ import { SettingsSubPageHeader } from './components/views/SettingsItems';
 import { common } from '@kit.AbilityKit';
 import { promptAction } from '@kit.ArkUI';
 import { AuthFacade } from '../infrastructure/auth/AuthFacade';
+import { ProfileViewModel } from '../viewmodel/ProfileViewModel';
 
 @Entry
 @Component
@@ -18,6 +19,7 @@ struct SettingsAccountSecurityPage {
     const hostContext = this.getUIContext().getHostContext() as common.Context;
     this.authFacade.bindContext(hostContext);
     await this.authFacade.logout();
+    ProfileViewModel.getInstance().reset();
     promptAction.openToast({ message: '已退出登录' });
     await this.getUIContext().getRouter().replaceUrl({ url: 'pages/LoginPage' });
   }

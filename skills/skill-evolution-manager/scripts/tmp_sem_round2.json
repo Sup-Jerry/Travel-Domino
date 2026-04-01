@@ -1,0 +1,1 @@
+{"preferences":["当用户要求复盘+迭代+推送+瘦身时，执行顺序固定：代码迭代 -> 验证 -> 经验沉淀 -> 瘦身 -> 提交推送。"],"fixes":["skill-evolution 的 JSON 写入必须使用无 BOM UTF-8，避免 merge_evolution 解析失败。"],"custom_prompts":"复盘输出先给结论闭环，再给证据（命令、日志、提交号、瘦身报告）。"}

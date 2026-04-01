@@ -19,6 +19,8 @@ import { DateUtil } from '../common/utils/DateUtil';
 import { ThemeCenter, ThemeMode } from '../common/utils/ThemeCenter';
 import { AppStorageKeys } from '../common/constants/AppStorageKeys';
 import { AppStartupCoordinator } from '../infrastructure/auth/AppStartupCoordinator';
+import { AuthFacade } from '../infrastructure/auth/AuthFacade';
+import { ProfileViewModel } from '../viewmodel/ProfileViewModel';
 
 const DOMAIN = 0x0000;
 const TAG = 'EntryAbility';
@@ -62,13 +64,33 @@ export default class EntryAbility extends UIAbility {
   }
 
   private async bootstrapUserContext(): Promise<void> {
-    const startup = await this.startupCoordinator.checkStartupAuth();
-    if (startup.success && startup.data) {
-      const accountId = startup.data.accountId || '';
-      hilog.info(DOMAIN, TAG, `[LOGIN_TRACE][bootstrap] authenticated accountId=${accountId}`);
-      return;
+    try {
+      const authFacade = AuthFacade.getInstance();
+      authFacade.bindContext(this.context);
+      const profileViewModel = ProfileViewModel.getInstance();
+      profileViewModel.bindContext(this.context);
+      const startup = await this.startupCoordinator.checkStartupAuth();
+      if (startup.success && startup.data) {
+        const accountId = startup.data.accountId || '';
+        if (accountId.trim().length > 0) {
+          await profileViewModel.bootstrap(accountId);
+        }
+        hilog.info(
+          DOMAIN,
+          TAG,
+          `[LOGIN_TRACE][bootstrap] authenticated accountId=${accountId}, source=${startup.source}, message=${startup.message}`
+        );
+        return;
+      }
+      profileViewModel.reset();
+      hilog.info(
+        DOMAIN,
+        TAG,
+        `[LOGIN_TRACE][bootstrap] unauthenticated code=${startup.code}, source=${startup.source}, message=${startup.message}`
+      );
+    } catch (error) {
+      hilog.error(DOMAIN, TAG, `[LOGIN_TRACE][bootstrap] failed reason=${JSON.stringify(error)}`);
     }
-    hilog.info(DOMAIN, TAG, `[LOGIN_TRACE][bootstrap] unauthenticated code=${startup.code}`);
   }
 
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {

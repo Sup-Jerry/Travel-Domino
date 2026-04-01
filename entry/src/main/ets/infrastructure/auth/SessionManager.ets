@@ -11,6 +11,34 @@ export class SessionManager {
   }
 
   public save(session: UserSession): void {
+    const payload = this.toPayload(session);
+    AuthSessionStore.save(payload);
+  }
+
+  public load(): UserSession | null {
+    const raw = AuthSessionStore.load();
+    return this.toSession(raw);
+  }
+
+  public async saveSessionPersisted(context: common.Context, session: UserSession): Promise<void> {
+    const payload = this.toPayload(session);
+    await AuthSessionStore.saveSessionPersisted(context, payload);
+  }
+
+  public async restoreSessionPersisted(context: common.Context): Promise<UserSession | null> {
+    const raw = await AuthSessionStore.loadSessionPersisted(context);
+    const session = this.toSession(raw);
+    if (session) {
+      this.save(session);
+    }
+    return session;
+  }
+
+  public async clearSessionPersisted(context: common.Context): Promise<void> {
+    await AuthSessionStore.clearSessionPersisted(context);
+  }
+
+  private toPayload(session: UserSession): AuthSessionPayload {
     const normalizedExpireAt = Number(session.expireAt);
     const payload = new AuthSessionPayload();
     payload.accountId = session.accountId;
@@ -23,11 +51,10 @@ export class SessionManager {
       ? normalizedExpireAt
       : Date.now() + 2 * 60 * 60 * 1000;
     payload.sessionId = session.sessionId;
-    AuthSessionStore.save(payload);
+    return payload;
   }
 
-  public load(): UserSession | null {
-    const raw = AuthSessionStore.load();
+  private toSession(raw: AuthSessionPayload | null): UserSession | null {
     if (!raw) {
       return null;
     }

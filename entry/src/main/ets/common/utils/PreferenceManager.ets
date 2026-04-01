@@ -5,6 +5,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { DEFAULT_WEATHER_USER_PREFERENCE, WeatherPreferenceLevel, WeatherUserPreference } from '../../domain/services/WeatherModels';
 import { DEFAULT_USER_PROFILE, UserStrategyProfile } from '../../domain/strategy/UserStrategyProfile';
 import { AvatarProfile } from '../../domain/auth/AvatarModels';
+import { StorageKeys } from '../constants/StorageKeys';
 
 const TAG = 'PreferenceManager';
 
@@ -49,6 +50,9 @@ export class PreferenceManager {
   static readonly KEY_AUTH_GUEST_CHOSEN = 'authGuestChosen';
   static readonly KEY_AUTH_BLOCK_SILENT_AFTER_LOGOUT = 'authBlockSilentAfterLogout';
   static readonly KEY_AVATAR_PROFILE_PREFIX = 'avatarProfile:';
+  static readonly KEY_SESSION_CACHE = StorageKeys.SESSION_CACHE;
+  static readonly KEY_PROFILE_CACHE_PREFIX = StorageKeys.PROFILE_CACHE_PREFIX;
+  static readonly KEY_AVATAR_CACHE_PREFIX = StorageKeys.AVATAR_CACHE_PREFIX;
 
   // 新增：是否允许调用高德路线 API
   static readonly KEY_ENABLE_AMAP_ROUTE_API = 'enableAmapRouteApi';
@@ -286,6 +290,39 @@ export class PreferenceManager {
   public static buildAvatarProfileKey(userId: string): string {
     const safeUserId = (userId || '').trim().length > 0 ? userId.trim() : 'guest_local';
     return `${PreferenceManager.KEY_AVATAR_PROFILE_PREFIX}${safeUserId}`;
+  }
+
+  public static buildProfileCacheKey(accountId: string): string {
+    return StorageKeys.buildProfileCacheKey(accountId);
+  }
+
+  public static buildAvatarCacheKey(accountId: string): string {
+    return StorageKeys.buildAvatarCacheKey(accountId);
+  }
+
+  public async getSessionCacheJson(): Promise<string> {
+    const raw = await this.getValue(PreferenceManager.KEY_SESSION_CACHE, '');
+    return typeof raw === 'string' ? raw : '';
+  }
+
+  public async setSessionCacheJson(raw: string): Promise<void> {
+    await this.setValue(PreferenceManager.KEY_SESSION_CACHE, String(raw || ''));
+  }
+
+  public async getProfileCacheJson(accountId: string): Promise<string> {
+    const key = PreferenceManager.buildProfileCacheKey(accountId);
+    const raw = await this.getValue(key, '');
+    return typeof raw === 'string' ? raw : '';
+  }
+
+  public async setProfileCacheJson(accountId: string, raw: string): Promise<void> {
+    const key = PreferenceManager.buildProfileCacheKey(accountId);
+    await this.setValue(key, String(raw || ''));
+  }
+
+  public async clearProfileCache(accountId: string): Promise<void> {
+    const key = PreferenceManager.buildProfileCacheKey(accountId);
+    await this.setValue(key, '');
   }
 
   public async getAvatarProfile(userId: string): Promise<AvatarProfile> {

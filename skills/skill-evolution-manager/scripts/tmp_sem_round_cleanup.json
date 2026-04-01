@@ -1,0 +1,12 @@
+﻿{
+  "preferences": [
+    "When user asks retrospective iteration, persist lessons in the same turn and provide concrete evidence including commands and updated files."
+  ],
+  "fixes": [
+    "Retrospective should include direct linkage from observed user confusion to actionable skill constraints, not generic summaries."
+  ],
+  "contexts": [
+    "In cleanup sessions, user expects concise Chinese output with clear numbers and follow-up options."
+  ],
+  "custom_prompts": "When user requests review-and-iterate, evolve the active domain skill and skill-evolution-manager in the same turn using merge_evolution plus smart_stitch, then verify by reading evolution.json last_updated and SKILL.md stitched section."
+}

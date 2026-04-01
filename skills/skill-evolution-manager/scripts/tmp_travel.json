@@ -1,0 +1,1 @@
+﻿{"preferences":["用户要求复盘+迭代+推送时，按顺序执行：经验沉淀->瘦身->提交推送"],"fixes":["地图选点崩溃需先区分 key 配置问题与 native so 加载问题，再决定修复层级","当报错为 nativeSetAMapXComponentCallback of undefined 时，优先在业务入口加运行时可用性门禁，阻断页面跳转避免崩溃"],"custom_prompts":"处理地图能力故障时，先验证 HAP 内 so 是否存在及 ABI 是否匹配，再给出打包/设备侧结论"}

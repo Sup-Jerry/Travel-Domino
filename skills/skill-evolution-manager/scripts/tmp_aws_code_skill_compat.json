@@ -1,0 +1,13 @@
+{
+  "preferences": [
+    "AWS Code无法通过Skill工具调用未注册的本地skills",
+    "解决方案：在CLAUDE.md中添加自动加载规则，通过Read工具读取skill内容",
+    "本地skills路径：E:\\Travel12.19\\skills\\"
+  ],
+  "fixes": [
+    "在CLAUDE.md添加Local Skills Auto-Loading section",
+    "定义4个主要skills的触发条件（travel-domino-dev、skill-evolution-manager、skill-manager、app-size-pruner）",
+    "使用Read工具绕过Skill工具限制"
+  ],
+  "custom_prompts": "当检测到AWS Code环境且无法调用Skill工具时，优先在CLAUDE.md中配置自动加载规则，而非尝试修改系统配置"
+}

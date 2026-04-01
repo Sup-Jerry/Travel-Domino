@@ -4,12 +4,19 @@ $PSNativeCommandUseErrorActionPreference = $false
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 Set-Location $repoRoot
 
+$devEcoJavaHome = 'E:\DevEco Studio\jbr\bin'
+$devEcoJavaExe = Join-Path $devEcoJavaHome 'java.exe'
+if (Test-Path $devEcoJavaExe) {
+  $env:PATH = "$devEcoJavaHome;$env:PATH"
+  Write-Host "[unit-all] java pinned to $devEcoJavaExe"
+}
+
 Write-Host '[unit-all] running all entry unit tests...'
 $logDir = Join-Path $repoRoot '.tmp'
 New-Item -ItemType Directory -Path $logDir -ErrorAction SilentlyContinue | Out-Null
 $logPath = Join-Path $logDir 'unit-all.log'
 
-$rawOutput = & cmd /c "entry\hvigorw.bat --mode module -p module=entry@default -p product=default test 2>&1"
+$rawOutput = & cmd /c "entry\hvigorw.bat --no-daemon --mode module -p module=entry@default -p product=default test 2>&1"
 $exitCode = $LASTEXITCODE
 $rawOutput | Tee-Object -FilePath $logPath | Out-Null
 $lines = @($rawOutput | ForEach-Object { "$_" })

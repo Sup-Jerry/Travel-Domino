@@ -1,4 +1,4 @@
-import { common } from '@kit.AbilityKit';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import { LoginStatus } from '../domain/auth/AuthTypes';
 import { AppStartupCoordinator } from '../infrastructure/auth/AppStartupCoordinator';
 import { AuthFacade } from '../infrastructure/auth/AuthFacade';
@@ -6,6 +6,8 @@ import { AuthFacade } from '../infrastructure/auth/AuthFacade';
 @Entry
 @Component
 struct AuthGatePage {
+  private static readonly LOG_DOMAIN: number = 0x0000;
+  private static readonly LOG_TAG: string = 'AuthGatePage';
   @State private checking: boolean = true;
   private checkingInProgress: boolean = false;
   private readonly startupCoordinator: AppStartupCoordinator = AppStartupCoordinator.getInstance();
@@ -21,8 +23,6 @@ struct AuthGatePage {
     }
     this.checkingInProgress = true;
     this.checking = true;
-    const hostContext = this.getUIContext().getHostContext() as common.Context;
-    this.authFacade.bindContext(hostContext);
     void this.checkAndRoute().finally(() => {
       this.checkingInProgress = false;
       this.checking = false;
@@ -33,9 +33,20 @@ struct AuthGatePage {
     try {
       const startup = await this.startupCoordinator.checkStartupAuth();
       if (startup.success && startup.status === LoginStatus.AUTHENTICATED) {
+        const accountId = String(startup.data?.accountId || '').trim();
+        hilog.info(
+          AuthGatePage.LOG_DOMAIN,
+          AuthGatePage.LOG_TAG,
+          `[LOGIN_TRACE][gate] authenticated route accountId=${accountId}, source=${startup.source}, message=${startup.message}`
+        );
         await this.replaceUrl('pages/PlanListPage');
         return;
       }
+      hilog.info(
+        AuthGatePage.LOG_DOMAIN,
+        AuthGatePage.LOG_TAG,
+        `[LOGIN_TRACE][gate] unauthenticated route code=${startup.code}, source=${startup.source}, message=${startup.message}`
+      );
       await this.replaceUrl('pages/LoginPage');
     } catch (_error) {
       await this.authFacade.logout();

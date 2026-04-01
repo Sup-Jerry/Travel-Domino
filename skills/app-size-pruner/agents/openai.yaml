@@ -1,0 +1,4 @@
+interface:
+  display_name: "App Size Pruner"
+  short_description: "Scan removable large files and delete safe candidates."
+  default_prompt: "Use this skill to clean app workspace size by deleting safe, non-tracked artifacts."

@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-03-30T22:22:32.214668",
+  "last_updated": "2026-04-01T18:36:16.849121",
   "preferences": [
     "Retrospective output should follow: issues-root causes-improvements-next constraints.",
     "When user reports Day/date mismatch, first check mixed usage of dynamic_day_offset vs day_offset.",
@@ -56,19 +56,12 @@
     "对于多文件策略重构，实施前先验证计划中的类型名称与实际代码一致性",
     "当用户直接提供错误日志时，先基于错误码做根因归类，再决定最小修复路径。",
     "地图搜索故障排查默认先区分 SDK 鉴权失败 与 搜索链路/解析问题，避免误判为关键词问题。",
-    "??????????????????AI??dayOffset????????????????",
-    "????????????????????????????????????UI???",
-    "?????????????????????????????",
-    "??????GitHub???????????????????skills??????????",
-    "???????/???????????????????????????",
-    "??????+??+??+???????????????? -> ?? -> Git ???",
-    "当用户要求方案落地并同步GitHub时，按顺序执行：代码迭代->验证->瘦身->精确提交推送。",
-    "涉及HarmonyOS账号接入时，先做本机AccountKit d.ts签名核验，再编码。",
-    "????????????SDK????????????????????????????????AGC???",
-    "?????????????trace???????->provider->facade->fallback???????????????",
-    "When user requests a small UI adjustment, verify current HEAD state before claiming a new change.",
-    "For requests like 'buttons too long', interpret as visual width first and keep interaction logic unchanged.",
-    "When user asks retrospective + push + slim down in one turn, execute in fixed order: evolve lessons -> cleanup -> scoped commit/push."
+    "For auth flows, treat accountId(OpenID/UnionID) as primary identity and use userId only as fallback.",
+    "When login succeeds but page does not navigate, verify session expireAt format compatibility before routing.",
+    "For logout acceptance, validate both memory and persisted silent-login block markers.",
+    "遇到登录卡在Gate页时，先按provider->facade->gate顺序对齐LOGIN_TRACE时序，再决定修复点。",
+    "启动静默登录的context默认由EntryAbility绑定，页面层不要重复覆盖AuthFacade上下文。",
+    "离线重进失败时优先验证session_cache恢复链路，而不是先怀疑华为账号SDK。"
   ],
   "fixes": [
     "For cross-day domino shifts, user-facing date and writeback inputs must prefer dynamic_day_offset; do not mix with day_offset in one flow.",
@@ -148,21 +141,15 @@
     "Windows环境编译验证优先使用后台运行或简化命令格式",
     "当 AMap POI SDK 返回 errorCode=1008（MD5安全码未通过）时，保持 SDK 为主链路但自动降级到 Web POI API（around/text）保障可用性。",
     "修复后必须跑一次 hvigorw assembleApp，并在结论中明确区分“新增问题”与“仓库既有问题”。",
-    "AiService????????maxItems?????????????????",
-    "TimelineViewModel?AI???????dayOffset?????????240???????",
-    "Index?AI??catch???????????????????",
-    "???????preview->apply????????MinSizeMB=1????????",
-    "???????????????????????????????",
-    "moveToBacklog ??? status=1?????? skip ??????",
-    "?????????????????????????????????",
-    "华为登录按钮回调需对空credential做保护，避免空数据进入换票链路。",
-    "客户端构建验证需区分CompileArkTS通过与PackageHap环境失败，避免误判为代码错误。",
-    "??AccountKit??1001502003???????????????API????????????????????????",
-    "ArkTS catch?????throw???????????Error???????arkts-limited-throw?????",
-    "Before GitHub sync, explicitly revert local signing/profile changes and avoid committing machine-specific build credentials.",
-    "In dirty worktrees with many untracked local skill folders, use precise staging so only intended repo files are committed."
+    "Fix /auth/social/login 500 by keeping user_account/auth_identity/user_session writes in one DB transaction.",
+    "Normalize session expireAt parsing for ISO/seconds/milliseconds and add fallback TTL to avoid immediate expiry.",
+    "Skip provider silent login when UI context is unavailable in early bootstrap stage.",
+    "Add in-flight dedup in startup silent login to avoid duplicate exchange races.",
+    "修复silentLogin因context类型不兼容导致auth_provider_error：在EntryAbility.bootstrapUserContext先bindContext(this.context)，并移除AuthGatePage覆盖绑定。",
+    "修复ArkTS no-structural-typing：AuthSessionStore对外load/loadSessionPersisted统一返回AuthSessionPayload。",
+    "认证链路改动后先跑unit-all做最小回归，再做真机登录验收。"
   ],
-  "custom_prompts": "Default to concise Chinese closure: status first, then files changed, cleanup results, and push evidence.",
+  "custom_prompts": "针对Travel Domino登录/会话问题，先做日志定因与最小补丁，保证离线重进可用后再扩展优化。",
   "contexts": [
     "Case: Companion/immersive CN localization + Index back fix; compile blocker was untyped router fallback object in NavigationHelper and solved via typed options interface.",
     "Case: companion page light-theme + immersive start flow refactor in ArkTS; high-signal edits were localized to ThemeCenter and CompanionView while preserving single-active-task consistency checks.",
@@ -184,6 +171,8 @@
     "Case: User filled AMap key but still saw map capability not configured; root cause was writing non-runtime config file while runtime imported AppConfig.ets.",
     "Case: New place not refreshing immediately on plan page was caused by non-awaited async save chain in Index -> TimelineInteractionHelper.",
     "Case: Commute time recalculation policy stabilized by persisting first fetched route minutes and refreshing only on place/mode mutation.",
-    "Travel Domino 到达提醒与伴游联动修复（全局单活跃、通知跳转、冲突弹窗）"
+    "Travel Domino 到达提醒与伴游联动修复（全局单活跃、通知跳转、冲突弹窗）",
+    "Case: social login returned 201 but app stayed on LoginPage due expireAt string parsed to NaN; fixed parse and storage fallback.",
+    "Case: logout still triggered startup silent provider path without context; fixed with context gate plus logout block checks."
   ]
 }

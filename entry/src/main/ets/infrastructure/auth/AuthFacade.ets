@@ -91,22 +91,62 @@ export class AuthFacade {
       }
     }
     const local = this.sessionManager.load();
-    if (local) {
-      const me = await AuthGateway.me(local.accessToken);
-      if (me.code === 0) {
-        local.accountId = me.data.accountId || local.accountId || '';
-        local.userId = me.data.userId || '';
-        local.isGuest = Boolean(me.data.isGuest);
-        local.loginMethod = me.data.defaultLoginMethod || '';
-        local.loginType = local.isGuest ? 'guest' : 'huawei';
-        local.isLogin = true;
-        local.lastLoginAt = Date.now();
-        this.sessionManager.saveSession(local);
-        hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] silentLogin local_session ok');
-        return this.success(local, 'LOCAL_SESSION');
+    let workingLocal = local;
+    if (!workingLocal && this.appContext) {
+      workingLocal = await this.sessionManager.restoreSessionPersisted(this.appContext);
+      if (workingLocal) {
+        hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] silentLogin restored persisted session');
       }
-      hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, `[LOGIN_TRACE][facade] silentLogin local_session invalid code=${me.code}`);
-      this.sessionManager.clear();
+    }
+    if (workingLocal) {
+      try {
+        const me = await AuthGateway.me(workingLocal.accessToken);
+        if (me.code === 0) {
+          workingLocal.accountId = me.data.accountId || workingLocal.accountId || '';
+          workingLocal.userId = me.data.userId || workingLocal.userId || '';
+          workingLocal.isGuest = Boolean(me.data.isGuest);
+          workingLocal.loginMethod = me.data.defaultLoginMethod || workingLocal.loginMethod || '';
+          workingLocal.loginType = workingLocal.isGuest ? 'guest' : 'huawei';
+          workingLocal.isLogin = true;
+          workingLocal.lastLoginAt = Date.now();
+          await this.onLoginSuccess(workingLocal);
+          hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] silentLogin local_session ok');
+          return this.success(workingLocal, 'LOCAL_SESSION');
+        }
+
+        if (this.isSessionInvalidCode(me.code)) {
+          hilog.warn(
+            AuthFacade.LOG_DOMAIN,
+            AuthFacade.LOG_TAG,
+            `[LOGIN_TRACE][facade] silentLogin local_session invalid code=${me.code}`
+          );
+          this.sessionManager.clear();
+          if (this.appContext) {
+            await this.sessionManager.clearSessionPersisted(this.appContext);
+          }
+        } else {
+          // 离线或服务异常时保留本地会话，避免重启后卡在登录页。
+          workingLocal.isLogin = true;
+          workingLocal.lastLoginAt = Date.now();
+          await this.onLoginSuccess(workingLocal);
+          hilog.warn(
+            AuthFacade.LOG_DOMAIN,
+            AuthFacade.LOG_TAG,
+            `[LOGIN_TRACE][facade] silentLogin local_session fallback code=${me.code}, message=${me.message}`
+          );
+          return this.success(workingLocal, 'LOCAL_SESSION');
+        }
+      } catch (error) {
+        workingLocal.isLogin = true;
+        workingLocal.lastLoginAt = Date.now();
+        await this.onLoginSuccess(workingLocal);
+        hilog.warn(
+          AuthFacade.LOG_DOMAIN,
+          AuthFacade.LOG_TAG,
+          `[LOGIN_TRACE][facade] silentLogin local_session fallback error=${this.normalizeError(error)}`
+        );
+        return this.success(workingLocal, 'LOCAL_SESSION');
+      }
     }
 
     if (!this.appContext) {
@@ -154,6 +194,7 @@ export class AuthFacade {
   public async logout(): Promise<void> {
     this.sessionManager.clear();
     if (this.appContext) {
+      await this.sessionManager.clearSessionPersisted(this.appContext);
       await this.sessionManager.markSilentLoginBlockedAfterLogoutPersisted(this.appContext);
       hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] logout set silent_block=1');
       return;
@@ -230,8 +271,12 @@ export class AuthFacade {
       }
       hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] explicit success clear silent_block=0');
     }
-    this.onLoginSuccess(session);
-    hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, `[LOGIN_TRACE][facade] exchange success source=${source}, isGuest=${session.isGuest ? 1 : 0}`);
+    await this.onLoginSuccess(session);
+    hilog.info(
+      AuthFacade.LOG_DOMAIN,
+      AuthFacade.LOG_TAG,
+      `[LOGIN_TRACE][facade] exchange success source=${source}, isGuest=${session.isGuest ? 1 : 0}, accountId=${session.accountId}, userId=${session.userId}`
+    );
     return this.success(session, source);
   }
 
@@ -249,7 +294,7 @@ export class AuthFacade {
       return this.failure(-1, 'guest_session_empty', 'GUEST_FALLBACK', LoginStatus.LOGIN_FAILED);
     }
     session.isGuest = true;
-    this.onLoginSuccess(session);
+    await this.onLoginSuccess(session);
     if (this.appContext) {
       await this.sessionManager.markGuestChosen(this.appContext);
     }
@@ -276,8 +321,11 @@ export class AuthFacade {
     return session;
   }
 
-  private onLoginSuccess(session: UserSession): void {
+  private async onLoginSuccess(session: UserSession): Promise<void> {
     this.sessionManager.save(session);
+    if (this.appContext) {
+      await this.sessionManager.saveSessionPersisted(this.appContext, session);
+    }
   }
 
   private makeDeviceInfo(): DeviceInfo {
@@ -334,6 +382,10 @@ export class AuthFacade {
       return error.message || 'auth_error';
     }
     return 'auth_error';
+  }
+
+  private isSessionInvalidCode(code: number): boolean {
+    return code === AuthErrorCode.SESSION_EXPIRED || code === 401;
   }
 
   private normalizeAndValidateUsername(rawValue: string): string {

@@ -4,6 +4,13 @@ $PSNativeCommandUseErrorActionPreference = $false
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 Set-Location $repoRoot
 
+$devEcoJavaHome = 'E:\DevEco Studio\jbr\bin'
+$devEcoJavaExe = Join-Path $devEcoJavaHome 'java.exe'
+if (Test-Path $devEcoJavaExe) {
+  $env:PATH = "$devEcoJavaHome;$env:PATH"
+  Write-Host "[quality-gate] java pinned to $devEcoJavaExe"
+}
+
 Write-Host '[quality-gate] running secret scan...'
 powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'secret-scan.ps1')
 if ($LASTEXITCODE -ne 0) {
@@ -13,13 +20,13 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host '[quality-gate] building entry module...'
 New-Item -ItemType Directory -Path '.tmp' -ErrorAction SilentlyContinue | Out-Null
 $buildLog = Join-Path $repoRoot '.tmp\quality-gate-build.log'
-& cmd /c "entry\hvigorw.bat --mode module -p module=entry clean 2>&1" | Out-Host
+& cmd /c "entry\hvigorw.bat --no-daemon --mode module -p module=entry clean 2>&1" | Out-Host
 if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE
 }
 $previousErrorAction = $ErrorActionPreference
 $ErrorActionPreference = 'Continue'
-& cmd /c "entry\hvigorw.bat --mode module -p module=entry -p product=default -p buildMode=debug assembleHap 2>&1" | Tee-Object -FilePath $buildLog | Out-Host
+& cmd /c "entry\hvigorw.bat --no-daemon --mode module -p module=entry -p product=default -p buildMode=debug assembleHap 2>&1" | Tee-Object -FilePath $buildLog | Out-Host
 $ErrorActionPreference = $previousErrorAction
 if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE

@@ -24,6 +24,9 @@ import authServiceTest from './AuthService.test';
 import authFacadeSessionManagerTest from './AuthFacadeSessionManager.test';
 import avatarServiceTest from './AvatarService.test';
 import avatarUploadApiTest from './AvatarUploadApi.test';
+import profileCacheManagerTest from './ProfileCacheManager.test';
+import profileViewModelTest from './ProfileViewModel.test';
+import userProfileRepositoryImplTest from './UserProfileRepositoryImpl.test';
 export default function testsuite() {
   localUnitTest();
   automatedTest();
@@ -51,5 +54,8 @@ export default function testsuite() {
   authFacadeSessionManagerTest();
   avatarServiceTest();
   avatarUploadApiTest();
+  profileCacheManagerTest();
+  profileViewModelTest();
+  userProfileRepositoryImplTest();
 }
 
