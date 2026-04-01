@@ -16,7 +16,6 @@ export class AppConfig {
 
   // 认证后端配置
   static readonly AUTH_API_BASE_URL: string = 'http://127.0.0.1:3000';
-  static readonly AUTH_USE_MOCK: boolean = true;
 
   static validateAiConfig(): void {
     if (!AppConfig.AI_API_URL || AppConfig.AI_API_URL.trim() === '') {

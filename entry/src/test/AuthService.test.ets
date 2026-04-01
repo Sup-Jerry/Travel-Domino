@@ -1,7 +1,7 @@
 import { describe, expect, it } from '@ohos/hypium';
 import { AuthService } from '../main/ets/infrastructure/auth/AuthService';
 import { AuthErrorCode } from '../main/ets/infrastructure/auth/AuthErrorCode';
-import { DeviceInfo, SocialCredential, UpdateUsernamePayload } from '../main/ets/domain/auth/AuthModels';
+import { DeviceInfo, SocialCredential, UpdateAvatarPayload, UpdateUsernamePayload } from '../main/ets/domain/auth/AuthModels';
 
 function makeSocialCredential(uid: string): SocialCredential {
   const credential = new SocialCredential();
@@ -16,6 +16,13 @@ function makeUsernamePayload(username: string): UpdateUsernamePayload {
   return payload;
 }
 
+function makeAvatarPayload(dataUrl: string, mimeType: string = 'image/jpeg'): UpdateAvatarPayload {
+  const payload = new UpdateAvatarPayload();
+  payload.imageDataUrl = dataUrl;
+  payload.mimeType = mimeType;
+  return payload;
+}
+
 export default function authServiceTest() {
   describe('authServiceTest', () => {
     it('social_login_default_username_should_not_be_empty', 0, () => {
@@ -24,6 +31,7 @@ export default function authServiceTest() {
       expect(login.code).assertEqual(0);
       const defaultName = String(login.data.user.nickname || '').trim();
       expect(defaultName.length > 0).assertTrue();
+      expect(String(login.data.user.accountId || '').length > 0).assertTrue();
     });
 
     it('update_username_should_succeed_for_social_user', 0, () => {
@@ -68,6 +76,26 @@ export default function authServiceTest() {
       expect(updatedB.code).assertEqual(0);
       expect(updatedA.data.nickname).assertEqual(sameName);
       expect(updatedB.data.nickname).assertEqual(sameName);
+    });
+
+    it('update_avatar_should_succeed_for_social_user', 0, () => {
+      const service = AuthService.getInstance();
+      const login = service.loginWithSocial('HUAWEI', makeSocialCredential(`uid_${Date.now()}_4`), new DeviceInfo('d5', 'dev5', 'HARMONY'));
+      expect(login.code).assertEqual(0);
+
+      const dataUrl = 'data:image/jpeg;base64,/9j/4AAQSkZJRg==';
+      const updated = service.updateAvatar(login.data.session.accessToken, makeAvatarPayload(dataUrl));
+      expect(updated.code).assertEqual(0);
+      expect(String(updated.data.avatarUrl || '')).assertEqual(dataUrl);
+    });
+
+    it('update_avatar_should_reject_invalid_data', 0, () => {
+      const service = AuthService.getInstance();
+      const login = service.loginWithSocial('HUAWEI', makeSocialCredential(`uid_${Date.now()}_5`), new DeviceInfo('d6', 'dev6', 'HARMONY'));
+      expect(login.code).assertEqual(0);
+
+      const updated = service.updateAvatar(login.data.session.accessToken, makeAvatarPayload('invalid_data'));
+      expect(updated.code).assertEqual(AuthErrorCode.AVATAR_INVALID);
     });
   });
 }

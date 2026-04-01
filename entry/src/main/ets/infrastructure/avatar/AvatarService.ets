@@ -7,7 +7,7 @@ import image from '@ohos.multimedia.image';
 import { PreferenceManager } from '../../common/utils/PreferenceManager';
 import { AvatarProfile, AvatarUploadInput } from '../../domain/auth/AvatarModels';
 import { AvatarUploadPort } from './AvatarUploadPort';
-import { AvatarUploadStub } from './AvatarUploadStub';
+import { AvatarUploadApi } from './AvatarUploadApi';
 
 const TAG = 'AvatarService';
 
@@ -48,12 +48,22 @@ class PreferenceAvatarStore implements AvatarStorePort {
   }
 }
 
-class NoopAvatarStore implements AvatarStorePort {
-  public async loadAvatarProfile(_userId: string): Promise<AvatarProfile> {
-    return new AvatarProfile();
+class InMemoryAvatarStore implements AvatarStorePort {
+  private readonly store: Map<string, AvatarProfile> = new Map<string, AvatarProfile>();
+
+  public async loadAvatarProfile(userId: string): Promise<AvatarProfile> {
+    return this.store.get(userId) || new AvatarProfile();
   }
 
-  public async saveAvatarProfile(_profile: AvatarProfile): Promise<void> {
+  public async saveAvatarProfile(profile: AvatarProfile): Promise<void> {
+    const safe = new AvatarProfile();
+    safe.userId = (profile.userId || '').trim();
+    safe.localUri = profile.localUri || '';
+    safe.compressedUri = profile.compressedUri || '';
+    safe.cloudUrl = profile.cloudUrl || '';
+    safe.uploadState = profile.uploadState || 'EMPTY';
+    safe.updatedAt = Number(profile.updatedAt) > 0 ? Number(profile.updatedAt) : 0;
+    this.store.set(safe.userId, safe);
   }
 }
 
@@ -66,8 +76,8 @@ export class AvatarService {
 
   constructor(options: AvatarServiceOptions) {
     this.picker = options.picker || new photoAccessHelper.PhotoViewPicker();
-    this.store = options.store || new NoopAvatarStore();
-    this.uploader = options.uploader || new AvatarUploadStub();
+    this.store = options.store || new InMemoryAvatarStore();
+    this.uploader = options.uploader || new AvatarUploadApi();
     this.compressor = options.compressor || AvatarService.compressToJpegInCache;
     this.now = options.now || (() => Date.now());
   }

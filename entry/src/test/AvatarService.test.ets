@@ -43,7 +43,7 @@ class FakeUploader implements AvatarUploadPort {
   async uploadAvatar(_input: AvatarUploadInput): Promise<AvatarUploadResult> {
     this.called += 1;
     const result = new AvatarUploadResult();
-    result.status = 'PENDING_IMPLEMENTATION';
+    result.status = 'SYNCED';
     result.requestId = `req_${this.called}`;
     return result;
   }
@@ -66,7 +66,7 @@ export default function avatarServiceTest() {
       expect(profile !== null).assertTrue();
       expect(String(profile?.localUri || '')).assertEqual('file://picked.jpg');
       expect(String(profile?.compressedUri || '')).assertEqual('file://compressed.jpg');
-      expect(String(profile?.uploadState || '')).assertEqual('PENDING_IMPLEMENTATION');
+      expect(String(profile?.uploadState || '')).assertEqual('SYNCED');
       expect(store.saved.length).assertEqual(1);
       done();
     });

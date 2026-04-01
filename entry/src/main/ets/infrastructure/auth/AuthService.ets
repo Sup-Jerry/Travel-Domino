@@ -4,6 +4,8 @@ import {
   AuthLoginResult,
   AuthMeResult,
   AuthSessionPayload,
+  UpdateAvatarPayload,
+  UpdateAvatarResult,
   UpdateUsernamePayload,
   UpdateUsernameResult,
   SocialCredential,
@@ -18,8 +20,10 @@ interface SessionRecord {
 }
 
 interface UserRecord {
+  accountId: string;
   userId: string;
   nickname: string;
+  avatarUrl: string;
   isGuest: boolean;
   providerUid?: string;
   providerType?: string;
@@ -41,8 +45,10 @@ export class AuthService {
     const now = Date.now();
     const userId = `u_${this.nextId()}`;
     const user: UserRecord = {
+      accountId: '',
       userId,
       nickname: '',
+      avatarUrl: '',
       isGuest: true
     };
     this.users.push(user);
@@ -58,10 +64,16 @@ export class AuthService {
     session.refreshToken = refreshToken;
     session.expireAt = expireAt;
     session.sessionId = sessionId;
+    session.accountId = '';
+    session.userId = user.userId;
+    session.isGuest = true;
+    session.loginMethod = 'GUEST';
 
     const profile = new AuthUserProfile();
+    profile.accountId = '';
     profile.userId = user.userId;
     profile.nickname = user.nickname;
+    profile.avatarUrl = user.avatarUrl;
     profile.isGuest = true;
     profile.profileCompleted = false;
     profile.defaultLoginMethod = 'GUEST';
@@ -89,7 +101,9 @@ export class AuthService {
 
     const me = new AuthMeResult();
     me.userId = user.userId;
+    me.accountId = user.accountId || '';
     me.nickname = user.nickname;
+    me.avatarUrl = user.avatarUrl;
     me.isGuest = user.isGuest;
     me.defaultLoginMethod = 'GUEST';
     return this.ok(me);
@@ -111,13 +125,18 @@ export class AuthService {
     const isNewUser = !user;
     if (!user) {
       user = {
+        accountId: uid,
         userId: `u_${this.nextId()}`,
         nickname: this.buildDefaultUsername(),
+        avatarUrl: '',
         isGuest: false,
         providerUid: uid,
         providerType: providerType
       };
       this.users.push(user);
+    }
+    if (!user.accountId) {
+      user.accountId = uid;
     }
 
     const accessToken = `social_access_${uid}_${now}`;
@@ -131,10 +150,16 @@ export class AuthService {
     session.refreshToken = refreshToken;
     session.expireAt = expireAt;
     session.sessionId = sessionId;
+    session.accountId = user.accountId || '';
+    session.userId = user.userId;
+    session.isGuest = false;
+    session.loginMethod = providerType;
 
     const profile = new AuthUserProfile();
+    profile.accountId = user.accountId || '';
     profile.userId = user.userId;
     profile.nickname = user.nickname;
+    profile.avatarUrl = user.avatarUrl;
     profile.isGuest = false;
     profile.profileCompleted = true;
     profile.defaultLoginMethod = 'CUSTOM';
@@ -166,9 +191,41 @@ export class AuthService {
     user.nickname = username;
 
     const result = new UpdateUsernameResult();
+    result.accountId = user.accountId || '';
     result.userId = user.userId;
     result.nickname = user.nickname;
-    result.avatarUrl = '';
+    result.avatarUrl = user.avatarUrl;
+    result.mobileMasked = '';
+    result.profileCompleted = true;
+    result.isGuest = false;
+    result.defaultLoginMethod = 'CUSTOM';
+    return this.ok(result);
+  }
+
+  public updateAvatar(accessToken: string, payload: UpdateAvatarPayload): AuthApiResponse<UpdateAvatarResult> {
+    const session = this.sessions.find((item: SessionRecord) => item.accessToken === accessToken) || null;
+    if (!session || Date.now() >= session.expireAt) {
+      return this.fail<UpdateAvatarResult>(AuthErrorCode.SESSION_EXPIRED, 'session_expired', new UpdateAvatarResult());
+    }
+    const user = this.users.find((item: UserRecord) => item.userId === session.userId) || null;
+    if (!user) {
+      return this.fail<UpdateAvatarResult>(AuthErrorCode.ACCOUNT_NOT_FOUND, 'user_not_found', new UpdateAvatarResult());
+    }
+    if (user.isGuest) {
+      return this.fail<UpdateAvatarResult>(AuthErrorCode.GUEST_AVATAR_UNSUPPORTED, 'guest_avatar_unsupported', new UpdateAvatarResult());
+    }
+
+    const avatarDataUrl = this.normalizeAndValidateAvatarDataUrl(payload.imageDataUrl, payload.mimeType);
+    if (!avatarDataUrl) {
+      return this.fail<UpdateAvatarResult>(AuthErrorCode.AVATAR_INVALID, 'avatar_invalid', new UpdateAvatarResult());
+    }
+    user.avatarUrl = avatarDataUrl;
+
+    const result = new UpdateAvatarResult();
+    result.accountId = user.accountId || '';
+    result.userId = user.userId;
+    result.nickname = user.nickname;
+    result.avatarUrl = user.avatarUrl;
     result.mobileMasked = '';
     result.profileCompleted = true;
     result.isGuest = false;
@@ -181,6 +238,7 @@ export class AuthService {
       return null;
     }
     const me = new AuthMeResult();
+    me.accountId = '';
     me.userId = 'guest_local';
     me.nickname = '';
     me.isGuest = true;
@@ -202,6 +260,25 @@ export class AuthService {
       return '';
     }
     return normalized;
+  }
+
+  private normalizeAndValidateAvatarDataUrl(rawDataUrl: string, rawMimeType: string): string {
+    const dataUrl = String(rawDataUrl || '').trim();
+    const mimeType = String(rawMimeType || '').trim().toLowerCase();
+    if (!dataUrl || dataUrl.length > 3_500_000) {
+      return '';
+    }
+    const allowedMime = mimeType === '' || mimeType === 'image/jpeg' || mimeType === 'image/jpg' || mimeType === 'image/png' || mimeType === 'image/webp';
+    if (!allowedMime) {
+      return '';
+    }
+    if (!dataUrl.startsWith('data:image/')) {
+      return '';
+    }
+    if (dataUrl.indexOf(';base64,') <= 0) {
+      return '';
+    }
+    return dataUrl;
   }
 
   private buildDefaultUsername(): string {

@@ -4,6 +4,10 @@ import { PreferenceManager } from '../../common/utils/PreferenceManager';
 import { AuthSessionPayload } from '../../domain/auth/AuthModels';
 
 class StoredSession {
+  accountId: string = '';
+  userId: string = '';
+  isGuest: boolean = false;
+  loginMethod: string = '';
   accessToken: string = '';
   refreshToken: string = '';
   sessionId: string = '';
@@ -13,6 +17,10 @@ class StoredSession {
 export class AuthSessionStore {
   public static save(session: AuthSessionPayload): void {
     const raw = new StoredSession();
+    raw.accountId = session.accountId || '';
+    raw.userId = session.userId || '';
+    raw.isGuest = session.isGuest === true;
+    raw.loginMethod = session.loginMethod || '';
     raw.accessToken = session.accessToken;
     raw.refreshToken = session.refreshToken;
     raw.sessionId = session.sessionId;

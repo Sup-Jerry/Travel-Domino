@@ -26,7 +26,4 @@ export class AppConfigService {
     return Number(process.env.AUTH_REFRESH_TTL_SECONDS || 2592000);
   }
 
-  get authUseStubProviders(): boolean {
-    return String(process.env.AUTH_USE_STUB_PROVIDERS || 'false').toLowerCase() === 'true';
-  }
 }

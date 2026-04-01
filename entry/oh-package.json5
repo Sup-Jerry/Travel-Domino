@@ -10,6 +10,13 @@
     "@amap/amap_lbs_map3d": ">=11.1.0",
     "@amap/amap_lbs_search": ">=11.1.0",
     "@amap/amap_lbs_location": "11.1.0",
-  }
+    "@hw-agconnect/core-ohos": "file:./local-hars/core-ohos-1.1.3.har",
+    "@hw-agconnect/cloudstorage-ohos": "1.1.3",
+    "@hw-agconnect/api-ohos": "1.1.2",
+    "@hw-agconnect/auth-ohos": "1.1.3",
+    "@hw-agconnect/credential-ohos": "1.1.3",
+    "@hw-agconnect/crypto-ohos": "1.1.2"
+  },
+  "devDependencies": {},
+  "dynamicDependencies": {}
 }
-

@@ -1,4 +1,4 @@
-export type AvatarUploadState = 'EMPTY' | 'LOCAL_ONLY' | 'PENDING_IMPLEMENTATION' | 'SYNCED';
+export type AvatarUploadState = 'EMPTY' | 'LOCAL_ONLY' | 'SYNCED';
 
 export class AvatarProfile {
   userId: string = '';
@@ -17,7 +17,7 @@ export class AvatarUploadInput {
 }
 
 export class AvatarUploadResult {
-  status: AvatarUploadState = 'PENDING_IMPLEMENTATION';
+  status: AvatarUploadState = 'LOCAL_ONLY';
   requestId: string = '';
   remoteUrl?: string;
   errorCode?: string;

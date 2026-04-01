@@ -1,7 +1,7 @@
 import { promptAction } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { HuaweiCredential } from '../domain/auth/AuthTypes';
+import { AuthResult, HuaweiCredential, UserSession } from '../domain/auth/AuthTypes';
 import { AuthFacade } from '../infrastructure/auth/AuthFacade';
 import { HuaweiAccountLoginButton } from './components/auth/HuaweiAccountLoginButton';
 
@@ -44,8 +44,12 @@ struct LoginPage {
     const hostContext = this.getUIContext().getHostContext() as common.Context;
     this.authFacade.bindContext(hostContext);
     this.loading = true;
-    const result = await this.authFacade.explicitLoginByButton(credential, false);
-    this.loading = false;
+    let result = new AuthResult<UserSession>();
+    try {
+      result = await this.authFacade.explicitLoginByButton(credential, false);
+    } finally {
+      this.loading = false;
+    }
     if (!result.success) {
       hilog.warn(
         LoginPage.LOG_DOMAIN,
@@ -68,8 +72,12 @@ struct LoginPage {
     const hostContext = this.getUIContext().getHostContext() as common.Context;
     this.authFacade.bindContext(hostContext);
     this.loading = true;
-    const result = await this.authFacade.explicitLoginByButton(undefined, false);
-    this.loading = false;
+    let result = new AuthResult<UserSession>();
+    try {
+      result = await this.authFacade.explicitLoginByButton(undefined, false);
+    } finally {
+      this.loading = false;
+    }
     if (!result.success) {
       hilog.warn(
         LoginPage.LOG_DOMAIN,
@@ -92,8 +100,12 @@ struct LoginPage {
     const hostContext = this.getUIContext().getHostContext() as common.Context;
     this.authFacade.bindContext(hostContext);
     this.loading = true;
-    const result = await this.authFacade.explicitGuestLogin();
-    this.loading = false;
+    let result = new AuthResult<UserSession>();
+    try {
+      result = await this.authFacade.explicitGuestLogin();
+    } finally {
+      this.loading = false;
+    }
     if (!result.success) {
       hilog.warn(
         LoginPage.LOG_DOMAIN,

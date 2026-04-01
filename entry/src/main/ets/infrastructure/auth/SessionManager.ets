@@ -11,10 +11,17 @@ export class SessionManager {
   }
 
   public save(session: UserSession): void {
+    const normalizedExpireAt = Number(session.expireAt);
     const payload = new AuthSessionPayload();
+    payload.accountId = session.accountId;
+    payload.userId = session.userId;
+    payload.isGuest = session.isGuest;
+    payload.loginMethod = session.loginMethod;
     payload.accessToken = session.accessToken;
     payload.refreshToken = session.refreshToken;
-    payload.expireAt = session.expireAt;
+    payload.expireAt = Number.isFinite(normalizedExpireAt) && normalizedExpireAt > 0
+      ? normalizedExpireAt
+      : Date.now() + 2 * 60 * 60 * 1000;
     payload.sessionId = session.sessionId;
     AuthSessionStore.save(payload);
   }
@@ -29,6 +36,13 @@ export class SessionManager {
     }
 
     const session = new UserSession();
+    session.isLogin = true;
+    session.accountId = raw.accountId || '';
+    session.loginType = raw.isGuest === true ? 'guest' : 'huawei';
+    session.lastLoginAt = Date.now();
+    session.userId = raw.userId || '';
+    session.isGuest = raw.isGuest === true;
+    session.loginMethod = raw.loginMethod || '';
     session.accessToken = raw.accessToken;
     session.refreshToken = raw.refreshToken;
     session.expireAt = Number(raw.expireAt);
@@ -38,6 +52,30 @@ export class SessionManager {
 
   public clear(): void {
     AuthSessionStore.clear();
+  }
+
+  public saveSession(session: UserSession): void {
+    this.save(session);
+  }
+
+  public restoreSession(): UserSession | null {
+    return this.load();
+  }
+
+  public clearSession(): void {
+    this.clear();
+  }
+
+  public getCurrentAccountId(): string {
+    const session = this.load();
+    if (!session) {
+      return '';
+    }
+    return (session.accountId || '').trim();
+  }
+
+  public isLoggedIn(): boolean {
+    return this.load() !== null;
   }
 
   public async markGuestChosen(context: common.Context): Promise<void> {
@@ -50,6 +88,10 @@ export class SessionManager {
 
   public markSilentLoginBlockedAfterLogout(): void {
     AuthSessionStore.markSilentLoginBlockedAfterLogout();
+  }
+
+  public isSilentLoginBlockedAfterLogout(): boolean {
+    return AuthSessionStore.isSilentLoginBlockedAfterLogout();
   }
 
   public clearSilentLoginBlockedAfterLogout(): void {

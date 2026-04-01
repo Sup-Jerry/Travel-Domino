@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/
 import * as jwt from 'jsonwebtoken';
 import { AppConfigService } from '../../config/app-config.service';
 import { PgService } from '../../config/pg.service';
-import { GuestCreateDto, SocialLoginDto, UpdateUsernameDto } from './dto/auth.dto';
+import { GuestCreateDto, SocialLoginDto, UpdateAvatarDto, UpdateUsernameDto } from './dto/auth.dto';
 
 interface SessionTokenPayload {
   userId: string;
@@ -10,6 +10,7 @@ interface SessionTokenPayload {
 }
 
 interface AuthProfile {
+  accountId: string;
   userId: string;
   nickname: string;
   avatarUrl: string;
@@ -19,20 +20,18 @@ interface AuthProfile {
   defaultLoginMethod: string;
 }
 
-interface UsernameSyncPort {
-  onUsernameChanged(userId: string, username: string): Promise<void>;
+interface SocialCredentialLike {
+  unionId?: string;
+  openId?: string;
+  authCode?: string;
+  idToken?: string;
 }
 
-class NoopUsernameSyncPort implements UsernameSyncPort {
-  async onUsernameChanged(_userId: string, _username: string): Promise<void> {
-    return;
-  }
-}
+type QueryExecutor = (sql: string, params?: unknown[]) => Promise<{ rowCount: number; rows: any[] }>;
 
 @Injectable()
 export class AuthService {
   private static readonly USERNAME_PATTERN: RegExp = /^[\u4E00-\u9FFFa-zA-Z0-9_ ]+$/;
-  private readonly usernameSyncPort: UsernameSyncPort = new NoopUsernameSyncPort();
 
   constructor(
     private readonly config: AppConfigService,
@@ -60,9 +59,10 @@ export class AuthService {
         dto.deviceInfo.deviceName,
         dto.deviceInfo.platform,
         'GUEST',
-        ip
+        ip,
+        query
       );
-      const profile = await this.loadProfile(userId);
+      const profile = await this.loadProfile(userId, query);
       return { user: profile, session };
     });
   }
@@ -75,25 +75,26 @@ export class AuthService {
   async socialLogin(dto: SocialLoginDto, ip: string): Promise<unknown> {
     return this.pg.withTransaction(async (query) => {
       const providerType = String(dto.providerType || '').trim().toUpperCase();
-      const credential = dto.credential || {};
-      const providerUid = String(
-        credential.unionId || credential.openId || credential.authCode || credential.idToken || ''
-      ).trim();
+      const credential: SocialCredentialLike = dto.credential || {};
+      const providerUid = this.buildProviderUid(credential);
       if (!providerType || !providerUid) {
         throw new BadRequestException('THIRD_PARTY_AUTH_FAILED');
       }
 
       const identityRes = await query(
-        `select user_id from auth_identity where provider_type=$1 and provider_uid=$2 and bind_status='BOUND' limit 1`,
+        `select identity_id,user_id from auth_identity where provider_type=$1 and provider_uid=$2 and bind_status='BOUND' limit 1`,
         [providerType, providerUid]
       );
 
       let userId = '';
       if (identityRes.rowCount > 0) {
+        const identityId = String(identityRes.rows[0].identity_id || '');
         userId = String(identityRes.rows[0].user_id || '');
         await query(
-          `update auth_identity set last_used_time=now() where provider_type=$1 and provider_uid=$2 and bind_status='BOUND'`,
-          [providerType, providerUid]
+          `update auth_identity
+           set provider_open_id=$2, provider_union_id=$3, last_used_time=now(), updated_at=now()
+           where identity_id=$1`,
+          [identityId, String(credential.openId || ''), String(credential.unionId || '')]
         );
       } else {
         userId = this.nextId('u');
@@ -127,9 +128,10 @@ export class AuthService {
         dto.deviceInfo.deviceName,
         dto.deviceInfo.platform,
         providerType,
-        ip
+        ip,
+        query
       );
-      const profile = await this.loadProfile(userId);
+      const profile = await this.loadProfile(userId, query);
       return { user: profile, session };
     });
   }
@@ -146,7 +148,21 @@ export class AuthService {
       `update user_account set nickname=$2, updated_at=now() where user_id=$1`,
       [session.userId, username]
     );
-    await this.usernameSyncPort.onUsernameChanged(session.userId, username);
+    return this.loadProfile(session.userId);
+  }
+
+  async updateAvatar(accessToken: string, dto: UpdateAvatarDto): Promise<unknown> {
+    const session = await this.mustSession(accessToken);
+    const profile = await this.loadProfile(session.userId);
+    if (profile.isGuest) {
+      throw new BadRequestException('GUEST_AVATAR_UNSUPPORTED');
+    }
+
+    const avatarUrl = this.normalizeAndValidateAvatarDataUrl(dto.imageDataUrl, dto.mimeType || 'image/jpeg');
+    await this.pg.query(
+      `update user_account set avatar_url=$2, updated_at=now() where user_id=$1`,
+      [session.userId, avatarUrl]
+    );
     return this.loadProfile(session.userId);
   }
 
@@ -156,7 +172,8 @@ export class AuthService {
     deviceName: string,
     platform: string,
     loginMethod: string,
-    ip: string
+    ip: string,
+    queryExecutor?: QueryExecutor
   ): Promise<{ accessToken: string; refreshToken: string; expireAt: string; sessionId: string }> {
     const sessionId = this.nextId('s');
     const accessExpireAt = new Date(Date.now() + this.config.authAccessTtlSeconds * 1000);
@@ -166,7 +183,8 @@ export class AuthService {
     const accessToken = jwt.sign(payload, this.config.jwtSecret, { expiresIn: this.config.authAccessTtlSeconds });
     const refreshToken = jwt.sign({ ...payload, kind: 'refresh' }, this.config.jwtSecret, { expiresIn: this.config.authRefreshTtlSeconds });
 
-    await this.pg.query(
+    const execute = queryExecutor || ((sql: string, params: unknown[] = []) => this.pg.query(sql, params));
+    await execute(
       `insert into user_session(session_id,user_id,device_id,device_name,platform,access_token,refresh_token,issued_at,expire_at,refresh_expire_at,status,login_method,last_active_time,ip)
        values($1,$2,$3,$4,$5,$6,$7,now(),$8,$9,'ACTIVE',$10,now(),$11)`,
       [sessionId, userId, deviceId, deviceName, platform, accessToken, refreshToken, accessExpireAt, refreshExpireAt, loginMethod, ip]
@@ -208,9 +226,29 @@ export class AuthService {
     return payload;
   }
 
-  private async loadProfile(userId: string): Promise<AuthProfile> {
-    const res = await this.pg.query(
-      `select user_id,nickname,avatar_url,mobile_masked,profile_completed,is_guest,default_login_method,status from user_account where user_id=$1 limit 1`,
+  private async loadProfile(userId: string, queryExecutor?: QueryExecutor): Promise<AuthProfile> {
+    const execute = queryExecutor || ((sql: string, params: unknown[] = []) => this.pg.query(sql, params));
+    const res = await execute(
+      `select
+         ua.user_id,
+         ua.nickname,
+         ua.avatar_url,
+         ua.mobile_masked,
+         ua.profile_completed,
+         ua.is_guest,
+         ua.default_login_method,
+         ua.status,
+         coalesce(nullif(ai.provider_union_id, ''), nullif(ai.provider_open_id, ''), '') as account_id
+       from user_account ua
+       left join lateral (
+         select provider_open_id, provider_union_id
+         from auth_identity
+         where user_id = ua.user_id and provider_type='HUAWEI' and bind_status='BOUND'
+         order by last_used_time desc, created_at desc
+         limit 1
+       ) ai on true
+       where ua.user_id=$1
+       limit 1`,
       [userId]
     );
     if (res.rowCount === 0) {
@@ -221,6 +259,7 @@ export class AuthService {
       throw new BadRequestException('RISK_BLOCKED');
     }
     return {
+      accountId: String(row.account_id || ''),
       userId: String(row.user_id || ''),
       nickname: String(row.nickname || ''),
       avatarUrl: String(row.avatar_url || ''),
@@ -242,8 +281,38 @@ export class AuthService {
     return normalized;
   }
 
+  private normalizeAndValidateAvatarDataUrl(rawDataUrl: string, rawMimeType: string): string {
+    const dataUrl = String(rawDataUrl || '').trim();
+    const mimeType = String(rawMimeType || '').trim().toLowerCase();
+    if (!dataUrl || dataUrl.length > 3_500_000) {
+      throw new BadRequestException('AVATAR_INVALID');
+    }
+    const mimeAllowed =
+      mimeType === '' ||
+      mimeType === 'image/jpeg' ||
+      mimeType === 'image/jpg' ||
+      mimeType === 'image/png' ||
+      mimeType === 'image/webp';
+    if (!mimeAllowed) {
+      throw new BadRequestException('AVATAR_INVALID');
+    }
+    if (!dataUrl.startsWith('data:image/')) {
+      throw new BadRequestException('AVATAR_INVALID');
+    }
+    if (dataUrl.indexOf(';base64,') <= 0) {
+      throw new BadRequestException('AVATAR_INVALID');
+    }
+    return dataUrl;
+  }
+
   private buildDefaultUsername(): string {
     return `user_${Date.now() % 100000}`;
+  }
+
+  private buildProviderUid(credential: SocialCredentialLike): string {
+    return String(
+      credential.unionId || credential.openId || credential.authCode || credential.idToken || ''
+    ).trim();
   }
 
   private nextId(prefix: string): string {

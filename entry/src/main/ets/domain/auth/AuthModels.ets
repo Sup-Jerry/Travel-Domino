@@ -1,4 +1,4 @@
-export type AuthProviderType = 'GUEST' | 'CUSTOM';
+export type AuthProviderType = 'GUEST' | 'CUSTOM' | 'HUAWEI';
 
 export class DeviceInfo {
   deviceId: string = '';
@@ -21,6 +21,10 @@ export class SocialCredential {
 }
 
 export class AuthSessionPayload {
+  accountId: string = '';
+  userId: string = '';
+  isGuest: boolean = false;
+  loginMethod: string = '';
   accessToken: string = '';
   refreshToken: string = '';
   expireAt: number = 0;
@@ -28,6 +32,7 @@ export class AuthSessionPayload {
 }
 
 export class AuthUserProfile {
+  accountId: string = '';
   userId: string = '';
   nickname: string = '';
   avatarUrl: string = '';
@@ -79,6 +84,7 @@ export class AuthGuestUpgradeResult {
 }
 
 export class AuthMeResult {
+  accountId: string = '';
   userId: string = '';
   nickname: string = '';
   avatarUrl: string = '';
@@ -102,6 +108,23 @@ export class UpdateUsernamePayload {
 }
 
 export class UpdateUsernameResult {
+  accountId: string = '';
+  userId: string = '';
+  nickname: string = '';
+  avatarUrl: string = '';
+  mobileMasked: string = '';
+  profileCompleted: boolean = false;
+  isGuest: boolean = false;
+  defaultLoginMethod: AuthProviderType = 'GUEST';
+}
+
+export class UpdateAvatarPayload {
+  imageDataUrl: string = '';
+  mimeType: string = 'image/jpeg';
+}
+
+export class UpdateAvatarResult {
+  accountId: string = '';
   userId: string = '';
   nickname: string = '';
   avatarUrl: string = '';

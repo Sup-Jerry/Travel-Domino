@@ -6,9 +6,9 @@ import { AuthResult, HuaweiCredential, LoginStatus, UserSession } from '../../do
 import { AuthGateway } from './AuthGateway';
 import { HuaweiAccountProvider } from './HuaweiAccountProvider';
 import { SessionManager } from './SessionManager';
-import { NoopUsernameSyncPort, UsernameSyncPort } from './UsernameSyncPort';
 
 export class CurrentUserBasicProfile {
+  accountId: string = '';
   userId: string = '';
   nickname: string = '';
   avatarUrl: string = '';
@@ -22,7 +22,6 @@ export class AuthFacade {
   private static instance: AuthFacade = new AuthFacade();
   private readonly sessionManager: SessionManager = SessionManager.getInstance();
   private readonly huaweiProvider: HuaweiAccountProvider = HuaweiAccountProvider.getInstance();
-  private readonly usernameSyncPort: UsernameSyncPort = new NoopUsernameSyncPort();
   private appContext: common.Context | null = null;
 
   public static getInstance(): AuthFacade {
@@ -61,12 +60,17 @@ export class AuthFacade {
     }
     const me = await AuthGateway.me(session.accessToken);
     if (me.code !== 0) {
-      profile.userId = session.userId || 'guest_local';
+      const fallbackId = session.accountId || session.userId || 'guest_local';
+      profile.accountId = session.accountId || '';
+      profile.userId = fallbackId;
       profile.nickname = defaultName;
       profile.isGuest = session.isGuest !== false;
       return profile;
     }
-    profile.userId = String(me.data.userId || session.userId || 'guest_local');
+    const accountId = String(me.data.accountId || session.accountId || '').trim();
+    const userId = String(me.data.userId || session.userId || '').trim();
+    profile.accountId = accountId;
+    profile.userId = accountId || userId || 'guest_local';
     profile.nickname = String((me.data.nickname || '').trim() || defaultName);
     profile.avatarUrl = String(me.data.avatarUrl || '');
     profile.isGuest = Boolean(me.data.isGuest);
@@ -75,6 +79,10 @@ export class AuthFacade {
 
   public async silentLogin(): Promise<AuthResult<UserSession>> {
     hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] silentLogin start');
+    if (this.sessionManager.isSilentLoginBlockedAfterLogout()) {
+      hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] silentLogin blocked by logout marker(memory)');
+      return this.failure(-1, 'silent_login_blocked_after_logout', 'HUAWEI_SILENT', LoginStatus.UNAUTHENTICATED);
+    }
     if (this.appContext) {
       const blocked = await this.sessionManager.isSilentLoginBlockedAfterLogoutPersisted(this.appContext);
       if (blocked) {
@@ -86,9 +94,14 @@ export class AuthFacade {
     if (local) {
       const me = await AuthGateway.me(local.accessToken);
       if (me.code === 0) {
+        local.accountId = me.data.accountId || local.accountId || '';
         local.userId = me.data.userId || '';
         local.isGuest = Boolean(me.data.isGuest);
         local.loginMethod = me.data.defaultLoginMethod || '';
+        local.loginType = local.isGuest ? 'guest' : 'huawei';
+        local.isLogin = true;
+        local.lastLoginAt = Date.now();
+        this.sessionManager.saveSession(local);
         hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] silentLogin local_session ok');
         return this.success(local, 'LOCAL_SESSION');
       }
@@ -96,8 +109,14 @@ export class AuthFacade {
       this.sessionManager.clear();
     }
 
+    if (!this.appContext) {
+      // EntryAbility 早期阶段没有可用 UI 上下文，不能走 provider 静默登录。
+      hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] silentLogin skip provider: context unavailable');
+      return this.failure(-1, 'silent_login_context_unavailable', 'HUAWEI_SILENT', LoginStatus.UNAUTHENTICATED);
+    }
+
     try {
-      const credential = await this.huaweiProvider.silentLogin(this.appContext || undefined);
+      const credential = await this.huaweiProvider.silentLogin(this.appContext);
       hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] silentLogin provider ok');
       return this.exchangeHuaweiCredential(credential, 'HUAWEI_SILENT');
     } catch (error) {
@@ -163,11 +182,11 @@ export class AuthFacade {
     }
 
     const profile = new CurrentUserBasicProfile();
-    profile.userId = String(response.data.userId || session.userId || '');
+    profile.accountId = String(response.data.accountId || session.accountId || '');
+    profile.userId = String(profile.accountId || response.data.userId || session.userId || '');
     profile.nickname = String((response.data.nickname || '').trim());
     profile.avatarUrl = String(response.data.avatarUrl || '');
     profile.isGuest = Boolean(response.data.isGuest);
-    await this.usernameSyncPort.onUsernameChanged(profile.userId, profile.nickname);
 
     const result = new AuthResult<CurrentUserBasicProfile>();
     result.success = true;
@@ -243,13 +262,17 @@ export class AuthFacade {
       return null;
     }
     const session = new UserSession();
+    session.accountId = payload.user.accountId || '';
     session.userId = payload.user.userId || '';
     session.accessToken = payload.session.accessToken || '';
     session.refreshToken = payload.session.refreshToken || '';
-    session.expireAt = Number(payload.session.expireAt);
+    session.expireAt = this.normalizeExpireAt(payload.session.expireAt);
     session.sessionId = payload.session.sessionId || '';
     session.isGuest = Boolean(payload.user.isGuest);
     session.loginMethod = payload.user.defaultLoginMethod || '';
+    session.loginType = session.isGuest ? 'guest' : 'huawei';
+    session.isLogin = true;
+    session.lastLoginAt = Date.now();
     return session;
   }
 
@@ -286,6 +309,24 @@ export class AuthFacade {
     result.status = status;
     result.data = null;
     return result;
+  }
+
+  private normalizeExpireAt(rawExpireAt: number | string): number {
+    const text = String(rawExpireAt || '').trim();
+    const numeric = Number(text);
+    if (Number.isFinite(numeric) && numeric > 0) {
+      // 兼容秒级时间戳
+      if (numeric < 1_000_000_000_000) {
+        return numeric * 1000;
+      }
+      return numeric;
+    }
+    const parsed = Date.parse(text);
+    if (!Number.isNaN(parsed) && parsed > 0) {
+      return parsed;
+    }
+    // 兜底 2 小时，避免会话被立即判定为失效
+    return Date.now() + 2 * 60 * 60 * 1000;
   }
 
   private normalizeError(error: Object): string {

@@ -18,6 +18,8 @@ import { AppConfig } from '../common/utils/AppConfig';
 import { DateUtil } from '../common/utils/DateUtil';
 import { ThemeCenter, ThemeMode } from '../common/utils/ThemeCenter';
 import { AppStorageKeys } from '../common/constants/AppStorageKeys';
+import { AuthFacade } from '../infrastructure/auth/AuthFacade';
+import { AppStartupCoordinator } from '../infrastructure/auth/AppStartupCoordinator';
 
 const DOMAIN = 0x0000;
 const TAG = 'EntryAbility';
@@ -43,6 +45,8 @@ export default class EntryAbility extends UIAbility {
   private currentThemeMode: ThemeMode = 'system';
   private static lastNotificationFingerprint: string = '';
   private static lastNotificationTs: number = 0;
+  private readonly authFacade: AuthFacade = AuthFacade.getInstance();
+  private readonly startupCoordinator: AppStartupCoordinator = AppStartupCoordinator.getInstance();
 
   private async initThemeMode(): Promise<void> {
     try {
@@ -59,8 +63,19 @@ export default class EntryAbility extends UIAbility {
     }
   }
 
+  private async bootstrapUserContext(): Promise<void> {
+    const startup = await this.startupCoordinator.checkStartupAuth();
+    if (startup.success && startup.data) {
+      const accountId = startup.data.accountId || '';
+      hilog.info(DOMAIN, TAG, `[LOGIN_TRACE][bootstrap] authenticated accountId=${accountId}`);
+      return;
+    }
+    hilog.info(DOMAIN, TAG, `[LOGIN_TRACE][bootstrap] unauthenticated code=${startup.code}`);
+  }
+
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     void this.initThemeMode();
+    void this.bootstrapUserContext();
     AppStorage.setOrCreate(AppStorageKeys.THEME_MODE, 'system');
     AppStorage.setOrCreate(AppStorageKeys.EFFECTIVE_THEME, 'light');
     AppStorage.setOrCreate(AppStorageKeys.GLOBAL_TIME_DISPLAY_MODE, 0);

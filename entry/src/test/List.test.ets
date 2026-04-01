@@ -23,7 +23,7 @@ import timelineWeatherLinkageIntegrationTest from './TimelineWeatherLinkageInteg
 import authServiceTest from './AuthService.test';
 import authFacadeSessionManagerTest from './AuthFacadeSessionManager.test';
 import avatarServiceTest from './AvatarService.test';
-import avatarUploadStubTest from './AvatarUploadStub.test';
+import avatarUploadApiTest from './AvatarUploadApi.test';
 export default function testsuite() {
   localUnitTest();
   automatedTest();
@@ -50,6 +50,6 @@ export default function testsuite() {
   authServiceTest();
   authFacadeSessionManagerTest();
   avatarServiceTest();
-  avatarUploadStubTest();
+  avatarUploadApiTest();
 }
 

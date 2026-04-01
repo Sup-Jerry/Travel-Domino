@@ -6,7 +6,6 @@
 - `AUTH_ACCESS_TTL_SECONDS`
 - `AUTH_REFRESH_TTL_SECONDS`
 - `SMS_PROVIDER`
-- `AUTH_USE_STUB_PROVIDERS=false`
 - 第三方回调配置：`HUAWEI_*`, `WECHAT_*`, `QQ_*`
 
 ## 2. 启动

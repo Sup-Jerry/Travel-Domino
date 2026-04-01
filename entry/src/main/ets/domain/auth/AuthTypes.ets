@@ -8,6 +8,10 @@ export enum LoginStatus {
 export type AuthSource = 'LOCAL_SESSION' | 'HUAWEI_BUTTON' | 'HUAWEI_SILENT' | 'GUEST_FALLBACK' | 'NONE';
 
 export class UserSession {
+  isLogin: boolean = false;
+  accountId: string = '';
+  loginType: 'huawei' | 'guest' = 'huawei';
+  lastLoginAt: number = 0;
   userId: string = '';
   accessToken: string = '';
   refreshToken: string = '';

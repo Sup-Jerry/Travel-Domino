@@ -304,7 +304,7 @@ export class PreferenceManager {
       profile.compressedUri = typeof parsed.compressedUri === 'string' ? parsed.compressedUri : '';
       profile.cloudUrl = typeof parsed.cloudUrl === 'string' ? parsed.cloudUrl : '';
       const state = typeof parsed.uploadState === 'string' ? parsed.uploadState : 'EMPTY';
-      profile.uploadState = state as 'EMPTY' | 'LOCAL_ONLY' | 'PENDING_IMPLEMENTATION' | 'SYNCED';
+      profile.uploadState = state === 'LOCAL_ONLY' || state === 'SYNCED' ? state : 'EMPTY';
       profile.updatedAt = Number.isFinite(Number(parsed.updatedAt)) ? Number(parsed.updatedAt) : 0;
       return profile;
     } catch (_error) {
