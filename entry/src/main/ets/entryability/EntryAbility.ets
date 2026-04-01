@@ -18,7 +18,6 @@ import { AppConfig } from '../common/utils/AppConfig';
 import { DateUtil } from '../common/utils/DateUtil';
 import { ThemeCenter, ThemeMode } from '../common/utils/ThemeCenter';
 import { AppStorageKeys } from '../common/constants/AppStorageKeys';
-import { AuthFacade } from '../infrastructure/auth/AuthFacade';
 import { AppStartupCoordinator } from '../infrastructure/auth/AppStartupCoordinator';
 
 const DOMAIN = 0x0000;
@@ -45,7 +44,6 @@ export default class EntryAbility extends UIAbility {
   private currentThemeMode: ThemeMode = 'system';
   private static lastNotificationFingerprint: string = '';
   private static lastNotificationTs: number = 0;
-  private readonly authFacade: AuthFacade = AuthFacade.getInstance();
   private readonly startupCoordinator: AppStartupCoordinator = AppStartupCoordinator.getInstance();
 
   private async initThemeMode(): Promise<void> {
@@ -105,10 +103,7 @@ export default class EntryAbility extends UIAbility {
     const flag = bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_SIGNATURE_INFO;
     const bundleInfo = bundleManager.getBundleInfoForSelfSync(flag);
     const appId = bundleInfo.signatureInfo.appId;
-    const signatureDump = JSON.stringify(bundleInfo.signatureInfo);
-    console.info('appId:' + appId);
     hilog.info(DOMAIN, TAG, `[LOGIN_TRACE][runtime] bundle=${bundleInfo.name}, appId=${appId}`);
-    hilog.info(DOMAIN, TAG, `[LOGIN_TRACE][runtime] signature=${signatureDump}`);
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');
 
     try {
