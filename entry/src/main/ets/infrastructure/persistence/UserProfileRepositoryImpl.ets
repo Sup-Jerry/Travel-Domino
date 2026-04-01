@@ -11,6 +11,7 @@ import {
   CloudDBZoneConfig,
   CloudDBZoneQuery
 } from '@hw-agconnect/database-ohos';
+import Long from 'long';
 import { UserProfileEntity } from '../../domain/entity/UserProfileEntity';
 import { IUserProfileRepository } from '../../domain/ports/IUserProfileRepository';
 import { UserProfile } from './clouddb/UserProfile';
@@ -300,10 +301,16 @@ export class UserProfileRepositoryImpl implements IUserProfileRepository {
     record.avatarPath = entity.avatarPath;
     record.avatarVersion = entity.avatarVersion;
     record.isInitialized = entity.isInitialized;
-    // Cloud DB Long 字段在当前 SDK 下直接写 number 可能触发类型不匹配，
-    // 先交由云端默认值/空值处理，读取时再做容错转换。
-    record.createdAt = undefined;
-    record.updatedAt = undefined;
+    const now = Date.now();
+    const createdAt = Number.isFinite(entity.createdAt) && entity.createdAt > 0
+      ? Math.floor(entity.createdAt)
+      : now;
+    const updatedAt = Number.isFinite(entity.updatedAt) && entity.updatedAt > 0
+      ? Math.floor(entity.updatedAt)
+      : createdAt;
+    // Cloud DB Long 字段要求 Long 实例，number 会触发类型不匹配。
+    record.createdAt = Long.fromNumber(createdAt);
+    record.updatedAt = Long.fromNumber(updatedAt);
     return record;
   }
 

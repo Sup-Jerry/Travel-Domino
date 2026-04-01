@@ -63,6 +63,10 @@ struct LoginPage {
   }
 
   private async loginWithHuaweiButton(credential: HuaweiCredential): Promise<void> {
+    if (this.loading) {
+      hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, '[LOGIN_TRACE][page] ignore duplicated loginWithHuaweiButton');
+      return;
+    }
     hilog.info(
       LoginPage.LOG_DOMAIN,
       LoginPage.LOG_TAG,
@@ -78,6 +82,10 @@ struct LoginPage {
     let result = new AuthResult<UserSession>();
     try {
       result = await this.authFacade.explicitLoginByButton(credential, false);
+    } catch (error) {
+      hilog.error(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] login exception=${JSON.stringify(error)}`);
+      this.toast('登录异常，请检查网络后重试');
+      return;
     } finally {
       this.loading = false;
     }
@@ -91,12 +99,16 @@ struct LoginPage {
       return;
     }
     hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] login success source=${result.source}`);
-    await this.ensureCloudProfile(hostContext, result.data);
+    void this.ensureCloudProfile(hostContext, result.data);
     this.toast('登录成功');
     await this.replaceUrl('pages/PlanListPage');
   }
 
   private async loginWithHuaweiApiFallback(): Promise<void> {
+    if (this.loading) {
+      hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, '[LOGIN_TRACE][page] ignore duplicated loginWithHuaweiApiFallback');
+      return;
+    }
     if (!this.ensureAgreement()) {
       hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, '[LOGIN_TRACE][page] api_fallback blocked by agreement');
       return;
@@ -107,6 +119,10 @@ struct LoginPage {
     let result = new AuthResult<UserSession>();
     try {
       result = await this.authFacade.explicitLoginByButton(undefined, false);
+    } catch (error) {
+      hilog.error(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] api_fallback exception=${JSON.stringify(error)}`);
+      this.toast('登录异常，请检查网络后重试');
+      return;
     } finally {
       this.loading = false;
     }
@@ -120,12 +136,16 @@ struct LoginPage {
       return;
     }
     hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] api_fallback success source=${result.source}`);
-    await this.ensureCloudProfile(hostContext, result.data);
+    void this.ensureCloudProfile(hostContext, result.data);
     this.toast('登录成功');
     await this.replaceUrl('pages/PlanListPage');
   }
 
   private async loginAsGuest(): Promise<void> {
+    if (this.loading) {
+      hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, '[LOGIN_TRACE][page] ignore duplicated loginAsGuest');
+      return;
+    }
     if (!this.ensureAgreement()) {
       hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, '[LOGIN_TRACE][page] guest_login blocked by agreement');
       return;
@@ -136,6 +156,10 @@ struct LoginPage {
     let result = new AuthResult<UserSession>();
     try {
       result = await this.authFacade.explicitGuestLogin();
+    } catch (error) {
+      hilog.error(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] guest_login exception=${JSON.stringify(error)}`);
+      this.toast('游客登录异常，请稍后重试');
+      return;
     } finally {
       this.loading = false;
     }
