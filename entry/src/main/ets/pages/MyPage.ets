@@ -8,7 +8,7 @@ import { AuthFacade } from '../infrastructure/auth/AuthFacade';
 import { SessionManager } from '../infrastructure/auth/SessionManager';
 import { HuaweiAccountLoginButton } from './components/auth/HuaweiAccountLoginButton';
 import { AvatarService } from '../infrastructure/avatar/AvatarService';
-import { ProfileViewModel } from '../viewmodel/ProfileViewModel';
+import { ProfileViewModel, ProfileViewState } from '../viewmodel/ProfileViewModel';
 
 const DEFAULT_USER_NAME = '游客用户';
 
@@ -18,6 +18,7 @@ struct MyPage {
   private static readonly LOG_DOMAIN: number = 0x0000;
   private static readonly LOG_TAG: string = 'MyPage';
   private static readonly USERNAME_PATTERN: RegExp = /^[\u4E00-\u9FFFa-zA-Z0-9_ ]+$/;
+  private static readonly LIGHT_HINT_DEDUP_MS: number = 12000;
   @State userName: string = DEFAULT_USER_NAME;
   @State loadingProfile: boolean = false;
   @State actionLoading: boolean = false;
@@ -33,6 +34,8 @@ struct MyPage {
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
   private readonly authFacade: AuthFacade = AuthFacade.getInstance();
   private avatarService: AvatarService | null = null;
+  private lastLightHintKey: string = '';
+  private lastLightHintAt: number = 0;
 
   private getThemePalette() {
     return ThemeCenter.getPalette(this.effectiveTheme);
@@ -78,6 +81,7 @@ struct MyPage {
       const accountId = String(sessionAccountId || profile.accountId || '').trim();
       if (!profile.isGuest && accountId.length > 0) {
         const cloudProfile = await profileViewModel.bootstrap(accountId);
+        this.showProfileBootstrapHint(accountId, profileViewModel.getState());
         if (cloudProfile) {
           this.userName = cloudProfile.username || this.userName;
           this.currentUserId = cloudProfile.accountId;
@@ -135,12 +139,46 @@ struct MyPage {
       this.avatarDisplayUri = this.avatarService.resolveDisplayUri(profile);
       this.currentRemoteAvatarUrl = profile.cloudUrl;
       this.useDefaultAvatar = false;
-      this.toast('头像已更新（本地）');
+      if (profile.uploadState === 'SYNCED') {
+        this.toast('头像已更新并同步');
+      } else {
+        this.toast('头像已更新（本地）');
+        this.toastLightHintOnce(
+          `avatar_cloud_sync_pending:${this.currentUserId}`,
+          '云端同步失败或延迟，稍后将自动重试'
+        );
+      }
     } catch (_error) {
       this.toast('头像选择失败，请稍后重试');
     } finally {
       this.avatarBusy = false;
     }
+  }
+
+  private showProfileBootstrapHint(accountId: string, state: ProfileViewState): void {
+    const safeAccountId = String(accountId || '').trim() || 'guest_local';
+    if (state === 'offline') {
+      this.toastLightHintOnce(`profile_offline:${safeAccountId}`, '当前为离线缓存资料');
+      return;
+    }
+    if (state === 'error') {
+      this.toastLightHintOnce(`profile_cloud_fail:${safeAccountId}`, '云端同步失败，请稍后重试');
+    }
+  }
+
+  private toastLightHintOnce(key: string, message: string): void {
+    const safeKey = String(key || '').trim();
+    if (!safeKey || !message) {
+      return;
+    }
+    const now = Date.now();
+    if (this.lastLightHintKey === safeKey && (now - this.lastLightHintAt) < MyPage.LIGHT_HINT_DEDUP_MS) {
+      return;
+    }
+    this.lastLightHintKey = safeKey;
+    this.lastLightHintAt = now;
+    this.toast(message);
+    hilog.info(MyPage.LOG_DOMAIN, MyPage.LOG_TAG, `[PROFILE_TRACE][page] light_hint key=${safeKey}`);
   }
 
   private async doLogoutFromMyPage(): Promise<void> {
