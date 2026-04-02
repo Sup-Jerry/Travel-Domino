@@ -1,8 +1,8 @@
 ﻿import { PlanItem } from '../infrastructure/persistence/PlanRepositoryImpl';
 import { CreatePlanDialog } from './components/dialogs/CreatePlanDialog';
 import { TipDialog } from './components/dialogs/TipDialog';
-import { PlanJsonExportDialog } from './components/dialogs/PlanJsonExportDialog';
-import { PlanJsonImportDialog } from './components/dialogs/PlanJsonImportDialog';
+import { PlanShareDialog } from './components/dialogs/PlanShareDialog';
+import { PlanImportDialog } from './components/dialogs/PlanImportDialog';
 import { promptAction, router } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { PreferenceManager } from '../common/utils/PreferenceManager';
@@ -314,8 +314,14 @@ struct PlanListPage {
 
   private openExportDialog(): void {
     this.exportJsonDialogController = new CustomDialogController({
-      builder: PlanJsonExportDialog({
-        jsonText: this.exportJsonText
+      builder: PlanShareDialog({
+        planId: 0,
+        planTitle: '',
+        startDate: 0,
+        endDate: 0,
+        totalDays: 0,
+        totalEvents: 0,
+        compressedJson: this.exportJsonText
       }),
       alignment: DialogAlignment.Center
     });
@@ -324,7 +330,7 @@ struct PlanListPage {
 
   private openImportDialog(): void {
     this.importJsonDialogController = new CustomDialogController({
-      builder: PlanJsonImportDialog({
+      builder: PlanImportDialog({
         onImport: async (jsonText: string, cancelToken: PlanJsonImportCancelToken): Promise<void> => {
           await this.importPlanFromJson(jsonText, cancelToken);
         }
@@ -459,7 +465,7 @@ struct PlanListPage {
   @Builder
   PlanSwipeMenu(item: PlanItem) {
     Row() {
-      Button('导出')
+      Button('分享')
         .type(ButtonType.Normal)
         .backgroundColor('#2196F3')
         .width(70)
@@ -502,7 +508,7 @@ struct PlanListPage {
                     Blank();
 
           Row({ space: 8 }) {
-            Button('导入JSON')
+            Button('导入计划')
               .fontSize(12)
               .height(30)
               .backgroundColor('#007DFF')

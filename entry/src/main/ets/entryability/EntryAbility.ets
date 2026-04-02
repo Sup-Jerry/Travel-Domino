@@ -164,6 +164,21 @@ export default class EntryAbility extends UIAbility {
 
   onNewWant(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     this.handleNotificationLaunchWant(want);
+    this.handleDeepLinkWant(want);
+  }
+
+  private handleDeepLinkWant(want: Want): void {
+    const uri = want.uri;
+    if (!uri || !uri.startsWith('travelapp://import')) {
+      return;
+    }
+
+    try {
+      hilog.info(DOMAIN, TAG, `[DEEP_LINK] Received: ${uri}`);
+      AppStorage.setOrCreate('pendingImportUri', uri);
+    } catch (error) {
+      hilog.error(DOMAIN, TAG, `[DEEP_LINK] Failed: ${JSON.stringify(error)}`);
+    }
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {

@@ -11,34 +11,42 @@
 - Prefer type safety and explicit error handling.
 - Never expose secrets/tokens/credentials in output.
 
-## Skills available for this repo (13 enabled, yt-dlp excluded)
+## Skills available for this repo (17 enabled, yt-dlp excluded)
 When user explicitly names a skill, or task clearly matches its description, use that skill workflow.
 
-1. Skill Evolution Manager  
+1. Skill Evolution Manager
    Path: `C:/Users/Reaper/.codex/skills/skill-evolution-manager-workspace/skill-snapshot-20260311_101857/SKILL.md`
-2. app-architecture-planning  
+2. app-architecture-planning
    Path: `C:/Users/Reaper/.codex/skills/travel-architecture-foresight/SKILL.md`
-3. app-preflight-planner  
+3. app-preflight-planner
    Path: `C:/Users/Reaper/.codex/skills/app-preflight-planner/SKILL.md`
-4. bat  
+4. bat
    Path: `C:/Users/Reaper/.codex/skills/bat/SKILL.md`
-5. github-to-skills  
+5. github-to-skills
    Path: `C:/Users/Reaper/.codex/skills/github-to-skills/SKILL.md`
-6. requests  
+6. requests
    Path: `C:/Users/Reaper/.codex/skills/github-to-skills-workspace/smoke/requests/SKILL.md`
-7. skill-evolution-manager  
+7. skill-evolution-manager
    Path: `C:/Users/Reaper/.codex/skills/skill-evolution-manager/SKILL.md`
-8. skill-manager  
+8. skill-manager
    Path: `C:/Users/Reaper/.codex/skills/skill-manager/SKILL.md`
-9. software-lifecycle-ops  
+9. software-lifecycle-ops
    Path: `C:/Users/Reaper/.codex/skills/software-lifecycle-ops/SKILL.md`
-10. travel-domino-dev  
+10. travel-domino-dev
     Path: `C:/Users/Reaper/.codex/skills/travel-domino-dev/SKILL.md`
-11. openai-docs  
+11. frontend-design
+    Path: `C:/Users/Reaper/.codex/skills/frontend-design/SKILL.md`
+12. web-access
+    Path: `C:/Users/Reaper/.codex/skills/web-access/SKILL.md`
+13. claude-mem
+    Path: `C:/Users/Reaper/.codex/skills/claude-mem/SKILL.md`
+14. pua
+    Path: `C:/Users/Reaper/.codex/skills/pua/SKILL.md`
+15. openai-docs
     Path: `C:/Users/Reaper/.codex/skills/.system/openai-docs/SKILL.md`
-12. skill-creator  
+16. skill-creator
     Path: `C:/Users/Reaper/.codex/skills/.system/skill-creator/SKILL.md`
-13. skill-installer  
+17. skill-installer
     Path: `C:/Users/Reaper/.codex/skills/.system/skill-installer/SKILL.md`
 
 ## Skill usage rules
