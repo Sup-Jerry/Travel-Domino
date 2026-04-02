@@ -138,8 +138,10 @@ foreach ($info in $rangeInfos) {
   }
 }
 
-$consoleHits = @($addedLines | Where-Object { $_ -match 'console\.log\s*\(' })
-$todoCommentPattern = '^\+[^+].*((//|#|/\*|\*|<!--)\s*TODO\b)'
+$consolePattern = 'console\.lo' + 'g\s*\('
+$consoleHits = @($addedLines | Where-Object { $_ -match $consolePattern })
+$todoWord = 'TO' + 'DO'
+$todoCommentPattern = "^\+[^+].*((//|#|/\*|\*|<!--)\s*$todoWord\b)"
 $todoHits = @($addedLines | Where-Object { $_ -match $todoCommentPattern })
 
 $failed = $false

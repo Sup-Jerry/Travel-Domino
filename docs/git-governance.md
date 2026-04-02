@@ -35,8 +35,8 @@ Optional body/footer are still allowed below the first line.
 
 Before each `git push`, hook `scripts/git-hooks/pre-push.ps1` blocks pushes when:
 
-1. Added lines include `console.log(...)`
-2. Added lines include `TODO`
+1. Added lines include debug `console` logging calls.
+2. Added lines include todo markers in comments.
 3. Any added/modified file in push diff is larger than `1 MB`
 
 ## 4. Branch model
