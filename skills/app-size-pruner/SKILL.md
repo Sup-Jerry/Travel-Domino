@@ -38,7 +38,6 @@ description: Clean oversized application workspaces by scanning removable large 
   - 失败数
   - JSON 报告路径（`.app-size-prune-report-*.json`）
 
-
 ## User-Learned Best Practices & Constraints
 
 > **Auto-Generated Section**: This section is maintained by `skill-evolution-manager`. Do not edit manually.
@@ -46,11 +45,13 @@ description: Clean oversized application workspaces by scanning removable large 
 ### User Preferences
 - When user asks to clean project, run preview first and explicitly explain MinSizeMB threshold impact before apply.
 - When user reports remaining size after cleanup, provide top directory size breakdown first, then offer safe second pass.
+- 瘦身默认先预览再执行删除，并回报释放空间和JSON报告路径。
 
 ### Known Fixes & Workarounds
 - Default MinSizeMB 20 can miss many 1-20MB build artifacts; run a second scan with MinSizeMB 1 for safe whitelist cleanup when user still needs more space.
 - After cleanup, explicitly explain that .git and dependency folders such as oh_modules or node_modules are expected remaining size and are not safe-garbage targets by default.
+- 瘦身执行后若释放不足，按规则降阈值二次扫描（例如MinSizeMB从20降到1）并分别汇报两轮结果。
 
 ### Custom Instruction Injection
 
-For project cleanup tasks, always execute in this order: preview -> apply -> size breakdown verification. If user still needs more space, run a low-threshold safe pass with MinSizeMB 1 and report both per-round and cumulative freed space with report file paths.
+瘦身流程固定：preview -> apply -> 报告路径与释放量核对。

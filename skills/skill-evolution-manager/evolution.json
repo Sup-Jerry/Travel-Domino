@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-01T18:36:31.611940",
+  "last_updated": "2026-04-02T11:47:54.758666",
   "preferences": [
     "If user says no code changes, stop code edits and switch to retrospective output.",
     "Default retrospective language is Chinese with fixed structure: issues-root causes-improvements-next steps.",
@@ -49,7 +49,8 @@
     "When user explicitly names required skills, execute those skill workflows first and provide script-level evidence.",
     "For retrospective and iteration requests, keep output concise in Chinese and include persistence proof.",
     "当用户明确要求“复盘+推main+瘦身”时，执行顺序固定为：经验沉淀 -> GitHub同步 -> 瘦身扫描与执行。",
-    "执行skill-evolution脚本时优先使用环境变量传递JSON，避免PowerShell参数去引号导致解析失败。"
+    "执行skill-evolution脚本时优先使用环境变量传递JSON，避免PowerShell参数去引号导致解析失败。",
+    "用户请求“复盘迭代+瘦身”时，顺序固定为：经验沉淀->瘦身执行->结果证据回报。"
   ],
   "fixes": [
     "Before any edit, restate user intent and explicitly state whether code will be changed.",
@@ -101,9 +102,11 @@
     "Run merge_evolution plus smart_stitch for both active domain skill and skill-evolution-manager in the same turn.",
     "On PowerShell, replace unsupported command chaining with ';' to avoid parser interruption during workflow execution.",
     "merge_evolution在PowerShell直接传JSON参数会丢失引号；改为EV_PAYLOAD环境变量传递可稳定执行。",
-    "复盘完成后需要给出可验证证据：last_updated时间戳、SKILL.md自动缝合区存在。"
+    "复盘完成后需要给出可验证证据：last_updated时间戳、SKILL.md自动缝合区存在。",
+    "经验沉淀完成后必须同轮回读evolution.json的last_updated和SKILL.md自动区块作为持久化证据。",
+    "当用户追加流程约束（如“以后以最新main为主”）时，应立即沉淀为可执行规则而非口头备注。"
   ],
-  "custom_prompts": "复盘任务默认输出中文、简洁、可验收，且包含脚本命令与落盘证据。",
+  "custom_prompts": "复盘输出必须包含：执行脚本、目标skill、落盘证据（last_updated与自动区块）。",
   "contexts": [
     "Case: Toolbox package missing in ohpm registry, switched to vendored local source and local exports.",
     "Case: Expansion/drag issues caused by oversized wrapper (200x200) and positioned container; fixed with 58x58 wrapper and origin position.",

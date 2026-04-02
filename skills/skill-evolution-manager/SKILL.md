@@ -113,6 +113,7 @@ Agent 调用 `scripts/smart_stitch.py`，将 `evolution.json` 的内容转化为
 - For retrospective and iteration requests, keep output concise in Chinese and include persistence proof.
 - 当用户明确要求“复盘+推main+瘦身”时，执行顺序固定为：经验沉淀 -> GitHub同步 -> 瘦身扫描与执行。
 - 执行skill-evolution脚本时优先使用环境变量传递JSON，避免PowerShell参数去引号导致解析失败。
+- 用户请求“复盘迭代+瘦身”时，顺序固定为：经验沉淀->瘦身执行->结果证据回报。
 
 ### Known Fixes & Workarounds
 - Before any edit, restate user intent and explicitly state whether code will be changed.
@@ -165,7 +166,9 @@ Agent 调用 `scripts/smart_stitch.py`，将 `evolution.json` 的内容转化为
 - On PowerShell, replace unsupported command chaining with ';' to avoid parser interruption during workflow execution.
 - merge_evolution在PowerShell直接传JSON参数会丢失引号；改为EV_PAYLOAD环境变量传递可稳定执行。
 - 复盘完成后需要给出可验证证据：last_updated时间戳、SKILL.md自动缝合区存在。
+- 经验沉淀完成后必须同轮回读evolution.json的last_updated和SKILL.md自动区块作为持久化证据。
+- 当用户追加流程约束（如“以后以最新main为主”）时，应立即沉淀为可执行规则而非口头备注。
 
 ### Custom Instruction Injection
 
-复盘任务默认输出中文、简洁、可验收，且包含脚本命令与落盘证据。
+复盘输出必须包含：执行脚本、目标skill、落盘证据（last_updated与自动区块）。

@@ -228,6 +228,8 @@ description: 用于 Travel Domino（HarmonyOS 行程规划项目）的定向开�
 - 遇到登录卡在Gate页时，先按provider->facade->gate顺序对齐LOGIN_TRACE时序，再决定修复点。
 - 启动静默登录的context默认由EntryAbility绑定，页面层不要重复覆盖AuthFacade上下文。
 - 离线重进失败时优先验证session_cache恢复链路，而不是先怀疑华为账号SDK。
+- 当分支与main差异过大且冲突扩散时，优先在main做最小补丁并直接提交，不强行整分支合并。
+- 用户明确要求“以最新为主”时，直接清理旧分支并以origin/main作为唯一基线。
 
 ### Known Fixes & Workarounds
 - For cross-day domino shifts, user-facing date and writeback inputs must prefer dynamic_day_offset; do not mix with day_offset in one flow.
@@ -314,7 +316,9 @@ description: 用于 Travel Domino（HarmonyOS 行程规划项目）的定向开�
 - 修复silentLogin因context类型不兼容导致auth_provider_error：在EntryAbility.bootstrapUserContext先bindContext(this.context)，并移除AuthGatePage覆盖绑定。
 - 修复ArkTS no-structural-typing：AuthSessionStore对外load/loadSessionPersisted统一返回AuthSessionPayload。
 - 认证链路改动后先跑unit-all做最小回归，再做真机登录验收。
+- merge --ff-only失败且冲突文件明显超出本次需求范围时，先merge --abort，再执行最小补丁策略。
+- Windows PowerShell不支持&&，命令链需要拆分执行避免脚本中断。
 
 ### Custom Instruction Injection
 
-针对Travel Domino登录/会话问题，先做日志定因与最小补丁，保证离线重进可用后再扩展优化。
+遇到分支合并冲突范围明显大于当前需求时，默认采取“main最小补丁+旧分支清理”策略，并在结果中给出保留/删除依据。
