@@ -23,3 +23,6 @@ A skill is a set of local instructions to follow that is stored in a `SKILL.md` 
 ## User preferences
 - GitHub submissions must go directly to `main`.
 - Do not create or submit feature branches unless the user explicitly asks for it.
+
+任何密码、密钥、签名信息，都不写进 Git 跟踪文件。
+开发环境和构建环境都不用手填真实秘密到仓库文件中

@@ -22,6 +22,10 @@ buildarkts_fail.log
 buildarkts_run.log
 .app-size-prune-report-*.json
 build-profile.json5
+build.log
+travel-domino-skill-evolution-all.txt
+.claude/
+*.bak
 
 /backend/node_modules
 /backend/dist

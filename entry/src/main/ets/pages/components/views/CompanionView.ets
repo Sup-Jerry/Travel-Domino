@@ -7,36 +7,56 @@ import {
   HistoryTimelineSummary,
   TimelineViewModel
 } from '../../../viewmodel/TimelineViewModel';
-import { DateUtil } from '../../../common/utils/DateUtil';
-import { display, promptAction, window } from '@kit.ArkUI';
+import { promptAction, window } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
-import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { CompanionBottomActionBar } from './BottomNavBar';
 import { ThemeCenter } from '../../../common/utils/ThemeCenter';
-import { CompanionEventState, CompanionPresentationHelper } from './CompanionPresentationHelper';
 import { TimelineExecutionState } from '../../../domain/policy/TimelineExecutionState';
-import { SoftReplanApplyResult, WeatherSuggestion } from '../../../domain/services/WeatherModels';
-
-type CompanionSubMode = 'immersive' | 'control';
-type CompanionInteractionMode = 'immersive' | 'control' | 'both';
+import { WeatherSuggestion } from '../../../domain/services/WeatherModels';
+import { CompanionImmersiveView } from './companion/CompanionImmersiveView';
+import { CompanionControlPage } from './companion/CompanionControlPage';
+import { CompanionOverlayPages } from './companion/CompanionOverlayPages';
+import {
+  CompanionDisplayFilterState,
+  canCompanionEndFocused,
+  canCompanionStartFocused,
+  getCompanionEventState,
+  getCompanionFilterLabel,
+  getCompanionForecastStartText,
+  hasCompanionOtherActiveEvent,
+  getCompanionPlannedRange,
+  getCompanionRuntimeLabel,
+  isCompanionCurrentEventActive,
+  isCompanionCurrentEventPending,
+  matchesCompanionFilter
+} from './companion/CompanionDisplayHelper';
+import {
+  CompanionInteractionMode,
+  CompanionSubMode,
+  getCompanionInteractiveEnabled,
+  pickRandomCompanionImmersiveText
+} from './companion/CompanionAnimationHelper';
+import { getCompanionSwipeUpdate, shouldCompanionEnterControlMode } from './companion/CompanionSwipeHelper';
+import {
+  applyCompanionWeatherSuggestion,
+  getCompanionDismissSuggestionToast,
+  getCompanionWeatherGuidePopupText,
+  getCompanionWeatherSuggestionDetailText
+} from './companion/CompanionWeatherActionHelper';
+import { handleCompanionFocusedReopen, handleCompanionFocusedSkip } from './companion/CompanionFocusActionHelper';
+import {
+  applyCompanionSystemBarVisible,
+  createCompanionZeroInsets,
+  resolveCompanionSafeAreaInsets
+} from './companion/CompanionWindowHelper';
 type FocusSource = 'tap' | 'scroll' | 'init';
-type TimelineEventState = CompanionEventState;
-type CompanionFilterState = 'ALL' | TimelineEventState;
+type CompanionFilterState = CompanionDisplayFilterState;
 type HistoryViewMode = 'timeline' | 'detail';
-
-interface HistoryTimelineGroup {
-  key: string;
-  title: string;
-  items: HistoryTimelineItem[];
-}
-
 @Component
 export struct CompanionView {
   @Link vm: TimelineViewModel;
   @Link isShow: boolean;
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
-
   // region state
   @State context: CompanionContext = {
     runtimeState: 'IDLE',
@@ -53,12 +73,10 @@ export struct CompanionView {
       canViewDetail: false
     }
   };
-
   @State companionSubMode: CompanionSubMode = 'immersive';
   @State interactionMode: CompanionInteractionMode = 'immersive';
   @State immersiveText: string = '';
   @State immersiveDragOffsetY: number = 0;
-
   @State showHistoryPage: boolean = false;
   @State historyTimelineSummary: HistoryTimelineSummary | null = null;
   @State historyTimelineItems: HistoryTimelineItem[] = [];
@@ -164,7 +182,7 @@ export struct CompanionView {
     this.swipeLastTs = 0;
     this.swipePeakDistance = 0;
     this.bindImmersiveWindowContext();
-    this.pickImmersiveText();
+    this.immersiveText = pickRandomCompanionImmersiveText();
     this.ensureFocusReady();
   }
 
@@ -173,214 +191,8 @@ export struct CompanionView {
     this.setSystemBarVisible(true);
   }
 
-  private pickImmersiveText(): void {
-    const tips: string[] = [
-      '一步一步来。',
-      '按自己的节奏走，就是最好的节奏。',
-      '先完成这一站，再去下一站。',
-      '旅程正在此刻发生。'
-    ];
-    const idx = Math.floor(Math.random() * tips.length);
-    this.immersiveText = tips[idx];
-  }
-
   private getThemePalette() {
     return ThemeCenter.getPalette(this.effectiveTheme);
-  }
-
-  private getWeatherScoreSummary(): string {
-    if (!Number.isFinite(this.vm.executionWeatherScore) || this.vm.executionWeatherScore < 0) {
-      return '暂无评分';
-    }
-    const score = this.vm.executionWeatherScore;
-    if (score < 70) {
-      return `评分 ${score} · 高风险`;
-    }
-    if (score < 85) {
-      return `评分 ${score} · 中风险`;
-    }
-    return `评分 ${score} · 低风险`;
-  }
-
-  private buildExecutionSuggestionExplanation(item: WeatherSuggestion): string {
-    const reason = item.reason && item.reason.trim().length > 0 ? item.reason : '系统根据天气风险自动生成。';
-    const benefit = item.expectedBenefit && item.expectedBenefit.trim().length > 0 ? item.expectedBenefit : '用于降低执行中断风险。';
-    const rollback = item.canRollback ? '可回滚' : '不可回滚';
-    const actionTypeText = item.actionType === 'REORDER'
-      ? '重排行程顺序'
-      : (item.actionType === 'SHORTEN_STAY'
-        ? '缩短停留时长'
-        : (item.actionType === 'REPLACE_NODE'
-          ? '替换为更稳妥节点'
-          : (item.actionType === 'SKIP_NODE'
-            ? '跳过当前高风险节点'
-            : '提示类建议')));
-    return `建议：${item.title}\n动作类型：${actionTypeText}\n原因：${reason}\n收益：${benefit}\n回滚：${rollback}\n按钮说明：可选应用=立即尝试按建议调整；稍后=本次先不处理但后续仍可再看；忽略=移除该建议，不会自动执行。`;
-  }
-
-  private buildReplanToastMessage(result: SoftReplanApplyResult): string {
-    if (result.success) {
-      const summary = result.preview?.summary && result.preview.summary.trim().length > 0
-        ? result.preview.summary
-        : '已按可选建议调整行程';
-      return summary;
-    }
-    if (result.errorCode === 'REPLAN_INVALID') {
-      if (result.reasonCode === 'status_blocked') {
-        return '当前计划状态不可调整（如已过期/已完成）';
-      }
-      if (result.reasonCode === 'suggestion_missing') {
-        return '建议已失效，请先刷新天气后重试';
-      }
-      return '参数或状态不满足应用条件';
-    }
-    if (result.errorCode === 'REPLAN_BUSY') {
-      return '系统正在处理上一条建议，请稍后再试';
-    }
-    if (result.errorCode === 'REPLAN_IMMUTABLE') {
-      return '命中已完成或锁定节点保护，未执行调整';
-    }
-    if (result.errorCode === 'REPLAN_TIMEOUT') {
-      return '调整超时，已自动回滚';
-    }
-    if (result.errorCode === 'REPLAN_CONFLICT') {
-      if (result.reasonCode === 'apply_failed') {
-        return '建议未命中可调整节点，已回滚';
-      }
-      return result.rolledBack ? '执行冲突，已回滚未改动行程' : '执行冲突，未应用建议';
-    }
-    return '可选建议应用失败，请稍后重试';
-  }
-
-  @Builder
-  private WeatherScorePopupBuilder() {
-    Scroll() {
-      Column({ space: 2 }) {
-        Text(this.getWeatherScoreLine(0))
-          .fontSize(12)
-          .lineHeight(20)
-          .fontColor('#1565C0')
-          .fontWeight(FontWeight.Bold)
-        Text(this.getWeatherScoreLine(1))
-          .fontSize(12)
-          .lineHeight(20)
-          .fontColor('#2E7D32')
-          .fontWeight(FontWeight.Medium)
-        Text(this.getWeatherScoreLine(2))
-          .fontSize(12)
-          .lineHeight(20)
-          .fontColor('#6A1B9A')
-          .fontWeight(FontWeight.Medium)
-        Text(this.getWeatherScoreLine(3))
-          .fontSize(12)
-          .lineHeight(20)
-          .fontColor('#455A64')
-          .fontWeight(FontWeight.Medium)
-        Text(this.getWeatherScoreLine(4))
-          .fontSize(12)
-          .lineHeight(20)
-          .fontColor('#EF6C00')
-          .fontWeight(FontWeight.Medium)
-        Text(this.getWeatherScoreLine(5))
-          .fontSize(12)
-          .lineHeight(20)
-          .fontColor('#1B5E20')
-          .fontWeight(FontWeight.Medium)
-      }
-      .padding(10)
-      .width('100%');
-    }
-    .height(230)
-    .width(280);
-  }
-
-  @Builder
-  private WeatherHintPopupBuilder() {
-    Scroll() {
-      Column({ space: 2 }) {
-        Text(this.getWeatherHintLine(0))
-          .fontSize(12)
-          .lineHeight(20)
-          .fontColor('#1565C0')
-          .fontWeight(FontWeight.Medium)
-        Text(this.getWeatherHintLine(1))
-          .fontSize(12)
-          .lineHeight(20)
-          .fontColor('#2E7D32')
-          .fontWeight(FontWeight.Medium)
-        Text(this.getWeatherHintLine(2))
-          .fontSize(12)
-          .lineHeight(20)
-          .fontColor('#6A1B9A')
-          .fontWeight(FontWeight.Medium)
-        Text(this.getWeatherHintLine(3))
-          .fontSize(12)
-          .lineHeight(20)
-          .fontColor('#455A64')
-          .fontWeight(FontWeight.Medium)
-      }
-      .padding(10)
-      .width('100%');
-    }
-    .height(230)
-    .width(280);
-  }
-
-  @Builder
-  private WeatherSuggestionPopupBuilder() {
-    Scroll() {
-      Column({ space: 2 }) {
-        Text(this.getWeatherSuggestionLine(0))
-          .fontSize(12)
-          .lineHeight(20)
-          .fontColor('#1565C0')
-          .fontWeight(FontWeight.Bold)
-        Text(this.getWeatherSuggestionLine(1))
-          .fontSize(12)
-          .lineHeight(20)
-          .fontColor('#2E7D32')
-          .fontWeight(FontWeight.Medium)
-        Text(this.getWeatherSuggestionLine(2))
-          .fontSize(12)
-          .lineHeight(20)
-          .fontColor('#6A1B9A')
-          .fontWeight(FontWeight.Medium)
-        Text(this.getWeatherSuggestionLine(3))
-          .fontSize(12)
-          .lineHeight(20)
-          .fontColor('#EF6C00')
-          .fontWeight(FontWeight.Medium)
-        Text(this.getWeatherSuggestionLine(4))
-          .fontSize(12)
-          .lineHeight(20)
-          .fontColor('#455A64')
-          .fontWeight(FontWeight.Medium)
-        Text(this.getWeatherSuggestionLine(5))
-          .fontSize(12)
-          .lineHeight(20)
-          .fontColor('#D32F2F')
-          .fontWeight(FontWeight.Bold)
-      }
-      .padding(10)
-      .width('100%');
-    }
-    .height(240)
-    .width(290);
-  }
-
-  private getWeatherScoreLine(index: number): string {
-    const lines = this.vm.buildWeatherScoreExplanation(this.vm.executionWeatherScore).split('\n');
-    return lines[index] ?? '';
-  }
-
-  private getWeatherHintLine(index: number): string {
-    const lines = this.vm.buildWeatherHintExplanation().split('\n');
-    return lines[index] ?? '';
-  }
-
-  private getWeatherSuggestionLine(index: number): string {
-    const lines = this.weatherSuggestionPopupText.split('\n');
-    return lines[index] ?? '';
   }
 
   private bindImmersiveWindowContext(): void {
@@ -393,10 +205,11 @@ export struct CompanionView {
       mainWindow.on('avoidAreaChange', this.onWindowAvoidAreaChange);
       mainWindow.on('windowSizeChange', this.onWindowSizeChange);
     }).catch((_err: object) => {
-      this.safeTopInset = 0;
-      this.safeBottomInset = 0;
-      this.safeLeftInset = 0;
-      this.safeRightInset = 0;
+      const zeroInsets = createCompanionZeroInsets();
+      this.safeTopInset = zeroInsets.top;
+      this.safeBottomInset = zeroInsets.bottom;
+      this.safeLeftInset = zeroInsets.left;
+      this.safeRightInset = zeroInsets.right;
     });
   }
 
@@ -410,18 +223,13 @@ export struct CompanionView {
   }
 
   private setSystemBarVisible(isVisible: boolean): void {
-    const apply = (targetWindow: window.Window) => {
-      targetWindow.setWindowSystemBarEnable(isVisible ? ['status', 'navigation'] : []).catch((_error: BusinessError) => {
-        // Ignore recoverable UI chrome updates.
-      });
-    };
     if (this.immersiveWindow) {
-      apply(this.immersiveWindow);
+      applyCompanionSystemBarVisible(this.immersiveWindow, isVisible);
       return;
     }
     window.getLastWindow(this.getUIContext().getHostContext()).then((mainWindow: window.Window) => {
       this.immersiveWindow = mainWindow;
-      apply(mainWindow);
+      applyCompanionSystemBarVisible(mainWindow, isVisible);
     }).catch((_err: object) => {
       // Ignore if current UI context is already detached.
     });
@@ -436,39 +244,27 @@ export struct CompanionView {
       this.immersiveWindow = mainWindow;
       this.updateSafeAreaInsetsFromWindow(mainWindow);
     }).catch((_err: object) => {
-      this.safeTopInset = 0;
-      this.safeBottomInset = 0;
-      this.safeLeftInset = 0;
-      this.safeRightInset = 0;
+      const zeroInsets = createCompanionZeroInsets();
+      this.safeTopInset = zeroInsets.top;
+      this.safeBottomInset = zeroInsets.bottom;
+      this.safeLeftInset = zeroInsets.left;
+      this.safeRightInset = zeroInsets.right;
     });
   }
 
   private updateSafeAreaInsetsFromWindow(mainWindow: window.Window): void {
     try {
-      const sysArea = mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM);
-      const navArea = mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR);
-      const cutoutArea = mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_CUTOUT);
-      const displayInfo = display.getDefaultDisplaySync();
-
-      const cutoutTopPx = cutoutArea.topRect.height > 0 ? cutoutArea.topRect.top + cutoutArea.topRect.height : 0;
-      const cutoutBottomPx = cutoutArea.bottomRect.height > 0 ? displayInfo.height - cutoutArea.bottomRect.top : 0;
-      const cutoutLeftPx = cutoutArea.leftRect.width > 0 ? cutoutArea.leftRect.left + cutoutArea.leftRect.width : 0;
-      const cutoutRightPx = cutoutArea.rightRect.width > 0 ? displayInfo.width - cutoutArea.rightRect.left : 0;
-
-      const safeTopPx = Math.max(sysArea.topRect.height, cutoutTopPx);
-      const safeBottomPx = Math.max(navArea.bottomRect.height, cutoutBottomPx);
-      const safeLeftPx = Math.max(sysArea.leftRect.width, cutoutLeftPx);
-      const safeRightPx = Math.max(sysArea.rightRect.width, cutoutRightPx);
-
-      this.safeTopInset = this.getUIContext().px2vp(safeTopPx);
-      this.safeBottomInset = this.getUIContext().px2vp(safeBottomPx);
-      this.safeLeftInset = this.getUIContext().px2vp(safeLeftPx);
-      this.safeRightInset = this.getUIContext().px2vp(safeRightPx);
+      const safeInsets = resolveCompanionSafeAreaInsets(mainWindow, this.getUIContext());
+      this.safeTopInset = safeInsets.top;
+      this.safeBottomInset = safeInsets.bottom;
+      this.safeLeftInset = safeInsets.left;
+      this.safeRightInset = safeInsets.right;
     } catch (_err) {
-      this.safeTopInset = 0;
-      this.safeBottomInset = 0;
-      this.safeLeftInset = 0;
-      this.safeRightInset = 0;
+      const zeroInsets = createCompanionZeroInsets();
+      this.safeTopInset = zeroInsets.top;
+      this.safeBottomInset = zeroInsets.bottom;
+      this.safeLeftInset = zeroInsets.left;
+      this.safeRightInset = zeroInsets.right;
     }
   }
 
@@ -491,7 +287,9 @@ export struct CompanionView {
       this.cachedIndexById.set(event.id, index);
       this.cachedSearchTextById.set(event.id, `${event.name}|${event.address || ''}`.toLowerCase());
     });
-    this.cachedVisibleScheduledEvents = this.cachedScheduledEvents.filter((event: EventEntity) => this.matchesFilter(event));
+    this.cachedVisibleScheduledEvents = this.cachedScheduledEvents.filter((event: EventEntity) =>
+      matchesCompanionFilter(event, this.companionFilterState)
+    );
     this.cachedVisibleScheduledEvents.forEach((event: EventEntity, index: number) => {
       this.cachedVisibleIndexById.set(event.id, index);
     });
@@ -506,13 +304,6 @@ export struct CompanionView {
   private getScheduledEvents(): EventEntity[] {
     this.ensureScheduleCacheUpToDate();
     return this.cachedScheduledEvents;
-  }
-
-  private matchesFilter(event: EventEntity): boolean {
-    if (this.companionFilterState === 'ALL') {
-      return true;
-    }
-    return this.getEventState(event) === this.companionFilterState;
   }
 
   private getVisibleScheduledEvents(): EventEntity[] {
@@ -532,22 +323,6 @@ export struct CompanionView {
     this.ensureScheduleCacheUpToDate();
     const index = this.cachedVisibleIndexById.get(this.focusedEventId);
     return index !== undefined ? index + 1 : 0;
-  }
-
-  private getFilterLabel(state: CompanionFilterState): string {
-    if (state === 'ALL') {
-      return '全部';
-    }
-    if (state === 'PENDING') {
-      return '未开始';
-    }
-    if (state === 'ACTIVE') {
-      return '进行中';
-    }
-    if (state === 'COMPLETED') {
-      return '已完成';
-    }
-    return '已跳过';
   }
 
   private ensureFocusVisible(): void {
@@ -574,12 +349,8 @@ export struct CompanionView {
     this.showFilterPage = false;
     this.ensureFocusVisible();
     const visibleCount = this.cachedVisibleScheduledEvents.length;
-    this.safeShowToast(`筛选：${this.getFilterLabel(this.companionFilterState)}（${visibleCount}）`);
+    this.safeShowToast(`筛选：${getCompanionFilterLabel(this.companionFilterState)}（${visibleCount}）`);
     hilog.info(0x0000, 'CompanionView', `[COMPANION_FILTER][apply] state=${this.companionFilterState}, count=${visibleCount}`);
-  }
-
-  private getFilterOptions(): CompanionFilterState[] {
-    return ['ALL', 'PENDING', 'ACTIVE', 'COMPLETED', 'SKIPPED'];
   }
 
   private refreshSearchResults(): void {
@@ -725,22 +496,6 @@ export struct CompanionView {
     return this.getFocusedEvent();
   }
 
-  private getSafeCardEvent(id: number): EventEntity {
-    const direct = this.getEventById(id);
-    if (direct) {
-      return direct;
-    }
-    const focused = this.getFocusedEvent();
-    if (focused) {
-      return focused;
-    }
-    const schedule = this.getScheduledEvents();
-    if (schedule.length > 0) {
-      return schedule[0];
-    }
-    return new EventEntity();
-  }
-
   private applyFocusById(targetId: number, source: FocusSource): void {
     if (targetId <= 0) {
       return;
@@ -823,143 +578,6 @@ export struct CompanionView {
     this.timelineScroller.scrollToIndex(index, true, ScrollAlign.CENTER);
   }
 
-  private formatTs(ts: number): string {
-    return CompanionPresentationHelper.formatTs(ts);
-  }
-
-  private getPlannedRange(event: EventEntity): string {
-    return CompanionPresentationHelper.getPlannedRange(event);
-  }
-
-  private getForecastStartText(event: EventEntity): string {
-    return CompanionPresentationHelper.getForecastStartText(event);
-  }
-
-  private getMainCardTimeText(event: EventEntity): string {
-    return CompanionPresentationHelper.getMainCardTimeText(event);
-  }
-
-  private getEventState(event: EventEntity): TimelineEventState {
-    return CompanionPresentationHelper.getEventState(event);
-  }
-
-  private getEventStateLabel(event: EventEntity): string {
-    return CompanionPresentationHelper.getEventStateLabel(event);
-  }
-
-  private getStateCoreColor(event: EventEntity): ResourceColor {
-    const state = this.getEventState(event);
-    const palette = this.getThemePalette();
-    if (state === 'ACTIVE') {
-      return palette.success;
-    }
-    if (state === 'COMPLETED') {
-      return palette.statusCompleted;
-    }
-    if (state === 'SKIPPED') {
-      return palette.statusSkipped;
-    }
-    return palette.statusPending;
-  }
-
-  private getStateTagBackgroundColor(event: EventEntity): ResourceColor {
-    const state = this.getEventState(event);
-    if (state === 'ACTIVE') {
-      return '#E9F8F1';
-    }
-    if (state === 'COMPLETED') {
-      return '#EAF7EE';
-    }
-    if (state === 'SKIPPED') {
-      return '#FFF4E7';
-    }
-    return '#EAF2FF';
-  }
-
-  private getStateTagTextColor(event: EventEntity): ResourceColor {
-    return this.getStateCoreColor(event);
-  }
-
-  private getStateBorderColor(event: EventEntity): ResourceColor {
-    return this.getStateCoreColor(event);
-  }
-
-  private getStateDotColor(event: EventEntity): ResourceColor {
-    return this.getStateCoreColor(event);
-  }
-
-  private getTimelineSupplement(event: EventEntity): string {
-    return CompanionPresentationHelper.getTimelineSupplement(event);
-  }
-
-  private getRuntimeLabel(): string {
-    switch (this.context.runtimeState) {
-      case 'READY':
-        return '可开始';
-      case 'ACTIVE':
-        return '进行中';
-      case 'PAUSED':
-        return '已暂停';
-      case 'GAP':
-        return '空档中';
-      default:
-        return '空闲';
-    }
-  }
-
-  private getRuntimeDescription(): string {
-    if (this.context.runtimeState === 'PAUSED') {
-      return '当前执行已暂停，可继续恢复；恢复后会重新计算后续安排。';
-    }
-    if (this.context.runtimeState === 'ACTIVE') {
-      return '当前地点进行中。结束打卡后会自动重排后续行程。';
-    }
-
-    if (this.context.runtimeState === 'READY' && this.context.currentEvent) {
-      const startTs = this.context.currentEvent.dynamic_start_time;
-      if (startTs > 0 && startTs + 60000 < Date.now()) {
-        const overdue = Math.max(1, Math.round((Date.now() - startTs) / 60000));
-        return `已超出计划开始 ${overdue} 分钟，仍可立即开始。`;
-      }
-      return '当前任务可以立即开始。';
-    }
-
-    if (this.context.runtimeState === 'GAP' && this.context.nextEvent) {
-      return `当前暂无可执行任务。下一站：${this.context.nextEvent.name}。`;
-    }
-
-    if (this.context.nextEvent) {
-      return `下一站：${this.context.nextEvent.name}。`;
-    }
-    return '当前暂无进行中的任务。';
-  }
-
-  private hasOtherActiveEvent(excludeEventId: number): boolean {
-    return this.getScheduledEvents().some((item: EventEntity) =>
-      item.id !== excludeEventId && this.getEventState(item) === 'ACTIVE'
-    );
-  }
-
-  private canStartFocused(event: EventEntity): boolean {
-    if (this.getEventState(event) !== 'PENDING') {
-      return false;
-    }
-    return !this.hasOtherActiveEvent(event.id);
-  }
-
-  private canEndFocused(event: EventEntity): boolean {
-    if (this.getEventState(event) !== 'ACTIVE') {
-      return false;
-    }
-    if (!this.context.actions.canEnd) {
-      return false;
-    }
-    if (!this.context.currentEvent) {
-      return false;
-    }
-    return this.context.currentEvent.id === event.id;
-  }
-
   private showActiveConflictDialog(conflictName: string): void {
     const safeName = (conflictName || '').trim().length > 0 ? conflictName : '其他地点';
     this.getUIContext().showAlertDialog({
@@ -983,14 +601,6 @@ export struct CompanionView {
     return true;
   }
 
-  private isCurrentEventPending(): boolean {
-    return !!this.context.currentEvent && this.getEventState(this.context.currentEvent) === 'PENDING';
-  }
-
-  private isCurrentEventActive(): boolean {
-    return !!this.context.currentEvent && this.getEventState(this.context.currentEvent) === 'ACTIVE';
-  }
-
   private async handleFocusedPrimaryAction(): Promise<void> {
     const focused = this.getFocusedEvent();
     if (!focused) {
@@ -1008,10 +618,10 @@ export struct CompanionView {
       return;
     }
 
-    const state = this.getEventState(focused);
+    const state = getCompanionEventState(focused);
     const now = Date.now();
     if (state === 'PENDING') {
-      if (!this.canStartFocused(focused)) {
+      if (!canCompanionStartFocused(focused, this.getScheduledEvents())) {
         const shown = await this.showGlobalActiveConflictDialog(focused.id);
         if (!shown) {
           this.safeShowToast('请先结束当前进行中的任务');
@@ -1047,40 +657,15 @@ export struct CompanionView {
   }
 
   private async handleFocusedSkip(): Promise<void> {
-    const focused = this.getFocusedEvent();
-    if (!focused) {
-      return;
-    }
-    if (this.getEventState(focused) !== 'PENDING') {
-      this.safeShowToast('仅“未开始”任务可跳过');
-      return;
-    }
-    await this.vm.skipEvent(focused);
-    this.refreshContext();
-    setTimeout(() => {
-      const schedule = this.getScheduledEvents();
-      const startIndex = this.getScheduleIndexById(focused.id);
-      let nextId = -1;
-      if (startIndex >= 0) {
-        for (let i = startIndex + 1; i < schedule.length; i++) {
-          if (TimelineExecutionState.isStartable(schedule[i])) {
-            nextId = schedule[i].id;
-            break;
-          }
-        }
-      }
-      if (nextId <= 0) {
-        for (let i = 0; i < schedule.length; i++) {
-          if (TimelineExecutionState.isStartable(schedule[i])) {
-            nextId = schedule[i].id;
-            break;
-          }
-        }
-      }
-      if (nextId > 0) {
-        this.applyFocusById(nextId, 'tap');
-      }
-    }, 120);
+    await handleCompanionFocusedSkip({
+      focusedEvent: this.getFocusedEvent(),
+      skipEvent: async (event: EventEntity): Promise<void> => this.vm.skipEvent(event),
+      refreshContext: () => this.refreshContext(),
+      getScheduledEvents: () => this.getScheduledEvents(),
+      getScheduleIndexById: (id: number) => this.getScheduleIndexById(id),
+      applyFocusById: (id: number) => this.applyFocusById(id, 'tap'),
+      showToast: (message: string) => this.safeShowToast(message)
+    });
   }
 
   private startNavigation(target?: EventEntity): void {
@@ -1104,12 +689,12 @@ export struct CompanionView {
 
     const callback: common.AbilityStartCallback = {
       onError: () => {
-        this.safeShowToast('拉起导航失败');
+        this.safeShowToast('鎷夎捣瀵艰埅澶辫触');
       }
     };
 
-    uiContext.startAbilityByType('navigation', wantParam, callback).catch((error: BusinessError) => {
-      this.safeShowToast(`当前设备不支持系统导航（${error.code}）`);
+    uiContext.startAbilityByType('navigation', wantParam, callback).catch((_error: Object) => {
+      this.safeShowToast('当前设备不支持系统导航');
     });
   }
 
@@ -1141,36 +726,19 @@ export struct CompanionView {
   }
 
   private async handleFocusedReopen(): Promise<void> {
-    const focused = this.getFocusedEvent();
-    if (!focused) {
-      return;
-    }
-    if (this.getEventState(focused) !== 'SKIPPED') {
-      this.safeShowToast('仅“已跳过”任务可重新开始');
-      return;
-    }
-    if (this.hasOtherActiveEvent(focused.id)) {
-      this.safeShowToast('请先结束当前进行中的任务');
-      return;
-    }
-
-    const reopened = await this.vm.reopenSkippedEvent(focused.id);
-    if (!reopened) {
-      this.safeShowToast('重新开始失败');
-      return;
-    }
-
-    const started = await this.vm.updateActualTime(focused.id, 'actual_start_time', Date.now());
-    if (!started) {
-      const shown = await this.showGlobalActiveConflictDialog(focused.id);
-      if (!shown) {
-        this.safeShowToast('开始打卡失败，请稍后重试');
-      }
-      return;
-    }
-    this.refreshContext();
-    this.applyFocusById(focused.id, 'tap');
-    this.enterImmersiveMode();
+    await handleCompanionFocusedReopen({
+      focusedEvent: this.getFocusedEvent(),
+      getScheduledEvents: () => this.getScheduledEvents(),
+      reopenSkippedEvent: async (eventId: number) => this.vm.reopenSkippedEvent(eventId),
+      updateActualStart: async (eventId: number, nowTs: number) =>
+        this.vm.updateActualTime(eventId, 'actual_start_time', nowTs),
+      showGlobalActiveConflictDialog: async (excludeEventId: number) =>
+        this.showGlobalActiveConflictDialog(excludeEventId),
+      refreshContext: () => this.refreshContext(),
+      applyFocusById: (id: number) => this.applyFocusById(id, 'tap'),
+      enterImmersiveMode: () => this.enterImmersiveMode(),
+      showToast: (message: string) => this.safeShowToast(message)
+    });
   }
 
   private enterControlMode(): void {
@@ -1225,17 +793,10 @@ export struct CompanionView {
     if (this.companionSubMode !== 'immersive') {
       return;
     }
-    if (event.offsetY < 0) {
-      const dragDistance = Math.abs(event.offsetY);
-      if (dragDistance > this.swipePeakDistance) {
-        this.swipePeakDistance = dragDistance;
-      }
-      this.swipeLastTs = Date.now();
-      const dampedOffset = event.offsetY * 0.38;
-      this.immersiveDragOffsetY = dampedOffset < -150 ? -150 : dampedOffset;
-      return;
-    }
-    this.immersiveDragOffsetY = 0;
+    const nextState = getCompanionSwipeUpdate(event.offsetY, this.swipePeakDistance, Date.now());
+    this.swipePeakDistance = nextState.peakDistance;
+    this.swipeLastTs = nextState.lastTs;
+    this.immersiveDragOffsetY = nextState.dragOffsetY;
   }
 
   private resetImmersiveSwipe(): void {
@@ -1249,10 +810,14 @@ export struct CompanionView {
 
   private handleImmersiveSwipeEnd(event: GestureEvent): void {
     const now = Date.now();
-    const dragDistance = Math.max(this.swipePeakDistance, event.offsetY < 0 ? Math.abs(event.offsetY) : 0);
-    const duration = Math.max(1, now - this.swipeStartTs);
-    const upVelocity = dragDistance / duration;
-    const shouldEnterControl = dragDistance >= this.immersiveDistanceTrigger || upVelocity >= this.immersiveVelocityTrigger;
+    const shouldEnterControl = shouldCompanionEnterControlMode(
+      this.swipePeakDistance,
+      event.offsetY,
+      this.swipeStartTs,
+      now,
+      this.immersiveDistanceTrigger,
+      this.immersiveVelocityTrigger
+    );
     this.swipeStartTs = 0;
     this.swipeLastTs = 0;
     this.swipePeakDistance = 0;
@@ -1263,1460 +828,206 @@ export struct CompanionView {
     this.resetImmersiveSwipe();
   }
 
-  private getInteractiveEnabled(mode: CompanionSubMode): boolean {
-    if (this.interactionMode === 'both') {
-      return true;
-    }
-    return this.interactionMode === mode;
-  }
-
-  private getCardTranslateX(phase: 'stable' | 'outgoing' | 'incoming'): number {
-    if (!this.isCardSwitching) {
-      return 0;
-    }
-    if (phase === 'outgoing') {
-      return -24 * this.cardSwitchProgress;
-    }
-    if (phase === 'incoming') {
-      return 24 * (1 - this.cardSwitchProgress);
-    }
-    return 0;
-  }
-
-  private getCardOpacity(phase: 'stable' | 'outgoing' | 'incoming'): number {
-    if (!this.isCardSwitching) {
-      return 1;
-    }
-    if (phase === 'outgoing') {
-      return 1 - this.cardSwitchProgress;
-    }
-    if (phase === 'incoming') {
-      return this.cardSwitchProgress;
-    }
-    return 1;
-  }
-
-  private getCardScale(phase: 'stable' | 'outgoing' | 'incoming'): number {
-    if (!this.isCardSwitching) {
-      return 1;
-    }
-    if (phase === 'outgoing') {
-      return 1 - (0.015 * this.cardSwitchProgress);
-    }
-    if (phase === 'incoming') {
-      return 0.992 + (0.008 * this.cardSwitchProgress);
-    }
-    return 1;
-  }
   // endregion
 
   // region builders
-  @Builder
-  private ImmersiveView() {
-    Column({ space: 18 }) {
-      Blank().layoutWeight(1);
 
-      if (this.context.currentEvent) {
-        Text(this.context.currentEvent.name)
-          .fontSize(42)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.getThemePalette().textPrimary)
-          .maxLines(2)
-          .textAlign(TextAlign.Center)
-          .textOverflow({ overflow: TextOverflow.Ellipsis });
-
-        Text(`${this.getRuntimeLabel()} | ${this.getPlannedRange(this.context.currentEvent)}`)
-          .fontSize(14)
-          .fontColor(this.getThemePalette().textSecondary)
-          .padding({ left: 16, right: 16, top: 8, bottom: 8 })
-          .backgroundColor(this.getThemePalette().cardBgSoft)
-          .borderRadius(16);
-
-        Row({ space: 10 }) {
-          if (this.isCurrentEventPending()) {
-            Button('开始')
-              .layoutWeight(2)
-              .height(50)
-              .enabled(this.context.currentEvent ? this.canStartFocused(this.context.currentEvent) : false)
-              .backgroundColor(this.getThemePalette().success)
-              .fontColor(Color.White)
-              .onClick(async () => {
-                this.applyFocusById(this.context.currentEvent ? this.context.currentEvent.id : -1, 'tap');
-                await this.handleFocusedPrimaryAction();
-              });
-          }
-          if (this.isCurrentEventActive() || this.context.runtimeState === 'PAUSED') {
-            Button('结束')
-              .layoutWeight(1)
-              .height(50)
-              .enabled(this.context.currentEvent ? this.canEndFocused(this.context.currentEvent) : false)
-              .backgroundColor(this.getThemePalette().warning)
-              .fontColor(Color.White)
-              .onClick(async () => {
-                const current = this.context.currentEvent;
-                if (!current) {
-                  return;
-                }
-                await this.vm.updateActualTime(current.id, 'actual_end_time', Date.now());
-                this.refreshContext();
-              });
-          }
-          Button('导航')
-            .layoutWeight(1)
-            .height(50)
-            .backgroundColor(this.getThemePalette().primary)
-            .fontColor(Color.White)
-            .onClick(() => this.startNavigation(this.context.currentEvent || undefined));
-        }
-        .width('78%');
-      } else {
-        Text('当前暂无进行中的地点')
-          .fontSize(28)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.getThemePalette().textPrimary);
-        Text(this.immersiveText)
-          .fontSize(16)
-          .fontColor(this.getThemePalette().textSecondary)
-          .textAlign(TextAlign.Center)
-          .padding({ left: 28, right: 28 });
-        if (this.context.nextEvent) {
-          Text(`下一站：${this.context.nextEvent.name}（${this.getForecastStartText(this.context.nextEvent)}）`)
-            .fontSize(14)
-            .fontColor(this.getThemePalette().textSecondary)
-            .textAlign(TextAlign.Center)
-            .padding({ left: 28, right: 28 });
-        }
-      }
-
-      Text('上滑进入控制页')
-        .fontSize(12)
-        .fontColor(this.getThemePalette().textTertiary)
-        .margin({ top: 10 });
-
-      Blank().layoutWeight(1);
-    }
-    .width('100%')
-    .height('100%')
-    .justifyContent(FlexAlign.Center)
-    .alignItems(HorizontalAlign.Center)
-    .padding({ top: this.safeTopInset + 12, bottom: this.safeBottomInset + 12 })
-    .backgroundColor(this.getThemePalette().immersiveBg)
-    .translate({ y: this.immersiveDragOffsetY })
-    .priorityGesture(
-      PanGesture({ direction: PanDirection.Vertical, distance: 64 })
-        .onActionStart((_event: GestureEvent) => {
-          this.handleImmersiveSwipeStart();
-        })
-        .onActionUpdate((event: GestureEvent) => {
-          this.handleImmersiveSwipeUpdate(event);
-        })
-        .onActionEnd((event: GestureEvent) => {
-          this.handleImmersiveSwipeEnd(event);
-        })
-    );
-  }
-
-  @Builder
-  private ControlTopBar() {
-    Row() {
-      Column({ space: 2 }) {
-        Text('伴游控制')
-          .fontSize(18)
-          .fontColor(this.getThemePalette().textPrimary)
-          .fontWeight(FontWeight.Bold);
-        Text(this.getRuntimeDescription())
-          .fontSize(11)
-          .fontColor(this.getThemePalette().textSecondary)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis });
-      }
-      .alignItems(HorizontalAlign.Start)
-      .layoutWeight(1);
-      Text('退出伴游')
-        .fontSize(13)
-        .fontColor(this.getThemePalette().textSecondary)
-        .onClick(() => {
-          this.exitCompanion();
-        });
-    }
-    .width('100%')
-    .padding({ top: this.safeTopInset + 10, left: 16, right: 16, bottom: 8 });
-  }
-
-  @Builder
-  private FocusedCardBody(event: EventEntity, phase: 'stable' | 'outgoing' | 'incoming') {
-    Column({ space: 10 }) {
-      Text(event.name)
-        .fontSize(24)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(this.getThemePalette().textPrimary)
-        .maxLines(1)
-        .textOverflow({ overflow: TextOverflow.Ellipsis });
-
-      Row({ space: 8 }) {
-        Text(this.getEventStateLabel(event))
-          .fontSize(12)
-          .fontColor(this.getStateTagTextColor(event))
-          .padding({ left: 8, right: 8, top: 4, bottom: 4 })
-          .backgroundColor(this.getStateTagBackgroundColor(event))
-          .border({ width: 1, color: this.getStateBorderColor(event), radius: 10 })
-          .borderRadius(10);
-        Text(this.getMainCardTimeText(event))
-          .fontSize(12)
-          .fontColor(this.getThemePalette().textSecondary)
-          .maxLines(1);
-      }
-
-      if (this.getEventState(event) !== 'PENDING') {
-        Text(`计划 ${this.getPlannedRange(event)}`)
-          .fontSize(12)
-          .fontColor(this.getThemePalette().textTertiary)
-          .maxLines(1);
-      }
-
-      Row({ space: 8 }) {
-        Button('导航')
-          .layoutWeight(1)
-          .height(42)
-          .backgroundColor(this.getThemePalette().primary)
-          .fontColor(Color.White)
-          .onClick(() => this.startNavigation(event));
-
-        if (this.getEventState(event) === 'PENDING') {
-          Button('开始')
-            .layoutWeight(1)
-            .height(42)
-            .enabled(this.canStartFocused(event))
-            .backgroundColor(this.getThemePalette().success)
-            .fontColor(Color.White)
-            .onClick(async () => {
-              await this.handleFocusedPrimaryAction();
-            });
-          Button('跳过')
-            .layoutWeight(1)
-            .height(42)
-            .backgroundColor(this.getThemePalette().warning)
-            .fontColor(Color.White)
-            .onClick(async () => {
-              await this.handleFocusedSkip();
-            });
-        } else if (this.getEventState(event) === 'ACTIVE') {
-          Button('结束')
-            .layoutWeight(1)
-            .height(42)
-            .enabled(this.canEndFocused(event))
-            .backgroundColor(this.getThemePalette().warning)
-            .fontColor(Color.White)
-            .onClick(async () => {
-              await this.vm.updateActualTime(event.id, 'actual_end_time', Date.now());
-              this.refreshContext();
-            });
-        } else if (this.context.runtimeState === 'PAUSED' && this.context.currentEvent && this.context.currentEvent.id === event.id) {
-          Button('结束')
-            .layoutWeight(1)
-            .height(42)
-            .enabled(this.canEndFocused(event))
-            .backgroundColor(this.getThemePalette().warning)
-            .fontColor(Color.White)
-            .onClick(async () => {
-              await this.vm.updateActualTime(event.id, 'actual_end_time', Date.now());
-              this.refreshContext();
-            });
-        } else if (this.getEventState(event) === 'SKIPPED') {
-          Button('重新开始')
-            .layoutWeight(1)
-            .height(42)
-            .backgroundColor(this.getThemePalette().success)
-            .fontColor(Color.White)
-            .onClick(async () => {
-              await this.handleFocusedReopen();
-            });
-          Button('跳过')
-            .layoutWeight(1)
-            .height(42)
-            .enabled(false)
-            .backgroundColor(this.getThemePalette().cardBgSoft)
-            .fontColor(this.getThemePalette().textTertiary)
-            .onClick(() => {
-              this.safeShowToast('已跳过任务不可再次跳过');
-            });
-        } else {
-          Button('结束')
-            .layoutWeight(1)
-            .height(42)
-            .enabled(false)
-            .backgroundColor(this.getThemePalette().cardBgSoft)
-            .fontColor(this.getThemePalette().textTertiary);
-          Button('跳过')
-            .layoutWeight(1)
-            .height(42)
-            .enabled(false)
-            .backgroundColor(this.getThemePalette().cardBgSoft)
-            .fontColor(this.getThemePalette().textTertiary);
-        }
-      }
-      .width('100%');
-
-      Text('点击此卡片进入沉浸模式')
-        .fontSize(11)
-        .fontColor(this.getThemePalette().primary)
-        .padding({ top: 2 });
-    }
-    .alignItems(HorizontalAlign.Start)
-    .width('100%')
-    .padding(16)
-    .backgroundColor(this.getThemePalette().companionCardBg)
-    .border({ width: 1, color: this.getStateBorderColor(event), radius: 16 })
-    .shadow({ radius: 14, color: '#24000000', offsetY: 5 })
-    .borderRadius(16)
-    .translate({ x: this.getCardTranslateX(phase), y: 0 })
-    .opacity(this.getCardOpacity(phase))
-    .scale({
-      x: this.getCardScale(phase),
-      y: this.getCardScale(phase)
-    })
-    .onClick(() => {
-      this.enterImmersiveMode();
-    });
-  }
-
-  @Builder
-  private FocusedCardHost() {
-    Stack() {
-      if (this.canRenderSwitchCards()) {
-        this.FocusedCardBody(this.getSafeCardEvent(this.outgoingCardEventId), 'outgoing');
-        this.FocusedCardBody(this.getSafeCardEvent(this.incomingCardEventId), 'incoming');
-      } else if (this.getDisplayCardEvent()) {
-        this.FocusedCardBody(this.getSafeCardEvent(this.cardDisplayEventId), 'stable');
-      } else {
-        Column({ space: 8 }) {
-          Text('暂无焦点任务')
-            .fontSize(20)
-            .fontColor(this.getThemePalette().textPrimary)
-            .fontWeight(FontWeight.Bold);
-          Text('点击时间轴条目以聚焦')
-            .fontSize(12)
-            .fontColor(this.getThemePalette().textSecondary);
-        }
-        .width('100%')
-        .padding(16)
-        .backgroundColor(this.getThemePalette().companionCardBg)
-        .borderRadius(16);
-      }
-    }
-    .width('100%');
-  }
-
-  @Builder
-  private TimelineFocusItem(item: EventEntity, index: number) {
-    Row({ space: 10 }) {
-      Column({ space: 0 }) {
-        Column()
-          .width(10)
-          .height(10)
-          .borderRadius(5)
-          .backgroundColor(item.id === this.focusedEventId ? this.getStateDotColor(item) : this.getThemePalette().textTertiary);
-      }
-      .width(16)
-      .alignItems(HorizontalAlign.Center)
-      .justifyContent(FlexAlign.Start);
-
-      Column({ space: 4 }) {
-        Text(item.name)
-          .fontSize(item.id === this.focusedEventId ? 16 : 14)
-          .fontWeight(item.id === this.focusedEventId ? FontWeight.Bold : FontWeight.Medium)
-          .fontColor(item.id === this.focusedEventId ? this.getThemePalette().textPrimary : this.getThemePalette().textSecondary)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis });
-
-        if (item.id === this.focusedEventId) {
-          Row({ space: 6 }) {
-            Text(this.getEventStateLabel(item))
-              .fontSize(10)
-              .fontColor(this.getStateTagTextColor(item))
-              .padding({ left: 6, right: 6, top: 2, bottom: 2 })
-              .backgroundColor(this.getStateTagBackgroundColor(item))
-              .border({ width: 1, color: this.getStateBorderColor(item), radius: 8 })
-              .borderRadius(8);
-            Text(this.getTimelineSupplement(item))
-              .fontSize(11)
-              .fontColor(this.getThemePalette().textTertiary)
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-              .layoutWeight(1);
-          }
-          .width('100%');
-        }
-      }
-      .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start);
-    }
-    .width('100%')
-    .padding({
-      left: 12,
-      right: 12,
-      top: item.id === this.focusedEventId ? 12 : 10,
-      bottom: item.id === this.focusedEventId ? 12 : 10
-    })
-    .backgroundColor(item.id === this.focusedEventId ? this.getThemePalette().companionCardBg : this.getThemePalette().companionBg)
-    .border({ width: item.id === this.focusedEventId ? 1 : 0, color: this.getStateBorderColor(item), radius: 12 })
-    .borderRadius(12)
-    .shadow({
-      radius: item.id === this.focusedEventId ? 10 : 0,
-      color: item.id === this.focusedEventId ? '#22000000' : '#00000000',
-      offsetY: item.id === this.focusedEventId ? 4 : 0
-    })
-    .scale({ x: item.id === this.focusedEventId ? 1 : 0.995, y: item.id === this.focusedEventId ? 1 : 0.995 })
-    .onClick(() => {
-      this.handleTimelineTap(item, index);
-    });
-  }
-
-  @Builder
-  private TimelineSection() {
-    Column({ space: 8 }) {
-      Row() {
-        Text('时间轴')
-          .fontSize(13)
-          .fontColor(this.getThemePalette().textSecondary);
-        Blank();
-        Text(`筛选 ${this.getFilterLabel(this.companionFilterState)}  ${this.getVisibleFocusPosition()}/${Math.max(1, this.getVisibleTimelineCount())}`)
-          .fontSize(11)
-          .fontColor(this.getThemePalette().textTertiary);
-      }
-      .width('100%');
-
-      if (this.getVisibleTimelineCount() === 0) {
-        Column({ space: 6 }) {
-          Text('当前筛选下无可见日程')
-            .fontSize(13)
-            .fontColor(this.getThemePalette().textSecondary);
-          Text('点击筛选按钮可切换状态')
-            .fontSize(11)
-            .fontColor(this.getThemePalette().textTertiary);
-        }
-        .layoutWeight(1)
-        .width('100%')
-        .justifyContent(FlexAlign.Center)
-        .alignItems(HorizontalAlign.Center);
-      } else {
-        List({ space: 8, scroller: this.timelineScroller }) {
-          ForEach(this.getVisibleTimelineEvents(), (item: EventEntity, index: number) => {
-            ListItem() {
-              this.TimelineFocusItem(item, index);
-            };
-          }, (item: EventEntity) => item.id.toString());
-          ListItem().height(8);
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .scrollBar(BarState.Auto)
-        .onScrollIndex((start: number, end: number, center: number) => {
-          this.handleTimelineScrollIndex(start, end, center);
-        })
-        .onScrollStop(() => {
-          this.handleTimelineScrollStop();
-        });
-      }
-    }
-    .width('100%')
-    .layoutWeight(1);
-  }
-
-  private closeHistoryPage(): void {
-    this.showHistoryPage = false;
-    this.historyViewMode = 'timeline';
-    this.historyTimelineFilter = 'all';
-    this.selectedHistoryTimelineItem = null;
-    this.selectedHistoryPlaceName = '';
-    this.historySummary = null;
-  }
-
-  private backToHistoryTimeline(): void {
-    this.historyViewMode = 'timeline';
-    this.selectedHistoryTimelineItem = null;
-    this.selectedHistoryPlaceName = '';
-    this.historySummary = null;
-  }
-
-  private formatDateTime(ts: number): string {
-    return CompanionPresentationHelper.formatDateTime(ts);
-  }
-
-  private getHistoryAddress(placeName: string): string {
-    return this.vm.getPlaceAddress(placeName);
-  }
-
-  private getLatestEventForPlace(placeName: string): EventEntity | null {
-    return this.vm.getLatestEventForPlace(placeName);
-  }
-
-  private getCurrentHistoryLatestEvent(): EventEntity | null {
-    if (!this.historySummary) {
-      return null;
-    }
-    return this.getLatestEventForPlace(this.historySummary.placeName);
-  }
-
-  private getCurrentHistoryStatusText(): string {
-    const latestEvent = this.getCurrentHistoryLatestEvent();
-    if (!latestEvent) {
-      return '--';
-    }
-    if (TimelineExecutionState.isSkipped(latestEvent)) {
-      return '已跳过';
-    }
-    if (TimelineExecutionState.isActive(latestEvent)) {
-      return '进行中';
-    }
-    if (TimelineExecutionState.isCompleted(latestEvent)) {
-      return '已离开';
-    }
-    return '未开始';
-  }
-
-  private getCurrentHistoryPlannedStartText(): string {
-    if (this.selectedHistoryTimelineItem && this.selectedHistoryTimelineItem.plannedStart > 0) {
-      return this.formatTs(this.selectedHistoryTimelineItem.plannedStart);
-    }
-    const latestEvent = this.getCurrentHistoryLatestEvent();
-    if (!latestEvent) {
-      return '--:--';
-    }
-    if (latestEvent.dynamic_start_time > 0) {
-      return this.formatTs(latestEvent.dynamic_start_time);
-    }
-    return latestEvent.computed_time || latestEvent.fixed_start_time || '--:--';
-  }
-
-  private getCurrentHistoryActualStartText(): string {
-    const latestEvent = this.getCurrentHistoryLatestEvent();
-    if (!latestEvent || latestEvent.actual_start_time <= 0) {
-      return '--:--';
-    }
-    return this.formatTs(latestEvent.actual_start_time);
-  }
-
-  private getCurrentHistoryActualEndText(): string {
-    const latestEvent = this.getCurrentHistoryLatestEvent();
-    if (!latestEvent || latestEvent.actual_end_time <= 0) {
-      return '--:--';
-    }
-    return this.formatTs(latestEvent.actual_end_time);
-  }
-
-  private getCurrentHistoryStayText(): string {
-    const latestEvent = this.getCurrentHistoryLatestEvent();
-    if (!latestEvent || latestEvent.actual_start_time <= 0 || latestEvent.actual_end_time <= latestEvent.actual_start_time) {
-      return '0 分钟';
-    }
-    const stayMinutes = Math.round((latestEvent.actual_end_time - latestEvent.actual_start_time) / 60000);
-    return `${stayMinutes} 分钟`;
-  }
-
-  private getCurrentHistoryDeviationText(): string {
-    const latestEvent = this.getCurrentHistoryLatestEvent();
-    if (!latestEvent || latestEvent.actual_start_time <= 0 || latestEvent.dynamic_start_time <= 0) {
-      return '--';
-    }
-    const delta = Math.round((latestEvent.actual_start_time - latestEvent.dynamic_start_time) / 60000);
-    if (delta > 0) {
-      return `晚到 ${delta} 分钟`;
-    }
-    if (delta < 0) {
-      return `早到 ${Math.abs(delta)} 分钟`;
-    }
-    return '准时';
-  }
-
-  private getCurrentHistoryNoteText(): string {
-    const latestEvent = this.getCurrentHistoryLatestEvent();
-    if (!latestEvent) {
-      return '--';
-    }
-    const note = (latestEvent.note || '').trim();
-    return note.length > 0 ? note : '--';
-  }
-
-  private applyHistoryTimelineFilter(filter: HistoryTimelineFilter): void {
-    this.historyTimelineFilter = filter;
-  }
-
-  private cycleHistoryTimelineFilter(): void {
-    if (this.historyTimelineFilter === 'all') {
-      this.historyTimelineFilter = 'completed';
-      return;
-    }
-    if (this.historyTimelineFilter === 'completed') {
-      this.historyTimelineFilter = 'skipped';
-      return;
-    }
-    if (this.historyTimelineFilter === 'skipped') {
-      this.historyTimelineFilter = 'abnormal';
-      return;
-    }
-    this.historyTimelineFilter = 'all';
-  }
-
-  private getHistoryTimelineFilterLabel(): string {
-    if (this.historyTimelineFilter === 'completed') {
-      return '只看完成';
-    }
-    if (this.historyTimelineFilter === 'skipped') {
-      return '只看跳过';
-    }
-    if (this.historyTimelineFilter === 'abnormal') {
-      return '只看异常';
-    }
-    return '全部';
-  }
-
-  private isTimelineItemVisible(item: HistoryTimelineItem): boolean {
-    if (this.historyTimelineFilter === 'all') {
-      return true;
-    }
-    if (this.historyTimelineFilter === 'completed') {
-      return item.actionType === 'ARRIVE' || item.actionType === 'LEAVE';
-    }
-    if (this.historyTimelineFilter === 'skipped') {
-      return item.actionType === 'SKIP';
-    }
-    return item.isAbnormal || item.actionType === 'SKIP';
-  }
-
-  private getFilteredHistoryTimelineItems(): HistoryTimelineItem[] {
-    return this.historyTimelineItems.filter((item: HistoryTimelineItem) => this.isTimelineItemVisible(item));
-  }
-
-  private getHistoryDayTitle(groupKey: string): string {
-    if (groupKey === '未定') {
-      return '未定';
-    }
-    const todayKey = DateUtil.formatLocalDate(Date.now());
-    if (groupKey === todayKey) {
-      return '今天';
-    }
-    const date = new Date(groupKey);
-    return DateUtil.formatDate(date, 'MM月dd日');
-  }
-
-  private getHistoryTimelineGroups(): HistoryTimelineGroup[] {
-    const source = this.getFilteredHistoryTimelineItems();
-    const grouped: Record<string, HistoryTimelineItem[]> = {};
-    source.forEach((item: HistoryTimelineItem) => {
-      const key = item.groupDateKey || '未定';
-      if (!grouped[key]) {
-        grouped[key] = [];
-      }
-      grouped[key].push(item);
-    });
-    const keys = Object.keys(grouped).sort((a: string, b: string) => a.localeCompare(b));
-    return keys.map((key: string): HistoryTimelineGroup => {
-      const items = grouped[key];
-      items.sort((a: HistoryTimelineItem, b: HistoryTimelineItem) => {
-        if (a.displayTs !== b.displayTs) {
-          return a.displayTs - b.displayTs;
-        }
-        return a.id - b.id;
-      });
-      return {
-        key: key,
-        title: this.getHistoryDayTitle(key),
-        items: items
-      };
-    });
-  }
-
-  private getTimelineActionText(item: HistoryTimelineItem): string {
-    if (item.actionType === 'ARRIVE') {
-      return `到达 ${item.placeName}`;
-    }
-    if (item.actionType === 'LEAVE') {
-      return `离开 ${item.placeName}`;
-    }
-    if (item.actionType === 'SKIP') {
-      return `跳过 ${item.placeName}`;
-    }
-    return `到达 ${item.placeName}`;
-  }
-
-  private getTimelineSkipReason(item: HistoryTimelineItem): string {
-    const note = (item.note || '').trim();
-    if (note.includes('时间不足')) {
-      return '时间不足';
-    }
-    return '手动跳过';
-  }
-
-  private getTimelineSubText(item: HistoryTimelineItem): string {
-    if (item.actionType === 'LEAVE') {
-      return `停留 ${item.stayMinutes} 分钟`;
-    }
-    if (item.actionType === 'SKIP') {
-      return `原因：${this.getTimelineSkipReason(item)}`;
-    }
-    if (item.actionType === 'ACTIVE') {
-      return '当前进行中';
-    }
-    if (item.deviationMinutes > 0) {
-      return `比计划晚 ${item.deviationMinutes} 分钟`;
-    }
-    if (item.deviationMinutes < 0) {
-      return `比计划早 ${Math.abs(item.deviationMinutes)} 分钟`;
-    }
-    return '与计划一致';
-  }
-
-  private getTimelineSubTextColor(item: HistoryTimelineItem): ResourceColor {
-    if (item.actionType === 'SKIP') {
-      return this.getThemePalette().statusSkipped;
-    }
-    if (item.actionType === 'ACTIVE') {
-      return this.getThemePalette().success;
-    }
-    if (item.isAbnormal) {
-      return this.getThemePalette().danger;
-    }
-    return this.getThemePalette().textSecondary;
-  }
-
-  private getTimelineCardBgColorByIndex(index: number): ResourceColor {
-    const palette: string[] = ['#EAF2FF', '#EAF7EE', '#F7F2EA', '#F8EEF2'];
-    const safeIndex = index >= 0 ? index : 0;
-    return palette[safeIndex % palette.length];
-  }
-
-  private getTimelineCardBgColor(item: HistoryTimelineItem): ResourceColor {
-    const visibleItems = this.getFilteredHistoryTimelineItems();
-    const placeColorIndex = new Map<string, number>();
-    let nextIndex = 0;
-    for (let i = 0; i < visibleItems.length; i++) {
-      const placeName = (visibleItems[i].placeName || '').trim();
-      if (!placeColorIndex.has(placeName)) {
-        placeColorIndex.set(placeName, nextIndex % 4);
-        nextIndex += 1;
-      }
-    }
-    const key = (item.placeName || '').trim();
-    const idx = placeColorIndex.get(key) ?? 0;
-    return this.getTimelineCardBgColorByIndex(idx);
-  }
-
-  private getTimelineDotColor(item: HistoryTimelineItem): ResourceColor {
-    return this.getThemePalette().primary;
-  }
-
-  @Builder
-  private HistoryFullPage() {
-    if (this.showHistoryPage) {
-      Column({ space: 12 }) {
-        Row() {
-          Text(this.historyViewMode === 'timeline' ? '本次计划打卡历史' : '打卡详情')
-            .fontSize(20)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(this.getThemePalette().textPrimary);
-          Blank();
-          if (this.historyViewMode === 'timeline') {
-            Text(`筛选 ${this.getHistoryTimelineFilterLabel()}`)
-              .fontSize(14)
-              .fontColor(this.getThemePalette().textSecondary)
-              .onClick(() => {
-                this.cycleHistoryTimelineFilter();
-              });
-          } else {
-            Text('返回')
-              .fontSize(14)
-              .fontColor(this.getThemePalette().textSecondary)
-              .onClick(() => {
-                this.backToHistoryTimeline();
-              });
-          }
-          Text('关闭')
-            .fontSize(14)
-            .fontColor(this.getThemePalette().textSecondary)
-            .margin({ left: 14 })
-            .onClick(() => {
-              this.closeHistoryPage();
-            });
-        }
-        .width('100%')
-        .padding({ top: this.safeTopInset + 8, bottom: 6 });
-
-        if (this.historyViewMode === 'timeline') {
-          if (this.historyTimelineSummary) {
-            Column({ space: 6 }) {
-              Text(`计划：${this.historyTimelineSummary.planName}`)
-                .fontSize(15)
-                .fontWeight(FontWeight.Medium)
-                .fontColor(this.getThemePalette().textPrimary)
-                .maxLines(1)
-                .textOverflow({ overflow: TextOverflow.Ellipsis });
-              Text(`已完成 ${this.historyTimelineSummary.completedCount} / 跳过 ${this.historyTimelineSummary.skippedCount} / 进行中 ${this.historyTimelineSummary.activeCount}`)
-                .fontSize(12)
-                .fontColor(this.getThemePalette().textSecondary);
-            }
-            .width('100%')
-            .padding(12)
-            .backgroundColor(this.getThemePalette().companionCardBg)
-            .borderRadius(12);
-          }
-
-          if (this.getHistoryTimelineGroups().length === 0) {
-            Column({ space: 8 }) {
-              Text('暂无打卡记录')
-                .fontSize(16)
-                .fontWeight(FontWeight.Medium)
-                .fontColor(this.getThemePalette().textSecondary);
-              Text('开始或结束一个地点后会生成时间线记录。')
-                .fontSize(12)
-                .fontColor(this.getThemePalette().textTertiary);
-            }
-            .width('100%')
-            .layoutWeight(1)
-            .justifyContent(FlexAlign.Center)
-            .alignItems(HorizontalAlign.Center);
-          } else {
-            List({ space: 10 }) {
-              ForEach(this.getHistoryTimelineGroups(), (group: HistoryTimelineGroup) => {
-                ListItem() {
-                  Column({ space: 8 }) {
-                    Text(group.title)
-                      .fontSize(13)
-                      .fontWeight(FontWeight.Medium)
-                      .fontColor(this.getThemePalette().textSecondary);
-
-                    Column({ space: 8 }) {
-                      ForEach(group.items, (item: HistoryTimelineItem) => {
-                        Row({ space: 10 }) {
-                          Text(item.displayTs > 0 ? this.formatTs(item.displayTs) : '--:--')
-                            .fontSize(12)
-                            .fontColor(this.getThemePalette().textSecondary)
-                            .width(52);
-
-                          Text('●')
-                            .fontSize(14)
-                            .fontColor(this.getTimelineDotColor(item))
-                            .width(14);
-
-                          Column({ space: 4 }) {
-                            Text(this.getTimelineActionText(item))
-                              .fontSize(14)
-                              .fontWeight(FontWeight.Medium)
-                              .fontColor(this.getThemePalette().textPrimary)
-                              .maxLines(1)
-                              .textOverflow({ overflow: TextOverflow.Ellipsis });
-                            Text(this.getTimelineSubText(item))
-                              .fontSize(12)
-                              .fontColor(this.getTimelineSubTextColor(item))
-                              .maxLines(1)
-                              .textOverflow({ overflow: TextOverflow.Ellipsis });
-                          }
-                          .layoutWeight(1)
-                          .alignItems(HorizontalAlign.Start);
-                        }
-                        .width('100%')
-                        .padding({ left: 10, right: 10, top: 8, bottom: 8 })
-                        .backgroundColor(this.getTimelineCardBgColor(item))
-                        .borderRadius(10)
-                        .onClick(() => {
-                          this.openHistoryDetailFromTimeline(item);
-                        });
-                      }, (item: HistoryTimelineItem) => item.id.toString());
-                    }
-                    .width('100%');
-                  }
-                  .width('100%')
-                  .padding({ left: 12, right: 12, top: 12, bottom: 12 })
-                  .backgroundColor(this.getThemePalette().companionCardBg)
-                  .borderRadius(12);
-                };
-              }, (group: HistoryTimelineGroup) => group.key);
-            }
-            .width('100%')
-            .layoutWeight(1);
-
-            Row({ space: 8 }) {
-              Button('只看完成')
-                .type(ButtonType.Capsule)
-                .fontSize(12)
-                .fontColor(this.historyTimelineFilter === 'completed'
-                  ? this.getThemePalette().primary
-                  : this.getThemePalette().textSecondary)
-                .backgroundColor(this.getThemePalette().companionCardBg)
-                .layoutWeight(1)
-                .onClick(() => {
-                  this.applyHistoryTimelineFilter('completed');
-                });
-              Button('只看跳过')
-                .type(ButtonType.Capsule)
-                .fontSize(12)
-                .fontColor(this.historyTimelineFilter === 'skipped'
-                  ? this.getThemePalette().statusSkipped
-                  : this.getThemePalette().textSecondary)
-                .backgroundColor(this.getThemePalette().companionCardBg)
-                .layoutWeight(1)
-                .onClick(() => {
-                  this.applyHistoryTimelineFilter('skipped');
-                });
-              Button('只看异常')
-                .type(ButtonType.Capsule)
-                .fontSize(12)
-                .fontColor(this.historyTimelineFilter === 'abnormal'
-                  ? this.getThemePalette().danger
-                  : this.getThemePalette().textSecondary)
-                .backgroundColor(this.getThemePalette().companionCardBg)
-                .layoutWeight(1)
-                .onClick(() => {
-                  this.applyHistoryTimelineFilter('abnormal');
-                });
-            }
-            .width('100%');
-          }
-        } else if (this.historySummary) {
-          Column({ space: 10 }) {
-            Column({ space: 4 }) {
-              Text(this.historySummary.placeName)
-                .fontSize(18)
-                .fontWeight(FontWeight.Bold)
-                .fontColor(this.getThemePalette().textPrimary)
-                .maxLines(1)
-                .textOverflow({ overflow: TextOverflow.Ellipsis });
-              Text(`状态：${this.getCurrentHistoryStatusText()}`)
-                .fontSize(12)
-                .fontColor(this.getThemePalette().textSecondary);
-            }
-            .width('100%')
-            .padding(12)
-            .backgroundColor(this.getThemePalette().companionCardBg)
-            .borderRadius(12);
-
-            Column({ space: 6 }) {
-              Text(`计划开始：${this.getCurrentHistoryPlannedStartText()}`)
-                .fontSize(12)
-                .fontColor(this.getThemePalette().textSecondary);
-              Text(`实际到达：${this.getCurrentHistoryActualStartText()}`)
-                .fontSize(12)
-                .fontColor(this.getThemePalette().textSecondary);
-              Text(`实际离开：${this.getCurrentHistoryActualEndText()}`)
-                .fontSize(12)
-                .fontColor(this.getThemePalette().textSecondary);
-              Text(`实际停留：${this.getCurrentHistoryStayText()}`)
-                .fontSize(12)
-                .fontColor(this.getThemePalette().textSecondary);
-              Text(`执行偏差：${this.getCurrentHistoryDeviationText()}`)
-                .fontSize(12)
-                .fontColor(this.getThemePalette().textSecondary);
-            }
-            .width('100%')
-            .padding(12)
-            .backgroundColor(this.getThemePalette().companionCardBg)
-            .borderRadius(12);
-
-            Column({ space: 6 }) {
-              Text(`地址：${this.getHistoryAddress(this.historySummary.placeName)}`)
-                .fontSize(12)
-                .fontColor(this.getThemePalette().textSecondary)
-                .maxLines(2)
-                .textOverflow({ overflow: TextOverflow.Ellipsis });
-              Text(`备注：${this.getCurrentHistoryNoteText()}`)
-                .fontSize(12)
-                .fontColor(this.getThemePalette().textSecondary)
-                .maxLines(2)
-                .textOverflow({ overflow: TextOverflow.Ellipsis });
-            }
-            .width('100%')
-            .padding(12)
-            .backgroundColor(this.getThemePalette().companionCardBg)
-            .borderRadius(12);
-          }
-          .width('100%')
-          .layoutWeight(1);
-        } else {
-          Column() {
-            Text('暂无历史详情')
-              .fontSize(14)
-              .fontColor(this.getThemePalette().textSecondary);
-          }
-          .width('100%')
-          .layoutWeight(1)
-          .justifyContent(FlexAlign.Center)
-          .alignItems(HorizontalAlign.Center);
-        }
-      }
-      .width('100%')
-      .height('100%')
-      .padding({ left: 16, right: 16, bottom: this.safeBottomInset + 14 })
-      .backgroundColor(this.getThemePalette().companionBg)
-      .zIndex(9)
-      .transition({
-        type: TransitionType.All,
-        opacity: 0,
-        translate: { y: 18 },
-        scale: { x: 0.985, y: 0.985 }
-      });
-    }
-  }
-
-  @Builder
-  private SearchFullPage() {
-    if (this.showSearchPage) {
-      Column({ space: 10 }) {
-        Row() {
-          Text('搜索日程')
-            .fontSize(20)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(this.getThemePalette().textPrimary);
-          Blank();
-          Text('关闭')
-            .fontSize(14)
-            .fontColor(this.getThemePalette().textSecondary)
-            .onClick(() => {
-              this.closeSearchPage();
-            });
-        }
-        .width('100%')
-        .padding({ top: this.safeTopInset + 8, bottom: 8 });
-
-        TextInput({ text: this.searchKeyword, placeholder: '输入地点名或地址' })
-          .width('100%')
-          .height(42)
-          .borderRadius(10)
-          .backgroundColor(this.getThemePalette().companionCardBg)
-          .fontColor(this.getThemePalette().textPrimary)
-          .placeholderColor(this.getThemePalette().textTertiary)
-          .padding({ left: 12, right: 12 })
-          .onChange((value: string) => {
-            this.searchKeyword = value;
-            this.refreshSearchResults();
-          });
-
-        if (this.searchResults.length === 0) {
-          Column({ space: 8 }) {
-            Text('没有匹配结果')
-              .fontSize(15)
-              .fontColor(this.getThemePalette().textSecondary);
-            Text('可尝试更短关键词')
-              .fontSize(12)
-              .fontColor(this.getThemePalette().textTertiary);
-          }
-          .layoutWeight(1)
-          .width('100%')
-          .justifyContent(FlexAlign.Center)
-          .alignItems(HorizontalAlign.Center);
-        } else {
-          List({ space: 8 }) {
-            ForEach(this.searchResults, (item: EventEntity) => {
-              ListItem() {
-                Row() {
-                  Column({ space: 4 }) {
-                    Text(item.name)
-                      .fontSize(15)
-                      .fontWeight(FontWeight.Medium)
-                      .fontColor(this.getThemePalette().textPrimary)
-                      .maxLines(1)
-                      .textOverflow({ overflow: TextOverflow.Ellipsis });
-                    Text(`${this.getEventStateLabel(item)} | ${this.getPlannedRange(item)}`)
-                      .fontSize(12)
-                      .fontColor(this.getThemePalette().textSecondary)
-                      .maxLines(1)
-                      .textOverflow({ overflow: TextOverflow.Ellipsis });
-                  }
-                  .layoutWeight(1)
-                  .alignItems(HorizontalAlign.Start);
-
-                  Text('聚焦')
-                    .fontSize(12)
-                    .fontColor(this.getThemePalette().primary);
-                }
-                .width('100%')
-                .padding({ left: 12, right: 12, top: 12, bottom: 12 })
-                .backgroundColor(this.getThemePalette().companionCardBg)
-                .borderRadius(10)
-                .onClick(() => {
-                  this.pickSearchResult(item);
-                });
-              };
-            }, (item: EventEntity) => item.id.toString());
-          }
-          .width('100%')
-          .layoutWeight(1);
-        }
-      }
-      .width('100%')
-      .height('100%')
-      .padding({ left: 16, right: 16, bottom: this.safeBottomInset + 14 })
-      .backgroundColor(this.getThemePalette().companionBg)
-      .zIndex(10)
-      .transition({
-        type: TransitionType.All,
-        opacity: 0,
-        translate: { y: 18 },
-        scale: { x: 0.985, y: 0.985 }
-      });
-    }
-  }
-
-  @Builder
-  private FilterFullPage() {
-    if (this.showFilterPage) {
-      Column({ space: 10 }) {
-        Row() {
-          Text('选择筛选')
-            .fontSize(20)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(this.getThemePalette().textPrimary);
-          Blank();
-          Text('关闭')
-            .fontSize(14)
-            .fontColor(this.getThemePalette().textSecondary)
-            .onClick(() => {
-              this.closeFilterPage();
-            });
-        }
-        .width('100%')
-        .padding({ top: this.safeTopInset + 8, bottom: 8 });
-
-        Column({ space: 8 }) {
-          ForEach(this.getFilterOptions(), (item: CompanionFilterState) => {
-            Row() {
-              Text(this.getFilterLabel(item))
-                .fontSize(15)
-                .fontWeight(item === this.companionFilterState ? FontWeight.Bold : FontWeight.Medium)
-                .fontColor(item === this.companionFilterState
-                  ? this.getThemePalette().textPrimary
-                  : this.getThemePalette().textSecondary);
-              Blank();
-              if (item === this.companionFilterState) {
-                Text('已选')
-                  .fontSize(12)
-                  .fontColor(this.getThemePalette().primary);
-              }
-            }
-            .width('100%')
-            .height(48)
-            .padding({ left: 12, right: 12 })
-            .backgroundColor(item === this.companionFilterState
-              ? this.getThemePalette().cardBgSoft
-              : this.getThemePalette().companionCardBg)
-            .border({
-              width: item === this.companionFilterState ? 1 : 0,
-              color: item === 'PENDING'
-                ? this.getThemePalette().statusPending
-                : (item === 'SKIPPED'
-                  ? this.getThemePalette().statusSkipped
-                  : (item === 'COMPLETED'
-                    ? this.getThemePalette().statusCompleted
-                    : this.getThemePalette().border)),
-              radius: 10
-            })
-            .borderRadius(10)
-            .onClick(() => {
-              this.applyFilter(item);
-            });
-          }, (item: CompanionFilterState) => item);
-        }
-        .width('100%');
-      }
-      .width('100%')
-      .height('100%')
-      .padding({ left: 16, right: 16, bottom: this.safeBottomInset + 14 })
-      .backgroundColor(this.getThemePalette().companionBg)
-      .zIndex(10)
-      .transition({
-        type: TransitionType.All,
-        opacity: 0,
-        translate: { y: 18 },
-        scale: { x: 0.985, y: 0.985 }
-      });
-    }
-  }
-
-  @Builder
-  private ExecutionWeatherCard() {
-    Column({ space: 8 }) {
-      Row() {
-        Text('执行天气')
-          .fontSize(14)
-          .fontColor(this.getThemePalette().textSecondary);
-        if (this.vm.executionWeatherCollabBadge.trim().length > 0) {
-          Text(this.vm.executionWeatherCollabBadge)
-            .fontSize(11)
-            .fontColor(this.getThemePalette().primary)
-            .backgroundColor(this.getThemePalette().cardBgSoft)
-            .padding({ left: 6, right: 6, top: 2, bottom: 2 })
-            .borderRadius(6)
-            .margin({ left: 6 });
-        }
-        Blank();
-        Text(this.vm.executionWeatherLoading ? '刷新中...' : '刷新')
-          .fontSize(12)
-          .fontColor(this.getThemePalette().primary)
-          .onClick(() => {
-            void this.vm.refreshExecutionWeather(true, 'MANUAL');
-          });
-        Text(this.weatherExpanded ? '收起' : '展开')
-          .fontSize(12)
-          .fontColor(this.getThemePalette().primary)
-          .margin({ left: 10 })
-          .onClick(() => {
-            this.weatherExpanded = !this.weatherExpanded;
-          });
-      }
-      .width('100%');
-
-      if (!this.weatherExpanded) {
-        Row() {
-          Text(this.getWeatherScoreSummary())
-            .fontSize(12)
-            .fontColor(this.getThemePalette().textSecondary)
-            .layoutWeight(1);
-          Text(this.vm.executionWeatherHint || '天气建议已收起，请用上方“展开”查看')
-            .fontSize(12)
-            .fontColor(this.getThemePalette().textSecondary)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .layoutWeight(2);
-        }
-        .width('100%');
-      } else {
-        Row() {
-          Text(`当前位置：${this.vm.executionWeatherCurrentText || '天气未知'}`)
-            .fontSize(13)
-            .fontColor(this.getThemePalette().textPrimary)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .layoutWeight(1);
-        }
-        .width('100%');
-
-        Row() {
-          Text(`下一节点：${this.vm.executionWeatherNextText || '天气未知'}`)
-            .fontSize(13)
-            .fontColor(this.getThemePalette().textPrimary)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .layoutWeight(1);
-          if (this.vm.executionWeatherScore >= 0) {
-            Text(`评分 ${this.vm.executionWeatherScore} ⓘ`)
-              .fontSize(12)
-              .fontColor(this.getThemePalette().primary)
-              .onClick(() => {
-                this.showWeatherScorePopup = !this.showWeatherScorePopup;
-              })
-              .bindPopup(this.showWeatherScorePopup, {
-                builder: this.WeatherScorePopupBuilder,
-                placement: Placement.BottomLeft,
-                mask: false,
-                popupColor: this.getThemePalette().cardBgSoft,
-                onStateChange: (e) => {
-                  if (!e.isVisible) {
-                    this.showWeatherScorePopup = false;
-                  }
-                }
-              });
-          }
-        }
-        .width('100%');
-
-        if (this.vm.executionWeatherHint) {
-          Text(`${this.vm.executionWeatherHint}  ⓘ`)
-            .fontSize(13)
-            .fontColor(
-              this.vm.executionWeatherLevel === 'WARNING'
-                ? this.getThemePalette().danger
-                : (this.vm.executionWeatherLevel === 'NOTICE'
-                  ? this.getThemePalette().warning
-                  : this.getThemePalette().textSecondary)
-            )
-            .maxLines(2)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .width('100%')
-            .onClick(() => {
-              this.showWeatherHintPopup = !this.showWeatherHintPopup;
-            })
-            .bindPopup(this.showWeatherHintPopup, {
-              builder: this.WeatherHintPopupBuilder,
-              placement: Placement.BottomLeft,
-              mask: false,
-              popupColor: this.getThemePalette().cardBgSoft,
-              onStateChange: (e) => {
-                if (!e.isVisible) {
-                  this.showWeatherHintPopup = false;
-                }
-              }
-            });
-        }
-
-        if (this.vm.executionWeatherCollabSummary.trim().length > 0) {
-          Text(`多日/多城：${this.vm.executionWeatherCollabSummary}`)
-            .fontSize(12)
-            .fontColor(this.getThemePalette().textSecondary)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .width('100%');
-        }
-
-        if (this.vm.executionWeatherAppliedSummary && this.vm.executionWeatherAppliedSummary.trim().length > 0) {
-          Text(`调整结果：${this.vm.executionWeatherAppliedSummary}`)
-            .fontSize(12)
-            .fontColor(this.getThemePalette().primary)
-            .maxLines(2)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .width('100%');
-        }
-
-        if (this.vm.executionWeatherSuggestions.length > 0) {
-          Column({ space: 8 }) {
-            Text('调整建议（可选）')
-              .fontSize(13)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(this.getThemePalette().primary)
-              .width('100%')
-              .onClick(() => {
-                this.weatherSuggestionPopupText = '调整建议（用途）\n在天气不利时，尽量保持计划可执行并降低中断概率。\n可做动作\n重排顺序、缩短停留、跳过高风险点、替代节点。\n按钮说明\n可选应用=立即尝试调整；稍后=先不处理，下次可再看；忽略=移除该建议。\n仅作为建议，不会自动改行程。';
-                this.showWeatherSuggestionPopup = !this.showWeatherSuggestionPopup;
-              })
-              .bindPopup(this.showWeatherSuggestionPopup, {
-                builder: this.WeatherSuggestionPopupBuilder,
-                placement: Placement.BottomLeft,
-                mask: false,
-                popupColor: this.getThemePalette().cardBgSoft,
-                onStateChange: (e) => {
-                  if (!e.isVisible) {
-                    this.showWeatherSuggestionPopup = false;
-                  }
-                }
-              });
-
-            ForEach(this.vm.executionWeatherSuggestions, (item: WeatherSuggestion) => {
-              Column({ space: 6 }) {
-                Text(`${item.title}  ⓘ`)
-                  .fontSize(13)
-                  .fontWeight(FontWeight.Medium)
-                  .fontColor(this.getThemePalette().primary)
-                  .maxLines(1)
-                  .textOverflow({ overflow: TextOverflow.Ellipsis })
-                  .width('100%')
-                  .onClick(() => {
-                    this.weatherSuggestionPopupText = this.buildExecutionSuggestionExplanation(item);
-                    this.showWeatherSuggestionPopup = true;
-                  });
-
-                Text(item.message)
-                  .fontSize(12)
-                  .fontColor(this.getThemePalette().textSecondary)
-                  .maxLines(2)
-                  .textOverflow({ overflow: TextOverflow.Ellipsis })
-                  .width('100%');
-
-                Row({ space: 8 }) {
-                  Text('可选应用')
-                    .fontSize(12)
-                    .fontColor(this.getThemePalette().primary)
-                    .onClick(() => {
-                      hilog.info(
-                        0x0000,
-                        'CompanionView',
-                        `[WEATHER_REPLAN][ui_apply_click] planId=${this.vm.planId}, suggestionId=${item.suggestionId}, actionType=${item.actionType}, applying=${this.vm.executionWeatherApplying ? 1 : 0}`
-                      );
-                      if (this.vm.executionWeatherApplying) {
-                        hilog.warn(
-                          0x0000,
-                          'CompanionView',
-                          `[WEATHER_REPLAN][ui_apply_blocked] reason=applying_busy, suggestionId=${item.suggestionId}`
-                        );
-                        this.safeShowToast('正在应用建议，请稍候');
-                        return;
-                      }
-                      this.getUIContext().showAlertDialog({
-                        title: '确认应用可选建议',
-                        message: `建议：${item.title}\n动作：${item.actionType}\n\n应用后将尝试调整后续行程。`,
-                        autoCancel: true,
-                        alignment: DialogAlignment.Center,
-                        primaryButton: {
-                          value: '先不应用',
-                          action: () => {}
-                        },
-                        secondaryButton: {
-                          value: '确认应用',
-                          action: () => {
-                            void this.vm.requestSoftReplan(this.vm.planId, item.suggestionId, 'APPLY').then((result) => {
-                              hilog.info(
-                                0x0000,
-                                'CompanionView',
-                                `[WEATHER_REPLAN][ui_apply_result] planId=${this.vm.planId}, suggestionId=${item.suggestionId}, actionType=${item.actionType}, success=${result.success ? 1 : 0}, errorCode=${result.errorCode || 'NONE'}, reasonCode=${result.reasonCode ?? ''}, startFromEventId=${result.startFromEventId ?? 0}, rolledBack=${result.rolledBack ? 1 : 0}`
-                              );
-                              if (!result.success) {
-                                hilog.warn(
-                                  0x0000,
-                                  'CompanionView',
-                                  `[WEATHER_REPLAN][ui_apply_fail] planId=${this.vm.planId}, suggestionId=${item.suggestionId}, actionType=${item.actionType}, errorCode=${result.errorCode}, reasonCode=${result.reasonCode ?? ''}, startFromEventId=${result.startFromEventId ?? 0}, rolledBack=${result.rolledBack ? 1 : 0}`
-                                );
-                              }
-                              this.safeShowToast(this.buildReplanToastMessage(result));
-                            }).catch((error: Object) => {
-                              hilog.error(
-                                0x0000,
-                                'CompanionView',
-                                `[WEATHER_REPLAN][ui_apply_exception] planId=${this.vm.planId}, suggestionId=${item.suggestionId}, actionType=${item.actionType}, reason=${JSON.stringify(error)}`
-                              );
-                              this.safeShowToast('可选建议应用失败：执行异常');
-                            });
-                          }
-                        }
-                      });
-                    });
-                  Text('稍后')
-                    .fontSize(12)
-                    .fontColor(this.getThemePalette().warning)
-                    .onClick(() => {
-                      this.vm.dismissExecutionSuggestion(item.suggestionId);
-                      this.safeShowToast('已暂不处理该建议');
-                    });
-                  Text('忽略')
-                    .fontSize(12)
-                    .fontColor(this.getThemePalette().textTertiary)
-                    .onClick(() => {
-                      this.vm.dismissExecutionSuggestion(item.suggestionId);
-                      this.safeShowToast('已忽略该可选建议');
-                    });
-                }
-                .width('100%');
-              }
-              .width('100%')
-              .padding(8)
-              .backgroundColor(this.getThemePalette().cardBgSoft)
-              .borderRadius(8);
-            }, (item: WeatherSuggestion) => item.suggestionId);
-          }
-          .width('100%');
-        }
-      }
-    }
-    .width('100%')
-    .padding(12)
-    .backgroundColor(this.getThemePalette().companionCardBg)
-    .borderRadius(12)
-    .border({ width: 1, color: this.getThemePalette().border, radius: 12 });
-  }
-
-  @Builder
-  private ControlView() {
+  build() {
     Stack({ alignContent: Alignment.Bottom }) {
-      Column({ space: 10 }) {
-        this.ControlTopBar();
-        if (this.vm.isWeatherFeatureEnabled()) {
-          this.ExecutionWeatherCard();
-        }
-        this.FocusedCardHost();
-        this.TimelineSection();
+      Stack() {
+        CompanionImmersiveView({
+          context: this.context,
+          immersiveText: this.immersiveText,
+          immersiveDragOffsetY: this.immersiveDragOffsetY,
+          safeTopInset: this.safeTopInset,
+          safeBottomInset: this.safeBottomInset,
+          getRuntimeLabel: () => getCompanionRuntimeLabel(this.context.runtimeState),
+          getPlannedRange: (event: EventEntity) => getCompanionPlannedRange(event),
+          getForecastStartText: (event: EventEntity) => getCompanionForecastStartText(event),
+          isCurrentEventPending: () => isCompanionCurrentEventPending(this.context),
+          isCurrentEventActive: () => isCompanionCurrentEventActive(this.context),
+          canStartFocused: (event: EventEntity) => canCompanionStartFocused(event, this.getScheduledEvents()),
+          canEndFocused: (event: EventEntity) => canCompanionEndFocused(event, this.context),
+          onStartEvent: async (event: EventEntity) => {
+            this.applyFocusById(event.id, 'tap');
+            await this.handleFocusedPrimaryAction();
+          },
+          onEndEvent: async (event: EventEntity) => {
+            await this.vm.updateActualTime(event.id, 'actual_end_time', Date.now());
+            this.refreshContext();
+          },
+          onNavigate: (event?: EventEntity) => {
+            this.startNavigation(event);
+          },
+          onSwipeGesture: (phase, event) => {
+            if (phase === 'start') {
+              this.handleImmersiveSwipeStart();
+              return;
+            }
+            if (phase === 'update' && event) {
+              this.handleImmersiveSwipeUpdate(event);
+              return;
+            }
+            if (phase === 'end' && event) {
+              this.handleImmersiveSwipeEnd(event);
+            }
+          }
+        });
       }
-      .width('100%')
-      .height('100%')
-      .padding({ left: 12, right: 12, bottom: this.safeBottomInset + 90 })
-      .backgroundColor(this.getThemePalette().companionBg);
+      .zIndex(this.companionSubMode === 'immersive' ? 3 : 1)
+      .enabled(getCompanionInteractiveEnabled('immersive', this.interactionMode))
+      .opacity(this.companionSubMode === 'immersive' ? 1 : 0)
+      .scale({
+        x: this.companionSubMode === 'immersive' ? 1 : 0.988,
+        y: this.companionSubMode === 'immersive' ? 1 : 0.988
+      })
+      .translate({
+        x: 0,
+        y: this.companionSubMode === 'immersive' ? this.immersiveDragOffsetY : -8
+      });
 
-      CompanionBottomActionBar({
+      CompanionControlPage({
+        context: this.context,
+        safeTopInset: this.safeTopInset,
+        safeBottomInset: this.safeBottomInset,
+        companionFilterState: this.companionFilterState,
+        isWeatherFeatureEnabled: this.vm.isWeatherFeatureEnabled(),
+        weatherExpanded: this.weatherExpanded,
+        showWeatherScorePopup: this.showWeatherScorePopup,
+        showWeatherHintPopup: this.showWeatherHintPopup,
+        showWeatherSuggestionPopup: this.showWeatherSuggestionPopup,
+        weatherSuggestionPopupText: this.weatherSuggestionPopupText,
+        executionWeatherCollabBadge: this.vm.executionWeatherCollabBadge,
+        executionWeatherLoading: this.vm.executionWeatherLoading,
+        executionWeatherHint: this.vm.executionWeatherHint,
+        executionWeatherLevel: this.vm.executionWeatherLevel,
+        executionWeatherCurrentText: this.vm.executionWeatherCurrentText,
+        executionWeatherNextText: this.vm.executionWeatherNextText,
+        executionWeatherScore: this.vm.executionWeatherScore,
+        executionWeatherCollabSummary: this.vm.executionWeatherCollabSummary,
+        executionWeatherAppliedSummary: this.vm.executionWeatherAppliedSummary,
+        executionWeatherSuggestions: this.vm.executionWeatherSuggestions,
+        weatherScoreLines: this.vm.buildWeatherScoreExplanation(this.vm.executionWeatherScore).split('\n'),
+        weatherHintLines: this.vm.buildWeatherHintExplanation().split('\n'),
+        canRenderSwitchCards: this.canRenderSwitchCards(),
+        outgoingEvent: this.getEventById(this.outgoingCardEventId),
+        incomingEvent: this.getEventById(this.incomingCardEventId),
+        stableEvent: this.getDisplayCardEvent(),
+        focusedEventId: this.focusedEventId,
+        isCardSwitching: this.isCardSwitching,
+        cardSwitchProgress: this.cardSwitchProgress,
+        scheduledEvents: this.getScheduledEvents(),
+        timelineEvents: this.getVisibleTimelineEvents(),
+        focusPosition: this.getVisibleFocusPosition(),
+        timelineCount: this.getVisibleTimelineCount(),
+        timelineScroller: this.timelineScroller,
+        onExit: () => {
+          this.exitCompanion();
+        },
+        onRefreshWeather: () => {
+          void this.vm.refreshExecutionWeather(true, 'MANUAL');
+        },
+        onToggleExpanded: () => {
+          this.weatherExpanded = !this.weatherExpanded;
+        },
+        onToggleScorePopup: () => {
+          this.showWeatherScorePopup = !this.showWeatherScorePopup;
+        },
+        onToggleHintPopup: () => {
+          this.showWeatherHintPopup = !this.showWeatherHintPopup;
+        },
+        onToggleSuggestionPopup: () => {
+          this.showWeatherSuggestionPopup = !this.showWeatherSuggestionPopup;
+        },
+        onScorePopupStateChange: (visible: boolean) => {
+          if (!visible) {
+            this.showWeatherScorePopup = false;
+          }
+        },
+        onHintPopupStateChange: (visible: boolean) => {
+          if (!visible) {
+            this.showWeatherHintPopup = false;
+          }
+        },
+        onSuggestionPopupStateChange: (visible: boolean) => {
+          if (!visible) {
+            this.showWeatherSuggestionPopup = false;
+          }
+        },
+        onOpenSuggestionGuide: () => {
+          this.weatherSuggestionPopupText = getCompanionWeatherGuidePopupText();
+          this.showWeatherSuggestionPopup = !this.showWeatherSuggestionPopup;
+        },
+        onOpenSuggestionDetail: (item: WeatherSuggestion) => {
+          this.weatherSuggestionPopupText = getCompanionWeatherSuggestionDetailText(item);
+          this.showWeatherSuggestionPopup = true;
+        },
+        onApplySuggestion: (item: WeatherSuggestion) => {
+          applyCompanionWeatherSuggestion({
+            vm: this.vm,
+            item: item,
+            showToast: (message: string) => {
+              this.safeShowToast(message);
+            },
+            showApplyConfirm: (title: string, message: string, onConfirm: () => void) => {
+              this.getUIContext().showAlertDialog({
+                title: title,
+                message: message,
+                autoCancel: true,
+                alignment: DialogAlignment.Center,
+                primaryButton: {
+                  value: '鍏堜笉搴旂敤',
+                  action: () => {}
+                },
+                secondaryButton: {
+                  value: '纭搴旂敤',
+                  action: () => {
+                    onConfirm();
+                  }
+                }
+              });
+            }
+          });
+        },
+        onLaterSuggestion: (suggestionId: string) => {
+          this.vm.dismissExecutionSuggestion(suggestionId);
+          this.safeShowToast(getCompanionDismissSuggestionToast('later'));
+        },
+        onIgnoreSuggestion: (suggestionId: string) => {
+          this.vm.dismissExecutionSuggestion(suggestionId);
+          this.safeShowToast(getCompanionDismissSuggestionToast('ignore'));
+        },
+        onNavigate: (event: EventEntity) => {
+          this.startNavigation(event);
+        },
+        onStartFocused: async () => {
+          await this.handleFocusedPrimaryAction();
+        },
+        onSkipFocused: async () => {
+          await this.handleFocusedSkip();
+        },
+        onEndFocused: async (event: EventEntity) => {
+          await this.vm.updateActualTime(event.id, 'actual_end_time', Date.now());
+          this.refreshContext();
+        },
+        onReopenFocused: async () => {
+          await this.handleFocusedReopen();
+        },
+        onSkipDisabledTap: () => {
+          this.safeShowToast('已跳过任务不可再次跳过');
+        },
+        onEnterImmersive: () => {
+          this.enterImmersiveMode();
+        },
+        onTimelineItemTap: (event: EventEntity, index: number) => {
+          this.handleTimelineTap(event, index);
+        },
+        onTimelineScrollIndex: (start: number, end: number, center: number) => {
+          this.handleTimelineScrollIndex(start, end, center);
+        },
+        onTimelineScrollStop: () => {
+          this.handleTimelineScrollStop();
+        },
         onHistory: () => {
           this.openHistoryList();
         },
@@ -2729,35 +1040,9 @@ export struct CompanionView {
         onFilter: () => {
           this.openFilterPage();
         }
-      });
-    }
-    .width('100%')
-    .height('100%')
-    .backgroundColor(this.getThemePalette().pageBg);
-  }
-
-  build() {
-    Stack({ alignContent: Alignment.Bottom }) {
-      Stack() {
-        this.ImmersiveView();
-      }
-      .zIndex(this.companionSubMode === 'immersive' ? 3 : 1)
-      .enabled(this.getInteractiveEnabled('immersive'))
-      .opacity(this.companionSubMode === 'immersive' ? 1 : 0)
-      .scale({
-        x: this.companionSubMode === 'immersive' ? 1 : 0.988,
-        y: this.companionSubMode === 'immersive' ? 1 : 0.988
       })
-      .translate({
-        x: 0,
-        y: this.companionSubMode === 'immersive' ? this.immersiveDragOffsetY : -8
-      });
-
-      Stack() {
-        this.ControlView();
-      }
       .zIndex(this.companionSubMode === 'control' ? 3 : 2)
-      .enabled(this.getInteractiveEnabled('control'))
+      .enabled(getCompanionInteractiveEnabled('control', this.interactionMode))
       .opacity(this.companionSubMode === 'control' ? 1 : 0)
       .scale({
         x: this.companionSubMode === 'control' ? 1 : 0.992,
@@ -2765,9 +1050,59 @@ export struct CompanionView {
       })
       .translate({ x: 0, y: this.companionSubMode === 'control' ? 0 : 10 });
 
-      this.HistoryFullPage();
-      this.SearchFullPage();
-      this.FilterFullPage();
+      CompanionOverlayPages({
+        showHistoryPage: this.showHistoryPage,
+        historyTimelineSummary: this.historyTimelineSummary,
+        historyTimelineItems: this.historyTimelineItems,
+        historyTimelineFilter: this.historyTimelineFilter,
+        historyViewMode: this.historyViewMode,
+        historySummary: this.historySummary,
+        vm: this.vm,
+        selectedHistoryTimelineItem: this.selectedHistoryTimelineItem,
+        showSearchPage: this.showSearchPage,
+        searchKeyword: this.searchKeyword,
+        searchResults: this.searchResults,
+        showFilterPage: this.showFilterPage,
+        companionFilterState: this.companionFilterState,
+        safeTopInset: this.safeTopInset,
+        safeBottomInset: this.safeBottomInset,
+        onHistoryClose: () => {
+          this.showHistoryPage = false;
+          this.historyViewMode = 'timeline';
+          this.historyTimelineFilter = 'all';
+          this.selectedHistoryTimelineItem = null;
+          this.selectedHistoryPlaceName = '';
+          this.historySummary = null;
+        },
+        onHistoryBack: () => {
+          this.historyViewMode = 'timeline';
+          this.selectedHistoryTimelineItem = null;
+          this.selectedHistoryPlaceName = '';
+          this.historySummary = null;
+        },
+        onHistoryFilterChange: (filter: HistoryTimelineFilter) => {
+          this.historyTimelineFilter = filter;
+        },
+        onHistoryItemClick: (item: HistoryTimelineItem) => {
+          this.openHistoryDetailFromTimeline(item);
+        },
+        onSearchClose: () => {
+          this.closeSearchPage();
+        },
+        onSearch: (keyword: string) => {
+          this.searchKeyword = keyword;
+          this.refreshSearchResults();
+        },
+        onSearchResultClick: (item: EventEntity) => {
+          this.pickSearchResult(item);
+        },
+        onFilterClose: () => {
+          this.closeFilterPage();
+        },
+        onFilterSelect: (state: CompanionFilterState) => {
+          this.applyFilter(state);
+        }
+      });
     }
     .width('100%')
     .height('100%')
@@ -2777,11 +1112,4 @@ export struct CompanionView {
   }
   // endregion
 }
-
-
-
-
-
-
-
 

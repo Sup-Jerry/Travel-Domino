@@ -152,29 +152,35 @@ export class AvatarService {
   }
 
   public static async compressToJpegInCache(context: common.Context, srcUri: string, userId: string): Promise<string> {
-    const imgSource = image.createImageSource(srcUri);
-    const pixelMap = await imgSource.createPixelMap();
-    const packer = image.createImagePacker();
-    const packed = await packer.packToData(pixelMap, {
-      format: 'image/jpeg',
-      quality: 80
-    });
-
-    const cacheDir = `${context.cacheDir}/avatar`;
-    if (!fileIo.accessSync(cacheDir)) {
-      fileIo.mkdirSync(cacheDir, true);
-    }
-    const filePath = `${cacheDir}/avatar_${userId}_${Date.now()}.jpg`;
-    const file = fileIo.openSync(
-      filePath,
-      fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC
-    );
     try {
-      fileIo.writeSync(file.fd, packed);
-    } finally {
-      fileIo.closeSync(file);
+      const imgSource = image.createImageSource(srcUri);
+      const pixelMap = await imgSource.createPixelMap();
+      const packer = image.createImagePacker();
+      const packed = await packer.packToData(pixelMap, {
+        format: 'image/jpeg',
+        quality: 80
+      });
+
+      const cacheDir = `${context.cacheDir}/avatar`;
+      if (!fileIo.accessSync(cacheDir)) {
+        fileIo.mkdirSync(cacheDir, true);
+      }
+      const filePath = `${cacheDir}/avatar_${userId}_${Date.now()}.jpg`;
+      const file = fileIo.openSync(
+        filePath,
+        fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC
+      );
+      try {
+        fileIo.writeSync(file.fd, packed);
+      } finally {
+        fileIo.closeSync(file);
+      }
+      return fileUri.getUriFromPath(filePath);
+    } catch (error) {
+      const msg = AvatarService.errorMessage(error);
+      hilog.error(0x0000, 'AvatarService', `compressToJpegInCache failed: ${msg}`);
+      throw new Error(msg);
     }
-    return fileUri.getUriFromPath(filePath);
   }
 
   private static safeUserId(raw: string): string {

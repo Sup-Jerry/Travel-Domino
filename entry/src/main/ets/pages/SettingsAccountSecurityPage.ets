@@ -16,12 +16,16 @@ struct SettingsAccountSecurityPage {
   }
 
   private async doLogout(): Promise<void> {
-    const hostContext = this.getUIContext().getHostContext() as common.Context;
-    this.authFacade.bindContext(hostContext);
-    await this.authFacade.logout();
-    ProfileViewModel.getInstance().reset();
-    promptAction.openToast({ message: '已退出登录' });
-    await this.getUIContext().getRouter().replaceUrl({ url: 'pages/LoginPage' });
+    try {
+      const hostContext = this.getUIContext().getHostContext() as common.Context;
+      this.authFacade.bindContext(hostContext);
+      await this.authFacade.logout();
+      ProfileViewModel.getInstance().reset();
+      promptAction.openToast({ message: '已退出登录' });
+      await this.getUIContext().getRouter().replaceUrl({ url: 'pages/LoginPage' });
+    } catch (error) {
+      promptAction.openToast({ message: '退出登录失败' });
+    }
   }
 
   build() {

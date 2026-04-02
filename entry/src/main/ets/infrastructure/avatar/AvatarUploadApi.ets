@@ -63,28 +63,34 @@ export class AvatarUploadApi implements AvatarUploadPort {
   }
 
   public static readFileAsDataUrl(fileUriText: string, mimeType: string): string {
-    const path = AvatarUploadApi.resolveFilePath(fileUriText);
-    const stat = fileIo.statSync(path);
-    const total = Number(stat.size);
-    if (!Number.isFinite(total) || total <= 0) {
-      throw new Error('avatar_file_empty');
-    }
-
-    const file = fileIo.openSync(path, fileIo.OpenMode.READ_ONLY);
     try {
-      const buffer = new ArrayBuffer(total);
-      const readSize = fileIo.readSync(file.fd, buffer);
-      if (readSize <= 0) {
-        throw new Error('avatar_file_read_empty');
+      const path = AvatarUploadApi.resolveFilePath(fileUriText);
+      const stat = fileIo.statSync(path);
+      const total = Number(stat.size);
+      if (!Number.isFinite(total) || total <= 0) {
+        throw new Error('avatar_file_empty');
       }
-      const source = new Uint8Array(buffer);
-      const content = source.slice(0, readSize);
-      const helper = new util.Base64Helper();
-      const base64 = helper.encodeToStringSync(content, util.Type.BASIC);
-      const safeMime = mimeType && mimeType.trim().length > 0 ? mimeType.trim() : 'image/jpeg';
-      return `data:${safeMime};base64,${base64}`;
-    } finally {
-      fileIo.closeSync(file);
+
+      const file = fileIo.openSync(path, fileIo.OpenMode.READ_ONLY);
+      try {
+        const buffer = new ArrayBuffer(total);
+        const readSize = fileIo.readSync(file.fd, buffer);
+        if (readSize <= 0) {
+          throw new Error('avatar_file_read_empty');
+        }
+        const source = new Uint8Array(buffer);
+        const content = source.slice(0, readSize);
+        const helper = new util.Base64Helper();
+        const base64 = helper.encodeToStringSync(content, util.Type.BASIC);
+        const safeMime = mimeType && mimeType.trim().length > 0 ? mimeType.trim() : 'image/jpeg';
+        return `data:${safeMime};base64,${base64}`;
+      } finally {
+        fileIo.closeSync(file);
+      }
+    } catch (error) {
+      const msg = AvatarUploadApi.errorMessage(error);
+      hilog.error(0x0000, TAG, `readFileAsDataUrl failed: ${msg}`);
+      throw new Error(msg);
     }
   }
 

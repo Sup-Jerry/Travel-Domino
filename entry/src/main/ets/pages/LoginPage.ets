@@ -29,7 +29,11 @@ struct LoginPage {
   }
 
   private async replaceUrl(url: string): Promise<void> {
-    await this.getUIContext().getRouter().replaceUrl({ url: url });
+    try {
+      await this.getUIContext().getRouter().replaceUrl({ url: url });
+    } catch (error) {
+      hilog.error(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `replaceUrl failed: ${JSON.stringify(error)}`);
+    }
   }
 
   private async ensureCloudProfile(hostContext: common.Context, session: UserSession | null): Promise<void> {

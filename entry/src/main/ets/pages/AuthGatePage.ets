@@ -14,7 +14,11 @@ struct AuthGatePage {
   private readonly authFacade: AuthFacade = AuthFacade.getInstance();
 
   private async replaceUrl(url: string): Promise<void> {
-    await this.getUIContext().getRouter().replaceUrl({ url: url });
+    try {
+      await this.getUIContext().getRouter().replaceUrl({ url: url });
+    } catch (error) {
+      hilog.error(AuthGatePage.LOG_DOMAIN, AuthGatePage.LOG_TAG, `replaceUrl failed: ${JSON.stringify(error)}`);
+    }
   }
 
   onPageShow(): void {
