@@ -1,0 +1,52 @@
+name: Tag On Release Or Hotfix Merge
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    if: >
+      github.event.pull_request.merged == true &&
+      (startsWith(github.event.pull_request.head.ref, 'release/v') ||
+       startsWith(github.event.pull_request.head.ref, 'hotfix/v'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Create and push annotated tag
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          set -euo pipefail
+
+          tag="${HEAD_REF#release/}"
+          tag="${tag#hotfix/}"
+
+          if ! printf '%s' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$'; then
+            echo "Invalid branch name for tagging: $HEAD_REF"
+            echo "Expected: release/vX.Y.Z or hotfix/vX.Y.Z"
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists. Skipping."
+            exit 0
+          fi
+
+          git tag -a "$tag" "$MERGE_SHA" -m "release: $tag"
+          git push origin "$tag"

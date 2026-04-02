@@ -1,103 +1,74 @@
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import fileIo from '@ohos.file.fs';
-import fileUri from '@ohos.file.fileuri';
-import util from '@ohos.util';
-import { AuthApiResponse, UpdateAvatarResult } from '../../domain/auth/AuthModels';
 import { AvatarUploadInput, AvatarUploadResult } from '../../domain/auth/AvatarModels';
-import { AuthGateway } from '../auth/AuthGateway';
-import { AuthSessionStore } from '../auth/AuthSessionStore';
 import { AvatarUploadPort } from './AvatarUploadPort';
+import { AvatarStorageService, AvatarUploadPayload } from '../storage/AvatarStorageService';
 
 const TAG = 'AvatarUploadApi';
+const LOG_DOMAIN = 0x0000;
 
 export interface AvatarUploadApiOptions {
-  getAccessToken?: () => string;
-  encodeFileToDataUrl?: (fileUriText: string, mimeType: string) => string;
-  updateAvatar?: (accessToken: string, imageDataUrl: string, mimeType: string) => Promise<AuthApiResponse<UpdateAvatarResult>>;
+  storageService?: AvatarStorageService;
+  uploadAvatar?: (accountId: string, localUri: string, avatarVersion?: number) => Promise<AvatarUploadPayload>;
   now?: () => number;
 }
 
 export class AvatarUploadApi implements AvatarUploadPort {
-  private readonly getAccessToken: () => string;
-  private readonly encodeFileToDataUrl: (fileUriText: string, mimeType: string) => string;
-  private readonly updateAvatar: (accessToken: string, imageDataUrl: string, mimeType: string) => Promise<AuthApiResponse<UpdateAvatarResult>>;
+  private readonly storageService: AvatarStorageService | null;
+  private readonly uploadAvatarToCloud: (accountId: string, localUri: string, avatarVersion?: number) => Promise<AvatarUploadPayload>;
   private readonly now: () => number;
 
   constructor(options?: AvatarUploadApiOptions) {
-    this.getAccessToken = options?.getAccessToken || (() => AuthSessionStore.getAccessToken());
-    this.encodeFileToDataUrl = options?.encodeFileToDataUrl || AvatarUploadApi.readFileAsDataUrl;
-    this.updateAvatar = options?.updateAvatar || ((accessToken: string, imageDataUrl: string, mimeType: string) =>
-      AuthGateway.updateAvatar(accessToken, imageDataUrl, mimeType));
+    this.storageService = options?.storageService || null;
+    this.uploadAvatarToCloud = options?.uploadAvatar || ((accountId: string, localUri: string, avatarVersion?: number) => {
+      if (!this.storageService) {
+        throw new Error('storage_service_required');
+      }
+      return this.storageService.uploadAvatar(accountId, localUri, avatarVersion);
+    });
     this.now = options?.now || (() => Date.now());
   }
 
   public async uploadAvatar(input: AvatarUploadInput): Promise<AvatarUploadResult> {
     const result = new AvatarUploadResult();
     result.requestId = `avatar_req_${this.now()}`;
-
-    const accessToken = this.getAccessToken();
-    if (!accessToken) {
+    const accountId = String(input.accountId || input.userId || '').trim();
+    hilog.info(
+      LOG_DOMAIN,
+      TAG,
+      `[PROFILE_TRACE][upload_api] start accountId=${accountId || 'empty'}, hasStorage=${this.storageService ? 1 : 0}, fileUriLen=${String(input.fileUri || '').length}`
+    );
+    if (!accountId) {
       result.status = 'LOCAL_ONLY';
-      result.errorCode = 'NO_SESSION';
+      result.errorCode = 'NO_ACCOUNT_ID';
+      hilog.warn(LOG_DOMAIN, TAG, '[PROFILE_TRACE][upload_api] skip no accountId');
       return result;
     }
 
     try {
-      const dataUrl = this.encodeFileToDataUrl(input.fileUri, input.mimeType || 'image/jpeg');
-      const response = await this.updateAvatar(accessToken, dataUrl, input.mimeType || 'image/jpeg');
-      if (response.code !== 0) {
-        result.status = 'LOCAL_ONLY';
-        result.errorCode = `${response.code}`;
-        return result;
-      }
-
+      const safeVersion = Number.isFinite(Number(input.avatarVersion)) && Number(input.avatarVersion) > 0
+        ? Math.floor(Number(input.avatarVersion))
+        : this.now();
+      const payload = await this.uploadAvatarToCloud(accountId, input.fileUri, safeVersion);
       result.status = 'SYNCED';
-      result.remoteUrl = String(response.data.avatarUrl || '');
+      result.remoteUrl = String(payload.downloadUrl || '');
+      result.avatarPath = String(payload.avatarPath || '');
+      result.avatarVersion = Number(payload.avatarVersion || 0);
+      hilog.info(
+        LOG_DOMAIN,
+        TAG,
+        `[PROFILE_TRACE][upload_api] success accountId=${accountId}, avatarPath=${result.avatarPath || 'empty'}, version=${Number(result.avatarVersion || 0)}, remoteUrlLen=${String(result.remoteUrl || '').length}`
+      );
       return result;
     } catch (error) {
       result.status = 'LOCAL_ONLY';
       result.errorCode = 'UPLOAD_EXCEPTION';
-      hilog.warn(0x0000, TAG, `upload avatar failed: ${AvatarUploadApi.errorMessage(error)}`);
+      hilog.warn(
+        LOG_DOMAIN,
+        TAG,
+        `[PROFILE_TRACE][upload_api] failed accountId=${accountId}, reason=${AvatarUploadApi.errorMessage(error)}`
+      );
       return result;
     }
-  }
-
-  public static readFileAsDataUrl(fileUriText: string, mimeType: string): string {
-    const path = AvatarUploadApi.resolveFilePath(fileUriText);
-    const stat = fileIo.statSync(path);
-    const total = Number(stat.size);
-    if (!Number.isFinite(total) || total <= 0) {
-      throw new Error('avatar_file_empty');
-    }
-
-    const file = fileIo.openSync(path, fileIo.OpenMode.READ_ONLY);
-    try {
-      const buffer = new ArrayBuffer(total);
-      const readSize = fileIo.readSync(file.fd, buffer);
-      if (readSize <= 0) {
-        throw new Error('avatar_file_read_empty');
-      }
-      const source = new Uint8Array(buffer);
-      const content = source.slice(0, readSize);
-      const helper = new util.Base64Helper();
-      const base64 = helper.encodeToStringSync(content, util.Type.BASIC);
-      const safeMime = mimeType && mimeType.trim().length > 0 ? mimeType.trim() : 'image/jpeg';
-      return `data:${safeMime};base64,${base64}`;
-    } finally {
-      fileIo.closeSync(file);
-    }
-  }
-
-  private static resolveFilePath(rawFileUri: string): string {
-    const trimmed = String(rawFileUri || '').trim();
-    if (!trimmed) {
-      throw new Error('avatar_uri_empty');
-    }
-    if (trimmed.startsWith('file://')) {
-      const uri = new fileUri.FileUri(trimmed);
-      return decodeURIComponent(uri.path);
-    }
-    return trimmed;
   }
 
   private static errorMessage(error: Object): string {
@@ -107,4 +78,3 @@ export class AvatarUploadApi implements AvatarUploadPort {
     return 'unknown_error';
   }
 }
-

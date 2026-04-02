@@ -1,0 +1,11 @@
+# Commit message format:
+# <type>[optional scope]: <description>
+#
+# [optional body]
+#
+# [optional footer]
+#
+# Examples:
+# feat(auth): add guest-login fallback
+# fix: prevent empty trip name
+

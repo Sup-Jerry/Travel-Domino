@@ -24,6 +24,8 @@ interface AvatarProfileSnapshot {
   localUri?: string;
   compressedUri?: string;
   cloudUrl?: string;
+  cloudPath?: string;
+  avatarVersion?: number;
   uploadState?: string;
   updatedAt?: number;
 }
@@ -340,6 +342,10 @@ export class PreferenceManager {
       profile.localUri = typeof parsed.localUri === 'string' ? parsed.localUri : '';
       profile.compressedUri = typeof parsed.compressedUri === 'string' ? parsed.compressedUri : '';
       profile.cloudUrl = typeof parsed.cloudUrl === 'string' ? parsed.cloudUrl : '';
+      profile.cloudPath = typeof parsed.cloudPath === 'string' ? parsed.cloudPath : '';
+      profile.avatarVersion = Number.isFinite(Number(parsed.avatarVersion)) && Number(parsed.avatarVersion) > 0
+        ? Math.floor(Number(parsed.avatarVersion))
+        : 0;
       const state = typeof parsed.uploadState === 'string' ? parsed.uploadState : 'EMPTY';
       profile.uploadState = state === 'LOCAL_ONLY' || state === 'SYNCED' ? state : 'EMPTY';
       profile.updatedAt = Number.isFinite(Number(parsed.updatedAt)) ? Number(parsed.updatedAt) : 0;
@@ -356,6 +362,10 @@ export class PreferenceManager {
     safe.localUri = profile.localUri || '';
     safe.compressedUri = profile.compressedUri || '';
     safe.cloudUrl = profile.cloudUrl || '';
+    safe.cloudPath = profile.cloudPath || '';
+    safe.avatarVersion = Number.isFinite(Number(profile.avatarVersion)) && Number(profile.avatarVersion) > 0
+      ? Math.floor(Number(profile.avatarVersion))
+      : 0;
     safe.uploadState = profile.uploadState || 'EMPTY';
     safe.updatedAt = Number(profile.updatedAt) > 0 ? Number(profile.updatedAt) : Date.now();
     await this.setValue(PreferenceManager.buildAvatarProfileKey(safeUserId), JSON.stringify(safe));

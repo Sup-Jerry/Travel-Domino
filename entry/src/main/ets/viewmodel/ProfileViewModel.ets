@@ -171,13 +171,24 @@ export class ProfileViewModel {
     if (!safeAccountId) {
       return null;
     }
+    hilog.info(
+      ProfileViewModel.LOG_DOMAIN,
+      ProfileViewModel.LOG_TAG,
+      `[PROFILE_TRACE][vm] updateAvatar start accountId=${safeAccountId}, avatarPath=${String(avatarPath || '').trim() || 'empty'}, version=${Number(avatarVersion || 0)}`
+    );
     try {
       const profile = await this.repository.updateAvatar(safeAccountId, avatarPath, avatarVersion);
       await this.cacheManager.writeProfile(profile);
       this.profile = this.cloneProfile(profile);
       this.state = 'ready';
+      hilog.info(ProfileViewModel.LOG_DOMAIN, ProfileViewModel.LOG_TAG, `[PROFILE_TRACE][vm] updateAvatar success accountId=${safeAccountId}`);
       return this.cloneProfile(profile);
-    } catch (_error) {
+    } catch (error) {
+      hilog.error(
+        ProfileViewModel.LOG_DOMAIN,
+        ProfileViewModel.LOG_TAG,
+        `[PROFILE_TRACE][vm] updateAvatar fail accountId=${safeAccountId}, reason=${this.normalizeError(error)}`
+      );
       return this.bootstrap(safeAccountId);
     }
   }

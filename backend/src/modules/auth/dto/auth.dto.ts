@@ -58,13 +58,3 @@ export class UpdateUsernameDto {
   @IsNotEmpty()
   username!: string;
 }
-
-export class UpdateAvatarDto {
-  @IsString()
-  @IsNotEmpty()
-  imageDataUrl!: string;
-
-  @IsString()
-  @IsOptional()
-  mimeType?: string;
-}

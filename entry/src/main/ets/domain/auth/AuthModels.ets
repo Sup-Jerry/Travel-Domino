@@ -118,22 +118,6 @@ export class UpdateUsernameResult {
   defaultLoginMethod: AuthProviderType = 'GUEST';
 }
 
-export class UpdateAvatarPayload {
-  imageDataUrl: string = '';
-  mimeType: string = 'image/jpeg';
-}
-
-export class UpdateAvatarResult {
-  accountId: string = '';
-  userId: string = '';
-  nickname: string = '';
-  avatarUrl: string = '';
-  mobileMasked: string = '';
-  profileCompleted: boolean = false;
-  isGuest: boolean = false;
-  defaultLoginMethod: AuthProviderType = 'GUEST';
-}
-
 export class AuthApiResponse<T> {
   code: number = 0;
   message: string = 'ok';

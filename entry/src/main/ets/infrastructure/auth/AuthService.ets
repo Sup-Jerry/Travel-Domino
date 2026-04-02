@@ -4,8 +4,6 @@ import {
   AuthLoginResult,
   AuthMeResult,
   AuthSessionPayload,
-  UpdateAvatarPayload,
-  UpdateAvatarResult,
   UpdateUsernamePayload,
   UpdateUsernameResult,
   SocialCredential,
@@ -202,37 +200,6 @@ export class AuthService {
     return this.ok(result);
   }
 
-  public updateAvatar(accessToken: string, payload: UpdateAvatarPayload): AuthApiResponse<UpdateAvatarResult> {
-    const session = this.sessions.find((item: SessionRecord) => item.accessToken === accessToken) || null;
-    if (!session || Date.now() >= session.expireAt) {
-      return this.fail<UpdateAvatarResult>(AuthErrorCode.SESSION_EXPIRED, 'session_expired', new UpdateAvatarResult());
-    }
-    const user = this.users.find((item: UserRecord) => item.userId === session.userId) || null;
-    if (!user) {
-      return this.fail<UpdateAvatarResult>(AuthErrorCode.ACCOUNT_NOT_FOUND, 'user_not_found', new UpdateAvatarResult());
-    }
-    if (user.isGuest) {
-      return this.fail<UpdateAvatarResult>(AuthErrorCode.GUEST_AVATAR_UNSUPPORTED, 'guest_avatar_unsupported', new UpdateAvatarResult());
-    }
-
-    const avatarDataUrl = this.normalizeAndValidateAvatarDataUrl(payload.imageDataUrl, payload.mimeType);
-    if (!avatarDataUrl) {
-      return this.fail<UpdateAvatarResult>(AuthErrorCode.AVATAR_INVALID, 'avatar_invalid', new UpdateAvatarResult());
-    }
-    user.avatarUrl = avatarDataUrl;
-
-    const result = new UpdateAvatarResult();
-    result.accountId = user.accountId || '';
-    result.userId = user.userId;
-    result.nickname = user.nickname;
-    result.avatarUrl = user.avatarUrl;
-    result.mobileMasked = '';
-    result.profileCompleted = true;
-    result.isGuest = false;
-    result.defaultLoginMethod = 'CUSTOM';
-    return this.ok(result);
-  }
-
   private buildGuestFallbackByToken(accessToken: string): AuthMeResult | null {
     if (!accessToken || !accessToken.startsWith('guest_access_')) {
       return null;
@@ -260,25 +227,6 @@ export class AuthService {
       return '';
     }
     return normalized;
-  }
-
-  private normalizeAndValidateAvatarDataUrl(rawDataUrl: string, rawMimeType: string): string {
-    const dataUrl = String(rawDataUrl || '').trim();
-    const mimeType = String(rawMimeType || '').trim().toLowerCase();
-    if (!dataUrl || dataUrl.length > 3_500_000) {
-      return '';
-    }
-    const allowedMime = mimeType === '' || mimeType === 'image/jpeg' || mimeType === 'image/jpg' || mimeType === 'image/png' || mimeType === 'image/webp';
-    if (!allowedMime) {
-      return '';
-    }
-    if (!dataUrl.startsWith('data:image/')) {
-      return '';
-    }
-    if (dataUrl.indexOf(';base64,') <= 0) {
-      return '';
-    }
-    return dataUrl;
   }
 
   private buildDefaultUsername(): string {

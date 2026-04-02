@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-01T18:36:16.849121",
+  "last_updated": "2026-04-02T10:25:50.007562",
   "preferences": [
     "Retrospective output should follow: issues-root causes-improvements-next constraints.",
     "When user reports Day/date mismatch, first check mixed usage of dynamic_day_offset vs day_offset.",
@@ -61,7 +61,10 @@
     "For logout acceptance, validate both memory and persisted silent-login block markers.",
     "遇到登录卡在Gate页时，先按provider->facade->gate顺序对齐LOGIN_TRACE时序，再决定修复点。",
     "启动静默登录的context默认由EntryAbility绑定，页面层不要重复覆盖AuthFacade上下文。",
-    "离线重进失败时优先验证session_cache恢复链路，而不是先怀疑华为账号SDK。"
+    "离线重进失败时优先验证session_cache恢复链路，而不是先怀疑华为账号SDK。",
+    "When user requests retrospective + GitHub sync + slimming, execute strictly in this order: evolution persistence -> git sync -> size pruning.",
+    "For retrospective requests, include concrete persistence evidence (updated timestamp and stitched section marker) in the same turn.",
+    "For Travel Domino cloud-profile rollout, treat accountId(OpenID/UnionID) as primary identity and keep fallback behavior explicit in logs."
   ],
   "fixes": [
     "For cross-day domino shifts, user-facing date and writeback inputs must prefer dynamic_day_offset; do not mix with day_offset in one flow.",
@@ -147,7 +150,10 @@
     "Add in-flight dedup in startup silent login to avoid duplicate exchange races.",
     "修复silentLogin因context类型不兼容导致auth_provider_error：在EntryAbility.bootstrapUserContext先bindContext(this.context)，并移除AuthGatePage覆盖绑定。",
     "修复ArkTS no-structural-typing：AuthSessionStore对外load/loadSessionPersisted统一返回AuthSessionPayload。",
-    "认证链路改动后先跑unit-all做最小回归，再做真机登录验收。"
+    "认证链路改动后先跑unit-all做最小回归，再做真机登录验收。",
+    "Before pushing to main from a dirty tree, inspect git status and explicitly avoid committing transient caches/tools unless user requests all files.",
+    "For HarmonyOS app slimming, prioritize removable artifacts: entry/build, .hvigor, backend/dist, and other regenerated outputs with reversible commands.",
+    "When running merge_evolution on PowerShell, pass JSON via environment variable to avoid quote-loss in argv."
   ],
   "custom_prompts": "针对Travel Domino登录/会话问题，先做日志定因与最小补丁，保证离线重进可用后再扩展优化。",
   "contexts": [
@@ -173,6 +179,8 @@
     "Case: Commute time recalculation policy stabilized by persisting first fetched route minutes and refreshing only on place/mode mutation.",
     "Travel Domino 到达提醒与伴游联动修复（全局单活跃、通知跳转、冲突弹窗）",
     "Case: social login returned 201 but app stayed on LoginPage due expireAt string parsed to NaN; fixed parse and storage fallback.",
-    "Case: logout still triggered startup silent provider path without context; fixed with context gate plus logout block checks."
+    "Case: logout still triggered startup silent provider path without context; fixed with context gate plus logout block checks.",
+    "Case: User requested a combined workflow (retrospective iteration + GitHub main sync + slimming) and expects strict execution order with proof.",
+    "Case: Project includes long AGC integration debugging history; concise Chinese status with command-level evidence is preferred over generic summaries."
   ]
 }
