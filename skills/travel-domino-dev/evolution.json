@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-02T11:47:54.647188",
+  "last_updated": "2026-04-02T19:26:55.194635",
   "preferences": [
     "Retrospective output should follow: issues-root causes-improvements-next constraints.",
     "When user reports Day/date mismatch, first check mixed usage of dynamic_day_offset vs day_offset.",
@@ -63,7 +63,9 @@
     "启动静默登录的context默认由EntryAbility绑定，页面层不要重复覆盖AuthFacade上下文。",
     "离线重进失败时优先验证session_cache恢复链路，而不是先怀疑华为账号SDK。",
     "当分支与main差异过大且冲突扩散时，优先在main做最小补丁并直接提交，不强行整分支合并。",
-    "用户明确要求“以最新为主”时，直接清理旧分支并以origin/main作为唯一基线。"
+    "用户明确要求“以最新为主”时，直接清理旧分支并以origin/main作为唯一基线。",
+    "当用户要求\"复盘+上传GitHub+瘦身\"时，固定执行顺序：复盘沉淀 -> Git同步状态确认 -> 瘦身执行 -> 提交推送。",
+    "瘦身默认先处理可验证安全项：先删无引用的 tracked 冗余文件，再清理本地可再生产物。"
   ],
   "fixes": [
     "For cross-day domino shifts, user-facing date and writeback inputs must prefer dynamic_day_offset; do not mix with day_offset in one flow.",
@@ -151,7 +153,9 @@
     "修复ArkTS no-structural-typing：AuthSessionStore对外load/loadSessionPersisted统一返回AuthSessionPayload。",
     "认证链路改动后先跑unit-all做最小回归，再做真机登录验收。",
     "merge --ff-only失败且冲突文件明显超出本次需求范围时，先merge --abort，再执行最小补丁策略。",
-    "Windows PowerShell不支持&&，命令链需要拆分执行避免脚本中断。"
+    "Windows PowerShell不支持&&，命令链需要拆分执行避免脚本中断。",
+    "Docker Compose v2 场景下移除 compose 文件中的 version 字段，避免持续 warning 干扰排查。",
+    "执行瘦身前先做引用扫描（rg）和 tracked 校验（git ls-files），防止误删运行时资源。"
   ],
   "custom_prompts": "遇到分支合并冲突范围明显大于当前需求时，默认采取“main最小补丁+旧分支清理”策略，并在结果中给出保留/删除依据。",
   "contexts": [

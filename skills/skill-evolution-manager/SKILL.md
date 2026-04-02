@@ -114,6 +114,8 @@ Agent 调用 `scripts/smart_stitch.py`，将 `evolution.json` 的内容转化为
 - 当用户明确要求“复盘+推main+瘦身”时，执行顺序固定为：经验沉淀 -> GitHub同步 -> 瘦身扫描与执行。
 - 执行skill-evolution脚本时优先使用环境变量传递JSON，避免PowerShell参数去引号导致解析失败。
 - 用户请求“复盘迭代+瘦身”时，顺序固定为：经验沉淀->瘦身执行->结果证据回报。
+- 当用户要求"复盘+上传GitHub+瘦身"时，固定执行顺序：复盘沉淀 -> Git同步状态确认 -> 瘦身执行 -> 提交推送。
+- 瘦身默认先处理可验证安全项：先删无引用的 tracked 冗余文件，再清理本地可再生产物。
 
 ### Known Fixes & Workarounds
 - Before any edit, restate user intent and explicitly state whether code will be changed.
@@ -168,6 +170,8 @@ Agent 调用 `scripts/smart_stitch.py`，将 `evolution.json` 的内容转化为
 - 复盘完成后需要给出可验证证据：last_updated时间戳、SKILL.md自动缝合区存在。
 - 经验沉淀完成后必须同轮回读evolution.json的last_updated和SKILL.md自动区块作为持久化证据。
 - 当用户追加流程约束（如“以后以最新main为主”）时，应立即沉淀为可执行规则而非口头备注。
+- Docker Compose v2 场景下移除 compose 文件中的 version 字段，避免持续 warning 干扰排查。
+- 执行瘦身前先做引用扫描（rg）和 tracked 校验（git ls-files），防止误删运行时资源。
 
 ### Custom Instruction Injection
 

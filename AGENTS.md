@@ -1,14 +1,14 @@
-# AGENTS.md instructions for E:\T
+# AGENTS.md instructions for E:\Travel
 
 ## Skills
 A skill is a set of local instructions to follow that is stored in a `SKILL.md` file. Below is the list of skills that can be used in this project.
 
 ### Available skills
-- bat: Windows batch/cmd automation helpers. (file: E:/T/.codex/skills/bat/SKILL.md)
-- github-to-skills: Convert/install GitHub resources into reusable skills. (file: E:/T/.codex/skills/github-to-skills/SKILL.md)
-- skill-evolution-manager: Review and evolve existing skills from usage feedback. (file: E:/T/.codex/skills/skill-evolution-manager/SKILL.md)
-- skill-manager: Skill inventory and lifecycle management workflows. (file: E:/T/.codex/skills/skill-manager/SKILL.md)
-- travel-domino-dev: Domain workflow for this travel timeline project. (file: E:/T/.codex/skills/travel-domino-dev/SKILL.md)
+- bat: Windows batch/cmd automation helpers. (file: E:/Travel/skills/bat/SKILL.md)
+- github-to-skills: Convert/install GitHub resources into reusable skills. (file: E:/Travel/skills/github-to-skills/SKILL.md)
+- skill-evolution-manager: Review and evolve existing skills from usage feedback. (file: E:/Travel/skills/skill-evolution-manager/SKILL.md)
+- skill-manager: Skill inventory and lifecycle management workflows. (file: E:/Travel/skills/skill-manager/SKILL.md)
+- travel-domino-dev: Domain workflow for this travel timeline project. (file: E:/Travel/skills/travel-domino-dev/SKILL.md)
 
 ### How to use skills
 - Discovery: The list above is the skills available in this session (name + description + file path).

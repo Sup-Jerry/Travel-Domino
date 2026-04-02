@@ -230,6 +230,8 @@ description: 用于 Travel Domino（HarmonyOS 行程规划项目）的定向开�
 - 离线重进失败时优先验证session_cache恢复链路，而不是先怀疑华为账号SDK。
 - 当分支与main差异过大且冲突扩散时，优先在main做最小补丁并直接提交，不强行整分支合并。
 - 用户明确要求“以最新为主”时，直接清理旧分支并以origin/main作为唯一基线。
+- 当用户要求"复盘+上传GitHub+瘦身"时，固定执行顺序：复盘沉淀 -> Git同步状态确认 -> 瘦身执行 -> 提交推送。
+- 瘦身默认先处理可验证安全项：先删无引用的 tracked 冗余文件，再清理本地可再生产物。
 
 ### Known Fixes & Workarounds
 - For cross-day domino shifts, user-facing date and writeback inputs must prefer dynamic_day_offset; do not mix with day_offset in one flow.
@@ -318,6 +320,8 @@ description: 用于 Travel Domino（HarmonyOS 行程规划项目）的定向开�
 - 认证链路改动后先跑unit-all做最小回归，再做真机登录验收。
 - merge --ff-only失败且冲突文件明显超出本次需求范围时，先merge --abort，再执行最小补丁策略。
 - Windows PowerShell不支持&&，命令链需要拆分执行避免脚本中断。
+- Docker Compose v2 场景下移除 compose 文件中的 version 字段，避免持续 warning 干扰排查。
+- 执行瘦身前先做引用扫描（rg）和 tracked 校验（git ls-files），防止误删运行时资源。
 
 ### Custom Instruction Injection
 
