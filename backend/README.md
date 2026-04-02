@@ -17,6 +17,8 @@ npm run start:dev
 - `SMS_PROVIDER`
 - `HUAWEI_*` `WECHAT_*` `QQ_*`（生产接入时必填）
 
+> 建议从仓库根目录的 `.env.example` 复制变量模板，真实值通过本地环境变量或 CI Secrets 注入。
+
 ## 主要接口
 - `POST /auth/phone/send-code`
 - `POST /auth/phone/login`
@@ -43,3 +45,4 @@ npm run start:dev
 - 部署：`../docker-compose.auth.yml`
 - 运行手册：`docs/RUNBOOK.md`
 - TC 跟踪：`docs/TC_TRACE_MATRIX.md`
+- 安全轮换手册：`../docs/security/secret-rotation-runbook.md`

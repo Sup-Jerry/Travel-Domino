@@ -1,4 +1,4 @@
-/node_modules
+﻿/node_modules
 /oh_modules
 /local.properties
 /.idea
@@ -25,6 +25,23 @@ build-profile.json5
 
 /backend/node_modules
 /backend/dist
+
+# Environment files (commit templates only)
+.env
+.env.*
+!.env.example
+
+# Sensitive signing / credential artifacts
+*.p12
+*.p7b
+*.jks
+*.keystore
+*.cer
+**/*.p12
+**/*.p7b
+**/*.jks
+**/*.keystore
+**/*.cer
 
 # AGConnect config (contains environment-specific service binding)
 AppScope/resources/rawfile/agconnect-services.json

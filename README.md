@@ -58,10 +58,14 @@ E:\Travel12.19
 1. 环境准备
    - DevEco Studio（建议使用稳定版本）
    - HarmonyOS SDK（与项目 `6.0.0(20)` 对齐）
-2. 本地配置密钥
-   - 复制 `entry/src/main/ets/common/utils/AppConfig.example.ets`
-   - 重命名为 `entry/src/main/ets/common/utils/AppConfig.ets`
-   - 按需填写：`AI_API_KEY`、`AMAP_WEB_API_KEY`、`AMAP_SDK_API_KEY`
+2. 本地配置密钥（环境变量注入）
+   - 先准备 `.env`（可由 `.env.example` 复制）
+   - 设置变量：`AI_API_KEY`、`AMAP_WEB_API_KEY`、`AMAP_SDK_API_KEY`、`AUTH_API_BASE_URL`
+   - 运行命令生成本地配置文件：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/ci/generate-app-config.ps1
+```
 3. 运行方式
    - 推荐：DevEco Studio 打开项目后直接运行
    - 可选：命令行在仓库根目录执行 `hvigorw.bat` 对应任务
@@ -87,6 +91,7 @@ npm run start:dev
 - 客户端设备测试目录：`entry/src/ohosTest`（当前 4 个 `.test.ets` 文件）。
 - 后端测试目录：`backend/test`（当前含基础认证相关测试）。
 - 仓库含 CI/门禁脚本：`scripts/ci/`（如 `quality-gate.ps1`、`full-gate.ps1`、`secret-scan.ps1`）。
+- GitHub Actions 安全门禁：`.github/workflows/security-gate.yml`（main 分支 PR/Push 必跑）。
 
 ## 5. 现状说明（请在协作前先阅读）
 
@@ -99,7 +104,21 @@ npm run start:dev
 ## 6. 安全与配置
 
 - 严禁提交任何真实密钥、令牌、凭据。
-- `entry/src/main/ets/common/utils/AppConfig.ets` 为本地私有配置，已在 `.gitignore` 中忽略。
+- 仅提交模板文件：`.env.example`、`build-profile.template.json5`、`entry/src/main/ets/common/utils/AppConfig.template.ets`。
+- `entry/src/main/ets/common/utils/AppConfig.ets`、`build-profile.json5`、`.env` 为本地私有配置，已在 `.gitignore` 中忽略。
+- 可执行以下命令启用本地提交拦截：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/ci/install-git-hooks.ps1
+```
+
+- 构建前可执行以下命令生成签名配置：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/ci/generate-build-profile.ps1
+```
+
+- 密钥轮换与历史清理流程见：`docs/security/secret-rotation-runbook.md`。
 - 若密钥泄露，请立即在服务端完成轮换，不要仅在仓库中删除明文。
 
 ## 7. License 状态

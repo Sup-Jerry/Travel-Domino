@@ -1,0 +1,56 @@
+﻿{
+  "app": {
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "storeFile": "__SIGN_STORE_FILE__",
+          "storePassword": "__SIGN_STORE_PASSWORD__",
+          "keyAlias": "__SIGN_KEY_ALIAS__",
+          "keyPassword": "__SIGN_KEY_PASSWORD__",
+          "signAlg": "SHA256withECDSA",
+          "profile": "__SIGN_PROFILE_FILE__",
+          "certpath": "__SIGN_CERT_PATH__"
+        }
+      }
+    ],
+    "products": [
+      {
+        "name": "default",
+        "signingConfig": "default",
+        "targetSdkVersion": "6.0.0(20)",
+        "compatibleSdkVersion": "6.0.0(20)",
+        "runtimeOS": "HarmonyOS",
+        "buildOption": {
+          "strictMode": {
+            "caseSensitiveCheck": true,
+            "useNormalizedOHMUrl": true
+          }
+        }
+      }
+    ],
+    "buildModeSet": [
+      {
+        "name": "debug"
+      },
+      {
+        "name": "release"
+      }
+    ]
+  },
+  "modules": [
+    {
+      "name": "entry",
+      "srcPath": "./entry",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": [
+            "default"
+          ]
+        }
+      ]
+    }
+  ]
+}

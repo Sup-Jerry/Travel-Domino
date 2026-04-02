@@ -5,7 +5,7 @@ export class AppConfig {
   static readonly AI_API_KEY: string = 'REPLACE_WITH_YOUR_AI_API_KEY';
 
   static readonly AMAP_WEB_API_KEY: string = 'REPLACE_WITH_YOUR_AMAP_WEB_API_KEY';
-  
+  static readonly AMAP_SDK_API_KEY: string = 'REPLACE_WITH_YOUR_AMAP_SDK_API_KEY';
 
   // 认证后端配置
   static readonly AUTH_API_BASE_URL: string = 'http://127.0.0.1:3000';
@@ -25,7 +25,11 @@ export class AppConfig {
     }
   }
 
-  
+  static validateAmapSdkConfig(): void {
+    if (!AppConfig.AMAP_SDK_API_KEY || AppConfig.AMAP_SDK_API_KEY.trim() === '') {
+      throw new Error('AMAP_SDK_API_KEY 未配置，请检查 AppConfig.ets');
+    }
+  }
 
   static validateAuthConfig(): void {
     if (!AppConfig.AUTH_API_BASE_URL || AppConfig.AUTH_API_BASE_URL.trim() === '') {
@@ -33,4 +37,3 @@ export class AppConfig {
     }
   }
 }
-
