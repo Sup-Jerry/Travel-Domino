@@ -4,6 +4,7 @@ import {
   AuthMeResult,
   DeviceInfo,
   SocialCredential,
+  UpdateAvatarResult,
   UpdateUsernameResult
 } from '../../domain/auth/AuthModels';
 import { AuthApiClient } from './AuthApiClient';
@@ -20,6 +21,11 @@ class SocialLoginPayload {
 
 class UpdateUsernameRequestPayload {
   username: string = '';
+}
+
+class UpdateAvatarRequestPayload {
+  imageDataUrl: string = '';
+  mimeType: string = 'image/jpeg';
 }
 
 export class AuthGateway {
@@ -51,5 +57,16 @@ export class AuthGateway {
     const payload = new UpdateUsernameRequestPayload();
     payload.username = username;
     return AuthGateway.apiClient.patch<UpdateUsernameResult>('/auth/profile/username', payload, accessToken);
+  }
+
+  static async updateAvatar(
+    accessToken: string,
+    imageDataUrl: string,
+    mimeType: string = 'image/jpeg'
+  ): Promise<AuthApiResponse<UpdateAvatarResult>> {
+    const payload = new UpdateAvatarRequestPayload();
+    payload.imageDataUrl = imageDataUrl;
+    payload.mimeType = mimeType;
+    return AuthGateway.apiClient.patch<UpdateAvatarResult>('/auth/profile/avatar', payload, accessToken);
   }
 }

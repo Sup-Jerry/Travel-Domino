@@ -55,7 +55,6 @@ export class UserProfileRepositoryImpl implements IUserProfileRepository {
   private static readonly LOG_DOMAIN: number = 0x0000;
   private static readonly LOG_TAG: string = 'UserProfileRepo';
   private static readonly CLOUD_DB_ZONE_NAMES: string[] = ['TravelDomino', 'CloudDBZone'];
-  private static readonly MAX_INTEGER_COLUMN_VALUE: number = 2147483647;
   public static readonly DEFAULT_AVATAR_PATH: string = 'app.media.headphoto';
   private static readonly CLOUD_DB_OBJECT_TYPE_INFO: CloudObjectTypeInfo = {
     schemaVersion: 1,
@@ -212,8 +211,9 @@ export class UserProfileRepositoryImpl implements IUserProfileRepository {
     const baseProfile = await this.createDefaultProfile(safeAccountId);
     const nextProfile = this.cloneEntity(baseProfile);
     nextProfile.avatarPath = String(avatarPath || '').trim();
-    const fallbackVersion = Math.max(1, Math.floor(baseProfile.avatarVersion + 1));
-    nextProfile.avatarVersion = this.normalizeIntegerVersion(avatarVersion, fallbackVersion);
+    nextProfile.avatarVersion = Number.isFinite(avatarVersion) && avatarVersion > 0
+      ? Math.floor(avatarVersion)
+      : Math.max(1, Math.floor(baseProfile.avatarVersion + 1));
     nextProfile.updatedAt = Date.now();
 
     const zone = await this.ensureCloudDbZone();
@@ -299,7 +299,7 @@ export class UserProfileRepositoryImpl implements IUserProfileRepository {
     record.accountId = entity.accountId;
     record.username = entity.username;
     record.avatarPath = entity.avatarPath;
-    record.avatarVersion = this.normalizeIntegerVersion(entity.avatarVersion, 1);
+    record.avatarVersion = entity.avatarVersion;
     record.isInitialized = entity.isInitialized;
     const now = Date.now();
     const createdAt = Number.isFinite(entity.createdAt) && entity.createdAt > 0
@@ -312,21 +312,6 @@ export class UserProfileRepositoryImpl implements IUserProfileRepository {
     record.createdAt = Long.fromNumber(createdAt);
     record.updatedAt = Long.fromNumber(updatedAt);
     return record;
-  }
-
-  private normalizeIntegerVersion(rawValue: number, fallbackValue: number): number {
-    const fallback = Number.isFinite(Number(fallbackValue)) && Number(fallbackValue) > 0
-      ? Math.floor(Number(fallbackValue))
-      : 1;
-    if (!Number.isFinite(Number(rawValue)) || Number(rawValue) <= 0) {
-      return fallback;
-    }
-    let normalized = Math.floor(Number(rawValue));
-    // Cloud DB avatarVersion 列是 Integer，毫秒时间戳会越界，需要压缩到合法范围。
-    while (normalized > UserProfileRepositoryImpl.MAX_INTEGER_COLUMN_VALUE) {
-      normalized = Math.floor(normalized / 10);
-    }
-    return normalized > 0 ? normalized : fallback;
   }
 
   private toTimestamp(rawValue: Object | number | undefined): number {

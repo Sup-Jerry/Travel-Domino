@@ -113,9 +113,6 @@ Agent 调用 `scripts/smart_stitch.py`，将 `evolution.json` 的内容转化为
 - For retrospective and iteration requests, keep output concise in Chinese and include persistence proof.
 - 当用户明确要求“复盘+推main+瘦身”时，执行顺序固定为：经验沉淀 -> GitHub同步 -> 瘦身扫描与执行。
 - 执行skill-evolution脚本时优先使用环境变量传递JSON，避免PowerShell参数去引号导致解析失败。
-- When user requests retrospective + GitHub sync + slimming, execute strictly in this order: evolution persistence -> git sync -> size pruning.
-- For retrospective requests, include concrete persistence evidence (updated timestamp and stitched section marker) in the same turn.
-- For Travel Domino cloud-profile rollout, treat accountId(OpenID/UnionID) as primary identity and keep fallback behavior explicit in logs.
 
 ### Known Fixes & Workarounds
 - Before any edit, restate user intent and explicitly state whether code will be changed.
@@ -168,9 +165,6 @@ Agent 调用 `scripts/smart_stitch.py`，将 `evolution.json` 的内容转化为
 - On PowerShell, replace unsupported command chaining with ';' to avoid parser interruption during workflow execution.
 - merge_evolution在PowerShell直接传JSON参数会丢失引号；改为EV_PAYLOAD环境变量传递可稳定执行。
 - 复盘完成后需要给出可验证证据：last_updated时间戳、SKILL.md自动缝合区存在。
-- Before pushing to main from a dirty tree, inspect git status and explicitly avoid committing transient caches/tools unless user requests all files.
-- For HarmonyOS app slimming, prioritize removable artifacts: entry/build, .hvigor, backend/dist, and other regenerated outputs with reversible commands.
-- When running merge_evolution on PowerShell, pass JSON via environment variable to avoid quote-loss in argv.
 
 ### Custom Instruction Injection
 

@@ -125,7 +125,7 @@ export class AuthFacade {
             await this.sessionManager.clearSessionPersisted(this.appContext);
           }
         } else {
-          // Keep local session in offline/service-error scenarios.
+          // 离线或服务异常时保留本地会话，避免重启后卡在登录页。
           workingLocal.isLogin = true;
           workingLocal.lastLoginAt = Date.now();
           await this.onLoginSuccess(workingLocal);
@@ -150,7 +150,7 @@ export class AuthFacade {
     }
 
     if (!this.appContext) {
-      // EntryAbility early stage may not have UI context for provider silent login.
+      // EntryAbility 早期阶段没有可用 UI 上下文，不能走 provider 静默登录。
       hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] silentLogin skip provider: context unavailable');
       return this.failure(-1, 'silent_login_context_unavailable', 'HUAWEI_SILENT', LoginStatus.UNAUTHENTICATED);
     }
@@ -363,7 +363,7 @@ export class AuthFacade {
     const text = String(rawExpireAt || '').trim();
     const numeric = Number(text);
     if (Number.isFinite(numeric) && numeric > 0) {
-      // Support second-level timestamps.
+      // 兼容秒级时间戳
       if (numeric < 1_000_000_000_000) {
         return numeric * 1000;
       }
@@ -373,7 +373,7 @@ export class AuthFacade {
     if (!Number.isNaN(parsed) && parsed > 0) {
       return parsed;
     }
-    // Fallback to 2 hours to avoid immediate invalidation.
+    // 兜底 2 小时，避免会话被立即判定为失效
     return Date.now() + 2 * 60 * 60 * 1000;
   }
 
@@ -390,7 +390,7 @@ export class AuthFacade {
 
   private normalizeAndValidateUsername(rawValue: string): string {
     const normalized = String(rawValue || '').trim();
-    if (!normalized || normalized.length < 2 || normalized.length > 20) {
+    if (!normalized || normalized.length > 32) {
       return '';
     }
     if (!AuthFacade.USERNAME_PATTERN.test(normalized)) {
@@ -410,4 +410,3 @@ export class AuthFacade {
     return result;
   }
 }
-

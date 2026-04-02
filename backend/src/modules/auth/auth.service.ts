@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/
 import * as jwt from 'jsonwebtoken';
 import { AppConfigService } from '../../config/app-config.service';
 import { PgService } from '../../config/pg.service';
-import { GuestCreateDto, SocialLoginDto, UpdateUsernameDto } from './dto/auth.dto';
+import { GuestCreateDto, SocialLoginDto, UpdateAvatarDto, UpdateUsernameDto } from './dto/auth.dto';
 
 interface SessionTokenPayload {
   userId: string;
@@ -151,6 +151,21 @@ export class AuthService {
     return this.loadProfile(session.userId);
   }
 
+  async updateAvatar(accessToken: string, dto: UpdateAvatarDto): Promise<unknown> {
+    const session = await this.mustSession(accessToken);
+    const profile = await this.loadProfile(session.userId);
+    if (profile.isGuest) {
+      throw new BadRequestException('GUEST_AVATAR_UNSUPPORTED');
+    }
+
+    const avatarUrl = this.normalizeAndValidateAvatarDataUrl(dto.imageDataUrl, dto.mimeType || 'image/jpeg');
+    await this.pg.query(
+      `update user_account set avatar_url=$2, updated_at=now() where user_id=$1`,
+      [session.userId, avatarUrl]
+    );
+    return this.loadProfile(session.userId);
+  }
+
   private async issueSession(
     userId: string,
     deviceId: string,
@@ -264,6 +279,30 @@ export class AuthService {
       throw new BadRequestException('USERNAME_INVALID');
     }
     return normalized;
+  }
+
+  private normalizeAndValidateAvatarDataUrl(rawDataUrl: string, rawMimeType: string): string {
+    const dataUrl = String(rawDataUrl || '').trim();
+    const mimeType = String(rawMimeType || '').trim().toLowerCase();
+    if (!dataUrl || dataUrl.length > 3_500_000) {
+      throw new BadRequestException('AVATAR_INVALID');
+    }
+    const mimeAllowed =
+      mimeType === '' ||
+      mimeType === 'image/jpeg' ||
+      mimeType === 'image/jpg' ||
+      mimeType === 'image/png' ||
+      mimeType === 'image/webp';
+    if (!mimeAllowed) {
+      throw new BadRequestException('AVATAR_INVALID');
+    }
+    if (!dataUrl.startsWith('data:image/')) {
+      throw new BadRequestException('AVATAR_INVALID');
+    }
+    if (dataUrl.indexOf(';base64,') <= 0) {
+      throw new BadRequestException('AVATAR_INVALID');
+    }
+    return dataUrl;
   }
 
   private buildDefaultUsername(): string {

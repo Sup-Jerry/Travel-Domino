@@ -8,7 +8,6 @@ import { PreferenceManager } from '../../common/utils/PreferenceManager';
 import { AvatarProfile, AvatarUploadInput } from '../../domain/auth/AvatarModels';
 import { AvatarUploadPort } from './AvatarUploadPort';
 import { AvatarUploadApi } from './AvatarUploadApi';
-import { AvatarStorageService } from '../storage/AvatarStorageService';
 
 const TAG = 'AvatarService';
 
@@ -27,11 +26,6 @@ export interface AvatarServiceOptions {
   uploader?: AvatarUploadPort;
   compressor?: (context: common.Context, srcUri: string, userId: string) => Promise<string>;
   now?: () => number;
-}
-
-export interface AvatarUploadRuntimeOptions {
-  waitForUpload?: boolean;
-  onUploadSynced?: (profile: AvatarProfile) => Promise<void>;
 }
 
 class PreferenceAvatarStore implements AvatarStorePort {
@@ -67,10 +61,6 @@ class InMemoryAvatarStore implements AvatarStorePort {
     safe.localUri = profile.localUri || '';
     safe.compressedUri = profile.compressedUri || '';
     safe.cloudUrl = profile.cloudUrl || '';
-    safe.cloudPath = profile.cloudPath || '';
-    safe.avatarVersion = Number.isFinite(Number(profile.avatarVersion)) && Number(profile.avatarVersion) > 0
-      ? Math.floor(Number(profile.avatarVersion))
-      : 0;
     safe.uploadState = profile.uploadState || 'EMPTY';
     safe.updatedAt = Number(profile.updatedAt) > 0 ? Number(profile.updatedAt) : 0;
     this.store.set(safe.userId, safe);
@@ -93,9 +83,7 @@ export class AvatarService {
   }
 
   public static createDefault(context: common.Context): AvatarService {
-    const storageService = AvatarStorageService.createDefault(context);
     return new AvatarService({
-      uploader: new AvatarUploadApi({ storageService }),
       store: new PreferenceAvatarStore(context)
     });
   }
@@ -122,13 +110,10 @@ export class AvatarService {
 
   public async pickAndSaveAvatar(
     context: common.Context,
-    accountId: string,
-    remoteAvatarUrl: string,
-    runtimeOptions?: AvatarUploadRuntimeOptions
+    userId: string,
+    remoteAvatarUrl: string
   ): Promise<AvatarProfile | null> {
-    const waitForUpload = runtimeOptions?.waitForUpload !== false;
-    const safeAccountId = AvatarService.safeUserId(accountId);
-    hilog.info(0x0000, TAG, `[PROFILE_TRACE][avatar_service] pick start accountId=${safeAccountId}, remoteUrlLen=${String(remoteAvatarUrl || '').length}`);
+    const safeUserId = AvatarService.safeUserId(userId);
     const options = new photoAccessHelper.PhotoSelectOptions();
     options.MIMEType = photoAccessHelper.PhotoViewMIMETypes.IMAGE_TYPE;
     options.maxSelectNumber = 1;
@@ -137,124 +122,37 @@ export class AvatarService {
 
     const selectResult = await this.picker.select(options);
     if (!selectResult.photoUris || selectResult.photoUris.length === 0) {
-      hilog.info(0x0000, TAG, `[PROFILE_TRACE][avatar_service] pick cancel accountId=${safeAccountId}`);
       return null;
     }
 
     const selectedUri = selectResult.photoUris[0];
-    hilog.info(0x0000, TAG, `[PROFILE_TRACE][avatar_service] pick selected accountId=${safeAccountId}, uriLen=${String(selectedUri || '').length}`);
-    const profile = await this.loadAvatarProfile(safeAccountId, remoteAvatarUrl);
+    const profile = await this.loadAvatarProfile(safeUserId, remoteAvatarUrl);
     profile.localUri = selectedUri;
     profile.updatedAt = this.now();
 
-    let uploadFileUri = selectedUri;
     try {
-      profile.compressedUri = await this.compressor(context, selectedUri, safeAccountId);
-      uploadFileUri = profile.compressedUri;
-      hilog.info(
-        0x0000,
-        TAG,
-        `[PROFILE_TRACE][avatar_service] compress ok accountId=${safeAccountId}, compressedUriLen=${String(profile.compressedUri || '').length}`
-      );
-    } catch (error) {
-      profile.compressedUri = '';
-      uploadFileUri = selectedUri;
-      hilog.warn(
-        0x0000,
-        TAG,
-        `[PROFILE_TRACE][avatar_service] compress failed fallback original accountId=${safeAccountId}, reason=${AvatarService.errorMessage(error)}`
-      );
-    }
-
-    if (waitForUpload) {
-      await this.performUpload(profile, safeAccountId, uploadFileUri);
-      await this.store.saveAvatarProfile(profile);
-      hilog.info(
-        0x0000,
-        TAG,
-        `[PROFILE_TRACE][avatar_service] save profile accountId=${safeAccountId}, uploadState=${profile.uploadState}, cloudPath=${profile.cloudPath || 'empty'}`
-      );
-      return profile;
-    }
-
-    profile.uploadState = 'LOCAL_ONLY';
-    await this.store.saveAvatarProfile(profile);
-    hilog.info(
-      0x0000,
-      TAG,
-      `[PROFILE_TRACE][avatar_service] save local first accountId=${safeAccountId}, uploadState=${profile.uploadState}`
-    );
-
-    const profileForSync = AvatarService.ensureProfile(profile, safeAccountId);
-    void this.syncUploadInBackground(profileForSync, safeAccountId, uploadFileUri, runtimeOptions?.onUploadSynced);
-    return profile;
-  }
-
-  private async performUpload(profile: AvatarProfile, safeAccountId: string, uploadFileUri: string): Promise<void> {
-    try {
+      profile.compressedUri = await this.compressor(context, selectedUri, safeUserId);
       const uploadInput = new AvatarUploadInput();
-      uploadInput.userId = safeAccountId;
-      uploadInput.accountId = safeAccountId;
-      uploadInput.fileUri = uploadFileUri;
+      uploadInput.userId = safeUserId;
+      uploadInput.fileUri = profile.compressedUri;
       uploadInput.mimeType = 'image/jpeg';
-      uploadInput.avatarVersion = this.now();
       const uploadResult = await this.uploader.uploadAvatar(uploadInput);
       profile.uploadState = uploadResult.status;
-      hilog.info(
-        0x0000,
-        TAG,
-        `[PROFILE_TRACE][avatar_service] upload result accountId=${safeAccountId}, status=${uploadResult.status}, errorCode=${uploadResult.errorCode || 'none'}, avatarPath=${uploadResult.avatarPath || 'empty'}, version=${Number(uploadResult.avatarVersion || 0)}`
-      );
       if (uploadResult.remoteUrl) {
         profile.cloudUrl = uploadResult.remoteUrl;
       }
-      if (uploadResult.avatarPath) {
-        profile.cloudPath = uploadResult.avatarPath;
-      }
-      profile.avatarVersion = Number.isFinite(Number(uploadResult.avatarVersion)) && Number(uploadResult.avatarVersion) > 0
-        ? Math.floor(Number(uploadResult.avatarVersion))
-        : profile.avatarVersion;
     } catch (error) {
+      profile.compressedUri = '';
       profile.uploadState = 'LOCAL_ONLY';
-      hilog.warn(
-        0x0000,
-        TAG,
-        `[PROFILE_TRACE][avatar_service] upload failed accountId=${safeAccountId}, reason=${AvatarService.errorMessage(error)}`
-      );
+      hilog.warn(0x0000, TAG, `compress or upload failed: ${AvatarService.errorMessage(error)}`);
     }
-  }
 
-  private async syncUploadInBackground(
-    profile: AvatarProfile,
-    safeAccountId: string,
-    uploadFileUri: string,
-    onUploadSynced?: (profile: AvatarProfile) => Promise<void>
-  ): Promise<void> {
-    await this.performUpload(profile, safeAccountId, uploadFileUri);
     await this.store.saveAvatarProfile(profile);
-    hilog.info(
-      0x0000,
-      TAG,
-      `[PROFILE_TRACE][avatar_service] background sync done accountId=${safeAccountId}, uploadState=${profile.uploadState}, cloudPath=${profile.cloudPath || 'empty'}`
-    );
-    if (profile.uploadState === 'SYNCED' && profile.cloudPath && profile.avatarVersion > 0 && onUploadSynced) {
-      try {
-        await onUploadSynced(AvatarService.ensureProfile(profile, safeAccountId));
-      } catch (error) {
-        hilog.warn(
-          0x0000,
-          TAG,
-          `[PROFILE_TRACE][avatar_service] onUploadSynced failed accountId=${safeAccountId}, reason=${AvatarService.errorMessage(error)}`
-        );
-      }
-    }
+    return profile;
   }
 
   public static async compressToJpegInCache(context: common.Context, srcUri: string, userId: string): Promise<string> {
     const imgSource = image.createImageSource(srcUri);
-    if (!imgSource) {
-      throw new Error('image_source_unavailable');
-    }
     const pixelMap = await imgSource.createPixelMap();
     const packer = image.createImagePacker();
     const packed = await packer.packToData(pixelMap, {
@@ -290,10 +188,6 @@ export class AvatarService {
     safe.localUri = profile.localUri || '';
     safe.compressedUri = profile.compressedUri || '';
     safe.cloudUrl = profile.cloudUrl || '';
-    safe.cloudPath = profile.cloudPath || '';
-    safe.avatarVersion = Number.isFinite(Number(profile.avatarVersion)) && Number(profile.avatarVersion) > 0
-      ? Math.floor(Number(profile.avatarVersion))
-      : 0;
     safe.uploadState = profile.uploadState || 'EMPTY';
     safe.updatedAt = Number(profile.updatedAt) > 0 ? Number(profile.updatedAt) : 0;
     return safe;
@@ -306,4 +200,3 @@ export class AvatarService {
     return 'unknown_error';
   }
 }
-

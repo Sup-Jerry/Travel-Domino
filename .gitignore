@@ -28,6 +28,3 @@ buildarkts_run.log
 # AGConnect config (contains environment-specific service binding)
 AppScope/resources/rawfile/agconnect-services.json
 **/agconnect-services.json
-
-# local generated skill evolution dump
-travel-domino-skill-evolution-all.txt

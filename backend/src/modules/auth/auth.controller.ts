@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Headers, Ip, Patch, Post } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { GuestCreateDto, SocialLoginDto, UpdateUsernameDto } from './dto/auth.dto';
+import { GuestCreateDto, SocialLoginDto, UpdateAvatarDto, UpdateUsernameDto } from './dto/auth.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -27,6 +27,22 @@ export class AuthController {
     @Headers('authorization') authHeader: string
   ): Promise<unknown> {
     return this.authService.updateUsername(authHeader || '', dto);
+  }
+
+  @Patch('profile/avatar')
+  async updateAvatar(
+    @Body() dto: UpdateAvatarDto,
+    @Headers('authorization') authHeader: string
+  ): Promise<unknown> {
+    return this.authService.updateAvatar(authHeader || '', dto);
+  }
+
+  @Post('profile/avatar')
+  async updateAvatarPost(
+    @Body() dto: UpdateAvatarDto,
+    @Headers('authorization') authHeader: string
+  ): Promise<unknown> {
+    return this.authService.updateAvatar(authHeader || '', dto);
   }
 
   @Post('profile/username')

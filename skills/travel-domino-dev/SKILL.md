@@ -1,6 +1,6 @@
 ---
 name: travel-domino-dev
-description: 用于 Travel Domino（HarmonyOS 行程规划项目）的定向开发与修改。对任何可能改动 repo-tracked 代码的请求（Bug 修复、功能实现、重构、接口调整、UI/时间逻辑联动）默认触发“改码前分支路由门禁 + 改码前强制对齐门禁”。默认中文输出；若关键上下文、API/数据契约或环境约束缺失，必须阻断实现并先收齐信息。
+description: 用于 Travel Domino（HarmonyOS 行程规划项目）的定向开发与修改。对任何可能改动 repo-tracked 代码的请求（Bug 修复、功能实现、重构、接口调整、UI/时间逻辑联动）默认触发“改码前强制对齐门禁”。默认中文输出；若关键上下文、API/数据契约或环境约束缺失，必须阻断实现并先收齐信息。
 ---
 
 # Travel Domino 项目开发 Skill
@@ -143,60 +143,15 @@ description: 用于 Travel Domino（HarmonyOS 行程规划项目）的定向开�
 - 明确列出缺失的文件/函数/类型定义
 - 不提供伪代码，不提供基于猜测的补丁
 
-## Git Branch Routing Gate（改码前分支路由门禁）
-
-在任何会改动仓库代码的任务里，先做“任务类型 -> 分支类型”路由，再进入实现阶段。
-
-### 路由规则
-- `feat`（新功能）：必须在 `feature/<name>` 分支上开发（从 `develop` 拉取）。
-- `release`（发版准备）：必须在 `release/vX.Y.Z` 分支上处理（从 `develop` 拉取）。
-- `hotfix`（线上紧急修复）：必须在 `hotfix/vX.Y.Z` 分支上处理（从 `main` 拉取）。
-- `fix/chore/docs/test/refactor`：默认在 `develop`；若用户要求隔离开发，可走 `feature/<name>`。
-- 若用户明确要求“直推 main”，按用户指令执行，但仍保留提交与推送门禁检查。
-
-### 类型判定模板（先判定再改码）
-- 先基于用户目标句做一次分类：`feat | fix | release | hotfix | chore | docs | test | refactor`。
-- 判定优先级：`hotfix > release > feat > fix > refactor > chore/docs/test`。
-- 关键触发词：
-  - `feat`：新增、支持、实现新能力、增加新页面/新接口。
-  - `fix`：修复、异常、报错、不生效、回归问题。
-  - `release`：发版、冻结、发布准备、版本收敛。
-  - `hotfix`：线上故障、紧急修复、生产事故、立即修。
-- 若同一句同时出现“新功能”和“修复”，默认按 `feat`，并在输出里说明包含兼容修复。
-- 若无法判断，先问 1 个澄清问题：`这次是新增功能（feat）还是修复问题（fix/hotfix）？`
-
-### 判定输出格式（固定）
-每次改码前先输出以下三行，再进入实现：
-1. `类型判定: <type>（原因: <一句话>）`
-2. `目标分支: <branch-name>`
-3. `执行命令: <copy-pastable command>`
-
-### 执行命令（统一脚本入口）
-- 初始化 `develop`（首次一次）：`powershell -ExecutionPolicy Bypass -File .\scripts\git-flow.ps1 init`
-- 新功能分支：`powershell -ExecutionPolicy Bypass -File .\scripts\git-flow.ps1 feature <name>`
-- 发版分支：`powershell -ExecutionPolicy Bypass -File .\scripts\git-flow.ps1 release vX.Y.Z`
-- 热修复分支：`powershell -ExecutionPolicy Bypass -File .\scripts\git-flow.ps1 hotfix vX.Y.Z`
-
-### 阻断条件
-- 无法判定任务类型时：先澄清类型，不得直接改代码。
-- 任务类型与当前分支不匹配时：先创建/切换到正确分支，再改代码。
-- `release/hotfix` 未提供版本号时：先补齐版本号，不得继续实现。
-
-### 输出要求（每次改码前）
-- 明确给出本次判定类型（例如：`feat`/`fix`）。
-- 明确给出目标分支名与创建命令。
-- 若已在正确分支，给出当前分支校验结果后再开始改码。
-
 ## 执行流程
-1. 判断任务是否会改动代码；若会，先进入 `Git Branch Routing Gate`
-2. 分支路由通过后，再进入 `Pre-Code Alignment Gate`
-3. 先完成技术意图澄清，再做代码充分性检查
-4. 涉及 API/数据流时先核验契约，再讨论实现细节
-5. 涉及数据库时同步核对实体、DAO、调用层
-6. 涉及 UI 时同步核对状态、布局、交互触发点
-7. 涉及时间逻辑时同步核对 ViewModel、logic、entity 映射
-8. 对齐包完整后才编码；否则阻断并列缺失项
-9. 除非用户明确要求，不新增抽象层或中间服务
+1. 判断任务是否会改动代码；若会，先进入 `Pre-Code Alignment Gate`
+2. 先完成技术意图澄清，再做代码充分性检查
+3. 涉及 API/数据流时先核验契约，再讨论实现细节
+4. 涉及数据库时同步核对实体、DAO、调用层
+5. 涉及 UI 时同步核对状态、布局、交互触发点
+6. 涉及时间逻辑时同步核对 ViewModel、logic、entity 映射
+7. 对齐包完整后才编码；否则阻断并列缺失项
+8. 除非用户明确要求，不新增抽象层或中间服务
 
 ## 参考资源
 - `resources/architecture.md`
@@ -273,9 +228,6 @@ description: 用于 Travel Domino（HarmonyOS 行程规划项目）的定向开�
 - 遇到登录卡在Gate页时，先按provider->facade->gate顺序对齐LOGIN_TRACE时序，再决定修复点。
 - 启动静默登录的context默认由EntryAbility绑定，页面层不要重复覆盖AuthFacade上下文。
 - 离线重进失败时优先验证session_cache恢复链路，而不是先怀疑华为账号SDK。
-- When user requests retrospective + GitHub sync + slimming, execute strictly in this order: evolution persistence -> git sync -> size pruning.
-- For retrospective requests, include concrete persistence evidence (updated timestamp and stitched section marker) in the same turn.
-- For Travel Domino cloud-profile rollout, treat accountId(OpenID/UnionID) as primary identity and keep fallback behavior explicit in logs.
 
 ### Known Fixes & Workarounds
 - For cross-day domino shifts, user-facing date and writeback inputs must prefer dynamic_day_offset; do not mix with day_offset in one flow.
@@ -362,9 +314,6 @@ description: 用于 Travel Domino（HarmonyOS 行程规划项目）的定向开�
 - 修复silentLogin因context类型不兼容导致auth_provider_error：在EntryAbility.bootstrapUserContext先bindContext(this.context)，并移除AuthGatePage覆盖绑定。
 - 修复ArkTS no-structural-typing：AuthSessionStore对外load/loadSessionPersisted统一返回AuthSessionPayload。
 - 认证链路改动后先跑unit-all做最小回归，再做真机登录验收。
-- Before pushing to main from a dirty tree, inspect git status and explicitly avoid committing transient caches/tools unless user requests all files.
-- For HarmonyOS app slimming, prioritize removable artifacts: entry/build, .hvigor, backend/dist, and other regenerated outputs with reversible commands.
-- When running merge_evolution on PowerShell, pass JSON via environment variable to avoid quote-loss in argv.
 
 ### Custom Instruction Injection
 

@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-02T10:25:50.008963",
+  "last_updated": "2026-04-01T18:36:31.611940",
   "preferences": [
     "If user says no code changes, stop code edits and switch to retrospective output.",
     "Default retrospective language is Chinese with fixed structure: issues-root causes-improvements-next steps.",
@@ -49,10 +49,7 @@
     "When user explicitly names required skills, execute those skill workflows first and provide script-level evidence.",
     "For retrospective and iteration requests, keep output concise in Chinese and include persistence proof.",
     "当用户明确要求“复盘+推main+瘦身”时，执行顺序固定为：经验沉淀 -> GitHub同步 -> 瘦身扫描与执行。",
-    "执行skill-evolution脚本时优先使用环境变量传递JSON，避免PowerShell参数去引号导致解析失败。",
-    "When user requests retrospective + GitHub sync + slimming, execute strictly in this order: evolution persistence -> git sync -> size pruning.",
-    "For retrospective requests, include concrete persistence evidence (updated timestamp and stitched section marker) in the same turn.",
-    "For Travel Domino cloud-profile rollout, treat accountId(OpenID/UnionID) as primary identity and keep fallback behavior explicit in logs."
+    "执行skill-evolution脚本时优先使用环境变量传递JSON，避免PowerShell参数去引号导致解析失败。"
   ],
   "fixes": [
     "Before any edit, restate user intent and explicitly state whether code will be changed.",
@@ -104,10 +101,7 @@
     "Run merge_evolution plus smart_stitch for both active domain skill and skill-evolution-manager in the same turn.",
     "On PowerShell, replace unsupported command chaining with ';' to avoid parser interruption during workflow execution.",
     "merge_evolution在PowerShell直接传JSON参数会丢失引号；改为EV_PAYLOAD环境变量传递可稳定执行。",
-    "复盘完成后需要给出可验证证据：last_updated时间戳、SKILL.md自动缝合区存在。",
-    "Before pushing to main from a dirty tree, inspect git status and explicitly avoid committing transient caches/tools unless user requests all files.",
-    "For HarmonyOS app slimming, prioritize removable artifacts: entry/build, .hvigor, backend/dist, and other regenerated outputs with reversible commands.",
-    "When running merge_evolution on PowerShell, pass JSON via environment variable to avoid quote-loss in argv."
+    "复盘完成后需要给出可验证证据：last_updated时间戳、SKILL.md自动缝合区存在。"
   ],
   "custom_prompts": "复盘任务默认输出中文、简洁、可验收，且包含脚本命令与落盘证据。",
   "contexts": [
@@ -126,8 +120,6 @@
     "Case: Commute time recalculation policy stabilized by persisting first fetched route minutes and refreshing only on place/mode mutation.",
     "多轮线上修复后进行技能经验沉淀与工程收尾",
     "In cleanup sessions, user expects concise Chinese output with clear numbers and follow-up options.",
-    "Case: user explicitly required skill-evolution-manager and app-size-pruner; execution needed explicit workflow evidence.",
-    "Case: User requested a combined workflow (retrospective iteration + GitHub main sync + slimming) and expects strict execution order with proof.",
-    "Case: Project includes long AGC integration debugging history; concise Chinese status with command-level evidence is preferred over generic summaries."
+    "Case: user explicitly required skill-evolution-manager and app-size-pruner; execution needed explicit workflow evidence."
   ]
 }
