@@ -93,6 +93,14 @@ If level is not explicitly provided, use `H4`.
 - Architecture high-risk identified with no remediation plan: total capped at 69
 - CI does not enforce minimum test + lint/security on mainline: total capped at 74
 
+## Stability-First Interval Caps (Global)
+- Principle: overall stability has priority over isolated excellence.
+- A standout single feature cannot offset obvious defects in other core dimensions.
+- If any one core dimension (`Architecture`, `Code Quality`, `Test Confidence`) is <= 8/20: total capped at 79.
+- If any two core dimensions are <= 8/20: total capped at 69.
+- If any one core dimension is <= 5/20: total capped at 59.
+- Apply the strictest cap when multiple cap rules are triggered.
+
 ## Grade Bands
 - 90-100: High-standard reference level
 - 80-89: Reliable overall, but has explicit shortfalls to fix soon
