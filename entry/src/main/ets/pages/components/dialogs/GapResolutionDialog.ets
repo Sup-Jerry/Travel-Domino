@@ -35,7 +35,7 @@ export struct GapResolutionDialog {
   }
 
   refreshGaps() {
-    this.gapList = this.vm.getSortedGaps();
+    this.gapList = this.vm.distributionCoordinator.getSortedGaps();
     if (this.gapList.length === 1) {
       this.selectGap(this.gapList[0]);
     } else {
@@ -46,14 +46,14 @@ export struct GapResolutionDialog {
   selectGap(item: EventEntity) {
     this.currentGap = item;
     // 候选列表只保留真实可分配地点；当前空闲点作为独立上下文卡片展示
-    this.candidates = this.vm.getDistributionCandidates(item);
+    this.candidates = this.vm.distributionCoordinator.getDistributionCandidates(item);
     this.selectedIds = new Set();
   }
 
   // ✅ 修复：使用 currentGap 进行预览计算
   getPreview(item: EventEntity): GeneratedTypeLiteralInterface_1 {
     const distributionMap = this.currentGap
-      ? this.vm.calculateDistributionPreview(this.currentGap, this.candidates, this.selectedIds, this.strategy)
+      ? this.vm.distributionCoordinator.calculateDistributionPreview(this.currentGap, this.candidates, this.selectedIds, this.strategy)
       : new Map<number, number>();
     const addMin = distributionMap.get(item.id) || 0;
     const startTime = item.computed_time.split(' ').pop() || '00:00';
@@ -97,14 +97,14 @@ export struct GapResolutionDialog {
     if (!this.currentGap) {
       return [];
     }
-    return this.candidates.filter(item => this.vm.getSafetyCap(item, this.currentGap!) > 0);
+    return this.candidates.filter(item => this.vm.distributionCoordinator.getSafetyCap(item, this.currentGap!) > 0);
   }
 
   private isCandidateAllocatable(item: EventEntity): boolean {
     if (!this.currentGap) {
       return false;
     }
-    return this.vm.getSafetyCap(item, this.currentGap) > 0;
+    return this.vm.distributionCoordinator.getSafetyCap(item, this.currentGap) > 0;
   }
 
   build() {
@@ -458,9 +458,9 @@ export struct GapResolutionDialog {
           .margin({ bottom: 16 })
 
           // ✅ 修改点：从 G.ets 移植的冲突风险预警块
-          if (this.currentGap && this.vm.checkDistributionRisk(
+          if (this.currentGap && this.vm.distributionCoordinator.checkDistributionRisk(
             this.currentGap,
-            this.vm.calculateDistributionPreview(this.currentGap, this.candidates, this.selectedIds, this.strategy)
+            this.vm.distributionCoordinator.calculateDistributionPreview(this.currentGap, this.candidates, this.selectedIds, this.strategy)
           )) {
             Row() {
               Text('⚠️').fontSize(14)
@@ -496,7 +496,7 @@ export struct GapResolutionDialog {
                   return;
                 }
 
-                const map = this.vm.calculateDistributionPreview(
+                const map = this.vm.distributionCoordinator.calculateDistributionPreview(
                   this.currentGap,
                   this.candidates,
                   this.selectedIds,
@@ -508,7 +508,7 @@ export struct GapResolutionDialog {
                   return;
                 }
 
-                await this.vm.applyDistribution(map);
+                await this.vm.distributionCoordinator.applyDistribution(map);
                 this.safeShowToast('时间分配成功', 2000);
 
                 this.refreshGaps();
@@ -531,6 +531,7 @@ export struct GapResolutionDialog {
     .constraintSize({ maxHeight: '80%' })
   }
 }
+
 
 
 

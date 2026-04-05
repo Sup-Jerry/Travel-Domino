@@ -3,7 +3,10 @@ import { http } from '@kit.NetworkKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AppConfig } from '../../common/utils/AppConfig';
 import { HttpRequestHelper } from '../adapters/HttpRequestHelper';
-import { PoiSearch, PoiQuery, PoiSearchBound, LatLonPoint, PoiResult, PoiItem } from '@amap/amap_lbs_search';
+import {
+  PoiSearch, PoiQuery, PoiSearchBound, LatLonPoint, PoiResult, PoiItem,
+  GeocodeSearch, GeocodeQuery, ReGeocodeQuery
+} from '@amap/amap_lbs_search';
 import { common } from '@kit.AbilityKit';
 
 export class GeoCoordinate {
@@ -22,6 +25,8 @@ export interface AmapGeocodeNode {
 
 export interface AmapResponse {
   status: string;
+  info?: string;
+  infocode?: string;
   geocodes?: AmapGeocodeNode[];
 }
 
@@ -42,11 +47,43 @@ export interface AmapPoiSearchResponse {
   pois?: AmapPoiSearchNode[];
 }
 
+interface AmapRoutePathNode {
+  duration?: string;
+}
+
+interface AmapDrivingRouteNode {
+  paths?: AmapRoutePathNode[];
+}
+
+interface AmapDrivingRouteResponse {
+  status: string;
+  info?: string;
+  infocode?: string;
+  route?: AmapDrivingRouteNode;
+}
+
 interface PoiItemListLike {
   length?: number;
   size?: (() => number) | number;
   get?: (index: number) => PoiItem | undefined;
   forEach?: (callback: (value: PoiItem) => void) => void;
+}
+
+interface GenericListLike {
+  length?: number;
+  size?: (() => number) | number;
+}
+
+interface GenericListGetter<T> {
+  get?: (idx: number) => T | undefined;
+}
+
+interface LatLonPointCarrier {
+  getLatLonPoint: () => LatLonPoint | undefined;
+}
+
+interface PoiTitleCarrier {
+  getTitle: () => string | undefined;
 }
 
 interface PoiSearchCacheEntry {
@@ -83,6 +120,8 @@ export interface AmapRegeocode {
 
 export interface AmapRegeoResponse {
   status: string;
+  info?: string;
+  infocode?: string;
   regeocode?: AmapRegeocode;
 }
 
@@ -93,6 +132,15 @@ export class AmapService {
   private static readonly POI_NEARBY_RADIUS_METERS = 50000;
   private static readonly POI_CACHE_TTL_MS = 20_000;
   private static readonly poiSearchCache: Map<string, PoiSearchCacheEntry> = new Map();
+  private static runtimeContext: common.Context | null = null;
+
+  public static bindRuntimeContext(context: common.Context): void {
+    AmapService.runtimeContext = context;
+  }
+
+  public static getRuntimeContext(): common.Context | null {
+    return AmapService.runtimeContext;
+  }
 
   private static isValidCoordinate(lat: number, lng: number): boolean {
     return Number.isFinite(lat) &&
@@ -102,7 +150,7 @@ export class AmapService {
       !(lat === 0 && lng === 0);
   }
 
-  public static async getGeocode(address: string): Promise<GeoCoordinate | null> {
+  private static async getGeocodeByWeb(address: string): Promise<GeoCoordinate | null> {
     if (!address || address.trim() === '') {
       hilog.warn(0x0000, AmapService.TAG, '[AMAP_TRACE][getGeocode] empty address, skip request');
       return null;
@@ -138,7 +186,14 @@ export class AmapService {
           }
         }
 
-        hilog.warn(0x0000, AmapService.TAG, `[AMAP_TRACE][getGeocode] business miss, status=${resultData.status}`);
+        hilog.warn(
+          0x0000,
+          AmapService.TAG,
+          `[AMAP_TRACE][getGeocode] business miss, status=${resultData.status}, info=${resultData.info ?? ''}, infocode=${resultData.infocode ?? ''}`
+        );
+        if (resultData.infocode === '10009') {
+          hilog.error(0x0000, AmapService.TAG, '[AMAP_TRACE][getGeocode] USERKEY_PLAT_NOMATCH: 请替换为高德Web服务Key');
+        }
       } else {
         hilog.warn(0x0000, AmapService.TAG, `[AMAP_TRACE][getGeocode] non-200 responseCode=${response.responseCode}`);
       }
@@ -527,10 +582,188 @@ export class AmapService {
     }
   }
 
+  private static getListSize(listObj: Object | undefined): number {
+    if (!listObj) {
+      return 0;
+    }
+    const dynamicList = listObj as GenericListLike;
+    if (typeof dynamicList.length === 'number' && Number.isFinite(dynamicList.length)) {
+      return dynamicList.length;
+    }
+    if (typeof dynamicList.size === 'number' && Number.isFinite(dynamicList.size)) {
+      return dynamicList.size;
+    }
+    if (typeof dynamicList.size === 'function') {
+      const size = dynamicList.size();
+      if (Number.isFinite(size)) {
+        return size;
+      }
+    }
+    return 0;
+  }
+
+  private static getListItem<T>(listObj: Object | undefined, index: number): T | undefined {
+    if (!listObj || index < 0) {
+      return undefined;
+    }
+    const dynamicList = listObj as GenericListGetter<T>;
+    if (typeof dynamicList.get === 'function') {
+      return dynamicList.get(index);
+    }
+    return undefined;
+  }
+
+  private static async getGeocodeBySdkKeyword(
+    address: string,
+    context: common.Context
+  ): Promise<GeoCoordinate | null> {
+    try {
+      const query = new PoiQuery(address, '', '');
+      query.setPageNum(1);
+      query.setPageSize(5);
+      query.setCityLimit(false);
+      query.setExtensions(PoiSearch.EXTENSIONS_BASE);
+      const search = new PoiSearch(context, query);
+      const result = await search.searchPOI();
+      const resolved = AmapService.extractPoiItems(result);
+      if (resolved.length <= 0) {
+        hilog.warn(0x0000, AmapService.TAG, '[AMAP_TRACE][getGeocode_sdk] empty_result');
+        return null;
+      }
+      const top = resolved[0];
+      if (!AmapService.isValidCoordinate(top.lat, top.lng)) {
+        hilog.warn(0x0000, AmapService.TAG, '[AMAP_TRACE][getGeocode_sdk] invalid_top_coordinate');
+        return null;
+      }
+      hilog.info(0x0000, AmapService.TAG, '[AMAP_TRACE][getGeocode_sdk] resolve success');
+      return new GeoCoordinate(top.lat, top.lng);
+    } catch (error) {
+      hilog.error(0x0000, AmapService.TAG, `[AMAP_TRACE][getGeocode_sdk] failed, error=${JSON.stringify(error)}`);
+      return null;
+    }
+  }
+
+  private static async getGeocodeBySdkGeoSearch(
+    address: string,
+    context: common.Context
+  ): Promise<GeoCoordinate | null> {
+    try {
+      const query = new GeocodeQuery(address, '');
+      const search = new GeocodeSearch(context);
+      const list = await search.getFromLocationName(query);
+      const size = AmapService.getListSize(list);
+      if (size <= 0) {
+        hilog.warn(0x0000, AmapService.TAG, '[AMAP_TRACE][getGeocode_sdk_geo] empty_result');
+        return null;
+      }
+      const first = AmapService.getListItem<LatLonPointCarrier>(list, 0);
+      const point = first?.getLatLonPoint();
+      const lat = point?.getLatitude() ?? Number.NaN;
+      const lng = point?.getLongitude() ?? Number.NaN;
+      if (!AmapService.isValidCoordinate(lat, lng)) {
+        hilog.warn(0x0000, AmapService.TAG, '[AMAP_TRACE][getGeocode_sdk_geo] invalid_coordinate');
+        return null;
+      }
+      hilog.info(0x0000, AmapService.TAG, '[AMAP_TRACE][getGeocode_sdk_geo] resolve success');
+      return new GeoCoordinate(lat, lng);
+    } catch (error) {
+      hilog.error(0x0000, AmapService.TAG, `[AMAP_TRACE][getGeocode_sdk_geo] failed, error=${JSON.stringify(error)}`);
+      return null;
+    }
+  }
+
+  public static async getGeocode(address: string, context?: common.Context | null): Promise<GeoCoordinate | null> {
+    const effectiveContext = context ?? AmapService.getRuntimeContext();
+    if (effectiveContext) {
+      const sdkGeoResult = await AmapService.getGeocodeBySdkGeoSearch(address, effectiveContext);
+      if (sdkGeoResult && AmapService.isValidCoordinate(sdkGeoResult.lat, sdkGeoResult.lng)) {
+        return sdkGeoResult;
+      }
+      const sdkKeywordResult = await AmapService.getGeocodeBySdkKeyword(address, effectiveContext);
+      if (sdkKeywordResult && AmapService.isValidCoordinate(sdkKeywordResult.lat, sdkKeywordResult.lng)) {
+        return sdkKeywordResult;
+      }
+    }
+    const webResult = await AmapService.getGeocodeByWeb(address);
+    if (webResult && AmapService.isValidCoordinate(webResult.lat, webResult.lng)) {
+      return webResult;
+    }
+    return null;
+  }
+
+  public static async getDrivingDurationByWebApi(
+    fromLat: number,
+    fromLng: number,
+    toLat: number,
+    toLng: number,
+    strategy: number = 0
+  ): Promise<number | null> {
+    if (!AmapService.isValidCoordinate(fromLat, fromLng) || !AmapService.isValidCoordinate(toLat, toLng)) {
+      hilog.warn(0x0000, AmapService.TAG, '[AMAP_TRACE][route_web] invalid coordinate, skip request');
+      return null;
+    }
+    try {
+      AppConfig.validateAmapWebConfig();
+      const safeStrategy = Number.isFinite(strategy) ? Math.max(0, Math.floor(strategy)) : 0;
+      const url =
+        `https://restapi.amap.com/v3/direction/driving?key=${AppConfig.AMAP_WEB_API_KEY}` +
+        `&origin=${fromLng},${fromLat}` +
+        `&destination=${toLng},${toLat}` +
+        `&strategy=${safeStrategy}`;
+      const response = await HttpRequestHelper.request(AmapService.TAG, 'getDrivingDurationByWebApi', url, {
+        method: http.RequestMethod.GET,
+        connectTimeout: 5000,
+        readTimeout: 5000
+      });
+      if (response.responseCode !== 200) {
+        hilog.warn(0x0000, AmapService.TAG, `[AMAP_TRACE][route_web] non-200 responseCode=${response.responseCode}`);
+        return null;
+      }
+      const payload = JSON.parse(String(response.result ?? '')) as AmapDrivingRouteResponse;
+      if (payload.status !== '1') {
+        hilog.warn(
+          0x0000,
+          AmapService.TAG,
+          `[AMAP_TRACE][route_web] business miss status=${payload.status}, info=${payload.info ?? ''}, infocode=${payload.infocode ?? ''}`
+        );
+        if (payload.infocode === '10009') {
+          hilog.error(0x0000, AmapService.TAG, '[AMAP_TRACE][route_web] USERKEY_PLAT_NOMATCH: 请替换为高德Web服务Key');
+        }
+        return null;
+      }
+      const durationRaw = payload.route?.paths && payload.route.paths.length > 0
+        ? payload.route.paths[0].duration
+        : undefined;
+      if (!durationRaw) {
+        hilog.warn(0x0000, AmapService.TAG, '[AMAP_TRACE][route_web] empty path duration');
+        return null;
+      }
+      const durationSeconds = Number.parseInt(durationRaw, 10);
+      if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+        hilog.warn(0x0000, AmapService.TAG, `[AMAP_TRACE][route_web] invalid duration=${durationRaw}`);
+        return null;
+      }
+      const minutes = Math.max(1, Math.ceil(durationSeconds / 60));
+      hilog.info(0x0000, AmapService.TAG, `[AMAP_TRACE][route_web] success minutes=${minutes}`);
+      return minutes;
+    } catch (error) {
+      hilog.error(0x0000, AmapService.TAG, `[AMAP_TRACE][route_web] failed, error=${JSON.stringify(error)}`);
+      return null;
+    }
+  }
+
   public static async getCityCodeByCoordinate(lat: number, lng: number): Promise<string | null> {
     if (lat === 0 || lng === 0) {
       hilog.warn(0x0000, AmapService.TAG, '[AMAP_TRACE][getCityCodeByCoordinate] invalid coordinate, skip request');
       return null;
+    }
+
+    const boundContext = AmapService.getRuntimeContext();
+    if (boundContext) {
+      const sdkCity = await AmapService.getCityCodeBySdkGeoSearch(boundContext, lat, lng);
+      if (sdkCity && sdkCity.trim().length > 0) {
+        return sdkCity;
+      }
     }
 
     try {
@@ -559,7 +792,7 @@ export class AmapService {
         hilog.warn(
           0x0000,
           AmapService.TAG,
-          `[AMAP_TRACE][getCityCodeByCoordinate] business miss, status=${resultData.status}, adCode=${adCode}, cityCode=${cityCode}`
+          `[AMAP_TRACE][getCityCodeByCoordinate] business miss, status=${resultData.status}, info=${resultData.info ?? ''}, infocode=${resultData.infocode ?? ''}, adCode=${adCode}, cityCode=${cityCode}`
         );
       } else {
         hilog.warn(
@@ -577,6 +810,39 @@ export class AmapService {
     }
 
     return null;
+  }
+
+  private static async getCityCodeBySdkGeoSearch(
+    context: common.Context,
+    lat: number,
+    lng: number
+  ): Promise<string | null> {
+    try {
+      const search = new GeocodeSearch(context);
+      const query = new ReGeocodeQuery(
+        new LatLonPoint(lat, lng),
+        300,
+        GeocodeSearch.AMAP
+      );
+      query.setExtensions(GeocodeSearch.EXTENSIONS_BASE);
+      const result = await search.getFromLocation(query);
+      if (!result) {
+        hilog.warn(0x0000, AmapService.TAG, '[AMAP_TRACE][getCityCode_sdk_geo] empty_result');
+        return null;
+      }
+      const adCode = (result.getAdCode() ?? '').trim();
+      const cityCode = (result.getCityCode() ?? '').trim();
+      const resolved = adCode.length > 0 ? adCode : cityCode;
+      if (resolved.length <= 0) {
+        hilog.warn(0x0000, AmapService.TAG, '[AMAP_TRACE][getCityCode_sdk_geo] empty_city_code');
+        return null;
+      }
+      hilog.info(0x0000, AmapService.TAG, `[AMAP_TRACE][getCityCode_sdk_geo] success city=${resolved}`);
+      return resolved;
+    } catch (error) {
+      hilog.error(0x0000, AmapService.TAG, `[AMAP_TRACE][getCityCode_sdk_geo] failed, error=${JSON.stringify(error)}`);
+      return null;
+    }
   }
 
   public static async getRegeo(lat: number, lng: number): Promise<string | null> {
@@ -611,7 +877,14 @@ export class AmapService {
           }
         }
 
-        hilog.warn(0x0000, AmapService.TAG, `[AMAP_TRACE][getRegeo] business miss, status=${resultData.status}`);
+        hilog.warn(
+          0x0000,
+          AmapService.TAG,
+          `[AMAP_TRACE][getRegeo] business miss, status=${resultData.status}, info=${resultData.info ?? ''}, infocode=${resultData.infocode ?? ''}`
+        );
+        if (resultData.infocode === '10009') {
+          hilog.error(0x0000, AmapService.TAG, '[AMAP_TRACE][getRegeo] USERKEY_PLAT_NOMATCH: 请替换为高德Web服务Key');
+        }
       } else {
         hilog.warn(0x0000, AmapService.TAG, `[AMAP_TRACE][getRegeo] non-200 responseCode=${response.responseCode}`);
       }
@@ -620,5 +893,95 @@ export class AmapService {
     }
 
     return null;
+  }
+
+  private static async getRegeoBySdkNearby(context: common.Context, lat: number, lng: number): Promise<string | null> {
+    try {
+      const center = new LatLonPoint(lat, lng);
+      const query = new PoiQuery('', '', '');
+      query.setPageNum(1);
+      query.setPageSize(10);
+      query.setLocation(center);
+      query.setDistanceSort(true);
+      query.setExtensions(PoiSearch.EXTENSIONS_BASE);
+
+      const search = new PoiSearch(context, query);
+      const bound = PoiSearchBound.createCircleSearchBound(center, 500, true);
+      search.setBound(bound);
+      const result = await search.searchPOI();
+      const resolved = AmapService.extractPoiItems(result);
+      if (resolved.length <= 0) {
+        hilog.warn(0x0000, AmapService.TAG, '[AMAP_TRACE][getRegeo_sdk] empty_result');
+        return null;
+      }
+      const top = resolved[0];
+      const name = (top.name ?? '').trim();
+      if (name.length <= 0) {
+        hilog.warn(0x0000, AmapService.TAG, '[AMAP_TRACE][getRegeo_sdk] top_name_empty');
+        return null;
+      }
+      hilog.info(0x0000, AmapService.TAG, '[AMAP_TRACE][getRegeo_sdk] resolve poi success');
+      return name;
+    } catch (error) {
+      hilog.error(0x0000, AmapService.TAG, `[AMAP_TRACE][getRegeo_sdk] failed, error=${JSON.stringify(error)}`);
+      return null;
+    }
+  }
+
+  private static async getRegeoBySdkGeoSearch(context: common.Context, lat: number, lng: number): Promise<string | null> {
+    try {
+      const search = new GeocodeSearch(context);
+      const query = new ReGeocodeQuery(
+        new LatLonPoint(lat, lng),
+        300,
+        GeocodeSearch.AMAP
+      );
+      query.setExtensions(GeocodeSearch.EXTENSIONS_ALL);
+      const result = await search.getFromLocation(query);
+      if (!result) {
+        hilog.warn(0x0000, AmapService.TAG, '[AMAP_TRACE][getRegeo_sdk_geo] empty_result');
+        return null;
+      }
+      const pois = result.getPois();
+      const poiSize = AmapService.getListSize(pois);
+      if (poiSize > 0) {
+        const topPoi = AmapService.getListItem<PoiTitleCarrier>(pois, 0);
+        const title = (topPoi?.getTitle() ?? '').trim();
+        if (title.length > 0) {
+          hilog.info(0x0000, AmapService.TAG, '[AMAP_TRACE][getRegeo_sdk_geo] resolve poi success');
+          return title;
+        }
+      }
+      const formatted = (result.getFormatAddress() ?? '').trim();
+      if (formatted.length > 0) {
+        hilog.info(0x0000, AmapService.TAG, '[AMAP_TRACE][getRegeo_sdk_geo] resolve address success');
+        return formatted;
+      }
+      return null;
+    } catch (error) {
+      hilog.error(0x0000, AmapService.TAG, `[AMAP_TRACE][getRegeo_sdk_geo] failed, error=${JSON.stringify(error)}`);
+      return null;
+    }
+  }
+
+  public static async getRegeoWithSdkFallback(
+    lat: number,
+    lng: number,
+    context?: common.Context | null
+  ): Promise<string | null> {
+    if (context) {
+      const sdkGeo = await AmapService.getRegeoBySdkGeoSearch(context, lat, lng);
+      if (sdkGeo && sdkGeo.trim().length > 0) {
+        return sdkGeo;
+      }
+    }
+    const webResult = await AmapService.getRegeo(lat, lng);
+    if (webResult && webResult.trim().length > 0) {
+      return webResult;
+    }
+    if (!context) {
+      return null;
+    }
+    return AmapService.getRegeoBySdkNearby(context, lat, lng);
   }
 }

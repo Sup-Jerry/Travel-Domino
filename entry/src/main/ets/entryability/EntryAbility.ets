@@ -21,6 +21,7 @@ import { AppStorageKeys } from '../common/constants/AppStorageKeys';
 import { AppStartupCoordinator } from '../infrastructure/auth/AppStartupCoordinator';
 import { AuthFacade } from '../infrastructure/auth/AuthFacade';
 import { ProfileViewModel } from '../viewmodel/ProfileViewModel';
+import { AmapService } from '../infrastructure/services/AmapService';
 
 const DOMAIN = 0x0000;
 const TAG = 'EntryAbility';
@@ -114,6 +115,7 @@ export default class EntryAbility extends UIAbility {
     try {
       const appContext = this.context.getApplicationContext();
       TrafficEngine.getInstance().initialize(appContext);
+      AmapService.bindRuntimeContext(appContext);
       hilog.info(DOMAIN, TAG, '[LIFECYCLE_GUARD] TrafficEngine initialized with ApplicationContext.');
     } catch (err) {
       hilog.error(DOMAIN, TAG, '[LIFECYCLE_GUARD] TrafficEngine init failed: %{public}s', JSON.stringify(err));

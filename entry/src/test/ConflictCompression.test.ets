@@ -30,7 +30,7 @@ export default function conflictCompressionTest() {
         buildEvent(3, 'Target', 60, 1, '10:30')
       ];
 
-      const plan = vm.calculateCompressionPlanBySelection(2, '10:30', new Set<number>([1, 2]), 'RATIO');
+      const plan = vm.compressionCoordinator.calculateCompressionPlanBySelection(2, '10:30', new Set<number>([1, 2]), 'RATIO');
       expect(plan.status).assertEqual('COMPRESS_CONFIRM');
       expect(plan.remainingGapMinutes ?? -1).assertEqual(0);
       expect(sumReduced(plan)).assertEqual(120);
@@ -45,14 +45,19 @@ export default function conflictCompressionTest() {
         buildEvent(3, 'Target', 60, 1, '11:30')
       ];
 
-      const plan = vm.calculateCompressionPlanBySelection(2, '11:30', new Set<number>([1, 2]), 'EQUAL');
+      const plan = vm.compressionCoordinator.calculateCompressionPlanBySelection(2, '11:30', new Set<number>([1, 2]), 'EQUAL');
       expect(plan.status).assertEqual('COMPRESS_CONFIRM');
       expect(sumReduced(plan)).assertEqual(60);
 
-      const first = plan.affectedItems.find(item => item.index === 0);
-      const second = plan.affectedItems.find(item => item.index === 1);
-      const firstReduced = first ? (first.oldVal - first.newVal) : 0;
-      const secondReduced = second ? (second.oldVal - second.newVal) : 0;
+      let firstReduced = 0;
+      let secondReduced = 0;
+      for (const item of plan.affectedItems) {
+        if (item.index === 0) {
+          firstReduced = item.oldVal - item.newVal;
+        } else if (item.index === 1) {
+          secondReduced = item.oldVal - item.newVal;
+        }
+      }
       expect(Math.abs(firstReduced - secondReduced) <= 1).assertEqual(true);
     });
 
@@ -65,9 +70,17 @@ export default function conflictCompressionTest() {
         buildEvent(3, 'Target', 60, 1, '10:00')
       ];
 
-      const context = vm.buildCompressionSelectionContext(2, '10:00');
+      const context = vm.compressionCoordinator.buildCompressionSelectionContext(2, '10:00');
       expect(context !== null).assertEqual(true);
-      const rigid = context ? context.candidates.find(item => item.id === 1) : undefined;
+      let rigid: import('../main/ets/viewmodel/TimelineViewModel').CompressionSelectionCandidate | undefined = undefined;
+      if (context) {
+        for (const candidate of context.candidates) {
+          if (candidate.id === 1) {
+            rigid = candidate;
+            break;
+          }
+        }
+      }
       expect(!!rigid).assertEqual(true);
       expect(rigid?.isRigid ?? false).assertEqual(true);
       expect(rigid?.selectable ?? true).assertEqual(false);
@@ -82,7 +95,7 @@ export default function conflictCompressionTest() {
         buildEvent(3, 'Target', 60, 1, '10:30')
       ];
 
-      const plan = vm.calculateCompressionPlanBySelection(2, '10:30', new Set<number>([2]), 'RATIO');
+      const plan = vm.compressionCoordinator.calculateCompressionPlanBySelection(2, '10:30', new Set<number>([2]), 'RATIO');
       expect(plan.status).assertEqual('OVERLOAD');
       expect(plan.remainingGapMinutes ?? 0).assertEqual(60);
       expect(plan.suggestedTime !== undefined).assertEqual(true);
