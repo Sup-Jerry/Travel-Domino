@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+msg_file="${1:-}"
+if [[ -z "$msg_file" || ! -f "$msg_file" ]]; then
+  echo "[commit-msg] missing commit message file." >&2
+  exit 1
+fi
+
+msg="$(sed -e '/^#/d' -e '/^[[:space:]]*$/d' "$msg_file" | head -n 1)"
+
+if [[ -z "$msg" ]]; then
+  echo "[commit-msg] empty commit subject is not allowed." >&2
+  exit 1
+fi
+
+if [[ ${#msg} -lt 8 ]]; then
+  echo "[commit-msg] commit subject too short (min 8 chars)." >&2
+  exit 1
+fi
+
+if [[ "$msg" =~ ^(wip|WIP) ]]; then
+  echo "[commit-msg] WIP commits are not allowed." >&2
+  exit 1
+fi

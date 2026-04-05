@@ -232,6 +232,7 @@ description: 用于 Travel Domino（HarmonyOS 行程规划项目）的定向开�
 - 用户明确要求“以最新为主”时，直接清理旧分支并以origin/main作为唯一基线。
 - 当用户要求"复盘+上传GitHub+瘦身"时，固定执行顺序：复盘沉淀 -> Git同步状态确认 -> 瘦身执行 -> 提交推送。
 - 瘦身默认先处理可验证安全项：先删无引用的 tracked 冗余文件，再清理本地可再生产物。
+- When user specifies scripts/git-flow.ps1 and hook gates, validate gate files exist before executing push flow.
 
 ### Known Fixes & Workarounds
 - For cross-day domino shifts, user-facing date and writeback inputs must prefer dynamic_day_offset; do not mix with day_offset in one flow.
@@ -322,7 +323,8 @@ description: 用于 Travel Domino（HarmonyOS 行程规划项目）的定向开�
 - Windows PowerShell不支持&&，命令链需要拆分执行避免脚本中断。
 - Docker Compose v2 场景下移除 compose 文件中的 version 字段，避免持续 warning 干扰排查。
 - 执行瘦身前先做引用扫描（rg）和 tracked 校验（git ls-files），防止误删运行时资源。
+- Before rollback/force-push operations, stash local uncommitted changes and restore after rollback to avoid loss.
 
 ### Custom Instruction Injection
 
-遇到分支合并冲突范围明显大于当前需求时，默认采取“main最小补丁+旧分支清理”策略，并在结果中给出保留/删除依据。
+Retrospective + prune + push: evolve memory first, run app-size-pruner preview/apply, then execute git flow and report evidence.
