@@ -2,6 +2,14 @@
 
 $ErrorActionPreference = 'Stop'
 
+$currentBranch = (git branch --show-current).Trim()
+$allowMainPush = $env:ALLOW_MAIN_PUSH -eq '1'
+if ($currentBranch -eq 'main' -and -not $allowMainPush) {
+  Write-Host '[pre-push] blocked: direct push to main is disabled by governance.' -ForegroundColor Red
+  Write-Host '[pre-push] use develop/feature/release/hotfix branches, or set ALLOW_MAIN_PUSH=1 for an explicit override.' -ForegroundColor Yellow
+  exit 1
+}
+
 function Get-UpstreamRef {
   $upstream = git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>$null
   if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($upstream)) {
@@ -34,41 +42,49 @@ function Is-TextFile([string]$Path) {
 $changedFiles = Get-ChangedFiles
 if ($changedFiles.Count -eq 0) {
   Write-Host '[pre-push] no changed files detected in push range.' -ForegroundColor DarkGray
-  exit 0
-}
+} else {
+  $violations = New-Object System.Collections.Generic.List[string]
 
-$violations = New-Object System.Collections.Generic.List[string]
-
-foreach ($file in $changedFiles) {
-  # 1) 1MB limit on tracked files
-  $sizeOutput = git cat-file -s "HEAD:$file" 2>$null
-  if ($LASTEXITCODE -eq 0 -and $sizeOutput -as [long]) {
-    $size = [long]$sizeOutput
-    if ($size -gt 1MB) {
-      $violations.Add("Large file >1MB: $file ($size bytes)")
-    }
-  }
-
-  # 2/3) console.log + task-tag checks on text files
-  if ((Test-Path -LiteralPath $file) -and (Is-TextFile $file)) {
-    $content = Get-Content -LiteralPath $file -Raw -ErrorAction SilentlyContinue
-    if ($null -ne $content) {
-      if ($content -match '\bconsole\.log\s*\(') {
-        $violations.Add("console.log found: $file")
+  foreach ($file in $changedFiles) {
+    $sizeOutput = git cat-file -s "HEAD:$file" 2>$null
+    if ($LASTEXITCODE -eq 0 -and $sizeOutput -as [long]) {
+      $size = [long]$sizeOutput
+      if ($size -gt 1MB) {
+        $violations.Add("Large file >1MB: $file ($size bytes)")
       }
-      $taskTag = ('TO' + 'DO')
-      $taskPattern = "(?im)#?\s*$taskTag\b|//\s*$taskTag\b|/\*\s*$taskTag\b"
-      if ($content -match $taskPattern) {
-        $violations.Add("task-tag comment found: $file")
+    }
+
+    if ((Test-Path -LiteralPath $file) -and (Is-TextFile $file)) {
+      $content = Get-Content -LiteralPath $file -Raw -ErrorAction SilentlyContinue
+      if ($null -ne $content) {
+        if ($content -match '\bconsole\.log\s*\(') {
+          $violations.Add("console.log found: $file")
+        }
+        if ($content -match '(?im)#?\s*TODO\b|//\s*TODO\b|/\*\s*TODO\b') {
+          $violations.Add("TODO comment found: $file")
+        }
       }
     }
   }
+
+  if ($violations.Count -gt 0) {
+    Write-Host '[pre-push] blocked by governance checks:' -ForegroundColor Red
+    $violations | Sort-Object -Unique | ForEach-Object { Write-Host " - $_" -ForegroundColor Yellow }
+    exit 1
+  }
 }
 
-if ($violations.Count -gt 0) {
-  Write-Host '[pre-push] blocked by governance checks:' -ForegroundColor Red
-  $violations | Sort-Object -Unique | ForEach-Object { Write-Host " - $_" -ForegroundColor Yellow }
+$repoRoot = (git rev-parse --show-toplevel).Trim()
+$secretScanScript = Join-Path $repoRoot 'scripts/ci/secret-scan.ps1'
+if (-not (Test-Path -LiteralPath $secretScanScript)) {
+  Write-Host '[pre-push] missing scripts/ci/secret-scan.ps1' -ForegroundColor Red
   exit 1
+}
+
+& powershell -NoProfile -ExecutionPolicy Bypass -File $secretScanScript -Scope Repo
+if ($LASTEXITCODE -ne 0) {
+  Write-Host '[pre-push] secret scan failed.' -ForegroundColor Red
+  exit $LASTEXITCODE
 }
 
 Write-Host '[pre-push] governance checks passed.' -ForegroundColor Green

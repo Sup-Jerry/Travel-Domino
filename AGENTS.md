@@ -24,6 +24,11 @@ A skill is a set of local instructions to follow that is stored in a `SKILL.md` 
 - 改代码：使用 `travel-domino-dev`，并结合 `skill-evolution-manager` 的迭代经验。
 - 代码瘦身：使用 `app-size-pruner`。
 - 上传到 GitHub：使用当前仓库已落地的 Git 治理流程（commit-msg / pre-push hooks、`scripts/git-flow.ps1`、相关 workflows）。
+- Git 上传策略：默认禁止直推 `main`。必须走 `develop / feature/* / release/* / hotfix/*`，除非用户当次明确授权直推 `main`。
+- Git 上传执行入口：必须优先使用 `scripts/git-auto-publish.ps1`，不要直接手工 `git push`。
+- 口令触发：当用户说“上传到github / 推到github / 发布到github”（大小写、空格、中文表述近似均算）时，默认直接执行 `./scripts/git-auto-publish.ps1`。
+- 口令默认参数：未额外说明时，保持自动推送并自动创建 Draft PR 到 `develop`（不加 `-NoPR`）。
+- 口令例外：若用户明确说“只本地提交 / 不推送 / 不要PR”，按用户指令覆盖默认行为。
 - 迭代进化：使用 `skill-evolution-manager`。
 
 任何密码、密钥、签名信息，都不写进 Git 跟踪文件。
