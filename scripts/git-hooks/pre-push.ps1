@@ -60,10 +60,8 @@ if ($changedFiles.Count -eq 0) {
         if ($content -match '\bconsole\.log\s*\(') {
           $violations.Add("console.log found: $file")
         }
-        $taskTag = ('TO' + 'DO')
-        $taskPattern = "(?im)#?\s*$taskTag\b|//\s*$taskTag\b|/\*\s*$taskTag\b"
-        if ($content -match $taskPattern) {
-          $violations.Add("task-tag comment found: $file")
+        if ($content -match '(?im)#?\s*TODO\b|//\s*TODO\b|/\*\s*TODO\b') {
+          $violations.Add("TODO comment found: $file")
         }
       }
     }

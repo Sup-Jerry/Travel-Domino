@@ -33,4 +33,4 @@
 - `pre-push blocked: direct push to main`：切到 `develop/feature/*` 重试。
 - `commit-msg invalid`：改成 `<type>[optional scope]: <description>`。
 - `gh not found/authenticated`：安装并登录 `gh`，或使用 `-NoPR`。
-- `console.log/任务标记/大文件` 被拦截：按提示清理后重试。
+- `console.log/TODO/大文件` 被拦截：按提示清理后重试。
