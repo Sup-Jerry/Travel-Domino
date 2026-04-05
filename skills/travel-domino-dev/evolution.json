@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-05T18:49:31.908322",
+  "last_updated": "2026-04-05T18:46:09.966087",
   "preferences": [
     "Retrospective output should follow: issues-root causes-improvements-next constraints.",
     "When user reports Day/date mismatch, first check mixed usage of dynamic_day_offset vs day_offset.",
@@ -66,10 +66,7 @@
     "用户明确要求“以最新为主”时，直接清理旧分支并以origin/main作为唯一基线。",
     "当用户要求\"复盘+上传GitHub+瘦身\"时，固定执行顺序：复盘沉淀 -> Git同步状态确认 -> 瘦身执行 -> 提交推送。",
     "瘦身默认先处理可验证安全项：先删无引用的 tracked 冗余文件，再清理本地可再生产物。",
-    "When user specifies scripts/git-flow.ps1 and hook gates, validate gate files exist before executing push flow.",
-    "???????????????????????? revert ????????????",
-    "?????? stash ?????????????????????????????",
-    "?? DevEco ???????? src/test ? ohosTest/testability ????????????????????"
+    "When user specifies scripts/git-flow.ps1 and hook gates, validate gate files exist before executing push flow."
   ],
   "fixes": [
     "For cross-day domino shifts, user-facing date and writeback inputs must prefer dynamic_day_offset; do not mix with day_offset in one flow.",
@@ -160,11 +157,9 @@
     "Windows PowerShell不支持&&，命令链需要拆分执行避免脚本中断。",
     "Docker Compose v2 场景下移除 compose 文件中的 version 字段，避免持续 warning 干扰排查。",
     "执行瘦身前先做引用扫描（rg）和 tracked 校验（git ls-files），防止误删运行时资源。",
-    "Before rollback/force-push operations, stash local uncommitted changes and restore after rollback to avoid loss.",
-    "PowerShell ??? && ???????????????? ;?",
-    "????? scripts/git-flow.ps1 ? githook ??????? .githooks/commit-msg ? .githooks/pre-push ??????????"
+    "Before rollback/force-push operations, stash local uncommitted changes and restore after rollback to avoid loss."
   ],
-  "custom_prompts": "Travel Domino ???????????????????????????? git-flow ????????????",
+  "custom_prompts": "Retrospective + prune + push: evolve memory first, run app-size-pruner preview/apply, then execute git flow and report evidence.",
   "contexts": [
     "Case: Companion/immersive CN localization + Index back fix; compile blocker was untyped router fallback object in NavigationHelper and solved via typed options interface.",
     "Case: companion page light-theme + immersive start flow refactor in ArkTS; high-signal edits were localized to ThemeCenter and CompanionView while preserving single-active-task consistency checks.",
