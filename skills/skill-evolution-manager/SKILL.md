@@ -117,6 +117,8 @@ Agent 调用 `scripts/smart_stitch.py`，将 `evolution.json` 的内容转化为
 - 当用户要求"复盘+上传GitHub+瘦身"时，固定执行顺序：复盘沉淀 -> Git同步状态确认 -> 瘦身执行 -> 提交推送。
 - 瘦身默认先处理可验证安全项：先删无引用的 tracked 冗余文件，再清理本地可再生产物。
 - When merge_evolution CLI argument parsing fails on PowerShell, call merge_evolution via python import with file-loaded JSON to avoid quoting issues.
+- 当用户明确指定多个skill和执行顺序时，先按顺序完成skill流程，再进入代码或Git操作。
+- 复盘沉淀输出应附带可验证证据：merge/stitch命令执行结果与last_updated时间。
 
 ### Known Fixes & Workarounds
 - Before any edit, restate user intent and explicitly state whether code will be changed.
@@ -174,7 +176,8 @@ Agent 调用 `scripts/smart_stitch.py`，将 `evolution.json` 的内容转化为
 - Docker Compose v2 场景下移除 compose 文件中的 version 字段，避免持续 warning 干扰排查。
 - 执行瘦身前先做引用扫描（rg）和 tracked 校验（git ls-files），防止误删运行时资源。
 - If user requires commit-msg gate but hook file is missing, create the gate first before push workflow.
+- PowerShell下merge_evolution优先使用Python文件读取调用，避免JSON argv转义失败。
 
 ### Custom Instruction Injection
 
-In retrospective requests, provide script evidence and persistence proof for each evolved skill.
+复盘请求默认执行：识别目标skill -> merge_evolution -> smart_stitch -> 时间戳与区块校验。

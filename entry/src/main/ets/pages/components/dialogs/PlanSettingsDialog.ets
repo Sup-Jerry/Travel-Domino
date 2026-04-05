@@ -8,6 +8,7 @@ export struct PlanSettingsDialog {
 
   onRename: () => void = () => {};
   onReschedule: () => void = () => {};
+  onShare: () => void = () => {};
   onWeatherPreferenceChange: (preference: WeatherUserPreference) => void = (_preference: WeatherUserPreference) => {};
   weatherUserPreference: WeatherUserPreference = {
     heatSensitivity: DEFAULT_WEATHER_USER_PREFERENCE.heatSensitivity,
@@ -127,6 +128,38 @@ export struct PlanSettingsDialog {
       .onClick(() => {
         this.controller.close();
         this.onReschedule();
+      });
+
+      Divider().color(this.getPalette().divider).margin({ top: 8, bottom: 8 });
+
+      Row() {
+        Text('[S]')
+          .fontSize(18)
+          .fontColor(this.getPalette().primary)
+          .margin({ right: 16 });
+
+        Column() {
+          Text('分享计划')
+            .fontSize(16)
+            .fontColor(this.getPalette().textPrimary)
+            .fontWeight(FontWeight.Medium);
+          Text('导出分享数据并生成分享图')
+            .fontSize(12)
+            .fontColor(this.getPalette().textSecondary)
+            .margin({ top: 4 });
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start);
+
+        Text('>')
+          .fontSize(16)
+          .fontColor(this.getPalette().textTertiary);
+      }
+      .width('100%')
+      .padding({ top: 12, bottom: 12 })
+      .onClick(() => {
+        this.controller.close();
+        this.onShare();
       });
 
       Divider().color(this.getPalette().divider).margin({ top: 12, bottom: 8 });
