@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-05T22:28:33.340282",
+  "last_updated": "2026-04-05T18:49:31.907724",
   "preferences": [
     "If user says no code changes, stop code edits and switch to retrospective output.",
     "Default retrospective language is Chinese with fixed structure: issues-root causes-improvements-next steps.",
@@ -54,8 +54,8 @@
     "当用户要求\"复盘+上传GitHub+瘦身\"时，固定执行顺序：复盘沉淀 -> Git同步状态确认 -> 瘦身执行 -> 提交推送。",
     "瘦身默认先处理可验证安全项：先删无引用的 tracked 冗余文件，再清理本地可再生产物。",
     "When merge_evolution CLI argument parsing fails on PowerShell, call merge_evolution via python import with file-loaded JSON to avoid quoting issues.",
-    "当用户明确指定多个skill和执行顺序时，先按顺序完成skill流程，再进入代码或Git操作。",
-    "复盘沉淀输出应附带可验证证据：merge/stitch命令执行结果与last_updated时间。"
+    "?????????????????????????-??-??-????",
+    "?????????? merge_evolution ? smart_stitch??????????"
   ],
   "fixes": [
     "Before any edit, restate user intent and explicitly state whether code will be changed.",
@@ -113,9 +113,10 @@
     "Docker Compose v2 场景下移除 compose 文件中的 version 字段，避免持续 warning 干扰排查。",
     "执行瘦身前先做引用扫描（rg）和 tracked 校验（git ls-files），防止误删运行时资源。",
     "If user requires commit-msg gate but hook file is missing, create the gate first before push workflow.",
-    "PowerShell下merge_evolution优先使用Python文件读取调用，避免JSON argv转义失败。"
+    "???/?????????????????????? stash?",
+    "???? git ??????????????????????????"
   ],
-  "custom_prompts": "复盘请求默认执行：识别目标skill -> merge_evolution -> smart_stitch -> 时间戳与区块校验。",
+  "custom_prompts": "????????????????? + evolution.json ???? + SKILL.md ???????",
   "contexts": [
     "Case: Toolbox package missing in ohpm registry, switched to vendored local source and local exports.",
     "Case: Expansion/drag issues caused by oversized wrapper (200x200) and positioned container; fixed with 58x58 wrapper and origin position.",

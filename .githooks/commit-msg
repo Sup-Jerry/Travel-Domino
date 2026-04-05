@@ -2,24 +2,20 @@
 set -euo pipefail
 
 msg_file="${1:-}"
-if [[ -z "$msg_file" || ! -f "$msg_file" ]]; then
-  echo "[commit-msg] missing commit message file." >&2
+if [[ -z "$msg_file" ]]; then
+  echo "[commit-msg] missing commit message file argument." >&2
   exit 1
 fi
 
-msg="$(sed -e '/^#/d' -e '/^[[:space:]]*$/d' "$msg_file" | head -n 1)"
+repo_root="$(git rev-parse --show-toplevel)"
 
-if [[ -z "$msg" ]]; then
-  echo "[commit-msg] empty commit subject is not allowed." >&2
+if command -v pwsh >/dev/null 2>&1; then
+  PS_BIN="pwsh"
+elif command -v powershell >/dev/null 2>&1; then
+  PS_BIN="powershell"
+else
+  echo "[commit-msg] PowerShell is required." >&2
   exit 1
 fi
 
-if [[ ${#msg} -lt 8 ]]; then
-  echo "[commit-msg] commit subject too short (min 8 chars)." >&2
-  exit 1
-fi
-
-if [[ "$msg" =~ ^(wip|WIP) ]]; then
-  echo "[commit-msg] WIP commits are not allowed." >&2
-  exit 1
-fi
+"$PS_BIN" -NoProfile -ExecutionPolicy Bypass -File "$repo_root/scripts/git-hooks/commit-msg.ps1" "$msg_file"
