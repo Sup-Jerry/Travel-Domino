@@ -1,4 +1,4 @@
-﻿# AGENTS.md instructions for E:\Travel
+# AGENTS.md instructions for E:\Travel
 
 ## Skills
 A skill is a set of local instructions to follow that is stored in a `SKILL.md` file. Below is the list of skills that can be used in this project.
@@ -21,10 +21,8 @@ A skill is a set of local instructions to follow that is stored in a `SKILL.md` 
   4. Reuse scripts/templates/assets provided by the skill whenever possible.
 
 ## User preferences
-- 改代码：使用 `travel-domino-dev`，并结合 `skill-evolution-manager` 的迭代经验。
-- 代码瘦身：使用 `app-size-pruner`。
-- 上传到 GitHub：使用当前仓库已落地的 Git 治理流程（commit-msg / pre-push hooks、`scripts/git-flow.ps1`、相关 workflows）。
-- 迭代进化：使用 `skill-evolution-manager`。
+- GitHub submissions must go directly to `main`.
+- Do not create or submit feature branches unless the user explicitly asks for it.
 
 任何密码、密钥、签名信息，都不写进 Git 跟踪文件。
-开发环境和构建环境都不用手填真实秘密到仓库文件中。
+开发环境和构建环境都不用手填真实秘密到仓库文件中
