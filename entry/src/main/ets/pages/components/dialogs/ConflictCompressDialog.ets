@@ -39,7 +39,7 @@ export struct ConflictCompressDialog {
 
   aboutToAppear() {
     this.mode = this.initialMode;
-    this.context = this.vm.compressionCoordinator.buildCompressionSelectionContext(this.targetIndex, this.targetTime);
+    this.context = this.vm.buildCompressionSelectionContext(this.targetIndex, this.targetTime);
     if (!this.context) {
       this.previewPlan = null;
       return;
@@ -68,7 +68,7 @@ export struct ConflictCompressDialog {
       this.previewPlan = null;
       return;
     }
-    this.previewPlan = this.vm.compressionCoordinator.calculateCompressionPlanBySelection(
+    this.previewPlan = this.vm.calculateCompressionPlanBySelection(
       this.targetIndex,
       this.targetTime,
       this.selectedIds,
@@ -303,7 +303,6 @@ export struct ConflictCompressDialog {
     .borderRadius(16)
   }
 }
-
 
 
 

@@ -12,8 +12,7 @@ import {
   CameraUpdateFactory,
   LatLng,
   OnCameraChangeListener,
-  MapView,
-  MapsInitializer
+  MapView
 } from '@amap/amap_lbs_map3d';
 import { AmapService, PoiSearchItem } from '../infrastructure/services/AmapService';
 
@@ -39,6 +38,11 @@ class MapPickerRouteParams {
   planId: number = 0;
   centerSource: string = 'current';
   queryName: string = '';
+}
+
+interface AMapNativeBridgeModule {
+  nativeSetAMapXComponentCallback?: (callback: object) => void;
+  default?: AMapNativeBridgeModule;
 }
 
 @Entry
@@ -178,16 +182,20 @@ struct MapPickerPage {
 
   private async isMapNativeRuntimeReady(): Promise<boolean> {
     try {
-      const version = MapsInitializer.getVersion() ?? '';
-      const callbackReady = version.trim().length > 0;
+      const nativeModule = await import('libAMapOpenMapJNI.so') as AMapNativeBridgeModule;
+      const moduleDefined = nativeModule !== undefined && nativeModule !== null;
+      const namedCallbackReady = typeof nativeModule?.nativeSetAMapXComponentCallback === 'function';
+      const defaultCallbackReady = typeof nativeModule?.default?.nativeSetAMapXComponentCallback === 'function';
+      const callbackReady = namedCallbackReady || defaultCallbackReady;
+      const exportKeys = moduleDefined ? Object.keys(nativeModule as object) : [];
       hilog.info(
         0x0000,
         'MapPickerPage',
-        `[MAP_NATIVE_GUARD] probe callbackReady=${callbackReady}, sdkVersion=${version}`
+        `[MAP_NATIVE_GUARD] probe moduleDefined=${moduleDefined}, callbackReady=${callbackReady}, named=${namedCallbackReady}, default=${defaultCallbackReady}, keyCount=${exportKeys.length}, keys=${exportKeys.join('|')}`
       );
       if (!callbackReady) {
         hilog.error(0x0000, 'MapPickerPage',
-          '[MAP_NATIVE_GUARD] runtime unavailable, sdk version empty');
+          '[MAP_NATIVE_GUARD] runtime unavailable, missing nativeSetAMapXComponentCallback export');
         return false;
       }
       hilog.info(0x0000, 'MapPickerPage', '[MAP_NATIVE_GUARD] native module load ok');
@@ -362,21 +370,16 @@ struct MapPickerPage {
   async fetchAddress(lat: number, lng: number): Promise<void> {
     const seq = ++this.addressRequestSeq;
     this.currentAddress = '正在解析附近地名...';
-    const address = await AmapService.getRegeoWithSdkFallback(lat, lng, this.uiContext ?? null);
+    const address = await AmapService.getRegeo(lat, lng);
     if (seq < this.addressRequestSeq || seq < this.latestAppliedAddressSeq) {
       return;
     }
     this.latestAppliedAddressSeq = seq;
-    if (address && address.trim().length > 0) {
+    if (address) {
       this.currentAddress = address;
-      return;
+    } else {
+      this.currentAddress = '未知坐标点';
     }
-    const fallbackAddress = this.buildCoordinateFallbackAddress(lat, lng);
-    if (this.isAddressResolving(this.currentAddress)) {
-      this.currentAddress = fallbackAddress;
-      return;
-    }
-    // 已存在有效地址（例如搜索结果名称）时，逆地理失败不覆盖已有展示
   }
 
   confirmSelection(): void {
@@ -570,102 +573,28 @@ struct MapPickerPage {
         .padding({ left: 24, right: 24, top: 24, bottom: 40 })
         .shadow({ radius: 30, color: 'rgba(0,0,0,0.15)', offsetY: -5 })
       } else {
-        Column({ space: 12 }) {
-          Text(this.mapRuntimeChecked ? '地图组件不可用，已切换关键词选点' : '正在初始化地图环境...')
-            .fontSize(18)
+        Column({ space: 16 }) {
+          Text(this.mapRuntimeChecked ? '地图暂不可用' : '正在初始化地图环境...')
+            .fontSize(20)
             .fontWeight(FontWeight.Bold)
             .fontColor(this.getThemePalette().textPrimary);
           if (this.mapRuntimeError.length > 0) {
             Text(this.mapRuntimeError)
-              .fontSize(12)
+              .fontSize(13)
               .fontColor(this.getThemePalette().textSecondary)
               .textAlign(TextAlign.Center);
           }
-          Row() {
-            TextInput({ text: this.searchKeyword, placeholder: '搜索地点（例如：东京塔）' })
-              .layoutWeight(1)
-              .height(40)
-              .backgroundColor(this.getThemePalette().cardBgSoft)
-              .borderRadius(10)
-              .fontColor(this.getThemePalette().textPrimary)
-              .placeholderColor(this.getThemePalette().textTertiary)
-              .onChange((value: string) => {
-                this.scheduleSearch(value);
-              });
-            Button(this.searching ? '搜索中' : '搜索')
-              .type(ButtonType.Capsule)
-              .height(36)
-              .enabled(!this.searching)
-              .backgroundColor(this.getThemePalette().primary)
-              .fontColor(Color.White)
-              .onClick(() => this.searchNow());
-          }
-          .width('100%')
-          .padding({ left: 12, right: 12 });
-
-          List({ space: 6 }) {
-            ForEach(this.searchResults, (item: PoiSearchItem) => {
-              ListItem() {
-                Row() {
-                  Column({ space: 2 }) {
-                    Text(item.name)
-                      .fontSize(14)
-                      .fontColor(this.getThemePalette().textPrimary)
-                      .maxLines(1)
-                      .textOverflow({ overflow: TextOverflow.Ellipsis });
-                    Text(item.address || `${item.lat.toFixed(5)}, ${item.lng.toFixed(5)}`)
-                      .fontSize(12)
-                      .fontColor(this.getThemePalette().textSecondary)
-                      .maxLines(1)
-                      .textOverflow({ overflow: TextOverflow.Ellipsis });
-                  }
-                  .layoutWeight(1)
-                  .alignItems(HorizontalAlign.Start);
-                  Text(this.formatDistance(item.distance))
-                    .fontSize(12)
-                    .fontColor(this.getThemePalette().textTertiary);
-                }
-                .width('100%')
-                .padding({ left: 10, right: 10, top: 10, bottom: 10 })
-                .backgroundColor(this.getThemePalette().cardBg)
-                .borderRadius(8)
-                .onClick(() => this.focusPoi(item));
-              };
-            }, (item: PoiSearchItem) => `${item.name}-${item.lat.toFixed(6)}-${item.lng.toFixed(6)}`);
-          }
-          .width('100%')
-          .layoutWeight(1)
-          .padding({ left: 12, right: 12 });
-
-          Text(this.currentAddress)
-            .fontSize(13)
-            .fontColor(this.getThemePalette().textSecondary)
-            .maxLines(2)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .width('100%')
-            .padding({ left: 12, right: 12 });
-
-          Row({ space: 10 }) {
-            Button('< 返回')
-              .layoutWeight(1)
-              .height(42)
-              .backgroundColor(this.getThemePalette().cardBgSoft)
-              .fontColor(this.getThemePalette().textPrimary)
-              .border({ width: 1, color: this.getThemePalette().border })
-              .onClick(() => this.getUIContext().getRouter().back());
-            Button('确认选点')
-              .layoutWeight(1)
-              .height(42)
-              .backgroundColor(this.getThemePalette().primary)
-              .fontColor(Color.White)
-              .onClick(() => this.confirmSelection());
-          }
-          .width('100%')
-          .padding({ left: 12, right: 12, bottom: 8 });
+          Button('< 返回')
+            .type(ButtonType.Capsule)
+            .backgroundColor(this.getThemePalette().cardBgSoft)
+            .fontColor(this.getThemePalette().textPrimary)
+            .border({ width: 1, color: this.getThemePalette().border })
+            .onClick(() => this.getUIContext().getRouter().back());
         }
         .width('100%')
         .height('100%')
-        .padding({ top: 48, left: 12, right: 12, bottom: 20 });
+        .justifyContent(FlexAlign.Center)
+        .padding({ left: 24, right: 24 });
       }
 
     }

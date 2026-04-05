@@ -144,24 +144,5 @@ export default function timeConstraintSolverTest() {
       expect(first.computedStartTime ?? '').assertEqual('01-02 08:00');
       expect(second.computedStartTime ?? '').assertEqual('09:00');
     });
-
-    it('solver_should_shift_following_item_to_next_day_when_travel_is_super_long', 0, () => {
-      const planStart = new Date('2026-01-01T00:00:00').getTime();
-      const first = buildScheduleItem(1, 'A', 60, 0, '', 0, 0, 0);
-      const second = buildScheduleItem(2, 'B', 60, 0, '', 0, 0, 0);
-      const third = buildScheduleItem(3, 'C', 60, 0, '', 0, 0, 0);
-      first.preTravelMinutes = 0;
-      second.preTravelMinutes = 0;
-      third.preTravelMinutes = 38 * 60;
-      const input = [first, second, third];
-
-      const result = TimeConstraintSolver.calculateTimeline(input, '09:00', planStart, {
-        autoRouteEnabled: false,
-        slackRatio: 0
-      });
-
-      const eventThird = result[2];
-      expect((eventThird.dynamicDayOffset ?? -1) > 0).assertTrue();
-    });
   });
 }

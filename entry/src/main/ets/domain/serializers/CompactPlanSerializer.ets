@@ -42,31 +42,12 @@ interface CompactPayload {
   e: CompactEvent[];      // events
 }
 
-export interface SharePlanMetaInput {
-  title: string;
-  startDate: number;
-  status: number;
-  enableAutoAmapRoute: number;
-}
-
-export interface SharePlanMetaOutput {
-  title: string;
-  startDate: number;
-  status: number;
-  enableAutoAmapRoute: number;
-}
-
-export interface ShareDecompressResult {
-  plan: SharePlanMetaOutput;
-  events: TravelPlanItem[];
-}
-
 export class CompactPlanSerializer {
   /**
    * 压缩计划数据用于分享
    */
   public static compressForShare(
-    planMeta: SharePlanMetaInput,
+    planMeta: { title: string; startDate: number; status: number; enableAutoAmapRoute: number },
     events: TravelPlanItem[]
   ): string {
     const compactPlan: CompactPlanMeta = {
@@ -91,14 +72,17 @@ export class CompactPlanSerializer {
   /**
    * 解压分享的计划数据
    */
-  public static decompressFromShare(compressed: string): ShareDecompressResult {
+  public static decompressFromShare(compressed: string): {
+    plan: { title: string; startDate: number; status: number; enableAutoAmapRoute: number };
+    events: TravelPlanItem[];
+  } {
     const payload = JSON.parse(compressed) as CompactPayload;
 
     if (payload.v !== 1) {
       throw new Error(`unsupported_version:${payload.v}`);
     }
 
-    const plan: SharePlanMetaOutput = {
+    const plan = {
       title: payload.p.t,
       startDate: payload.p.sd,
       status: payload.p.st,
@@ -107,8 +91,7 @@ export class CompactPlanSerializer {
 
     const events = payload.e.map(e => CompactPlanSerializer.decompressEvent(e));
 
-    const result: ShareDecompressResult = { plan: plan, events: events };
-    return result;
+    return { plan, events };
   }
 
   private static compressEvent(event: TravelPlanItem): CompactEvent {

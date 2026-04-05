@@ -89,7 +89,7 @@ export class TimelineInteractionHelper {
   }
 
   public static pickCompanionFocusEventId(vm: TimelineViewModel, _nowTs: number = Date.now()): number {
-    const schedule = vm.executionCoordinator.getOrderedScheduleEvents();
+    const schedule = vm.getOrderedScheduleEvents();
     if (schedule.length === 0) {
       return -1;
     }
@@ -107,7 +107,7 @@ export class TimelineInteractionHelper {
   }
 
   public static findNextPendingEventId(vm: TimelineViewModel, afterEventId: number): number {
-    const schedule = vm.executionCoordinator.getOrderedScheduleEvents();
+    const schedule = vm.getOrderedScheduleEvents();
     if (schedule.length === 0) {
       return -1;
     }
@@ -140,5 +140,4 @@ export class TimelineInteractionHelper {
     return TimelineDatePolicy.buildPlannedTimestamp(vm.planStartDate, dayOffset, plannedText);
   }
 }
-
 

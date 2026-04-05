@@ -211,14 +211,14 @@ export struct CompanionHistoryPage {
     if (!this.vm) {
       return '--';
     }
-    return this.vm.historyManager.getPlaceAddress(placeName);
+    return this.vm.getPlaceAddress(placeName);
   }
 
   private getLatestEventForPlace(placeName: string): EventEntity | null {
     if (!this.vm) {
       return null;
     }
-    return this.vm.historyManager.getLatestEventForPlace(placeName);
+    return this.vm.getLatestEventForPlace(placeName);
   }
 
   private getCurrentHistoryLatestEvent(): EventEntity | null {
@@ -558,4 +558,3 @@ export struct CompanionHistoryPage {
     }
   }
 }
-

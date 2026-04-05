@@ -44,11 +44,6 @@ export class TimelineGroupingService {
   ): DateGroup[] {
     const nextGroups: DateGroup[] = [];
     const planBaseDayMs = TimelineDatePolicy.toDayStartMs(planStartDate > 0 ? planStartDate : Date.now());
-    const hasValidFilter =
-      Number.isFinite(filterStart) &&
-      Number.isFinite(filterEnd) &&
-      (filterStart as number) > 0 &&
-      (filterEnd as number) >= (filterStart as number);
 
     const scheduleEvents = events
       .filter(e => e.status === 1)
@@ -73,7 +68,7 @@ export class TimelineGroupingService {
       const renderDayOffset = TimelineDatePolicy.resolveEventDayOffset(item);
       const itemDateMs = TimelineDatePolicy.dayOffsetToDayStartMs(planBaseDayMs, renderDayOffset);
 
-      if (hasValidFilter && (itemDateMs < (filterStart as number) || itemDateMs > (filterEnd as number))) {
+      if (filterStart && filterStart > 0 && (itemDateMs < filterStart || itemDateMs > (filterEnd || 0))) {
         return;
       }
 
@@ -81,7 +76,7 @@ export class TimelineGroupingService {
         const groupDate = new Date(itemDateMs);
         visibleDayIndex += 1;
 
-        const dateStr = DateUtil.formatDate(groupDate, 'MM月dd日');
+        const dateStr = DateUtil.formatDate(groupDate, "MM月dd日");
         let headerStr = `Day ${visibleDayIndex} (${dateStr})`;
 
         if (renderDayOffset < 0) {
@@ -239,4 +234,3 @@ export class TimelineGroupingService {
     return summaries;
   }
 }
-

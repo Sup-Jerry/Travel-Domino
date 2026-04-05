@@ -119,23 +119,6 @@ export class MapServiceImpl implements IMapService {
     return 60;
   }
 
-  private isAmapMd5AuthError(error: Object): boolean {
-    const raw = JSON.stringify(error);
-    return raw.includes('MD5') || raw.includes('安全码未通过');
-  }
-
-  private async tryDrivingWebFallback(
-    traceId: string,
-    fromLat: number,
-    fromLng: number,
-    toLat: number,
-    toLng: number,
-    strategy: number = 0
-  ): Promise<number | null> {
-    this.warnRouteTrace(traceId, 'web_fallback', 'mode=drive disabled_use_sdk_only=true');
-    return null;
-  }
-
   private isValidCoordinate(lat: number, lng: number): boolean {
     return Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0;
   }
@@ -180,7 +163,7 @@ export class MapServiceImpl implements IMapService {
       `${MapServiceImpl.GEO_FIX_PREFIX}[coord] role=${role} source=geocode_start keyword_len=${keyword.length}`
     );
     const hook = MapServiceImpl.testHooks?.geocodeResolver;
-    const geocode = hook ? await hook(keyword) : await AmapService.getGeocode(keyword, this.context);
+    const geocode = hook ? await hook(keyword) : await AmapService.getGeocode(keyword);
     if (geocode && this.isValidCoordinate(geocode.lat, geocode.lng)) {
       location.latitude = geocode.lat;
       location.longitude = geocode.lng;
@@ -252,11 +235,6 @@ export class MapServiceImpl implements IMapService {
       0x0000,
       MapServiceImpl.TAG,
       `${MapServiceImpl.GEO_FIX_PREFIX}[route] mode=${mode} startTime=${startTime ?? ''} from_len=${origin.name?.length ?? 0} to_len=${destination.name?.length ?? 0}`
-    );
-    hilog.info(
-      0x0000,
-      MapServiceImpl.TAG,
-      `${MapServiceImpl.ROUTE_DIAG_PREFIX}[input] mode=${mode} from_name=${origin.name ?? ''} to_name=${destination.name ?? ''} from_coord=(${this.maskCoordinate(origin.latitude ?? 0)},${this.maskCoordinate(origin.longitude ?? 0)}) to_coord=(${this.maskCoordinate(destination.latitude ?? 0)},${this.maskCoordinate(destination.longitude ?? 0)})`
     );
 
     const routeApiEnabled = await this.canUseAmapRouteApi(traceId);
@@ -413,14 +391,6 @@ export class MapServiceImpl implements IMapService {
             }
           }
         }
-
-        // SDK 返回空路径或 0 秒时，也尝试 Web API 兜底（不仅仅在抛异常时）
-        if (seconds <= 0 && mode === 2) {
-          const webFallback = await this.tryDrivingWebFallback(traceId, fromLat, fromLng, toLat, toLng, 0);
-          if (webFallback && webFallback > 0) {
-            return webFallback;
-          }
-        }
       }
 
       console.info(`[AMAP_RESULT] Mode: ${mode}, 最终秒数: ${seconds}s`);
@@ -452,12 +422,6 @@ export class MapServiceImpl implements IMapService {
         MapServiceImpl.TAG,
         `${MapServiceImpl.ROUTE_DIAG_PREFIX}[exception] mode=${mode} code=${err?.code} msg=${err?.message} startTime=${startTime ?? ''} from=(${this.maskCoordinate(fromLat)},${this.maskCoordinate(fromLng)}) to=(${this.maskCoordinate(toLat)},${this.maskCoordinate(toLng)})`
       );
-      if (this.isAmapMd5AuthError(e) && mode === 2) {
-        const fallbackMinutes = await this.tryDrivingWebFallback(traceId, fromLat, fromLng, toLat, toLng, 0);
-        if (fallbackMinutes && fallbackMinutes > 0) {
-          return fallbackMinutes;
-        }
-      }
       return this.fallbackDurationWithError('高德路线请求失败，已按 60 分钟处理');
     }
   }
@@ -572,12 +536,6 @@ export class MapServiceImpl implements IMapService {
         }
       }
 
-      // SDK 正常返回但无有效时长时，也走 Web API 兜底
-      const webFallback = await this.tryDrivingWebFallback(traceId, fromLat, fromLng, toLat, toLng, 0);
-      if (webFallback && webFallback > 0) {
-        return webFallback;
-      }
-
       this.warnRouteTrace(traceId, 'fallback', 'reason=drive_invalid_or_empty_path');
       return this.fallbackDurationWithError('高德驾车路线无有效结果，已按 60 分钟处理');
     } catch (error) {
@@ -593,12 +551,6 @@ export class MapServiceImpl implements IMapService {
         MapServiceImpl.TAG,
         `${MapServiceImpl.GEO_FIX_PREFIX}[error] mode=drive strategy=${strategy} code=${err?.code} msg=${err?.message}`
       );
-      if (this.isAmapMd5AuthError(error)) {
-        const fallbackMinutes = await this.tryDrivingWebFallback(traceId, fromLat, fromLng, toLat, toLng, amapMode);
-        if (fallbackMinutes && fallbackMinutes > 0) {
-          return fallbackMinutes;
-        }
-      }
       return this.fallbackDurationWithError('高德驾车路线请求失败，已按 60 分钟处理');
     }
   }

@@ -2,19 +2,8 @@
 import { NotificationBridge } from '../main/ets/domain/statemachine/NotificationBridge';
 import { ReplanCoordinator } from '../main/ets/domain/statemachine/ReplanCoordinator';
 import { PlanStatus, TransitionTriggerSource } from '../main/ets/domain/statemachine/PlanStatus';
-import { PlanWeatherRefreshPlanner, PlanWeatherScheduleDecision } from '../main/ets/domain/statemachine/WeatherRefreshScheduler';
-import { PlanStateMachine, PlanStateMachineDeps } from '../main/ets/domain/statemachine/PlanStateMachine';
-import { LocationChangeEvent } from '../main/ets/domain/statemachine/StateEventBus';
-
-class ThrowingWeatherPlanner extends PlanWeatherRefreshPlanner {
-  public onStatusEntered(_planId: string, _status: PlanStatus, _timestamp: number): PlanWeatherScheduleDecision {
-    throw new Error('weather_failed');
-  }
-
-  public evaluate(_planId: string, _status: PlanStatus, _now: number): PlanWeatherScheduleDecision {
-    return { shouldRefresh: false };
-  }
-}
+import { PlanWeatherRefreshPlanner } from '../main/ets/domain/statemachine/WeatherRefreshScheduler';
+import { PlanStateMachine } from '../main/ets/domain/statemachine/PlanStateMachine';
 
 export default function planStateMachineLinkTest() {
   describe('planStateMachineLinkTest', () => {
@@ -119,10 +108,16 @@ export default function planStateMachineLinkTest() {
     });
 
     it('weather_side_effect_failure_should_not_break_transition', 0, () => {
-      const deps: PlanStateMachineDeps = {
-        weatherRefreshPlanner: new ThrowingWeatherPlanner()
-      };
-      const machine = PlanStateMachine.getInstance(deps);
+      const machine = PlanStateMachine.getInstance({
+        weatherRefreshPlanner: {
+          onStatusEntered: (_planId: string, _status: PlanStatus, _timestamp: number): void => {
+            throw new Error('weather_failed');
+          },
+          evaluate: (_planId: string, _status: PlanStatus, _now: number) => {
+            return { shouldRefresh: false, reason: 'none', nextDueAt: 0 };
+          }
+        } as unknown as PlanWeatherRefreshPlanner
+      });
       const planId = `weather_fail_${Date.now()}`;
       const result = machine.confirmPlan(planId);
       expect(result.success).assertEqual(true);
@@ -137,7 +132,7 @@ export default function planStateMachineLinkTest() {
       machine.confirmPlan(planId);
       machine.prepareExecution(planId, TransitionTriggerSource.TIME_WINDOW);
       let called = false;
-      const dispose = machine.subscribeLocationChange(planId, (event: LocationChangeEvent) => {
+      const dispose = machine.subscribeLocationChange(planId, (event) => {
         called = true;
         expect(event.planId).assertEqual(planId);
         expect(event.distanceMeters >= 120).assertEqual(true);
@@ -158,7 +153,7 @@ export default function planStateMachineLinkTest() {
       const planId = `location_block_${Date.now()}`;
       machine.confirmPlan(planId);
       let called = false;
-      const dispose = machine.subscribeLocationChange(planId, (_event: LocationChangeEvent) => {
+      const dispose = machine.subscribeLocationChange(planId, (_event) => {
         called = true;
       });
       machine.updateExecutionContext({

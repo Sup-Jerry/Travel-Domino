@@ -17,7 +17,6 @@
     "@hw-agconnect/credential-ohos": "1.1.3",
     "@hw-agconnect/crypto-ohos": "1.1.2",
     "@hw-agconnect/database-ohos": "1.1.2",
-    "@ohos/zxing": "2.1.2",
     "long": "4.0.0",
     "@types/long": "4.0.2"
   },

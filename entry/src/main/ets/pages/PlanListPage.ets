@@ -18,29 +18,12 @@ import { DateUtil } from '../common/utils/DateUtil';
 import { AppTexts } from '../common/constants/AppTexts';
 import { AppStorageKeys } from '../common/constants/AppStorageKeys';
 import { AuthFacade } from '../infrastructure/auth/AuthFacade';
-import { CompactPlanSerializer, SharePlanMetaInput } from '../domain/serializers/CompactPlanSerializer';
-import { PlanSerializer } from '../domain/serializers/PlanSerializer';
-import { ShareEventItem } from '../domain/services/PlanShareImageService';
-import { TravelPlanItem } from '../model/interface/IStandardEvent';
 
 interface NotificationNavPayload {
   planId: number;
   eventId: number;
   forceCompanionMode: boolean;
 }
-
-interface ShareDialogPayload {
-  planId: number;
-  planTitle: string;
-  startDate: number;
-  endDate: number;
-  totalDays: number;
-  totalEvents: number;
-  events: ShareEventItem[];
-  compressedJson: string;
-}
-
-const MAX_SHARE_EVENT_COUNT = 50;
 
 @Entry
 @Component
@@ -329,84 +312,20 @@ struct PlanListPage {
     });
   }
 
-  private openExportDialog(payload: ShareDialogPayload): void {
+  private openExportDialog(): void {
     this.exportJsonDialogController = new CustomDialogController({
       builder: PlanShareDialog({
-        planId: payload.planId,
-        planTitle: payload.planTitle,
-        startDate: payload.startDate,
-        endDate: payload.endDate,
-        totalDays: payload.totalDays,
-        totalEvents: payload.totalEvents,
-        events: payload.events,
-        compressedJson: payload.compressedJson
+        planId: 0,
+        planTitle: '',
+        startDate: 0,
+        endDate: 0,
+        totalDays: 0,
+        totalEvents: 0,
+        compressedJson: this.exportJsonText
       }),
       alignment: DialogAlignment.Center
     });
     this.exportJsonDialogController.open();
-  }
-
-  private convertToShareEvents(events: TravelPlanItem[]): ShareEventItem[] {
-    const sorted = events.slice().sort((left: TravelPlanItem, right: TravelPlanItem) => {
-      const leftDay = Number(left.dayOffset ?? 0);
-      const rightDay = Number(right.dayOffset ?? 0);
-      if (leftDay !== rightDay) {
-        return leftDay - rightDay;
-      }
-      return Number(left.sortOrder ?? 0) - Number(right.sortOrder ?? 0);
-    });
-
-    return sorted.map((event: TravelPlanItem): ShareEventItem => {
-      const durationMinutes = Number.isFinite(Number(event.duration)) ? Math.max(0, Math.floor(Number(event.duration))) : 0;
-      const durationHoursRaw = durationMinutes / 60;
-      const durationHours = Math.round(durationHoursRaw * 10) / 10;
-      const dayOffset = Number.isFinite(Number(event.dayOffset)) ? Math.max(0, Math.floor(Number(event.dayOffset))) : 0;
-      return {
-        name: event.name && event.name.trim().length > 0 ? event.name.trim() : '未命名地点',
-        dayOffset: dayOffset,
-        startTime: this.resolveShareStartTime(event),
-        endTime: this.resolveShareEndTime(event, durationMinutes),
-        duration: durationHours > 0 ? durationHours : 0.5,
-        icon: this.resolveShareIcon(event),
-        location: event.address && event.address.trim().length > 0 ? event.address.trim() : '待补充地点',
-        category: this.resolveShareCategory(event)
-      };
-    });
-  }
-
-  private resolveShareStartTime(event: TravelPlanItem): string {
-    const pureTime = DateUtil.extractPureTime(event.fixedStartTime || event.computedStartTime || '');
-    if (DateUtil.isValidTimeString(pureTime)) {
-      return pureTime;
-    }
-    return '--:--';
-  }
-
-  private resolveShareEndTime(event: TravelPlanItem, durationMinutes: number): string {
-    const startTime = this.resolveShareStartTime(event);
-    if (startTime === '--:--') {
-      return '--:--';
-    }
-    const calculated = DateUtil.calculateEndTime(startTime, durationMinutes);
-    const pure = DateUtil.extractPureTime(calculated);
-    return DateUtil.isValidTimeString(pure) ? pure : '--:--';
-  }
-
-  private resolveShareIcon(event: TravelPlanItem): string {
-    if (event.priority === 1) {
-      return '⭐';
-    }
-    if (event.lockStatus === 1 || event.type === 'ANCHOR') {
-      return '⏰';
-    }
-    return '📍';
-  }
-
-  private resolveShareCategory(event: TravelPlanItem): string {
-    if (event.lockStatus === 1 || event.type === 'ANCHOR') {
-      return '固定行程';
-    }
-    return '灵活行程';
   }
 
   private openImportDialog(): void {
@@ -424,54 +343,12 @@ struct PlanListPage {
   private async exportPlanAsJson(item: PlanItem): Promise<void> {
     try {
       const json = await PlanImportExportService.exportPlanToJson(item.id);
-      const parsed = PlanSerializer.deserializePlan(json);
-      const sortedEvents = this.sortEventsForShare(parsed.events);
-      const shareSourceEvents = sortedEvents.length > MAX_SHARE_EVENT_COUNT
-        ? sortedEvents.slice(0, MAX_SHARE_EVENT_COUNT)
-        : sortedEvents;
-      if (sortedEvents.length > MAX_SHARE_EVENT_COUNT) {
-        this.safeShowToast(`分享最多携带 ${MAX_SHARE_EVENT_COUNT} 条事件，已自动截断`);
-      }
-
-      const shareEvents = this.convertToShareEvents(shareSourceEvents);
-      const maxDayOffset = shareEvents.reduce((max: number, current: ShareEventItem) =>
-        Math.max(max, current.dayOffset), 0);
-      const totalDays = maxDayOffset + 1;
-      const startDate = parsed.plan.startDate;
-      const endDate = startDate + maxDayOffset * 24 * 60 * 60 * 1000;
-      const sharePlanMeta: SharePlanMetaInput = {
-        title: parsed.plan.title,
-        startDate: parsed.plan.startDate,
-        status: parsed.plan.status,
-        enableAutoAmapRoute: parsed.plan.enableAutoAmapRoute
-      };
-      const compressed = CompactPlanSerializer.compressForShare(sharePlanMeta, shareSourceEvents);
-      this.exportJsonText = compressed;
-      this.openExportDialog({
-        planId: item.id,
-        planTitle: parsed.plan.title,
-        startDate: startDate,
-        endDate: endDate,
-        totalDays: totalDays,
-        totalEvents: shareSourceEvents.length,
-        events: shareEvents,
-        compressedJson: compressed
-      });
+      this.exportJsonText = json;
+      this.openExportDialog();
     } catch (error) {
       hilog.warn(0x0000, 'PlanListPage', `[PLAN_JSON][export_failed] planId=${item.id}, reason=${JSON.stringify(error)}`);
       this.safeShowToast('导出失败，请稍后重试');
     }
-  }
-
-  private sortEventsForShare(events: TravelPlanItem[]): TravelPlanItem[] {
-    return events.slice().sort((left: TravelPlanItem, right: TravelPlanItem) => {
-      const leftDay = Number(left.dayOffset ?? 0);
-      const rightDay = Number(right.dayOffset ?? 0);
-      if (leftDay !== rightDay) {
-        return leftDay - rightDay;
-      }
-      return Number(left.sortOrder ?? 0) - Number(right.sortOrder ?? 0);
-    });
   }
 
   private async importPlanFromJson(jsonText: string, cancelToken: PlanJsonImportCancelToken): Promise<void> {

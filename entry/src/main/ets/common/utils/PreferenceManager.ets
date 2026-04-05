@@ -175,7 +175,7 @@ export class PreferenceManager {
 
   // 新增：读取高德路线 API 开关
   public async isAmapRouteApiEnabled(): Promise<boolean> {
-    const value = await this.getValue(PreferenceManager.KEY_ENABLE_AMAP_ROUTE_API, true);
+    const value = await this.getValue(PreferenceManager.KEY_ENABLE_AMAP_ROUTE_API, false);
     const enabled = PreferenceManager.normalizeAmapRouteApiEnabled(value);
     hilog.info(0x0000, TAG, `Amap route api enabled = ${JSON.stringify(enabled)}`);
     return enabled;
