@@ -1,0 +1,24 @@
+codex:
+  enabled: true
+  binary: codex
+  config_dir: ~/.codex
+  profile: ''
+  model: gpt-5.4
+  model_reasoning_effort: xhigh
+  approval_policy: never
+  sandbox_mode: danger-full-access
+  retry_on_failure: true
+  retry_max_attempts: 5
+  retry_initial_backoff_sec: 10.0
+  retry_backoff_multiplier: 6.0
+  retry_max_backoff_sec: 1800.0
+  mcp_tool_timeout_sec: 180000
+  env: {}
+claude:
+  enabled: false
+  binary: claude
+  config_dir: ~/.claude
+  model: inherit
+  model_reasoning_effort: ''
+  env: {}
+  status: reserved_todo

@@ -205,7 +205,8 @@ export class TimeConstraintSolver {
 
           item.transitWarning = (mode === 3);
           const commute = TrafficEngine.getInstance().getCommuteMinutes(fromInfo, toInfo, mode, startTimeStr);
-          item.preTravelMinutes = commute;
+          // 异步加载中会返回负值哨兵（例如 -2），不能直接参与时间计算。
+          item.preTravelMinutes = commute > 0 ? commute : 0;
         } else if (item.preTravelMinutes === undefined || item.preTravelMinutes === null) {
           item.preTravelMinutes = 0;
         }
@@ -340,6 +341,11 @@ export class TimeConstraintSolver {
       if (finalDayOffset !== originalOffset) {
         hilog.info(0x0000, 'TimeConstraintSolver', `[DAY_OFFSET_GUARD][solver] name=${item.name} base=${originalOffset} dynamic=${finalDayOffset}`);
       }
+      hilog.info(
+        0x0000,
+        'TimeConstraintSolver',
+        `[SHIFT_SOLVER][item] id=${item.id ?? -1}, name=${item.name}, preTravel=${item.preTravelMinutes ?? 0}, baseDay=${originalOffset}, dynamicDay=${finalDayOffset}, dynamicStart=${finalStartTimestamp}`
+      );
       item.dynamicStartTime = finalStartTimestamp;
 
       const startObj = new Date(finalStartTimestamp);

@@ -1,10 +1,15 @@
 import { promptAction } from '@kit.ArkUI';
 import { image } from '@kit.ImageKit';
 import { photoAccessHelper } from '@kit.MediaLibraryKit';
-import { CompactPlanSerializer } from '../../../domain/serializers/CompactPlanSerializer';
+import { abilityAccessCtrl, bundleManager, common } from '@kit.AbilityKit';
+import pasteboard from '@ohos.pasteboard';
+import fileIo from '@ohos.file.fs';
 import { DeepLinkService } from '../../../domain/services/DeepLinkService';
 import { QRCodeService } from '../../../domain/services/QRCodeService';
-import { PlanShareImageService, ShareImageOptions } from '../../../domain/services/PlanShareImageService';
+import { PlanShareImageService, ShareEventItem, ShareImageOptions } from '../../../domain/services/PlanShareImageService';
+
+const MAX_SHARE_EVENTS = 50;
+const SAVE_MAX_ATTEMPTS = 2;
 
 @CustomDialog
 export struct PlanShareDialog {
@@ -15,6 +20,7 @@ export struct PlanShareDialog {
   endDate: number = 0;
   totalDays: number = 0;
   totalEvents: number = 0;
+  events: ShareEventItem[] = [];
   compressedJson: string = '';
 
   @State includeAuthor: boolean = false;
@@ -129,6 +135,7 @@ export struct PlanShareDialog {
     try {
       const deepLink = DeepLinkService.buildShareLink(this.compressedJson);
       const qrCode = await QRCodeService.generateQRCode(deepLink, 200);
+      const renderEvents = this.getRenderableEvents();
 
       const options: ShareImageOptions = {
         planTitle: this.planTitle,
@@ -136,16 +143,21 @@ export struct PlanShareDialog {
         endDate: this.endDate,
         totalDays: this.totalDays,
         totalEvents: this.totalEvents,
-        events: [],
+        events: renderEvents,
         qrCodePixelMap: qrCode,
         authorName: this.includeAuthor ? this.authorName : undefined,
         shareDate: Date.now()
       };
 
-      this.shareImage = await PlanShareImageService.renderShareImage(options);
+      this.shareImage = await this.renderShareImageWithRetry(options);
       this.safeShowToast('图片生成成功');
-    } catch (error) {
-      this.safeShowToast('生成失败，请重试');
+    } catch (_error) {
+      const copied = await this.copyShareTextToClipboard();
+      if (copied) {
+        this.safeShowToast('二维码生成失败，已复制文本分享内容');
+      } else {
+        this.safeShowToast('生成失败，请重试');
+      }
     } finally {
       this.isGenerating = false;
     }
@@ -156,24 +168,122 @@ export struct PlanShareDialog {
       return;
     }
 
+    const granted = await this.requestAlbumPermission();
+    if (!granted) {
+      this.safeShowToast('未获得相册权限，无法保存图片');
+      return;
+    }
+
     try {
       const context = getContext(this);
       const helper = photoAccessHelper.getPhotoAccessHelper(context);
-
       const uri = await helper.createAsset(photoAccessHelper.PhotoType.IMAGE, 'jpg');
-      const file = await helper.openAsset('rw', uri);
-
-      const imagePackerApi = image.createImagePacker();
-      const packOpts: image.PackingOption = { format: 'image/jpeg', quality: 95 };
-      const buffer = await imagePackerApi.packing(this.shareImage, packOpts);
-
-      await file.write(buffer);
-      await file.close();
+      await this.writeImageWithRetry(uri);
 
       this.safeShowToast('已保存到相册');
       this.controller.close();
-    } catch (error) {
-      this.safeShowToast('保存失败，请检查相册权限');
+    } catch (_error) {
+      const copied = await this.copyShareTextToClipboard();
+      if (copied) {
+        this.safeShowToast('保存失败，已复制文本分享内容');
+      } else {
+        this.safeShowToast('保存失败，请检查相册权限');
+      }
+    }
+  }
+
+  private async requestAlbumPermission(): Promise<boolean> {
+    try {
+      const atManager = abilityAccessCtrl.createAtManager();
+      const bundleInfo = await bundleManager.getBundleInfoForSelf(bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_APPLICATION);
+      const tokenID = bundleInfo.appInfo.accessTokenId;
+      const checkStatus = await atManager.checkAccessToken(tokenID, 'ohos.permission.WRITE_IMAGEVIDEO');
+      if (checkStatus === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED) {
+        return true;
+      }
+
+      const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      const requestResult = await atManager.requestPermissionsFromUser(context, ['ohos.permission.WRITE_IMAGEVIDEO']);
+      for (let i = 0; i < requestResult.authResults.length; i++) {
+        if (requestResult.authResults[i] === 0) {
+          return true;
+        }
+      }
+      return false;
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  private getRenderableEvents(): ShareEventItem[] {
+    if (this.events.length <= MAX_SHARE_EVENTS) {
+      return this.events;
+    }
+    this.safeShowToast(`分享图片最多展示 ${MAX_SHARE_EVENTS} 条事件`);
+    return this.events.slice(0, MAX_SHARE_EVENTS);
+  }
+
+  private async renderShareImageWithRetry(options: ShareImageOptions): Promise<image.PixelMap> {
+    try {
+      return await PlanShareImageService.renderShareImage(options);
+    } catch (_error) {
+      const fallbackOptions: ShareImageOptions = {
+        planTitle: options.planTitle,
+        startDate: options.startDate,
+        endDate: options.endDate,
+        totalDays: options.totalDays,
+        totalEvents: options.totalEvents,
+        events: options.events,
+        qrCodePixelMap: options.qrCodePixelMap,
+        authorName: undefined,
+        shareDate: options.shareDate
+      };
+      return PlanShareImageService.renderShareImage(fallbackOptions);
+    }
+  }
+
+  private async writeImageWithRetry(uri: string): Promise<void> {
+    let lastError: Error | null = null;
+    for (let attempt = 0; attempt < SAVE_MAX_ATTEMPTS; attempt++) {
+      const quality = attempt === 0 ? 95 : 80;
+      try {
+        await this.writeImageToUri(uri, quality);
+        return;
+      } catch (error) {
+        if (error instanceof Error) {
+          lastError = error;
+        }
+      }
+    }
+    throw (lastError ?? new Error('save_failed'));
+  }
+
+  private async writeImageToUri(uri: string, quality: number): Promise<void> {
+    if (!this.shareImage) {
+      throw new Error('no_share_image');
+    }
+    const imagePackerApi = image.createImagePacker();
+    const packOpts: image.PackingOption = { format: 'image/jpeg', quality: quality };
+    const buffer = await imagePackerApi.packToData(this.shareImage, packOpts);
+    const file = await fileIo.open(uri, fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
+    try {
+      await fileIo.write(file.fd, buffer);
+    } finally {
+      await fileIo.close(file);
+    }
+  }
+
+  private async copyShareTextToClipboard(): Promise<boolean> {
+    if (!this.compressedJson || this.compressedJson.length <= 0) {
+      return false;
+    }
+    try {
+      const data = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, this.compressedJson);
+      const board = pasteboard.getSystemPasteboard();
+      await board.setData(data);
+      return true;
+    } catch (_error) {
+      return false;
     }
   }
 }

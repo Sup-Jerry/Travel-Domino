@@ -337,6 +337,17 @@ export class EventRepositoryImpl {
       } finally {
         resultSet.close();
       }
+      const scheduleCount = resultList.filter((item: TravelPlanItem) => item.status === 1).length;
+      const invalidCoordCount = resultList.filter((item: TravelPlanItem) => {
+        const lat = item.latitude ?? 0;
+        const lng = item.longitude ?? 0;
+        return !Number.isFinite(lat) || !Number.isFinite(lng) || lat === 0 || lng === 0;
+      }).length;
+      hilog.info(
+        0x0000,
+        TAG,
+        `[LOAD_DIAG][repo_get_all] planId=${planId}, total=${resultList.length}, schedule=${scheduleCount}, backlog=${resultList.length - scheduleCount}, invalidCoord=${invalidCoordCount}`
+      );
       return resultList;
     } catch (err) {
       hilog.error(0x0000, TAG, `[getAllEvents] failed planId=${planId}, err=${JSON.stringify(err)}`);
