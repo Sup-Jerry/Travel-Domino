@@ -660,6 +660,13 @@ export class TimelineViewModel implements
     this.recalculationManager.recalculate();
   }
 
+  public recalculateTrafficOnly(): void {
+    this.recalculationManager.recalculateTrafficOnly();
+  }
+  public resolveGapBySync(item: EventEntity) {
+    this.distributionCoordinator.resolveGapBySync(item);
+  }
+
   public getSortedGaps(): EventEntity[] {
     if (!this.idleGapDetectionEnabled) {
       return [];
