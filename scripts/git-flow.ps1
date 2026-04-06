@@ -1,4 +1,4 @@
-param(
+﻿param(
   [Parameter(Mandatory = $true)]
   [string]$Message,
 
@@ -6,7 +6,10 @@ param(
   [string[]]$Files = @(),
 
   [Parameter(Mandatory = $false)]
-  [switch]$NoPush
+  [switch]$NoPush,
+
+  [Parameter(Mandatory = $false)]
+  [switch]$AllowMainPush
 )
 
 $ErrorActionPreference = "Stop"
@@ -38,7 +41,10 @@ git commit -m $commitMessage
 
 if (-not $NoPush) {
   Write-Step "Push"
-  $branch = git branch --show-current
+  $branch = (git branch --show-current).Trim()
+  if ($branch -eq 'main' -and -not $AllowMainPush) {
+    throw "Direct push to main is blocked. Switch to develop/feature/release/hotfix, or pass -AllowMainPush explicitly."
+  }
   git push origin $branch
 }
 

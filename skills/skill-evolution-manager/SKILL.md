@@ -117,6 +117,11 @@ Agent 调用 `scripts/smart_stitch.py`，将 `evolution.json` 的内容转化为
 - 当用户要求"复盘+上传GitHub+瘦身"时，固定执行顺序：复盘沉淀 -> Git同步状态确认 -> 瘦身执行 -> 提交推送。
 - 瘦身默认先处理可验证安全项：先删无引用的 tracked 冗余文件，再清理本地可再生产物。
 - When merge_evolution CLI argument parsing fails on PowerShell, call merge_evolution via python import with file-loaded JSON to avoid quoting issues.
+- ?????????????????????????-??-??-????
+- ?????????? merge_evolution ? smart_stitch??????????
+- 当用户反馈‘你改错了’或出现回归时，先按最小补丁回退拦截层，再继续功能修复。
+- 伴游页交互问题优先检查层级与手势命中链路：zIndex/常驻全屏容器/隐藏态是否拦截事件。
+- 用户要求‘侧滑返回只退一级’时，必须实现分层返回栈：Overlay详情->Overlay列表->控制页->沉浸页->退出伴游。
 
 ### Known Fixes & Workarounds
 - Before any edit, restate user intent and explicitly state whether code will be changed.
@@ -174,7 +179,11 @@ Agent 调用 `scripts/smart_stitch.py`，将 `evolution.json` 的内容转化为
 - Docker Compose v2 场景下移除 compose 文件中的 version 字段，避免持续 warning 干扰排查。
 - 执行瘦身前先做引用扫描（rg）和 tracked 校验（git ls-files），防止误删运行时资源。
 - If user requires commit-msg gate but hook file is missing, create the gate first before push workflow.
+- ???/?????????????????????? stash?
+- ???? git ??????????????????????????
+- CompanionOverlayPages 在隐藏态若常驻全屏容器会吞掉沉浸上滑手势；应仅在 showHistory/showSearch/showFilter 任一为 true 时渲染。
+- Index 页面需 onBackPress 拦截伴游态返回，并通过 token 下发到 CompanionView 处理内部回退。
 
 ### Custom Instruction Injection
 
-In retrospective requests, provide script evidence and persistence proof for each evolved skill.
+执行伴游交互修复时，先做‘症状->命中链路->最小改动->回归点’四段式说明。

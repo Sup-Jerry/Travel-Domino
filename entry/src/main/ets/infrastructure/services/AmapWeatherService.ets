@@ -1,11 +1,9 @@
-import { http } from '@kit.NetworkKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { AppConfig } from '../../common/utils/AppConfig';
-import { HttpRequestHelper } from '../adapters/HttpRequestHelper';
 import { IWeatherAdapter, WeatherInfo, WeatherGeoPointRequest } from '../adapters/IWeatherAdapter';
 import { AmapService } from './AmapService';
 import { WeatherCache } from './WeatherCache';
 import { WeatherSnapshot } from '../../domain/services/WeatherModels';
+import { WeatherSearch, WeatherSearchQuery, AMapException } from '@amap/amap_lbs_search';
 
 interface AmapLiveWeatherNode {
   adcode?: string;
@@ -18,6 +16,8 @@ interface AmapLiveWeatherNode {
 
 interface AmapLiveWeatherResponse {
   status?: string;
+  info?: string;
+  infocode?: string;
   lives?: AmapLiveWeatherNode[];
   forecasts?: AmapForecastNode[];
 }
@@ -55,34 +55,65 @@ export class AmapWeatherService implements IWeatherAdapter {
     if (!cityName || cityName.trim().length === 0) {
       return null;
     }
-    try {
-      AppConfig.validateAmapWebConfig();
-      const url =
-        `https://restapi.amap.com/v3/weather/weatherInfo?city=${encodeURIComponent(cityName)}` +
-        `&extensions=base&key=${AppConfig.AMAP_WEB_API_KEY}`;
-      const response = await HttpRequestHelper.request(TAG, 'getWeather', url, {
-        method: http.RequestMethod.GET,
-        connectTimeout: 5000,
-        readTimeout: 5000
-      });
-      if (response.responseCode !== 200) {
-        return null;
+    const runtimeContext = AmapService.getRuntimeContext();
+    if (runtimeContext) {
+      const sdkResult = await this.getWeatherBySdk(cityName.trim(), runtimeContext);
+      if (sdkResult) {
+        return sdkResult;
       }
-      const payload = typeof response.result === 'string' ? response.result : JSON.stringify(response.result);
-      const parsed = JSON.parse(payload) as AmapLiveWeatherResponse;
-      const mapped = this.mapResponseToInfo(parsed);
-      if (!mapped) {
-        hilog.warn(
-          0x0000,
-          TAG,
-          `[WEATHER][getWeather] empty business payload city=${cityName}, status=${parsed.status ?? ''}, lives=${parsed.lives?.length ?? 0}, forecasts=${parsed.forecasts?.length ?? 0}`
-        );
-      }
-      return mapped;
-    } catch (error) {
-      hilog.warn(0x0000, TAG, `[WEATHER][getWeather] failed reason=${JSON.stringify(error)}`);
+      hilog.warn(0x0000, TAG, `[WEATHER][getWeather] sdk miss city=${cityName}`);
       return null;
     }
+    hilog.warn(0x0000, TAG, `[WEATHER][getWeather] sdk context unavailable city=${cityName}`);
+    return null;
+  }
+
+  private async getWeatherBySdk(cityName: string, context: Context): Promise<WeatherInfo | null> {
+    return new Promise<WeatherInfo | null>((resolve) => {
+      try {
+        const query = new WeatherSearchQuery(cityName, WeatherSearchQuery.WEATHER_TYPE_LIVE);
+        const search = new WeatherSearch(context);
+        search.setOnWeatherSearchListener({
+          onWeatherLiveSearched: (weatherLiveResult, errorCode) => {
+            const success = errorCode === AMapException.CODE_AMAP_SUCCESS || errorCode === 0;
+            if (!success) {
+              hilog.warn(0x0000, TAG, `[WEATHER][sdk_live] failed city=${cityName}, code=${errorCode}`);
+              resolve(null);
+              return;
+            }
+            const live = weatherLiveResult?.getLiveResult();
+            if (!live) {
+              hilog.warn(0x0000, TAG, `[WEATHER][sdk_live] empty_result city=${cityName}`);
+              resolve(null);
+              return;
+            }
+            const temp = this.readAsNumber(live.getTemperature());
+            const humidity = this.readAsNumber(live.getHumidity());
+            const windPower = this.readAsNumber(live.getWindPower());
+            const condition = this.readAsText(live.getWeather());
+            if (condition.length <= 0) {
+              resolve(null);
+              return;
+            }
+            resolve({
+              temperature: Number.isFinite(temp) ? temp : 0,
+              condition: condition,
+              humidity: Number.isFinite(humidity) ? humidity : 0,
+              windSpeed: Number.isFinite(windPower) ? windPower : 0,
+              reportTime: this.readAsText(live.getReportTime()),
+              cityCode: this.readAsText(live.getAdCode())
+            });
+          },
+          onWeatherForecastSearched: (_weatherForecastResult, _errorCode) => {
+          }
+        });
+        search.setQuery(query);
+        search.searchWeatherAsyn();
+      } catch (error) {
+        hilog.warn(0x0000, TAG, `[WEATHER][sdk_live] exception city=${cityName}, reason=${JSON.stringify(error)}`);
+        resolve(null);
+      }
+    });
   }
 
   public async getWeatherByGeoPoint(

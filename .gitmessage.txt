@@ -1,0 +1,10 @@
+﻿# <type>[optional scope]: <description>
+#
+# Examples:
+# feat(timeline): add city clustering for overlap points
+# fix(auth): handle token refresh race condition
+# chore(repo): align git governance scripts
+#
+# Allowed:
+#   <type>: <description>
+#   <type>(<scope>): <description>

@@ -85,6 +85,7 @@ struct Index {
   @State pendingItem: PendingItemData | null = null;
   @State gapItem: EventEntity | null = null; // 用于传给弹窗
   @State isCompanionMode: boolean = false;
+  @State companionBackRequestToken: number = 0;
   @State hasUnsavedChanges: boolean = false;
   @State strategyMode: number = 0;
   @State currentStrategyExplanation: string = '';
@@ -98,6 +99,7 @@ struct Index {
   private arrivalReminderUnsubscribe: (() => void) | null = null;
   @State isWeatherDialogOpen: boolean = false;
   @State isArrivalDialogOpen: boolean = false;
+  @State dayGroupRenderVersion: number = 0;
   private readonly planService: PlanAppService = PlanAppService.getInstance();
   private readonly weatherCoordinator: WeatherReminderCoordinator = WeatherReminderCoordinator.getInstance();
   private readonly arrivalCoordinator: ArrivalReminderCoordinator = ArrivalReminderCoordinator.getInstance();
@@ -114,7 +116,13 @@ struct Index {
 
   onTrafficSignal() {
     hilog.info(0x0000, 'Index', '收到高德数据更新信号，触发 UI 重算');
-    this.vm.recalculateTrafficOnly(); // 路况回填走轻量重算，避免全量重算风暴
+    // 路况异步回填到达后，强制重拉通勤并全量重排，确保跨天分组及时生效。
+    this.vm.testAllCommute();
+    this.collapsedDayOffsets = [];
+    this.dayGroupRenderVersion += 1;
+    if (this.vm.filterStart > 0 || this.vm.filterEnd > 0) {
+      this.vm.clearFilter();
+    }
   }
 
    private scopedStorageKey(base: string): string {
@@ -229,6 +237,14 @@ struct Index {
     } catch (error) {
       hilog.warn(0x0000, 'Index', `[ARRIVAL][engine_start_failed] reason=${this.sanitizeError(error)}`);
     }
+  }
+
+  onBackPress(): boolean {
+    if (this.isCompanionMode) {
+      this.companionBackRequestToken += 1;
+      return true;
+    }
+    return false;
   }
 
   private bindReminderSubscriptions(): void {
@@ -404,7 +420,7 @@ struct Index {
               start: new Date(this.vm.planStartDate),
               end: new Date("2100-12-31"),
               selected: new Date(this.vm.planStartDate),
-              onAccept: (value: DatePickerResult) => {
+              onAccept: async (value: DatePickerResult) => {
                 // 1. 计算新的 DayOffset
                 const newSelectedDate = new Date();
                 newSelectedDate.setFullYear(value.year, value.month, value.day);
@@ -414,7 +430,7 @@ struct Index {
                 if (this.pendingItem) {
                   if (this.pendingItem.id !== -1) {
                     // ✨ 关键点：如果是从已有项移动来的，调用更新
-                    this.vm.updateEventInfo(
+                    await this.vm.updateEventInfo(
                       this.pendingItem.id,
                       this.pendingItem.name,
                       this.pendingItem.duration,
@@ -425,7 +441,7 @@ struct Index {
                     );
                   } else {
                     // 只有确实是全新添加的，才调用新增
-                    this.vm.addNewItem(this.pendingItem.name, this.pendingItem.duration, true, this.pendingItem.fixedTime, newOffset, -1, false, this.pendingItem.note);
+                    await this.vm.addNewItem(this.pendingItem.name, this.pendingItem.duration, true, this.pendingItem.fixedTime, newOffset, -1, false, this.pendingItem.note);
                   }
                   this.pendingItem = null;
                   this.safeShowToast("已更新日期并移至日程");
@@ -443,10 +459,10 @@ struct Index {
 
 
       // 选项 2: 放入暂存池 (清洗数据)
-      onMoveToBacklog: () => {
+      onMoveToBacklog: async () => {
         if (this.pendingItem) {
           // 调用 VM 中刚写好的清洗方法
-          this.vm.resolveConflictByBacklog(
+          await this.vm.resolveConflictByBacklog(
             this.pendingItem.id,       // ✨ 必须把 id 作为第一个参数传进去
             this.pendingItem.name,
             this.pendingItem.duration,
@@ -458,10 +474,10 @@ struct Index {
       },
 
       // 选项 3: 更改计划出发日期 (整体平移)
-      onChangePlanStartDate: () => {
+      onChangePlanStartDate: async () => {
         if (this.pendingItem) {
           // 调用平移方法
-          this.vm.resolveConflictByMovingPlan(
+          await this.vm.resolveConflictByMovingPlan(
             this.pendingItem.id,             // ✨ 同样，id 必须是第一个参数
             this.pendingItem.targetDateMs,
             this.pendingItem.name,
@@ -1172,6 +1188,25 @@ struct Index {
               isHardLock, note, isMustVisit,
               lat, lng // ✅ 传给下一步 Helper
             );
+            if (isSchedule) {
+              const targetDayOffset = dayOffset ?? 0;
+              const collapsedIdx = this.collapsedDayOffsets.indexOf(targetDayOffset);
+              if (collapsedIdx >= 0) {
+                this.collapsedDayOffsets.splice(collapsedIdx, 1);
+                this.collapsedDayOffsets = [...this.collapsedDayOffsets];
+              }
+              if (this.vm.filterStart > 0 || this.vm.filterEnd > 0) {
+                this.vm.clearFilter();
+                hilog.info(0x0000, 'IndexPage', '[ADD_UI][clear_filter_for_visibility] reason=new_schedule_item');
+              }
+            }
+            this.vm.refreshTimelineView();
+            const scheduleCount = this.vm.events.filter((event: EventEntity) => event.status === 1).length;
+            hilog.info(
+              0x0000,
+              'IndexPage',
+              `[ADD_UI][after_save] total=${this.vm.events.length}, schedule=${scheduleCount}, groups=${this.vm.groupedEvents.length}, dayOffset=${dayOffset ?? 0}, isSchedule=${isSchedule}`
+            );
 
             this.editingItemId = -1;
             return;
@@ -1369,6 +1404,9 @@ struct Index {
 
       this.currentPlanId = planId;
       this.hasManualPlanningWeatherRefresh = false;
+      // 防止页面重进时沿用上次折叠/筛选状态导致“日程看起来消失”
+      this.collapsedDayOffsets = [];
+      this.vm.clearFilter();
       this.vm.setHasUnsavedPostponeStorageKey(this.scopedStorageKey(AppStorageKeys.HAS_UNSAVED_POSTPONE));
       this.refreshUnsavedFlag();
       this.planTitle = params['title'] as string || '行程详情';
@@ -1466,12 +1504,17 @@ struct Index {
     }
     .width(60).height('100%')
     .backgroundColor('#FF9800') // 橙色
-    .onClick(() => {
+    .onClick(async () => {
       if (item.status !== 1) {
         this.safeShowToast('该地点不在日程表中');
         return;
       }
-      void this.vm.moveToBacklog(item);
+      try {
+        await this.vm.moveToBacklog(item);
+        this.vm.refreshTimelineView();
+      } catch (_error) {
+        this.safeShowToast('暂存失败，请重试');
+      }
     })
   }
 
@@ -1498,9 +1541,14 @@ struct Index {
           value: '删除',
           fontColor: Color.White,
           backgroundColor: '#2F7DFF',
-          action: () => {
+          action: async () => {
             // 确认后才执行删除
-            this.vm.hardDelete(item);
+            try {
+              await this.vm.hardDelete(item);
+              this.vm.refreshTimelineView();
+            } catch (_error) {
+              this.safeShowToast('删除失败，请重试');
+            }
           }
         }
       });
@@ -1567,7 +1615,8 @@ struct Index {
   CompanionModeBuilder() {
     CompanionView({
       vm: this.vm, // 传递 ViewModel
-      isShow: $isCompanionMode // 双向绑定，用于内部关闭
+      isShow: $isCompanionMode, // 双向绑定，用于内部关闭
+      backRequestToken: $companionBackRequestToken
     })
   }
 
@@ -1983,7 +2032,7 @@ struct Index {
             }
             .divider({ strokeWidth: 0 }) // 组内分割线 (可选)
           }, (group: import('../viewmodel/TimelineViewModel').DateGroup) =>
-            `${group.dayOffset}_${group.actualDateMs}_${group.events.length}`)
+            `${this.dayGroupRenderVersion}_${group.dayOffset}_${group.actualDateMs}_${group.events.length}`)
 
             if (!this.vm.isArchived && this.vm.getSortedGaps().length > 0) {
               ListItem() {
@@ -2099,7 +2148,8 @@ struct Index {
       if (this.isCompanionMode) {
         CompanionView({
           vm: this.vm,
-          isShow: $isCompanionMode
+          isShow: $isCompanionMode,
+          backRequestToken: $companionBackRequestToken
         })
           .zIndex(DomainConstants.COMPANION_OVERLAY_Z_INDEX) // 确保在最上层
           .transition({

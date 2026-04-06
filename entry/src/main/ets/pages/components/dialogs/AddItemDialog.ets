@@ -28,11 +28,6 @@ interface GeneratedObjectLiteralInterface_1 {
   lng: number;
 }
 
-interface AMapNativeBridgeModule {
-  nativeSetAMapXComponentCallback?: (callback: object) => void;
-  default?: AMapNativeBridgeModule;
-}
-
 class MapPickerRouteParams {
   lat: number;
   lng: number;
@@ -72,7 +67,7 @@ export struct AddItemDialog {
   initSuggestedTime: string = '';
   initIsAnchor: boolean = false;
   initDayOffset: number = 0;
-  initPreTravel: number = 0;
+  initPreTravel: number = -1;
   initPriority: number = 0;
   storageScopePlanId: number = 0;
   planStartDate: number = 0;
@@ -91,7 +86,7 @@ export struct AddItemDialog {
   @State longitude: number = 0;
   @State isGeocoding: boolean = false; // 控制 loading 状态
   // 持久化存储用户的选择习惯 (0=暂存, 1=日程)
-  @StorageLink('lastAddItemMode') mode: number = 0;
+  @StorageLink('lastAddItemMode') mode: number = 1;
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
 
   private getPalette() {
@@ -117,13 +112,21 @@ export struct AddItemDialog {
     );
     if (this.initName) {
       this.mode = this.initIsSchedule ? 1 : 0;
+    } else {
+      // 新建地点默认落到“日程”，避免用户保存后看不到新增项
+      this.mode = 1;
     }
 
     this.name = this.initName;
     this.note = this.initNote;
     this.isSchedule = this.initIsSchedule;
     this.isAnchor = this.initIsAnchor;
-    this.preTravel = this.initPreTravel > 0 ? this.initPreTravel : 0;
+    if (this.initName && this.initName.trim().length > 0) {
+      this.preTravel = this.initPreTravel > 0 ? this.initPreTravel : 0;
+    } else {
+      // 新建地点默认交给自动路程计算
+      this.preTravel = -1;
+    }
     this.isMustVisit = (this.initPriority === 1);
 
     if (this.initDuration > 0) {
@@ -204,23 +207,18 @@ export struct AddItemDialog {
 
   private async isMapNativeRuntimeReady(): Promise<boolean> {
     try {
-      const nativeModule = await import('libAMapOpenMapJNI.so') as AMapNativeBridgeModule;
-      const moduleDefined = nativeModule !== undefined && nativeModule !== null;
-      const namedCallbackReady = typeof nativeModule?.nativeSetAMapXComponentCallback === 'function';
-      const defaultCallbackReady = typeof nativeModule?.default?.nativeSetAMapXComponentCallback === 'function';
-      const callbackReady = namedCallbackReady || defaultCallbackReady;
-      const exportKeys = moduleDefined ? Object.keys(nativeModule as object) : [];
+      const version = (MapsInitializer.getVersion() ?? '').trim();
+      const callbackReady = version.length > 0;
       hilog.info(
         0x0000,
         'AddItemDialog',
-        `[MAP_NATIVE_GUARD] probe moduleDefined=${moduleDefined}, callbackReady=${callbackReady}, named=${namedCallbackReady}, default=${defaultCallbackReady}, keyCount=${exportKeys.length}, keys=${exportKeys.join('|')}`
+        `[MAP_NATIVE_GUARD] probe callbackReady=${callbackReady}, sdkVersion=${version}`
       );
       if (!callbackReady) {
         hilog.error(0x0000, 'AddItemDialog',
-          '[MAP_NATIVE_GUARD] runtime unavailable, missing nativeSetAMapXComponentCallback export');
+          '[MAP_NATIVE_GUARD] runtime unavailable, sdk version empty');
         return false;
       }
-      const version = (MapsInitializer.getVersion() ?? '').trim();
       hilog.info(0x0000, 'AddItemDialog', `[MAP_NATIVE_GUARD] load_ok, version=${version.length > 0 ? version : 'unknown'}`);
       return true;
     } catch (error) {
@@ -405,7 +403,10 @@ export struct AddItemDialog {
                 centerSource = 'existing';
               } else if (queryName.length > 0) {
                 try {
-                  const geocode = await AmapService.getGeocode(queryName);
+                  const geocode = await AmapService.getGeocode(
+                    queryName,
+                    this.getUIContext().getHostContext() as common.UIAbilityContext
+                  );
                   if (geocode && this.isValidCoordinate(geocode.lat, geocode.lng)) {
                     routeLat = geocode.lat;
                     routeLng = geocode.lng;
@@ -681,9 +682,51 @@ export struct AddItemDialog {
           .shadow({ radius: 8, color: '#40007DFF', offsetY: 4 })
           .onClick(async () => {
             if (this.name.length > 0) {
-              // 允许无坐标创建：不再强制地理编码。
-              const finalLat = this.isValidCoordinate(this.latitude, this.longitude) ? this.latitude : undefined;
-              const finalLng = this.isValidCoordinate(this.latitude, this.longitude) ? this.longitude : undefined;
+              let resolvedLat = this.latitude;
+              let resolvedLng = this.longitude;
+              const trimmedName = this.name.trim();
+              if (!this.isValidCoordinate(resolvedLat, resolvedLng) && trimmedName.length > 0) {
+                this.isGeocoding = true;
+                try {
+                  const hostContext = this.getUIContext().getHostContext() as common.UIAbilityContext;
+                  const geocode = await AmapService.getGeocode(trimmedName, hostContext);
+                  if (geocode && this.isValidCoordinate(geocode.lat, geocode.lng)) {
+                    resolvedLat = geocode.lat;
+                    resolvedLng = geocode.lng;
+                    this.latitude = geocode.lat;
+                    this.longitude = geocode.lng;
+                    hilog.info(
+                      0x0000,
+                      'AddItemDialog',
+                      `[COORD_DIAG][dialog_confirm_geocode] name=${trimmedName}, ok=true, lat=${resolvedLat}, lng=${resolvedLng}`
+                    );
+                  } else {
+                    hilog.warn(
+                      0x0000,
+                      'AddItemDialog',
+                      `[COORD_DIAG][dialog_confirm_geocode] name=${trimmedName}, ok=false, reason=empty_result`
+                    );
+                    this.safeShowToast('地点坐标不明确，天气可能不可用，建议使用地图选点');
+                  }
+                } catch (error) {
+                  hilog.warn(
+                    0x0000,
+                    'AddItemDialog',
+                    `[COORD_DIAG][dialog_confirm_geocode] name=${trimmedName}, ok=false, reason=${JSON.stringify(error)}`
+                  );
+                  this.safeShowToast('地点解析失败，建议使用地图选点');
+                } finally {
+                  this.isGeocoding = false;
+                }
+              }
+
+              const finalLat = this.isValidCoordinate(resolvedLat, resolvedLng) ? resolvedLat : undefined;
+              const finalLng = this.isValidCoordinate(resolvedLat, resolvedLng) ? resolvedLng : undefined;
+              hilog.info(
+                0x0000,
+                'AddItemDialog',
+                `[COORD_DIAG][dialog_confirm] name=${this.name}, mode=${this.mode}, rawLat=${this.latitude}, rawLng=${this.longitude}, finalLat=${finalLat ?? -999}, finalLng=${finalLng ?? -999}`
+              );
 
               const fixedTimeStr = this.formatTime(this.startTime);
               let finalDayOffset = 0;

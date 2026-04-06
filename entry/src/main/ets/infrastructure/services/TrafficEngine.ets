@@ -28,6 +28,23 @@ export class TrafficEngine {
 
   private constructor() {}
 
+  private isValidCoordinate(lat?: number, lng?: number): boolean {
+    return Number.isFinite(lat ?? NaN) &&
+      Number.isFinite(lng ?? NaN) &&
+      (lat ?? 0) !== 0 &&
+      (lng ?? 0) !== 0;
+  }
+
+  private buildRouteCacheKey(from: LocationInfo, to: LocationInfo, mode: number): string {
+    const fromCoord = this.isValidCoordinate(from.latitude, from.longitude)
+      ? `${(from.latitude as number).toFixed(5)},${(from.longitude as number).toFixed(5)}`
+      : 'NOCOORD';
+    const toCoord = this.isValidCoordinate(to.latitude, to.longitude)
+      ? `${(to.latitude as number).toFixed(5)},${(to.longitude as number).toFixed(5)}`
+      : 'NOCOORD';
+    return `${from.name}->${to.name}_M${mode}_F${fromCoord}_T${toCoord}`;
+  }
+
   public static getInstance(): TrafficEngine {
     if (!TrafficEngine.instance) {
       TrafficEngine.instance = new TrafficEngine();
@@ -92,11 +109,13 @@ export class TrafficEngine {
       return TrafficEngine.FALLBACK_MINUTES;
     }
 
-    const key = `${from.name}->${to.name}_M${mode}`;
+    const key = this.buildRouteCacheKey(from, to, mode);
+    const fromCoordValid = this.isValidCoordinate(from.latitude, from.longitude);
+    const toCoordValid = this.isValidCoordinate(to.latitude, to.longitude);
     hilog.info(
       0x0000,
       TAG,
-      `${ROUTE_DIAG_PREFIX}[entry] key=${key} mode=${mode} startTime=${startTime ?? ''} from_coord=${Number.isFinite(from.latitude ?? NaN) && Number.isFinite(from.longitude ?? NaN)} to_coord=${Number.isFinite(to.latitude ?? NaN) && Number.isFinite(to.longitude ?? NaN)}`
+      `${ROUTE_DIAG_PREFIX}[entry] key=${key} mode=${mode} startTime=${startTime ?? ''} from_coord=${fromCoordValid} to_coord=${toCoordValid}`
     );
     const now = Date.now();
     const blockedUntil = this.transientFailureUntil.get(key) ?? 0;
@@ -157,7 +176,14 @@ export class TrafficEngine {
 
       hilog.info(0x0000, TAG, `${ROUTE_GEO_FIX_PREFIX}[engine] fetch_start key=${key} mode=${mode}`);
       const duration = await this.mapService.getDurationByMode(from, to, mode, startTime);
-      this.cache.set(key, duration);
+      const fromCoordValid = this.isValidCoordinate(from.latitude, from.longitude);
+      const toCoordValid = this.isValidCoordinate(to.latitude, to.longitude);
+      const canCacheDuration = !(duration === TrafficEngine.FALLBACK_MINUTES && (!fromCoordValid || !toCoordValid));
+      if (canCacheDuration) {
+        this.cache.set(key, duration);
+      } else {
+        this.cache.delete(key);
+      }
       this.clearTransientFailure(key);
       hilog.info(0x0000, TAG, `${ROUTE_GEO_FIX_PREFIX}[engine] fetch_done key=${key} mode=${mode} duration=${duration}`);
       if (duration <= 0 || duration === TrafficEngine.FALLBACK_MINUTES) {

@@ -4,33 +4,9 @@ $ErrorActionPreference = 'Stop'
 
 $currentBranch = (git branch --show-current).Trim()
 $allowMainPush = $env:ALLOW_MAIN_PUSH -eq '1'
-
-# Git pre-push provides refs on stdin:
-# <local ref> <local sha> <remote ref> <remote sha>
-$pushLines = @()
-while ($true) {
-  $line = [Console]::In.ReadLine()
-  if ($null -eq $line) { break }
-  if (-not [string]::IsNullOrWhiteSpace($line)) {
-    $pushLines += $line
-  }
-}
-
-$targetsMain = $false
-foreach ($line in $pushLines) {
-  $parts = $line -split '\s+'
-  if ($parts.Count -ge 4) {
-    $remoteRef = $parts[2]
-    if ($remoteRef -eq 'refs/heads/main') {
-      $targetsMain = $true
-      break
-    }
-  }
-}
-
-if ((($currentBranch -eq 'main') -or $targetsMain) -and -not $allowMainPush) {
-  Write-Host '[pre-push] blocked: pushing to main is disabled by governance.' -ForegroundColor Red
-  Write-Host '[pre-push] use develop/feature/release/hotfix, or set ALLOW_MAIN_PUSH=1 for explicit override.' -ForegroundColor Yellow
+if ($currentBranch -eq 'main' -and -not $allowMainPush) {
+  Write-Host '[pre-push] blocked: direct push to main is disabled by governance.' -ForegroundColor Red
+  Write-Host '[pre-push] use develop/feature/release/hotfix branches, or set ALLOW_MAIN_PUSH=1 for an explicit override.' -ForegroundColor Yellow
   exit 1
 }
 

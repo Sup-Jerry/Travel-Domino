@@ -51,67 +51,69 @@ export struct CompanionOverlayPages {
   onFilterSelect: (state: CompanionDisplayFilterState) => void = (_state: CompanionDisplayFilterState) => {};
 
   build() {
-    Column() {
-      CompanionHistoryPage({
-        showHistoryPage: this.showHistoryPage,
-        historyTimelineSummary: this.historyTimelineSummary,
-        historyTimelineItems: this.historyTimelineItems,
-        historyTimelineFilter: this.historyTimelineFilter,
-        historyViewMode: this.historyViewMode,
-        historySummary: this.historySummary,
-        vm: this.vm,
-        selectedHistoryTimelineItem: this.selectedHistoryTimelineItem,
-        safeTopInset: this.safeTopInset,
-        safeBottomInset: this.safeBottomInset,
-        onClose: () => {
-          this.onHistoryClose();
-        },
-        onBack: () => {
-          this.onHistoryBack();
-        },
-        onFilterChange: (filter: HistoryTimelineFilter) => {
-          this.onHistoryFilterChange(filter);
-        },
-        onItemClick: (item: HistoryTimelineItem) => {
-          this.onHistoryItemClick(item);
-        }
-      });
+    if (this.showHistoryPage || this.showSearchPage || this.showFilterPage) {
+      Column() {
+        CompanionHistoryPage({
+          showHistoryPage: this.showHistoryPage,
+          historyTimelineSummary: this.historyTimelineSummary,
+          historyTimelineItems: this.historyTimelineItems,
+          historyTimelineFilter: this.historyTimelineFilter,
+          historyViewMode: this.historyViewMode,
+          historySummary: this.historySummary,
+          vm: this.vm,
+          selectedHistoryTimelineItem: this.selectedHistoryTimelineItem,
+          safeTopInset: this.safeTopInset,
+          safeBottomInset: this.safeBottomInset,
+          onClose: () => {
+            this.onHistoryClose();
+          },
+          onBack: () => {
+            this.onHistoryBack();
+          },
+          onFilterChange: (filter: HistoryTimelineFilter) => {
+            this.onHistoryFilterChange(filter);
+          },
+          onItemClick: (item: HistoryTimelineItem) => {
+            this.onHistoryItemClick(item);
+          }
+        });
 
-      CompanionSearchPage({
-        showSearchPage: this.showSearchPage,
-        searchKeyword: this.searchKeyword,
-        searchResults: this.searchResults,
-        safeTopInset: this.safeTopInset,
-        safeBottomInset: this.safeBottomInset,
-        onClose: () => {
-          this.onSearchClose();
-        },
-        onSearch: (keyword: string) => {
-          this.onSearch(keyword);
-        },
-        onResultClick: (item: EventEntity) => {
-          this.onSearchResultClick(item);
-        },
-        getEventStateLabel: (item: EventEntity) => getCompanionEventStateLabel(item),
-        getPlannedRange: (item: EventEntity) => getCompanionPlannedRange(item)
-      });
+        CompanionSearchPage({
+          showSearchPage: this.showSearchPage,
+          searchKeyword: this.searchKeyword,
+          searchResults: this.searchResults,
+          safeTopInset: this.safeTopInset,
+          safeBottomInset: this.safeBottomInset,
+          onClose: () => {
+            this.onSearchClose();
+          },
+          onSearch: (keyword: string) => {
+            this.onSearch(keyword);
+          },
+          onResultClick: (item: EventEntity) => {
+            this.onSearchResultClick(item);
+          },
+          getEventStateLabel: (item: EventEntity) => getCompanionEventStateLabel(item),
+          getPlannedRange: (item: EventEntity) => getCompanionPlannedRange(item)
+        });
 
-      CompanionFilterPage({
-        showFilterPage: this.showFilterPage,
-        companionFilterState: this.companionFilterState,
-        safeTopInset: this.safeTopInset,
-        safeBottomInset: this.safeBottomInset,
-        onClose: () => {
-          this.onFilterClose();
-        },
-        onFilterSelect: (state: CompanionDisplayFilterState) => {
-          this.onFilterSelect(state);
-        },
-        getFilterOptions: () => getCompanionFilterOptions(),
-        getFilterLabel: (state: CompanionDisplayFilterState) => getCompanionFilterLabel(state)
-      });
+        CompanionFilterPage({
+          showFilterPage: this.showFilterPage,
+          companionFilterState: this.companionFilterState,
+          safeTopInset: this.safeTopInset,
+          safeBottomInset: this.safeBottomInset,
+          onClose: () => {
+            this.onFilterClose();
+          },
+          onFilterSelect: (state: CompanionDisplayFilterState) => {
+            this.onFilterSelect(state);
+          },
+          getFilterOptions: () => getCompanionFilterOptions(),
+          getFilterLabel: (state: CompanionDisplayFilterState) => getCompanionFilterLabel(state)
+        });
+      }
+      .width('100%')
+      .height('100%');
     }
-    .width('100%')
-    .height('100%');
   }
 }

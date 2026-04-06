@@ -63,5 +63,29 @@ export default function mapServiceImplTest() {
       expect(minutes).assertEqual(60);
       done();
     });
+
+    it('route_should_return_positive_minutes_when_mode_seconds_resolved', 0, async (done: () => void) => {
+      MapServiceImpl.setTestHooks({
+        routeApiEnabledResolver: async (): Promise<boolean> => true,
+        modeSecondsResolver: async (
+          _mode: number,
+          _fromLat: number,
+          _fromLng: number,
+          _toLat: number,
+          _toLng: number,
+          _startTime: string
+        ): Promise<number> => 95
+      });
+      const service = new MapServiceImpl(null);
+      const minutes = await service.getDurationByMode(
+        buildLocation('A', 31.2304, 121.4737),
+        buildLocation('B', 31.2200, 121.4900),
+        2,
+        '09:00'
+      );
+      MapServiceImpl.setTestHooks(null);
+      expect(minutes).assertEqual(2);
+      done();
+    });
   });
 }

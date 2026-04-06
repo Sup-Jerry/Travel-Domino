@@ -56,6 +56,7 @@ type HistoryViewMode = 'timeline' | 'detail';
 export struct CompanionView {
   @Link vm: TimelineViewModel;
   @Link isShow: boolean;
+  @Link @Watch('onBackRequestTokenChanged') backRequestToken: number;
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
   // region state
   @State context: CompanionContext = {
@@ -378,6 +379,50 @@ export struct CompanionView {
     this.showSearchPage = false;
     this.searchKeyword = '';
     this.searchResults = [];
+  }
+
+  private onBackRequestTokenChanged(): void {
+    this.handleCompanionBackRequest();
+  }
+
+  private handleCompanionBackRequest(): void {
+    if (!this.isShow) {
+      return;
+    }
+
+    if (this.showFilterPage) {
+      this.closeFilterPage();
+      return;
+    }
+
+    if (this.showSearchPage) {
+      this.closeSearchPage();
+      return;
+    }
+
+    if (this.showHistoryPage) {
+      if (this.historyViewMode === 'detail') {
+        this.historyViewMode = 'timeline';
+        this.selectedHistoryTimelineItem = null;
+        this.selectedHistoryPlaceName = '';
+        this.historySummary = null;
+        return;
+      }
+      this.showHistoryPage = false;
+      this.historyViewMode = 'timeline';
+      this.historyTimelineFilter = 'all';
+      this.selectedHistoryTimelineItem = null;
+      this.selectedHistoryPlaceName = '';
+      this.historySummary = null;
+      return;
+    }
+
+    if (this.companionSubMode === 'control') {
+      this.enterImmersiveMode();
+      return;
+    }
+
+    this.exitCompanion();
   }
 
   private pickSearchResult(event: EventEntity): void {
@@ -1102,7 +1147,8 @@ export struct CompanionView {
         onFilterSelect: (state: CompanionFilterState) => {
           this.applyFilter(state);
         }
-      });
+      })
+      .zIndex(20);
     }
     .width('100%')
     .height('100%')
