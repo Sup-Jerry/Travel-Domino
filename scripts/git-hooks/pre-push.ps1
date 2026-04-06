@@ -44,8 +44,14 @@ if ($changedFiles.Count -eq 0) {
   Write-Host '[pre-push] no changed files detected in push range.' -ForegroundColor DarkGray
 } else {
   $violations = New-Object System.Collections.Generic.List[string]
+  $forbiddenPathPattern = '(?i)^DeepScientist/runtime/tools/uv/bin/(uv\.exe|uvx\.exe)?$|(?i)^DeepScientist/runtime/tools/uv/bin/'
 
   foreach ($file in $changedFiles) {
+    if ($file -match $forbiddenPathPattern) {
+      $violations.Add("Forbidden runtime binary path: $file")
+      continue
+    }
+
     $sizeOutput = git cat-file -s "HEAD:$file" 2>$null
     if ($LASTEXITCODE -eq 0 -and $sizeOutput -as [long]) {
       $size = [long]$sizeOutput
