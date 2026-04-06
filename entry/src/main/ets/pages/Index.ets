@@ -10,7 +10,6 @@ import { router } from '@kit.ArkUI';
 import { DateUtil } from '../common/utils/DateUtil';
 import { promptAction } from '@kit.ArkUI';
 import { ComposableStrategy } from '../domain/strategy/TravelStrategyDimensions';
-import { StrategyService } from '../domain/strategy/StrategyService';
 
 import { CompanionView } from './components/views/CompanionView';
 import { PlanBottomActionBar } from './components/views/BottomNavBar';
@@ -25,7 +24,6 @@ import { PageDraftRecovery } from '../common/utils/PageDraftRecovery';
 import { AppStorageKeys } from '../common/constants/AppStorageKeys';
 import { DomainConstants } from '../common/constants/DomainConstants';
 import { PlanRepositoryImpl } from '../infrastructure/persistence/PlanRepositoryImpl';
-import { WeatherUserPreference } from '../domain/services/WeatherModels';
 import { ArrivalReminderPayload } from '../infrastructure/services/ArrivalReminderEngine';
 import { ArrivalReminderCoordinator } from '../infrastructure/services/ArrivalReminderCoordinator';
 import { IndexPageLayout } from './index/IndexPageLayout';
@@ -37,6 +35,8 @@ import { IndexDialogManager } from './index/IndexDialogManager';
 import { IndexAddDialogHelper } from './index/IndexAddDialogHelper';
 import { IndexAddDialogFlowHelper } from './index/IndexAddDialogFlowHelper';
 import { ConflictFlowContext, IndexConflictFlowHelper } from './index/IndexConflictFlowHelper';
+import { IndexPageBehaviorHelper, ReminderDialogContext, StrategyDialogContext } from './index/IndexPageBehaviorHelper';
+import { IndexPageActionsHelper } from './index/IndexPageActionsHelper';
 
 @Entry
 @Component
@@ -268,82 +268,36 @@ struct Index {
     }
   }
 
-  private showWeatherReminderDialog(payload: WeatherReminderPayload): void {
-    this.isWeatherDialogOpen = true;
-    const dialogTitle = payload.suggestionId ? `天气建议（可选）· ${payload.title}` : `天气提醒（可选）· ${payload.title}`;
-    const affectedText = payload.affectedNodes && payload.affectedNodes.length > 0
-      ? `\n受影响节点：${payload.affectedNodes.join('、')}`
-      : '';
-    const reasonText = payload.reason ? `\n原因：${payload.reason}` : '';
-    const benefitText = payload.expectedBenefit ? `\n收益：${payload.expectedBenefit}` : '';
-    const durationText = Number.isFinite(payload.suggestedDurationMin)
-      ? `\n建议停留：约 ${payload.suggestedDurationMin} 分钟`
-      : '';
-    const strategyAdjustText = payload.strategyAdjustment
-      ? `\n策略调整预览：密度${payload.strategyAdjustment.density ?? 0}，节奏${payload.strategyAdjustment.pace ?? 0}，体力${payload.strategyAdjustment.energy ?? 0}`
-      : '';
-    const dialogMessage = payload.suggestionId
-      ? `${payload.message}${reasonText}${benefitText}${affectedText}${durationText}${payload.strategyHint ? `\n策略建议：${payload.strategyHint}` : ''}${strategyAdjustText}\n\n此建议基于多日/多城天气协同，属可选动作，不会自动执行。`
-      : `${payload.message}\n\n你可以选择刷新天气，不影响主流程。`;
-    this.getUIContext().showAlertDialog({
-      title: dialogTitle,
-      message: dialogMessage,
-      autoCancel: false,
-      alignment: DialogAlignment.Center,
-      primaryButton: {
-        value: payload.suggestionId ? '稍后处理' : '知道了',
-        action: () => {
-          this.isWeatherDialogOpen = false;
-          this.weatherCoordinator.clear(this.currentPlanId);
-        }
+  private getReminderDialogContext(): ReminderDialogContext {
+    const context: ReminderDialogContext = {
+      vm: this.vm,
+      currentPlanId: this.currentPlanId,
+      getUIContext: (): UIContext => this.getUIContext(),
+      weatherCoordinator: this.weatherCoordinator,
+      arrivalCoordinator: this.arrivalCoordinator,
+      tryStartEventWithConflictPrompt: async (eventId: number): Promise<boolean> => this.tryStartEventWithConflictPrompt(eventId),
+      setWeatherDialogOpen: (value: boolean): void => {
+        this.isWeatherDialogOpen = value;
       },
-      secondaryButton: {
-        value: payload.suggestionId ? '去伴游' : '刷新天气',
-        action: () => {
-          this.isWeatherDialogOpen = false;
-          this.weatherCoordinator.clear(this.currentPlanId);
-          if (payload.suggestionId) {
-            hilog.info(
-              0x0000,
-              'Index',
-              `[WEATHER_REPLAN][dialog_view_only] planId=${this.currentPlanId}, suggestionId=${payload.suggestionId}, actionType=${payload.actionType ?? 'NONE'}`
-            );
-            this.isCompanionMode = true;
-            this.safeShowToast('已进入伴游，请先查看建议，确认后再应用');
-          } else {
-            void this.vm.refreshExecutionWeather(true, 'MANUAL');
-          }
-        }
+      setArrivalDialogOpen: (value: boolean): void => {
+        this.isArrivalDialogOpen = value;
+      },
+      setCompanionMode: (value: boolean): void => {
+        this.isCompanionMode = value;
+      },
+      safeShowToast: (message: string): void => {
+        this.safeShowToast(message);
       }
-    });
+    };
+    return context;
+  }
+
+  private showWeatherReminderDialog(payload: WeatherReminderPayload): void {
+    IndexPageBehaviorHelper.showWeatherReminderDialog(this.getReminderDialogContext(), payload);
   }
 
   private showArrivalReminderDialog(payload: ArrivalReminderPayload): void {
-    this.isArrivalDialogOpen = true;
-    this.getUIContext().showAlertDialog({
-      title: '到达提醒',
-      message: `你已到达【${payload.placeName}】附近（约${Math.max(1, payload.distanceMeters)}米）`,
-      autoCancel: false,
-      alignment: DialogAlignment.Center,
-      primaryButton: {
-        value: '稍后',
-        action: () => {
-          this.isArrivalDialogOpen = false;
-          this.arrivalCoordinator.acknowledge(payload.eventId, 'dismiss');
-        }
-      },
-      secondaryButton: {
-        value: '开始打卡',
-        action: () => {
-          this.isArrivalDialogOpen = false;
-          void this.tryStartEventWithConflictPrompt(payload.eventId).then((started: boolean) => {
-            this.arrivalCoordinator.acknowledge(payload.eventId, started ? 'start' : 'dismiss');
-          }).catch(() => {
-            this.arrivalCoordinator.acknowledge(payload.eventId, 'dismiss');
-          });
-        }
-      }
-    });
+    IndexPageBehaviorHelper.showArrivalReminderDialog(this.getReminderDialogContext(), payload);
   }
 
   private getThemePalette() {
@@ -582,20 +536,7 @@ struct Index {
   }
 
   private findLeastBusyDay(): number {
-    if (this.vm.groupedEvents.length === 0) return 0;
-
-    // 简单逻辑：找出事件数量最少的组
-    // 进阶逻辑：找出总时长最短的组 (这里先用数量)
-    let minDay = 0;
-    let minCount = Number.MAX_SAFE_INTEGER;
-
-    this.vm.groupedEvents.forEach(group => {
-      if (group.events.length > 0 && group.events.length < minCount) {
-        minCount = group.events.length;
-        minDay = group.dayOffset;
-      }
-    });
-    return minDay;
+    return IndexPageActionsHelper.findLeastBusyDay(this.vm);
   }
 
   openDialog(initData?: InitDialogData) {
@@ -661,55 +602,36 @@ struct Index {
 
   // ✅ [修改] 打开高颜值筛选弹窗 (支持范围选择)
   openDateFilterDialog() {
-    this.dateFilterController = IndexDialogManager.openDateFilterDialog(
-      this.getUIContext(),
-      this.vm.planStartDate,
-      {
-        onShowAll: (): void => {
-          this.vm.clearFilter();
-        },
-        onSelectDate: (dateMs: number): void => {
-          this.vm.setFilter(dateMs, dateMs);
-        },
-        onSelectRange: (startMs: number, endMs: number): void => {
-          this.vm.setFilter(startMs, endMs);
-        }
-      }
-    );
+    this.dateFilterController = IndexPageActionsHelper.openDateFilterDialog({
+      vm: this.vm,
+      getUIContext: (): UIContext => this.getUIContext()
+    });
   }
 
   // [新增] 提取日期选择逻辑
   openDatePicker() {
-    IndexDialogManager.openPlanDatePicker(this.getUIContext(), this.vm.planStartDate, (dateMs: number): void => {
-      this.requestPlanDateUpdate(dateMs);
+    IndexPageActionsHelper.openDatePicker({
+      vm: this.vm,
+      getUIContext: (): UIContext => this.getUIContext(),
+      requestPlanDateUpdate: (dateMs: number): void => {
+        this.requestPlanDateUpdate(dateMs);
+      }
     });
   }
 
   // ✅ [修复步骤 2] 修改打开菜单的方法
   openSettingsDialog() {
-    this.settingsDialogController = IndexDialogManager.createSettingsController({
-      onRename: (): void => {
-        setTimeout((): void => this.openRenameDialog(), 100);
+    this.settingsDialogController = IndexPageActionsHelper.openSettingsDialog({
+      vm: this.vm,
+      getUIContext: (): UIContext => this.getUIContext(),
+      safeShowToast: (message: string): void => {
+        this.safeShowToast(message);
       },
-      onReschedule: (): void => {
-        setTimeout((): void => this.openDatePicker(), 100);
+      openRenameDialog: (): void => {
+        this.openRenameDialog();
       },
-      onShare: (): void => {
-        this.safeShowToast('分享功能暂不可用');
-      },
-      weatherUserPreference: this.vm.getWeatherUserPreference(),
-      onWeatherPreferenceChange: async (preference: WeatherUserPreference): Promise<void> => {
-        try {
-          await this.vm.updateWeatherUserPreference(preference);
-          if (this.vm.isWeatherFeatureEnabled()) {
-            void this.vm.refreshPlanningWeather(false);
-          }
-          if (this.vm.isWeatherFeatureEnabled() && this.vm.isExecutionWeatherStage()) {
-            void this.vm.refreshExecutionWeather(false, 'MANUAL');
-          }
-        } catch (_error) {
-          this.safeShowToast('天气偏好保存失败');
-        }
+      openDatePicker: (): void => {
+        this.openDatePicker();
       }
     });
 
@@ -718,9 +640,12 @@ struct Index {
 
   // [Priority 2 新增] 打开重命名弹窗
   openRenameDialog() {
-    this.dialogController = IndexDialogManager.createRenameController(this.planTitle, (newName: string): void => {
-      this.planTitle = newName;
-      this.vm.renamePlan(newName);
+    this.dialogController = IndexPageActionsHelper.openRenameDialog({
+      vm: this.vm,
+      planTitle: this.planTitle,
+      setPlanTitle: (title: string): void => {
+        this.planTitle = title;
+      }
     });
     this.dialogController.open();
   }
@@ -795,49 +720,26 @@ struct Index {
     });
   }
 
-  private loadStrategyExplanation() {
-    this.currentStrategyExplanation = StrategyService.buildStrategyExplanation(this.strategyMode);
+  private getStrategyDialogContext(): StrategyDialogContext {
+    const context: StrategyDialogContext = {
+      vm: this.vm,
+      strategyMode: this.strategyMode,
+      getUIContext: (): UIContext => this.getUIContext(),
+      regenerateByCurrentStrategy: async (): Promise<void> => this.vm.regenerateByCurrentStrategy()
+    };
+    return context;
+  }
+
+  private loadStrategyExplanation(): void {
+    this.currentStrategyExplanation = IndexPageBehaviorHelper.loadStrategyExplanation(this.strategyMode);
   }
 
   private startStrategyAdaptationCheck(): void {
-    this.strategyAdaptationCheckTimer = setInterval(() => {
-      if (this.vm.strategyAdaptationPrompt) {
-        this.showStrategyAdaptationDialog();
-      }
-    }, 1000);
+    this.strategyAdaptationCheckTimer = IndexPageBehaviorHelper.startStrategyAdaptationCheck(this.getStrategyDialogContext());
   }
 
   private showStrategyAdaptationDialog(): void {
-    const prompt = this.vm.strategyAdaptationPrompt;
-    if (!prompt) return;
-
-    // 立即清空，防止重复弹窗
-    this.vm.strategyAdaptationPrompt = null;
-
-    const strategyLabels = ['低', '中', '高'];
-    const message = `${prompt.message}\n\n` +
-      `密度：${strategyLabels[prompt.oldStrategy.density]} → ${strategyLabels[prompt.newStrategy.density]}\n` +
-      `节奏：${strategyLabels[prompt.oldStrategy.pace]} → ${strategyLabels[prompt.newStrategy.pace]}\n` +
-      `体力：${strategyLabels[prompt.oldStrategy.energy]} → ${strategyLabels[prompt.newStrategy.energy]}`;
-
-    this.getUIContext().showAlertDialog({
-      title: '✨ 策略已自动调整',
-      message: message,
-      autoCancel: false,
-      alignment: DialogAlignment.Center,
-      primaryButton: {
-        value: '立即生成',
-        action: () => {
-          void this.vm.regenerateByCurrentStrategy();
-        }
-      },
-      secondaryButton: {
-        value: '稍后',
-        action: () => {
-          // 已清空，无需操作
-        }
-      }
-    });
+    IndexPageBehaviorHelper.showStrategyAdaptationDialog(this.getStrategyDialogContext());
   }
 
   @Builder
@@ -900,26 +802,9 @@ struct Index {
   }
 
   openEditDialog(item: EventEntity) {
-    const coordValid = Number.isFinite(item.latitude) && Number.isFinite(item.longitude) &&
-      Math.abs(item.latitude) <= 90 && Math.abs(item.longitude) <= 180 &&
-      !(item.latitude === 0 && item.longitude === 0);
-    hilog.info(
-      0x0000,
-      'Index',
-      `[MAP_TRACE][edit_entry] itemId=${item.id}, source=${item.source}, nameLen=${(item.name || '').length}, coordValid=${coordValid}, lat=${item.latitude}, lng=${item.longitude}`
-    );
-    this.editingItemId = item.id;
-    const effectiveDayOffset = TimelineDatePolicy.resolveEventDayOffset(item);
-    this.openDialog({
-      name: item.name,
-      note: item.note,
-      duration: item.duration,
-      isAnchor: item.lock_status === 1,
-      fixedTime: item.fixed_start_time || '',
-      dayOffset: effectiveDayOffset || 0,
-      lat: item.latitude,
-      lng: item.longitude
-    });
+    const prepared = IndexPageActionsHelper.prepareEditDialog(item);
+    this.editingItemId = prepared.editingItemId;
+    this.openDialog(prepared.initData);
   }
 
   @Builder
@@ -1217,6 +1102,8 @@ struct Index {
   }
 
 }
+
+
 
 
 
