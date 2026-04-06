@@ -1,9 +1,8 @@
-﻿import { CompressionMode, TimelineViewModel } from '../viewmodel/TimelineViewModel';
+﻿import { TimelineViewModel } from '../viewmodel/TimelineViewModel';
 // 修改点：View 组件指向 views 目录
 import { EventItemView } from './components/views/EventItemView';
 import { BacklogView } from './components/views/BacklogView';
 // 修改点：Dialog 组件指向 dialogs 目录
-import { AddItemDialog } from './components/dialogs/AddItemDialog';
 import { TravelPlanItem } from '../model/interface/IStandardEvent';
 import { EventEntity } from '../model/entity/EventEntity';
 import { router } from '@kit.ArkUI';
@@ -13,7 +12,6 @@ import { promptAction } from '@kit.ArkUI';
 import { ComposableStrategy } from '../domain/strategy/TravelStrategyDimensions';
 import { StrategyService } from '../domain/strategy/StrategyService';
 
-import { TimelineInteractionHelper } from '../viewmodel/TimelineInteractionHelper';
 import { CompanionView } from './components/views/CompanionView';
 import { PlanBottomActionBar } from './components/views/BottomNavBar';
 import { hilog } from '@kit.PerformanceAnalysisKit';
@@ -32,12 +30,13 @@ import { ArrivalReminderPayload } from '../infrastructure/services/ArrivalRemind
 import { ArrivalReminderCoordinator } from '../infrastructure/services/ArrivalReminderCoordinator';
 import { IndexPageLayout } from './index/IndexPageLayout';
 import { IndexEventHandlers } from './index/IndexEventHandlers';
-import { AddDialogDefaults, InitDialogData, PendingItemData } from './index/IndexTypes';
+import { InitDialogData, PendingItemData } from './index/IndexTypes';
 import { IndexStateManager } from './index/IndexStateManager';
 import { IndexLifecycleHelper } from './index/IndexLifecycleHelper';
 import { IndexDialogManager } from './index/IndexDialogManager';
 import { IndexAddDialogHelper } from './index/IndexAddDialogHelper';
-import { IndexConflictHelper } from './index/IndexConflictHelper';
+import { IndexAddDialogFlowHelper } from './index/IndexAddDialogFlowHelper';
+import { ConflictFlowContext, IndexConflictFlowHelper } from './index/IndexConflictFlowHelper';
 
 @Entry
 @Component
@@ -531,209 +530,38 @@ struct Index {
       }
     }
   });
-  // 在 Index.ets 中找到 openTimeEditDialog 方法
-
-  // 文件路径: ets/pages/Index.ets
-
-  openTimeEditDialog(item: EventEntity) {
-
-    // 1. 计算基准日期 (保持不变)
-    let targetDateTs = new Date().getTime();
-    const effectiveDayOffset = TimelineDatePolicy.resolveEventDayOffset(item);
-    if (this.vm.planStartDate > 0) {
-      targetDateTs = TimelineDatePolicy.dayOffsetToDayStartMs(this.vm.planStartDate, effectiveDayOffset);
-    }
-
-    let smartTime = '09:00';
-    const currentIndex = this.vm.events.findIndex(e => e.id === item.id);
-
-    // 1. 先确定"上一站离场时间" (Base Time)
-    let prevEndTime = '09:00';
-    if (currentIndex > 0) {
-      const prevItem = this.vm.events[currentIndex - 1];
-      const prevStart = prevItem.computed_time || prevItem.fixed_start_time || '09:00';
-      prevEndTime = DateUtil.calculateEndTime(prevStart, prevItem.duration);
-    } else {
-      // 如果是第一个地点，假设 09:00 出发
-      prevEndTime = '09:00';
-    }
-
-    // 2. 叠加当前地点的"路程时间"
-    // 建议开始时间 = 上一站离场 + 路上耗时
-    smartTime = DateUtil.calculateEndTime(prevEndTime, item.pre_travel_min || 0);
-
+  openTimeEditDialog(_item: EventEntity) {
+    // 保留入口，具体冲突调整由统一冲突流程接管。
   }
 
-  private calculateSmartTime(targetItemId: number): string {
-    return IndexAddDialogHelper.calculateSmartTime(this.vm.events, targetItemId);
-  }
-
-  private getDefaultAddTime(): string {
-    return '08:00';
-  }
-
-  private normalizeTimeText(raw?: string): string {
-    const pure = DateUtil.extractPureTime(raw || '');
-    if (pure && DateUtil.isValidTimeString(pure)) {
-      return pure;
-    }
-    return this.getDefaultAddTime();
-  }
-
-  private resolveEventEndTimeText(event: EventEntity): string {
-    const start = this.normalizeTimeText(event.fixed_start_time || event.computed_time);
-    const duration = Number.isFinite(event.duration) && event.duration > 0 ? event.duration : 0;
-    return DateUtil.calculateEndTime(start, duration);
-  }
-
-  private getLatestCreatedScheduleEvent(): EventEntity | undefined {
-    const scheduled = this.vm.events.filter((item: EventEntity) => item.status === 1);
-    if (scheduled.length === 0) {
-      return undefined;
-    }
-    const sorted = scheduled.slice().sort((a: EventEntity, b: EventEntity) => {
-      const idA = Number.isFinite(a.id) ? a.id : -1;
-      const idB = Number.isFinite(b.id) ? b.id : -1;
-      return idB - idA;
-    });
-    return sorted[0];
-  }
-
-  private recommendAddByDayOffset(dayOffset: number): string {
-    return IndexAddDialogHelper.recommendAddByDayOffset(this.vm.events, dayOffset);
-  }
-
-  private resolveAddDialogDefaults(): AddDialogDefaults {
-    return IndexAddDialogHelper.resolveAddDialogDefaults(this.vm.events);
-  }
-  private resolveConflictGapMinutes(item: EventEntity, fallbackGap: number = 0): number {
-    return IndexConflictHelper.resolveConflictGapMinutes(item, fallbackGap);
-  }
-
-  private getConflictTargetTime(item: EventEntity): string {
-    return IndexConflictHelper.getConflictTargetTime(item);
-  }
-
-  private async saveConflictTime(item: EventEntity, newTime?: string, onDone?: () => Promise<void> | void): Promise<void> {
-    await IndexConflictHelper.saveConflictTime(this.vm, item, newTime, onDone);
+  private getConflictFlowContext(): ConflictFlowContext {
+    const context: ConflictFlowContext = {
+      vm: this.vm,
+      getUIContext: (): UIContext => this.getUIContext(),
+      safeShowToast: (message: string): void => this.safeShowToast(message),
+      setConflictSelectionController: (controller: CustomDialogController | null): void => {
+        this.conflictSelectionController = controller;
+      },
+      setConflictCompressController: (controller: CustomDialogController | null): void => {
+        this.conflictCompressController = controller;
+      },
+      setConflictAdvanceController: (controller: CustomDialogController | null): void => {
+        this.conflictAdvanceController = controller;
+      },
+      setSuggestionDialogController: (controller: CustomDialogController | null): void => {
+        this.suggestionDialogController = controller;
+      }
+    };
+    return context;
   }
 
   private handleEventConflictAction(item: EventEntity, strategy: 'delay' | 'compress' | 'advance' | 'smart', gapMinutes: number,
-    onDone?: () => void) {
-    IndexConflictHelper.handleEventConflictAction(
-      this.vm,
-      item,
-      strategy,
-      gapMinutes,
-      onDone,
-      (index: number, target: EventEntity, targetTime: string, plan: import('../viewmodel/TimelineViewModel').CompressionPlan,
-        saveCallback: (t?: string) => void, onBack: () => void) => {
-        this.openPreview(index, target, targetTime, plan, saveCallback, onBack);
-      },
-      (index: number, target: EventEntity, targetTime: string, saveCallback: (t?: string) => void) => {
-        this.openAdvanceAdjustDialog(index, target, targetTime, saveCallback);
-      },
-      (index: number, target: EventEntity, targetTime: string, saveCallback: (t?: string) => void, onBack: () => void) => {
-        this.openCompressSelectionDialog(index, target, targetTime, saveCallback, onBack);
-      },
-      (index: number, target: EventEntity, targetTime: string, gap: number, saveCallback: (t?: string) => void) => {
-        this.openConflictMenu(index, target, targetTime, gap, saveCallback);
-      }
-    );
-  }
-
-  private openAdvanceAdjustDialog(index: number, item: EventEntity, targetTime: string, saveCallback: (t?: string) => void): void {
-    this.conflictAdvanceController = IndexConflictHelper.openAdvanceAdjustDialog(
-      this.vm,
-      index,
-      item,
-      targetTime,
-      saveCallback,
-      (message: string): void => {
-        this.safeShowToast(message);
-      },
-      (): void => {
-        this.openAdvanceAdjustDialog(index, item, targetTime, saveCallback);
-      },
-      (gap: number): void => {
-        this.openConflictMenu(index, item, targetTime, gap, saveCallback);
-      }
-    );
-  }
-
-  private showCompressionBlockedDialog(index: number, item: EventEntity, targetTime: string, plan: import('../viewmodel/TimelineViewModel').CompressionPlan,
-    selectedIds: number[], mode: CompressionMode, saveCallback: (t?: string) => void, onBack: () => void) {
-    IndexConflictHelper.showCompressionBlockedDialog(
-      this.getUIContext(),
-      index,
-      item,
-      targetTime,
-      plan,
-      selectedIds,
-      mode,
-      saveCallback,
-      onBack,
-      (indexVal: number, itemVal: EventEntity, targetTimeVal: string, saveFn: (t?: string) => void, backFn: () => void,
-        presetSelectedIds: number[], presetMode: CompressionMode) => {
-        this.openCompressSelectionDialog(indexVal, itemVal, targetTimeVal, saveFn, backFn, presetSelectedIds, presetMode);
-      },
-      (indexVal: number, itemVal: EventEntity, targetTimeVal: string, nextPlan: import('../viewmodel/TimelineViewModel').CompressionPlan,
-        saveFn: (t?: string) => void, backFn: () => void) => {
-        this.openPreview(indexVal, itemVal, targetTimeVal, nextPlan, saveFn, backFn);
-      },
-      this.vm
-    );
-  }
-
-  private openCompressSelectionDialog(index: number, item: EventEntity, targetTime: string, saveCallback: (t?: string) => void,
-    onBack: () => void, presetSelectedIds: number[] = [], presetMode: CompressionMode = 'RATIO') {
-    this.conflictCompressController = IndexConflictHelper.openCompressSelectionDialog(
-      this.vm,
-      index,
-      item,
-      targetTime,
-      saveCallback,
-      onBack,
-      (message: string) => this.safeShowToast(message),
-      (indexVal: number, itemVal: EventEntity, targetTimeVal: string, plan: import('../viewmodel/TimelineViewModel').CompressionPlan,
-        saveFn: (t?: string) => void, backFn: () => void) => {
-        this.openPreview(indexVal, itemVal, targetTimeVal, plan, saveFn, backFn);
-      },
-      (indexVal: number, itemVal: EventEntity, targetTimeVal: string, plan: import('../viewmodel/TimelineViewModel').CompressionPlan,
-        selectedIds: number[], mode: CompressionMode, saveFn: (t?: string) => void, backFn: () => void) => {
-        this.showCompressionBlockedDialog(indexVal, itemVal, targetTimeVal, plan, selectedIds, mode, saveFn, backFn);
-      },
-      presetSelectedIds,
-      presetMode
-    );
+    onDone?: () => void): void {
+    IndexConflictFlowHelper.handleEventConflictAction(this.getConflictFlowContext(), item, strategy, gapMinutes, onDone);
   }
 
   private requestPlanDateUpdate(newDateTimestamp: number): void {
-    IndexConflictHelper.requestPlanDateUpdate(this.vm, newDateTimestamp, (index: number, item: EventEntity, targetTime: string,
-      gap: number, saveCallback: (t?: string) => void) => {
-      this.openConflictMenu(index, item, targetTime, gap, saveCallback);
-    });
-  }
-
-  openConflictMenu(index: number, item: EventEntity, targetTime: string, gap: number, saveCallback: (t?: string) => void) {
-    this.conflictSelectionController = IndexConflictHelper.openConflictMenu(
-      this.vm,
-      index,
-      item,
-      targetTime,
-      gap,
-      saveCallback,
-      (indexVal: number, itemVal: EventEntity, targetTimeVal: string, plan: import('../viewmodel/TimelineViewModel').CompressionPlan,
-        saveFn: (t?: string) => void, backFn: () => void) => {
-        this.openPreview(indexVal, itemVal, targetTimeVal, plan, saveFn, backFn);
-      },
-      (indexVal: number, itemVal: EventEntity, targetTimeVal: string, saveFn: (t?: string) => void, backFn: () => void) => {
-        this.openCompressSelectionDialog(indexVal, itemVal, targetTimeVal, saveFn, backFn);
-      },
-      (indexVal: number, itemVal: EventEntity, targetTimeVal: string, saveFn: (t?: string) => void) => {
-        this.openAdvanceAdjustDialog(indexVal, itemVal, targetTimeVal, saveFn);
-      }
-    );
+    IndexConflictFlowHelper.requestPlanDateUpdate(this.getConflictFlowContext(), newDateTimestamp);
   }
 
   private async initBacklogExpandedState(planId: number, isNewPlan: boolean): Promise<void> {
@@ -751,32 +579,6 @@ struct Index {
 
   private toggleDayCollapse(dayOffset: number): void {
     this.collapsedDayOffsets = IndexStateManager.toggleDayCollapse(this.collapsedDayOffsets, dayOffset);
-  }
-
-  // [新增] 抽离出来的预览逻辑
-  openPreview(index: number, item: EventEntity, targetTime: string, plan: import('../viewmodel/TimelineViewModel').CompressionPlan, saveCallback: (t?: string) => void, onBack: () => void) {
-    const detailMsg = plan.affectedItems.length === 0
-      ? '• 没有前序行程受到压缩，仅调整当前开始时间。'
-      : plan.affectedItems.map((aff) => `• ${aff.name}: ${aff.oldVal}m ➔ ${aff.newVal}m`).join('\n');
-    const prevItem = index > 0 ? this.vm.events[index - 1] : null;
-    this.suggestionDialogController = IndexDialogManager.createSuggestionController({
-      itemName: item.name,
-      conflictName: prevItem ? prevItem.name : '前序行程',
-      targetTime: targetTime,
-      suggestedTime: plan.suggestedTime || targetTime,
-      detailMsg: detailMsg,
-      onConfirm: (): void => {
-        if (!plan.suggestedTime) {
-          return;
-        }
-        if (plan.affectedItems.length > 0) {
-          this.vm.applyCompressionPlan(plan);
-        }
-        saveCallback(plan.suggestedTime);
-      },
-      onBack: onBack
-    });
-    this.suggestionDialogController.open();
   }
 
   private findLeastBusyDay(): number {
@@ -797,130 +599,61 @@ struct Index {
   }
 
   openDialog(initData?: InitDialogData) {
-    const isCreateMode = this.editingItemId === -1;
-    const createDefaults = new AddDialogDefaults();
-    if (isCreateMode) {
-      const computed = this.resolveAddDialogDefaults();
-      createDefaults.dayOffset = computed.dayOffset;
-      createDefaults.suggestedTime = computed.suggestedTime;
-    } else {
-      createDefaults.dayOffset = 0;
-      createDefaults.suggestedTime = '';
-    }
-    const smartTime = initData?.suggestedTime || (isCreateMode ? createDefaults.suggestedTime : this.calculateSmartTime(this.editingItemId));
-    const initDayOffset = initData?.dayOffset !== undefined
-      ? initData.dayOffset
-      : (isCreateMode ? createDefaults.dayOffset : 0);
-    const initLat = initData?.lat || 0;
-    const initLng = initData?.lng || 0;
-    const initCoordValid = Number.isFinite(initLat) && Number.isFinite(initLng) &&
-      Math.abs(initLat) <= 90 && Math.abs(initLng) <= 180 &&
-      !(initLat === 0 && initLng === 0);
+    const prepared = IndexAddDialogFlowHelper.prepareDialogState(this.vm.events, this.editingItemId, initData);
     hilog.info(
       0x0000,
       'Index',
-      `[MAP_TRACE][open_dialog] editId=${this.editingItemId}, createMode=${isCreateMode}, nameLen=${(initData?.name || '').length}, initCoordValid=${initCoordValid}, lat=${initLat}, lng=${initLng}`
+      `[MAP_TRACE][open_dialog] editId=${this.editingItemId}, createMode=${prepared.isCreateMode}, nameLen=${(initData?.name || '').length}, initCoordValid=${prepared.initCoordValid}, lat=${prepared.initLat}, lng=${prepared.initLng}`
     );
-    let currentPreTravel = 0;
-
-    // ✅ 准备 Priority 数据
-    let currentPriority = 0;
-
-    if (this.editingItemId !== -1) {
-      const item = this.vm.events.find(e => e.id === this.editingItemId);
-      if (item) {
-        if (item.pre_travel_min > 0) {
-          currentPreTravel = item.pre_travel_min;
+    this.dialogController = IndexDialogManager.createAddItemController({
+      initName: initData?.name || '',
+      initNote: initData?.note || '',
+      initDuration: initData?.duration || 60,
+      initIsAnchor: initData?.isAnchor || false,
+      initFixedTime: initData?.fixedTime || '',
+      initSuggestedTime: prepared.smartTime,
+      initIsSchedule: initData ? true : false,
+      initDayOffset: prepared.initDayOffset,
+      initPreTravel: prepared.currentPreTravel,
+      initPriority: prepared.currentPriority,
+      storageScopePlanId: this.currentPlanId,
+      planStartDate: this.vm.planStartDate,
+      initLat: prepared.initLat,
+      initLng: prepared.initLng,
+      onDateChangedRecommendTime: (dayOffset: number, currentTime: string): string => {
+        if (!prepared.isCreateMode) {
+          return currentTime;
         }
-        currentPriority = item.priority; // ✅ 获取现有优先级
-      }
-    }
-
-    this.dialogController = new CustomDialogController({
-      builder: AddItemDialog({
-        initName: initData?.name || '',
-        initNote: initData?.note || '',
-        initDuration: initData?.duration || 60,
-        initIsAnchor: initData?.isAnchor || false,
-        initFixedTime: initData?.fixedTime || '',
-        initSuggestedTime: smartTime,
-        initIsSchedule: initData ? true : false,
-        initDayOffset: initDayOffset,
-        initPreTravel: currentPreTravel,
-        initPriority: currentPriority, // ✅ 传入
-        storageScopePlanId: this.currentPlanId,
-        planStartDate: this.vm.planStartDate,
-
-        initLat: initLat, // ✅ 确保把坐标传给弹窗
-        initLng: initLng,
-        onDateChangedRecommendTime: (dayOffset: number, currentTime: string): string => {
-          if (!isCreateMode) {
-            return currentTime;
-          }
-          return this.recommendAddByDayOffset(dayOffset);
-        },
-
-        // ✅ [核心拦截逻辑] 更新回调签名
-        // ✅ 增加 lat, lng 接收参数
-        onConfirm: async (name, duration, isSchedule, fixedTime, dayOffset, preTravel, isHardLock, note, isMustVisit, lat, lng) => {
-          const hasCoordinate = Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0;
-          hilog.info(0x0000, 'IndexPage', `[DIALOG_SAVE] has_coordinate=${hasCoordinate}`);
-          if (this.editingItemId !== -1 && !this.vm.events.find(e => e.id === this.editingItemId)) {
-            hilog.warn(0x0000, 'IndexPage', `[DIALOG_SAVE_SKIP] reason=item_not_found, itemId=${this.editingItemId}`);
-            this.safeShowToast('该地点已不存在，请刷新后重试');
-            this.editingItemId = -1;
-            return;
-          }
-          if (this.vm.planStartDate <= 0 || (dayOffset !== undefined && dayOffset >= 0)) {
-            await TimelineInteractionHelper.handleSaveItem(
-              this.vm, this.editingItemId, name, duration, isSchedule,
-              fixedTime, dayOffset, preTravel, this.onGapFoundCallback,
-              isHardLock, note, isMustVisit,
-              lat, lng // ✅ 传给下一步 Helper
-            );
-            if (isSchedule) {
-              const targetDayOffset = dayOffset ?? 0;
-              const collapsedIdx = this.collapsedDayOffsets.indexOf(targetDayOffset);
-              if (collapsedIdx >= 0) {
-                this.collapsedDayOffsets.splice(collapsedIdx, 1);
-                this.collapsedDayOffsets = [...this.collapsedDayOffsets];
-              }
-              if (this.vm.filterStart > 0 || this.vm.filterEnd > 0) {
-                this.vm.clearFilter();
-                hilog.info(0x0000, 'IndexPage', '[ADD_UI][clear_filter_for_visibility] reason=new_schedule_item');
-              }
-            }
-            this.vm.refreshTimelineView();
-            const scheduleCount = this.vm.events.filter((event: EventEntity) => event.status === 1).length;
-            hilog.info(
-              0x0000,
-              'IndexPage',
-              `[ADD_UI][after_save] total=${this.vm.events.length}, schedule=${scheduleCount}, groups=${this.vm.groupedEvents.length}, dayOffset=${dayOffset ?? 0}, isSchedule=${isSchedule}`
-            );
-
-            this.editingItemId = -1;
-            return;
-          }
-
-          const targetMs = TimelineDatePolicy.dayOffsetToDayStartMs(this.vm.planStartDate, dayOffset!);
-
-          this.pendingItem = {
-            id: this.editingItemId,
-            name, duration, isSchedule, fixedTime,
-            dayOffset: dayOffset!,
-            targetDateMs: targetMs,
-            note: note || '',
-            lat: lat, // ✅ 暂存起来，应对日期冲突的情况
-            lng: lng
-          };
-
+        return IndexAddDialogHelper.recommendAddByDayOffset(this.vm.events, dayOffset);
+      },
+      onConfirm: async (name, duration, isSchedule, fixedTime, dayOffset, preTravel, isHardLock, note, isMustVisit, lat, lng) => {
+        const result = await IndexAddDialogFlowHelper.handleDialogConfirm(
+          {
+            vm: this.vm,
+            editingItemId: this.editingItemId,
+            planStartDate: this.vm.planStartDate,
+            collapsedDayOffsets: this.collapsedDayOffsets,
+            hasActiveFilter: this.vm.filterStart > 0 || this.vm.filterEnd > 0,
+            onGapFoundCallback: this.onGapFoundCallback
+          },
+          { name, duration, isSchedule, fixedTime, dayOffset, preTravel, isHardLock, note, isMustVisit, lat, lng }
+        );
+        this.collapsedDayOffsets = result.nextCollapsedDayOffsets;
+        if (result.clearFilter) {
+          this.vm.clearFilter();
+          hilog.info(0x0000, 'IndexPage', '[ADD_UI][clear_filter_for_visibility] reason=new_schedule_item');
+        }
+        if (result.toastMessage) {
+          this.safeShowToast(result.toastMessage);
+        }
+        if (result.pendingItem) {
+          this.pendingItem = result.pendingItem;
+        }
+        if (result.openConflictDialog) {
           setTimeout(() => { this.conflictDialogController.open(); }, 100);
         }
-      }),
-      alignment: DialogAlignment.Center,
-      offset: { dx: 0, dy: -50 }, // 稍微向上偏移 50vp
-      autoCancel: true,
-      customStyle: true
+        this.editingItemId = result.nextEditingItemId;
+      }
     });
     this.dialogController.open();
   }
@@ -1379,7 +1112,7 @@ struct Index {
         },
         onMoveToSchedule: (item: TravelPlanItem): void => {
           const suggestedDay = this.findLeastBusyDay();
-          const smartTime = this.calculateSmartTime(item.id ?? -1);
+          const smartTime = IndexAddDialogHelper.calculateSmartTime(this.vm.events, item.id ?? -1);
           this.editingItemId = item.id ?? -1;
           this.openDialog({
             name: item.name,
@@ -1484,6 +1217,7 @@ struct Index {
   }
 
 }
+
 
 
 
