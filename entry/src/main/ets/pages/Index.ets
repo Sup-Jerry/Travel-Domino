@@ -8,13 +8,9 @@ import { TravelPlanItem } from '../model/interface/IStandardEvent';
 import { EventEntity } from '../model/entity/EventEntity';
 import { router } from '@kit.ArkUI';
 // 修改点：批量更新 Dialog 路径
-import { RenameDialog } from './components/dialogs/RenameDialog';
-import { PlanSettingsDialog } from './components/dialogs/PlanSettingsDialog';
-import { DateFilterDialog } from './components/dialogs/DateFilterDialog';
 import { DateConflictDialog } from './components/dialogs/DateConflictDialog';
 import { DateUtil } from '../common/utils/DateUtil';
 import { promptAction } from '@kit.ArkUI';
-import { AiInputDialog } from './components/dialogs/AiInputDialog';
 import { ComposableStrategy } from '../domain/strategy/TravelStrategyDimensions';
 import { StrategyService } from '../domain/strategy/StrategyService';
 
@@ -27,7 +23,6 @@ import { GapResolutionDialog } from './components/dialogs/GapResolutionDialog';
 import { CompanionView } from './components/views/CompanionView';
 import { PlanBottomActionBar } from './components/views/BottomNavBar';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { PreferenceManager } from '../common/utils/PreferenceManager';
 import { ThemeCenter } from '../common/utils/ThemeCenter';
 import { NavigationHelper } from '../common/utils/NavigationHelper';
 import { WeatherReminderCoordinator } from '../infrastructure/services/WeatherReminderCoordinator';
@@ -44,6 +39,9 @@ import { ArrivalReminderCoordinator } from '../infrastructure/services/ArrivalRe
 import { IndexPageLayout } from './index/IndexPageLayout';
 import { IndexEventHandlers } from './index/IndexEventHandlers';
 import { AddDialogDefaults, InitDialogData, PendingItemData } from './index/IndexTypes';
+import { IndexStateManager } from './index/IndexStateManager';
+import { IndexLifecycleHelper } from './index/IndexLifecycleHelper';
+import { IndexDialogManager } from './index/IndexDialogManager';
 
 @Entry
 @Component
@@ -97,30 +95,20 @@ struct Index {
     }
   }
 
-   private scopedStorageKey(base: string): string {
-    if (this.currentPlanId > 0) {
-      return `${base}_${this.currentPlanId}`;
-    }
-    return base;
+  private scopedStorageKey(base: string): string {
+    return IndexStateManager.scopedStorageKey(base, this.currentPlanId);
   }
 
   private clearDialogDraftStorage(): void {
-    AppStorage.setOrCreate(this.scopedStorageKey(AppStorageKeys.TEMP_DIALOG_STATE), '');
-    AppStorage.setOrCreate(this.scopedStorageKey(AppStorageKeys.PICKED_LOCATION_STR), '');
-    AppStorage.setOrCreate(AppStorageKeys.TEMP_DIALOG_STATE, '');
-    AppStorage.setOrCreate(AppStorageKeys.PICKED_LOCATION_STR, '');
+    IndexStateManager.clearDialogDraftStorage(
+      this.currentPlanId,
+      AppStorageKeys.TEMP_DIALOG_STATE,
+      AppStorageKeys.PICKED_LOCATION_STR
+    );
   }
 
   private readDraftStorageWithFallback(key: string): string {
-    const scoped = AppStorage.get<Object>(this.scopedStorageKey(key));
-    if (typeof scoped === 'string' && scoped.trim().length > 0) {
-      return scoped;
-    }
-    const globalVal = AppStorage.get<Object>(key);
-    if (typeof globalVal === 'string' && globalVal.trim().length > 0) {
-      return globalVal;
-    }
-    return '';
+    return IndexStateManager.readDraftStorageWithFallback(this.currentPlanId, key);
   }
 
   private sanitizeError(error: Object): string {
@@ -187,16 +175,19 @@ struct Index {
   }
 
   private refreshUnsavedFlag(): void {
-    this.hasUnsavedChanges = AppStorage.get<boolean>(this.scopedStorageKey(AppStorageKeys.HAS_UNSAVED_POSTPONE)) ?? false;
+    this.hasUnsavedChanges = IndexStateManager.readUnsavedFlag(this.currentPlanId, AppStorageKeys.HAS_UNSAVED_POSTPONE);
   }
 
   private setUnsavedFlag(value: boolean): void {
-    AppStorage.setOrCreate(this.scopedStorageKey(AppStorageKeys.HAS_UNSAVED_POSTPONE), value);
-    this.hasUnsavedChanges = value;
+    this.hasUnsavedChanges = IndexStateManager.setUnsavedFlag(
+      this.currentPlanId,
+      AppStorageKeys.HAS_UNSAVED_POSTPONE,
+      value
+    );
   }
 
   private hasScopedUnsavedChanges(): boolean {
-    return AppStorage.get<boolean>(this.scopedStorageKey(AppStorageKeys.HAS_UNSAVED_POSTPONE)) ?? false;
+    return IndexStateManager.readUnsavedFlag(this.currentPlanId, AppStorageKeys.HAS_UNSAVED_POSTPONE);
   }
 
   private startArrivalReminderEngine(): void {
@@ -527,36 +518,31 @@ struct Index {
 
   private onGapFoundCallback = (item: EventEntity) => {}
 
-  aiDialogController: CustomDialogController = new CustomDialogController({
-    builder: AiInputDialog({
-      hasAiHistory: this.vm.hasAiHistory(),
-      onConfirm: async (text: string, strategy: number, customStrategy?: ComposableStrategy) => {
-        try {
-          await this.vm.generateByAi(text, strategy, customStrategy);
-          this.safeShowToast('AI 生成成功，已加入暂存池！');
-          this.aiDialogController.close();
-        } catch (error) {
-          const msg = error instanceof Error ? error.message : '生成失败';
-          this.safeShowToast(msg);
-          this.aiDialogController.close();
-        }
-      },
-      onRegenerate: async () => {
-        try {
-          await this.vm.regenerateByCurrentStrategy();
-          this.safeShowToast('重新生成成功');
-          this.aiDialogController.close();
-        } catch (error) {
-          const msg = error instanceof Error ? error.message : '重新生成失败';
-          console.error('[Index] AI重新规划失败:', JSON.stringify(error));
-          this.safeShowToast(msg);
-          this.aiDialogController.close();
-        }
+  aiDialogController: CustomDialogController = IndexDialogManager.createAiDialogController({
+    hasAiHistory: this.vm.hasAiHistory(),
+    onConfirm: async (text: string, strategy: number, customStrategy?: ComposableStrategy): Promise<void> => {
+      try {
+        await this.vm.generateByAi(text, strategy, customStrategy);
+        this.safeShowToast('AI 生成成功，已加入暂存池！');
+        this.aiDialogController.close();
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : '生成失败';
+        this.safeShowToast(msg);
+        this.aiDialogController.close();
       }
-    }),
-    alignment: DialogAlignment.Center,
-    autoCancel: false,
-    customStyle: true
+    },
+    onRegenerate: async (): Promise<void> => {
+      try {
+        await this.vm.regenerateByCurrentStrategy();
+        this.safeShowToast('重新生成成功');
+        this.aiDialogController.close();
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : '重新生成失败';
+        console.error('[Index] AI重新规划失败:', JSON.stringify(error));
+        this.safeShowToast(msg);
+        this.aiDialogController.close();
+      }
+    }
   });
   // 在 Index.ets 中找到 openTimeEditDialog 方法
 
@@ -958,62 +944,21 @@ struct Index {
     this.conflictSelectionController.open();
   }
 
-  private getBacklogExpandedKey(planId: number): string {
-    return `backlog_expanded_plan_${planId}`;
-  }
-
-  private getBacklogInitializedKey(planId: number): string {
-    return `backlog_expanded_initialized_plan_${planId}`;
-  }
-
   private async initBacklogExpandedState(planId: number, isNewPlan: boolean): Promise<void> {
-    const pref = PreferenceManager.getInstance();
-
-    // 新建计划首次进入：默认展开，并立即持久化
-    if (isNewPlan) {
-      this.backlogExpanded = true;
-      await pref.setValue(this.getBacklogExpandedKey(planId), true);
-      await pref.setValue(this.getBacklogInitializedKey(planId), true);
-      return;
-    }
-
-    // 非新建进入：读取历史状态
-    const initialized = await pref.getValue(this.getBacklogInitializedKey(planId), false);
-    if (initialized === true) {
-      const savedExpanded = await pref.getValue(this.getBacklogExpandedKey(planId), false);
-      this.backlogExpanded = (savedExpanded === true);
-      return;
-    }
-
-    // 旧计划但此前没有记录：按你的规则，不自动展开
-    this.backlogExpanded = false;
-    await pref.setValue(this.getBacklogExpandedKey(planId), false);
-    await pref.setValue(this.getBacklogInitializedKey(planId), true);
+    this.backlogExpanded = await IndexStateManager.initBacklogExpandedState(planId, isNewPlan);
   }
 
   private onToggleBacklogExpand(): void {
     this.backlogExpanded = !this.backlogExpanded;
-    const planId = this.currentPlanId;
-    if (planId > 0) {
-      PreferenceManager.getInstance().setValue(
-        this.getBacklogExpandedKey(planId),
-        this.backlogExpanded
-      );
-    }
+    IndexStateManager.persistBacklogExpanded(this.currentPlanId, this.backlogExpanded);
   }
 
   private isDayCollapsed(dayOffset: number): boolean {
-    return this.collapsedDayOffsets.indexOf(dayOffset) >= 0;
+    return IndexStateManager.isDayCollapsed(this.collapsedDayOffsets, dayOffset);
   }
 
   private toggleDayCollapse(dayOffset: number): void {
-    const idx = this.collapsedDayOffsets.indexOf(dayOffset);
-    if (idx >= 0) {
-      this.collapsedDayOffsets.splice(idx, 1);
-    } else {
-      this.collapsedDayOffsets.push(dayOffset);
-    }
-    this.collapsedDayOffsets = [...this.collapsedDayOffsets];
+    this.collapsedDayOffsets = IndexStateManager.toggleDayCollapse(this.collapsedDayOffsets, dayOffset);
   }
 
   // [新增] 抽离出来的预览逻辑
@@ -1210,217 +1155,138 @@ struct Index {
 
   // ✅ [修改] 打开高颜值筛选弹窗 (支持范围选择)
   openDateFilterDialog() {
-    this.dateFilterController = new CustomDialogController({
-      builder: DateFilterDialog({
-        onShowAll: () => {
+    this.dateFilterController = IndexDialogManager.openDateFilterDialog(
+      this.getUIContext(),
+      this.vm.planStartDate,
+      {
+        onShowAll: (): void => {
           this.vm.clearFilter();
         },
-        onSelectDate: () => {
-          this.openSingleDateFilterPicker();
+        onSelectDate: (dateMs: number): void => {
+          this.vm.setFilter(dateMs, dateMs);
         },
-        onSelectRange: () => {
-          this.openRangeDateFilterPicker();
+        onSelectRange: (startMs: number, endMs: number): void => {
+          this.vm.setFilter(startMs, endMs);
         }
-      }),
-      alignment: DialogAlignment.Bottom,
-      customStyle: true,
-      autoCancel: true
-    });
-
-    this.dateFilterController.open();
-  }
-
-  private openSingleDateFilterPicker(): void {
-    setTimeout(() => {
-      this.getUIContext().showDatePickerDialog({
-        start: new Date(this.vm.planStartDate || new Date()),
-        end: new Date(DomainConstants.DATE_PICKER_MAX),
-        selected: new Date(this.vm.planStartDate || new Date()),
-        onAccept: (value: DatePickerResult) => {
-          const selectDate = new Date();
-          selectDate.setFullYear(value.year, value.month, value.day);
-          selectDate.setHours(0, 0, 0, 0);
-          this.vm.setFilter(selectDate.getTime(), selectDate.getTime());
-        }
-      });
-    }, 100);
-  }
-
-  private openRangeDateFilterPicker(): void {
-    setTimeout(() => {
-      this.getUIContext().showDatePickerDialog({
-        start: new Date(this.vm.planStartDate || new Date()),
-        end: new Date(DomainConstants.DATE_PICKER_MAX),
-        selected: new Date(this.vm.planStartDate || new Date()),
-        onAccept: (startValue: DatePickerResult) => {
-          const startDate = new Date();
-          startDate.setFullYear(startValue.year, startValue.month, startValue.day);
-          startDate.setHours(0, 0, 0, 0);
-          setTimeout(() => {
-            this.openRangeEndDatePicker(startDate);
-          }, 300);
-        }
-      });
-    }, 100);
-  }
-
-  private openRangeEndDatePicker(startDate: Date): void {
-    this.getUIContext().showDatePickerDialog({
-      start: startDate,
-      end: new Date(DomainConstants.DATE_PICKER_MAX),
-      selected: startDate,
-      onAccept: (endValue: DatePickerResult) => {
-        const endDate = new Date();
-        endDate.setFullYear(endValue.year, endValue.month, endValue.day);
-        endDate.setHours(
-          DomainConstants.END_OF_DAY_HOUR,
-          DomainConstants.END_OF_DAY_MINUTE,
-          DomainConstants.END_OF_DAY_SECOND,
-          DomainConstants.END_OF_DAY_MILLISECOND
-        );
-        this.vm.setFilter(startDate.getTime(), endDate.getTime());
       }
-    });
+    );
   }
 
   // [新增] 提取日期选择逻辑
   openDatePicker() {
-    this.getUIContext().showDatePickerDialog({
-      start: new Date(DomainConstants.DATE_PICKER_MIN),
-      end: new Date(DomainConstants.DATE_PICKER_MAX),
-      selected: new Date(this.vm.planStartDate || new Date()),
-      onAccept: (value: DatePickerResult) => {
-        const newDate = new Date();
-        newDate.setFullYear(value.year, value.month, value.day);
-        newDate.setHours(0, 0, 0, 0);
-        this.requestPlanDateUpdate(newDate.getTime());
-      }
+    IndexDialogManager.openPlanDatePicker(this.getUIContext(), this.vm.planStartDate, (dateMs: number): void => {
+      this.requestPlanDateUpdate(dateMs);
     });
   }
 
   // ✅ [修复步骤 2] 修改打开菜单的方法
   openSettingsDialog() {
-    // ❌ 不要用 let settingsController = ... (这是导致闪退的原因)
-    // ✅ 改用 this.settingsDialogController
-    this.settingsDialogController = new CustomDialogController({
-      builder: PlanSettingsDialog({
-        onRename: () => {
-          setTimeout((): void => this.openRenameDialog(), 100);
-        },
-        onReschedule: () => {
-          setTimeout(() => {
-            this.getUIContext().showDatePickerDialog({
-              start: new Date(DomainConstants.DATE_PICKER_MIN),
-              end: new Date(DomainConstants.DATE_PICKER_MAX),
-              selected: new Date(this.vm.planStartDate || new Date()),
-              onAccept: (value: DatePickerResult) => {
-                const newDate = new Date();
-                newDate.setFullYear(value.year, value.month, value.day);
-                newDate.setHours(0, 0, 0, 0);
-                this.requestPlanDateUpdate(newDate.getTime());
-              }
-            });
-          }, 100);
-        },
-        weatherUserPreference: this.vm.getWeatherUserPreference(),
-        onWeatherPreferenceChange: async (preference: WeatherUserPreference) => {
-          try {
-            await this.vm.updateWeatherUserPreference(preference);
-            if (this.vm.isWeatherFeatureEnabled()) {
-              void this.vm.refreshPlanningWeather(false);
-            }
-            if (this.vm.isWeatherFeatureEnabled() && this.vm.isExecutionWeatherStage()) {
-              void this.vm.refreshExecutionWeather(false, 'MANUAL');
-            }
-          } catch (_error) {
-            this.safeShowToast('天气偏好保存失败');
+    this.settingsDialogController = IndexDialogManager.createSettingsController({
+      onRename: (): void => {
+        setTimeout((): void => this.openRenameDialog(), 100);
+      },
+      onReschedule: (): void => {
+        setTimeout((): void => this.openDatePicker(), 100);
+      },
+      onShare: (): void => {
+        this.safeShowToast('分享功能暂不可用');
+      },
+      weatherUserPreference: this.vm.getWeatherUserPreference(),
+      onWeatherPreferenceChange: async (preference: WeatherUserPreference): Promise<void> => {
+        try {
+          await this.vm.updateWeatherUserPreference(preference);
+          if (this.vm.isWeatherFeatureEnabled()) {
+            void this.vm.refreshPlanningWeather(false);
           }
+          if (this.vm.isWeatherFeatureEnabled() && this.vm.isExecutionWeatherStage()) {
+            void this.vm.refreshExecutionWeather(false, 'MANUAL');
+          }
+        } catch (_error) {
+          this.safeShowToast('天气偏好保存失败');
         }
-      }),
-      alignment: DialogAlignment.Bottom, // 底部弹出
-      customStyle: true, // 开启自定义样式
-      autoCancel: true
+      }
     });
 
-    // 打开弹窗
     this.settingsDialogController.open();
   }
 
   // [Priority 2 新增] 打开重命名弹窗
   openRenameDialog() {
-    // 复用 dialogController 变量 (反正同一时间只能开一个弹窗)
-    this.dialogController = new CustomDialogController({
-      builder: RenameDialog({
-        initName: this.planTitle,
-        onConfirm: (newName) => {
-          // 1. 更新 UI
-          this.planTitle = newName;
-          // 2. 更新数据库
-          this.vm.renamePlan(newName);
-        }
-      }),
-      alignment: DialogAlignment.Center, // 居中显示
-      autoCancel: true
+    this.dialogController = IndexDialogManager.createRenameController(this.planTitle, (newName: string): void => {
+      this.planTitle = newName;
+      this.vm.renamePlan(newName);
     });
     this.dialogController.open();
   }
 
   aboutToAppear() {
-    const params = this.getUIContext().getRouter().getParams() as Record<string, Object>;
-    if (params && params['planId']) {
-      const planId = params['planId'] as number;
-      const isNewPlan = (params['isNewPlan'] as boolean) === true;
-      const autoStartFromReminder = (params['autoStartFromReminder'] as boolean) === true;
-      const forceCompanionMode = (params['forceCompanionMode'] as boolean) === true;
-      const reminderEventId = Number(params['reminderEventId'] as number) || -1;
-
-      this.currentPlanId = planId;
-      this.hasManualPlanningWeatherRefresh = false;
-      // 防止页面重进时沿用上次折叠/筛选状态导致“日程看起来消失”
-      this.collapsedDayOffsets = [];
-      this.vm.clearFilter();
-      this.vm.setHasUnsavedPostponeStorageKey(this.scopedStorageKey(AppStorageKeys.HAS_UNSAVED_POSTPONE));
-      this.refreshUnsavedFlag();
-      this.planTitle = params['title'] as string || '行程详情';
-      this.bindReminderSubscriptions();
-      void this.vm.loadData(planId).then(() => {
-        this.strategyMode = this.vm.getStrategyMode();
+    this.collapsedDayOffsets = [];
+    this.vm.clearFilter();
+    IndexLifecycleHelper.handleAboutToAppear({
+      uiContext: this.getUIContext(),
+      vm: this.vm,
+      onSetCurrentPlanId: (planId: number): void => {
+        this.currentPlanId = planId;
+      },
+      onSetManualWeatherRefresh: (value: boolean): void => {
+        this.hasManualPlanningWeatherRefresh = value;
+      },
+      onRefreshUnsavedFlag: (): void => {
+        this.refreshUnsavedFlag();
+      },
+      onSetPlanTitle: (title: string): void => {
+        this.planTitle = title;
+      },
+      onBindReminderSubscriptions: (): void => {
+        this.bindReminderSubscriptions();
+      },
+      onSetStrategyMode: (mode: number): void => {
+        this.strategyMode = mode;
+      },
+      onLoadStrategyExplanation: (): void => {
         this.loadStrategyExplanation();
-        if (this.vm.isWeatherFeatureEnabled()) {
-          if (this.vm.shouldAutoRefreshPlanningWeather()) {
-            void this.vm.refreshPlanningWeather(false);
-          }
-        } else {
-          this.vm.stopExecutionWeatherScheduler();
-        }
-        if (autoStartFromReminder && reminderEventId > 0) {
-          this.isCompanionMode = true;
-          void this.tryStartEventWithConflictPrompt(reminderEventId);
-        } else if (forceCompanionMode) {
-          this.isCompanionMode = true;
-        }
+      },
+      onSetCompanionMode: (value: boolean): void => {
+        this.isCompanionMode = value;
+      },
+      onTryStartEvent: async (eventId: number): Promise<boolean> => this.tryStartEventWithConflictPrompt(eventId),
+      onStartArrivalReminderEngine: (): void => {
         this.startArrivalReminderEngine();
+      },
+      onStartStrategyAdaptationCheck: (): void => {
         this.startStrategyAdaptationCheck();
-      }).catch((error: Error) => {
-        hilog.error(0x0000, 'Index', `[ARRIVAL][load_data_failed] reason=${this.sanitizeError(error)}`);
-      });
-
-      this.initBacklogExpandedState(planId, isNewPlan);
-    } else {
-      console.error('Index page loaded without Plan ID');
-    }
+      },
+      onInitBacklogExpandedState: async (planId: number, isNewPlan: boolean): Promise<void> => {
+        await this.initBacklogExpandedState(planId, isNewPlan);
+      },
+      onLoadDataError: (reason: string): void => {
+        hilog.error(0x0000, 'Index', `[ARRIVAL][load_data_failed] reason=${reason}`);
+      }
+    });
   }
 
   aboutToDisappear() {
-    this.unbindReminderSubscriptions();
-    this.planService.stopArrivalEngine();
-    this.vm.stopExecutionWeatherScheduler();
-    this.vm.unbindPlanState();
-    this.clearDialogDraftStorage();
-    if (this.strategyAdaptationCheckTimer !== -1) {
-      clearInterval(this.strategyAdaptationCheckTimer);
-      this.strategyAdaptationCheckTimer = -1;
-    }
+    IndexLifecycleHelper.handleAboutToDisappear({
+      strategyAdaptationCheckTimer: this.strategyAdaptationCheckTimer,
+      onUnbindReminderSubscriptions: (): void => {
+        this.unbindReminderSubscriptions();
+      },
+      onStopArrivalEngine: (): void => {
+        this.planService.stopArrivalEngine();
+      },
+      onStopExecutionWeatherScheduler: (): void => {
+        this.vm.stopExecutionWeatherScheduler();
+      },
+      onUnbindPlanState: (): void => {
+        this.vm.unbindPlanState();
+      },
+      onClearDialogDraftStorage: (): void => {
+        this.clearDialogDraftStorage();
+      },
+      onSetStrategyAdaptationCheckTimer: (timer: number): void => {
+        this.strategyAdaptationCheckTimer = timer;
+      }
+    });
   }
 
   private loadStrategyExplanation() {
