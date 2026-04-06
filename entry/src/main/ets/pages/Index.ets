@@ -41,37 +41,9 @@ import { PlanRepositoryImpl } from '../infrastructure/persistence/PlanRepository
 import { WeatherUserPreference } from '../domain/services/WeatherModels';
 import { ArrivalReminderPayload } from '../infrastructure/services/ArrivalReminderEngine';
 import { ArrivalReminderCoordinator } from '../infrastructure/services/ArrivalReminderCoordinator';
-
-interface InitDialogData {
-  name: string;
-  note: string;
-  duration: number;
-  isAnchor: boolean;
-  fixedTime: string;
-  dayOffset: number;
-  suggestedTime?: string;
-  isSchedule?: boolean;
-  lat?: number; // ✅ 新增
-  lng?: number; // ✅ 新增
-}
-
-interface PendingItemData {
-  id: number;
-  name: string;
-  duration: number;
-  isSchedule: boolean;
-  fixedTime?: string;
-  dayOffset: number;
-  targetDateMs: number;
-  note: string;
-  lat?: number;
-  lng?: number;
-}
-
-class AddDialogDefaults {
-  dayOffset: number = 0;
-  suggestedTime: string = '08:00';
-}
+import { IndexPageLayout } from './index/IndexPageLayout';
+import { IndexEventHandlers } from './index/IndexEventHandlers';
+import { AddDialogDefaults, InitDialogData, PendingItemData } from './index/IndexTypes';
 
 @Entry
 @Component
@@ -1710,460 +1682,167 @@ struct Index {
   }
 
   build() {
-    Stack({ alignContent: Alignment.Bottom }) {
-      Column() {
-        Row() {
-          Button({ type: ButtonType.Normal, stateEffect: true }) {
-            Text('返回')
-              .fontSize(16)
-              .fontColor(this.getThemePalette().primary)
+    Column() {
+      IndexPageLayout({
+        vm: this.vm,
+        planTitle: this.planTitle,
+        strategyMode: this.strategyMode,
+        currentStrategyExplanation: this.currentStrategyExplanation,
+        isCompanionMode: this.isCompanionMode,
+        hasManualPlanningWeatherRefresh: this.hasManualPlanningWeatherRefresh,
+        showPlanningWeatherHintPopup: this.showPlanningWeatherHintPopup,
+        showPlanningWeatherScorePopup: this.showPlanningWeatherScorePopup,
+        backlogExpanded: this.backlogExpanded,
+        isPageRefreshing: this.isPageRefreshing,
+        hasUnsavedChanges: this.hasScopedUnsavedChanges(),
+        themePalette: this.getThemePalette(),
+        companionOverlayZIndex: DomainConstants.COMPANION_OVERLAY_Z_INDEX,
+        companionBackRequestToken: this.companionBackRequestToken,
+        onBack: (): void => {
+          void NavigationHelper.backOrFallbackToPlanList(this.getUIContext());
+        },
+        onOpenSettings: (): void => {
+          if (this.vm.isArchived) {
+            return;
           }
-          .backgroundColor(Color.Transparent)
-          .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-          .borderRadius(8)
-          .onClick(() => {
-            void NavigationHelper.backOrFallbackToPlanList(this.getUIContext());
-          })
-
-          Column() {
-            Text(this.planTitle.length > 7
-              ? this.planTitle.substring(0, 7) + '...'
-              : this.planTitle
-            )
-              .fontSize(18)
-              .fontWeight(FontWeight.Bold)
-              .maxLines(1) // 确保单行
-              .textOverflow({ overflow: TextOverflow.Ellipsis }) // 兜底省略
-              .textAlign(TextAlign.Center)
-
-            if (this.strategyMode === 1) {
-              Text('🚀 特种兵模式')
-                .fontSize(11)
-                .fontColor('#FF6B35')
-                .margin({ top: 2 })
-            } else if (this.strategyMode === 2) {
-              Text('🌴 休闲模式')
-                .fontSize(11)
-                .fontColor('#4CAF50')
-                .margin({ top: 2 })
-            } else if (this.strategyMode === -1) {
-              Text('🎛 自定义策略')
-                .fontSize(11)
-                .fontColor('#2196F3')
-                .margin({ top: 2 })
-            }
-
-            // 策略解释文案（非默认模式时展示）
-            if (this.strategyMode !== 0 && this.currentStrategyExplanation) {
-              Text(this.currentStrategyExplanation)
-                .fontSize(10)
-                .fontColor(this.strategyMode === 1 ? '#FF6B35'
-                  : this.strategyMode === 2 ? '#4CAF50'
-                  : '#2196F3')
-                .margin({ top: 1 })
-                .maxLines(1)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-            }
-
-            Text('点击修改日期')
-              .fontSize(10)
-              .fontColor(this.getThemePalette().textTertiary)
-              .margin({ top: 2 })
+          this.openSettingsDialog();
+        },
+        onEnterCompanion: (): void => {
+          hilog.info(0x0000, 'Index', '[DUAL_MODE_ACCEPT][mode_switch][click_enter]');
+          if (this.vm.isArchived) {
+            this.safeShowToast('归档计划不可进入伴游');
+            return;
           }
-          .layoutWeight(1).justifyContent(FlexAlign.Center)
-          .onClick(() => {
-            // [新增] 只读模式下禁止操作
-            if (this.vm.isArchived) {
-              return;
-            }
-            this.openSettingsDialog();
-          })
-
-       //   Button('全量测速')
-          //   .fontSize(12).height(28).backgroundColor('#4CAF50').margin({ right: 8 })
-          //        .onClick(() => {
-          //   this.vm.testAllCommute();
-          //      promptAction.openToast({ message: '同步高德实时路况中...' });
-          //     })
-
-
-          // ✅ [修复版] 稳健的伴游模式入口
-          Row() {
-            Text('🚀').fontSize(18)
+          this.isCompanionMode = true;
+        },
+        onRefreshWeather: (): void => {
+          this.hasManualPlanningWeatherRefresh = true;
+          void this.vm.refreshPlanningWeather(true).then((): void => {
+            this.safeShowToast('天气已刷新');
+          }).catch((_error: Object): void => {
+            this.safeShowToast('天气刷新失败');
+          });
+        },
+        onToggleHint: (): void => {
+          this.showPlanningWeatherHintPopup = !this.showPlanningWeatherHintPopup;
+        },
+        onToggleScore: (): void => {
+          this.showPlanningWeatherScorePopup = !this.showPlanningWeatherScorePopup;
+        },
+        onHintPopupVisibleChange: (visible: boolean): void => {
+          this.showPlanningWeatherHintPopup = visible;
+        },
+        onScorePopupVisibleChange: (visible: boolean): void => {
+          this.showPlanningWeatherScorePopup = visible;
+        },
+        onToggleBacklogExpand: (): void => {
+          this.onToggleBacklogExpand();
+        },
+        onMoveToSchedule: (item: TravelPlanItem): void => {
+          const suggestedDay = this.findLeastBusyDay();
+          const smartTime = this.calculateSmartTime(item.id ?? -1);
+          this.editingItemId = item.id ?? -1;
+          this.openDialog({
+            name: item.name,
+            note: item.note ?? '',
+            duration: item.duration ?? 60,
+            isAnchor: false,
+            fixedTime: smartTime,
+            dayOffset: suggestedDay,
+            isSchedule: true
+          });
+        },
+        onMoveAllToSchedule: (): void => {
+          const movedCount = this.vm.moveAllBacklogToSchedule();
+          if (movedCount > 0) {
+            this.safeShowToast(`已加入日程 ${movedCount} 个地点`);
+          } else {
+            this.safeShowToast('暂存池暂无可加入地点');
           }
-          .padding(8)
-          .margin({ right: 4 })
-          .onClick(() => {
-            hilog.info(0x0000, 'Index', '[DUAL_MODE_ACCEPT][mode_switch][click_enter]');
-            if (this.vm.isArchived) {
-              this.safeShowToast('归档计划不可进入伴游');
-              return;
-            }
-            this.isCompanionMode = true;
-          })
-
-          if (!this.isCompanionMode) {
-            if (this.vm.isWeatherFeatureEnabled()) {
-              Button(this.vm.weatherLoading ? '⏳' : '🌤️')
-                .height(30)
-                .fontSize(16)
-                .padding({ left: 10, right: 10 })
-                .backgroundColor(this.getThemePalette().cardBgSoft)
-                .fontColor(this.getThemePalette().textPrimary)
-                .enabled(!this.vm.weatherLoading)
-                .onClick(() => {
-                  this.hasManualPlanningWeatherRefresh = true;
-                  void this.vm.refreshPlanningWeather(true).then(() => {
-                    this.safeShowToast('天气已刷新');
-                  }).catch((_error: Object) => {
-                    this.safeShowToast('天气刷新失败');
-                  });
-                })
-            }
-          }
-
-        }
-        .width('100%')
-        .padding(16)
-        .backgroundColor(Color.Transparent)
-
-        if (this.vm.isWeatherFeatureEnabled() && this.hasManualPlanningWeatherRefresh && this.vm.weatherPlanningHint) {
-          Row() {
-            Text(`天气建议（可选） ⓘ ${this.vm.weatherCollabLabel ? `· ${this.vm.weatherCollabLabel}` : ''}：${this.vm.weatherPlanningHint}${this.vm.weatherCollabSummary ? `（${this.vm.weatherCollabSummary}）` : ''}${this.vm.weatherStrategyHint ? `；策略联动：${this.vm.weatherStrategyHint}` : ''}`)
-              .fontSize(13)
-              .fontColor(this.getThemePalette().primary)
-              .maxLines(3)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-              .layoutWeight(1)
-              .onClick(() => {
-                this.showPlanningWeatherHintPopup = !this.showPlanningWeatherHintPopup;
-              })
-              .bindPopup(this.showPlanningWeatherHintPopup, {
-                builder: this.PlanningWeatherHintPopupBuilder,
-                placement: Placement.BottomLeft,
-                mask: false,
-                popupColor: this.getThemePalette().cardBgSoft,
-                onStateChange: (e) => {
-                  if (!e.isVisible) {
-                    this.showPlanningWeatherHintPopup = false;
-                  }
-                }
-              })
-            Column()
-              .width(1)
-              .height(36)
-              .margin({ left: 10, right: 10 })
-              .backgroundColor('#2E7D32')
-              .borderRadius(1)
-            if (this.vm.weatherRouteScore >= 0) {
-              Column() {
-                Text('评分 ⓘ')
-                  .fontSize(12)
-                  .fontColor(this.getThemePalette().primary)
-                Text(`${this.vm.weatherRouteScore}`)
-                  .fontSize(15)
-                  .fontWeight(FontWeight.Bold)
-                  .fontColor(this.getThemePalette().textPrimary)
-              }
-              .alignItems(HorizontalAlign.Center)
-              .onClick(() => {
-                this.showPlanningWeatherScorePopup = !this.showPlanningWeatherScorePopup;
-              })
-              .bindPopup(this.showPlanningWeatherScorePopup, {
-                builder: this.PlanningWeatherScorePopupBuilder,
-                placement: Placement.BottomLeft,
-                mask: false,
-                popupColor: this.getThemePalette().cardBgSoft,
-                onStateChange: (e) => {
-                  if (!e.isVisible) {
-                    this.showPlanningWeatherScorePopup = false;
-                  }
-                }
-              })
-            }
-          }
-          .width('100%')
-          .padding({ left: 16, right: 16, top: 8, bottom: 8 })
-          .margin({ bottom: 4 })
-          .backgroundColor(this.getThemePalette().cardBgSoft)
-          .borderRadius(12)
-        }
-
-        // --- 区域 1: 顶部暂存池 ---
-        BacklogView({
-          items: this.vm.events
-            .filter(e => e.status !== 1)
-            .map(e => e.toInterface()),
-
-          isExpanded: this.backlogExpanded,
-
-          onToggleExpand: () => {
-            this.onToggleBacklogExpand();
-          },
-
-          onMoveToSchedule: (item) => {
-            const suggestedDay = this.findLeastBusyDay();
-
-            // 计算建议时间：日程表最后一个地点的结束时间
-            const scheduleItems = this.vm.events
-              .filter(e => e.status === 1)
-              .sort((a, b) => a.sort_order - b.sort_order);
-
-            let smartTime = '09:00';
-            if (scheduleItems.length > 0) {
-              const lastItem = scheduleItems[scheduleItems.length - 1];
-              // 优先使用computed_time（Solver计算结果，更可靠）
-              if (lastItem.computed_time) {
-                const timeStr = lastItem.computed_time.includes(' ')
-                  ? lastItem.computed_time.split(' ').pop()
-                  : lastItem.computed_time;
-                if (timeStr) {
-                  const parts = timeStr.split(':');
-                  const h = Number(parts[0]);
-                  const m = Number(parts[1]);
-                  const endMinutes = h * 60 + m + (lastItem.duration || 60);
-                  smartTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
-                }
-              }
-              // 降级使用dynamic_end_time
-              else if (lastItem.dynamic_end_time > 0) {
-                const endDate = new Date(lastItem.dynamic_end_time);
-                smartTime = `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`;
-              }
-            }
-
-            this.editingItemId = item.id ?? -1;
-            this.openDialog({
-              name: item.name,
-              note: item.note ?? '',
-              duration: item.duration ?? 60,
-              isAnchor: false,
-              fixedTime: smartTime,
-              dayOffset: suggestedDay,
-              isSchedule: true
-            });
-          },
-          onMoveAllToSchedule: () => {
-            const movedCount = this.vm.moveAllBacklogToSchedule();
-            if (movedCount > 0) {
-              this.safeShowToast(`已加入日程 ${movedCount} 个地点`);
-            } else {
-              this.safeShowToast('暂存池暂无可加入地点');
-            }
-          }
-        })
-          .constraintSize({ maxHeight: '30%' })
-          .zIndex(1)
-
-        Divider().color(this.getThemePalette().divider)
-
-        // --- 区域 2: 底部日程表 ---
-        Refresh({ refreshing: this.isPageRefreshing }) {
-          List({ space: 0 }) { // space 设为 0，由 Group 内间距控制
-
-            // [第一层循环] 遍历日期组
-            ForEach(this.vm.groupedEvents, (group: import('../viewmodel/TimelineViewModel').DateGroup) => {
-
-            // [新增] 日期组组件
-            ListItemGroup({ header: this.BuildDateHeader(group.dateHeader, group.dayOffset) }) {
-
-              // [第二层循环] 遍历组内事件
-              if (!this.isDayCollapsed(group.dayOffset)) {
-                ForEach(group.events, (item: EventEntity, dayIndex: number) => {
-                  ListItem() {
-                    EventItemView({
-                      event: item,
-                      isCompanionMode: this.isCompanionMode,
-                      showWeather: this.vm.isWeatherFeatureEnabled(),
-                      showTravelIndicator: dayIndex > 0,
-
-                      index: this.vm.events.indexOf(item),
-                      totalCount: this.vm.events.length,
-
-                      onMoveUp: () => {
-                        this.vm.moveEvent(this.vm.events.indexOf(item), 'up');
-                      },
-                      onMoveDown: () => {
-                        this.vm.moveEvent(this.vm.events.indexOf(item), 'down');
-                      },
-                      onMainContentClick: () => { // 原 onItemClick / onEditClick
-                        if (this.vm.isArchived) return;
-                        this.openEditDialog(item); // 点击中间 -> 完整编辑
-                      },
-
-                      onTimeClick: () => { // 点击左侧时间
-                        if (this.vm.isArchived) return;
-                        this.openTimeEditDialog(item); // 点击左侧 -> 时间编辑
-                      },
-                      onTravelModeChange: (mode: number) => {
-                        this.vm.updateTravelMode(item, mode);
-                      },
-                      onManualTravelInput: (minutes: number) => {
-                        this.vm.updateManualCommute(item, minutes);
-                      },
-                      onCommuteChange: (m) => {
-                        TimelineInteractionHelper.handleCommuteChange(this.vm, item, m,this.onGapFoundCallback);
-                      },
-                      onConflictAction: (targetItem: EventEntity, strategy: 'delay' | 'compress' | 'advance' | 'smart', gapMinutes: number) => {
-                        if (this.vm.isArchived) {
-                          return;
-                        }
-                        this.handleEventConflictAction(targetItem, strategy, gapMinutes);
-                      },
-                    })
-                      .enabled(!this.vm.isArchived)
-                  }
-                  .swipeAction(this.vm.isArchived ? undefined : {
-                    start: {
-                      builder: () => {
-                        this.SwipeStartAction(item)
-                      },
-                      actionAreaDistance: 60
-                    },
-                    end: {
-                      builder: () => {
-                        this.SwipeEndAction(item)
-                      },
-                      actionAreaDistance: 60
-                    }
-                  })
-                }, (item: EventEntity) => `${item.id}_${item.sort_order}_${item.status}`)
-              }
-            }
-            .divider({ strokeWidth: 0 }) // 组内分割线 (可选)
-          }, (group: import('../viewmodel/TimelineViewModel').DateGroup) =>
-            `${this.dayGroupRenderVersion}_${group.dayOffset}_${group.actualDateMs}_${group.events.length}`)
-
-            if (!this.vm.isArchived && this.vm.getSortedGaps().length > 0) {
-              ListItem() {
-                Row() {
-
-                Text('→')
-                  .fontSize(14)
-                  .fontColor(this.getThemePalette().textTertiary)
-                
-                Text(`检测到 ${this.vm.getSortedGaps().length} 处空闲时间，是否立即优化？`)
-                  .fontSize(13)
-                  .fontColor(this.getThemePalette().textSecondary)
-                  .layoutWeight(1) // 👈 报错点：确保这行上面没有分号
-
-                }
-                .width('100%')
-                .padding({ top: 12, bottom: 12, left: 16, right: 16 })
-                .justifyContent(FlexAlign.Center)
-                .onClick(() => {
-                  // 这里的逻辑已按你的要求修改
-                  this.gapItem = null
-                  this.gapDialogController?.open()
-                })
-              }
-            }
-            ListItem().height(this.isCompanionMode ? 24 : 100)
-          }
-          .sticky(StickyStyle.Header) // 效果：日期标题吸顶
-        }
-        .onRefreshing(() => {
+        },
+        onIsDayCollapsed: (dayOffset: number): boolean => this.isDayCollapsed(dayOffset),
+        onToggleDay: (dayOffset: number): void => this.toggleDayCollapse(dayOffset),
+        onScheduleRefresh: (): void => {
           void this.handlePagePullRefresh();
-        })
-        .layoutWeight(1)
-        .padding({
-          top: 0,
-          bottom: 0,
-          left: 12,
-          right: 12
-        })
-        .backgroundColor(this.getThemePalette().pageBg)
-      }
-      .width('100%').height('100%').backgroundColor(this.getThemePalette().pageBg)
-
-      if (!this.isCompanionMode) {
-        PlanBottomActionBar({
-          onFilter: () => {
-            this.openDateFilterDialog();
-          },
-          onAi: () => {
-            if (this.vm.isArchived) {
-              this.safeShowToast('归档计划不可操作');
-              return;
-            }
-            this.aiDialogController.open();
-          },
-          onAdd: () => {
-            if (this.vm.isArchived) {
-              this.safeShowToast('归档计划不可操作');
-              return;
-            }
-            this.editingItemId = -1;
-            this.openDialog();
-          },
-          aiEnabled: !this.vm.isArchived,
-          addEnabled: !this.vm.isArchived
-        })
-          .zIndex(8);
-      }
-
-      if (this.hasScopedUnsavedChanges()) {
-        Row() {
-          Row() {
-            Text("✨").fontSize(16).margin({ right: 6 })
-            Text("已自动优化行程时间")
-              .fontSize(14)
-              .fontColor(this.getThemePalette().textPrimary)
-              .fontWeight(FontWeight.Medium)
+        },
+        onOpenEditDialog: (item: EventEntity): void => this.openEditDialog(item),
+        onOpenTimeEditDialog: (item: EventEntity): void => this.openTimeEditDialog(item),
+        onGapFound: (item: EventEntity): void => this.onGapFoundCallback(item),
+        onResolveConflictAction: (item: EventEntity, strategy: 'delay' | 'compress' | 'advance' | 'smart', gapMinutes: number): void => {
+          this.handleEventConflictAction(item, strategy, gapMinutes);
+        },
+        onConfirmMoveToBacklog: (item: EventEntity): void => {
+          if (item.status !== 1) {
+            this.safeShowToast('该地点不在日程表中');
+            return;
           }
-          .layoutWeight(1)
-
-          Row() {
-            Text("撤销")
-              .fontSize(14)
-              .fontColor(this.getThemePalette().textSecondary)
-              .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-              .onClick(() => {
-                this.vm.loadData(this.vm.planId);
-                this.setUnsavedFlag(false);
-              })
-
-            Line().width(1).height(14).backgroundColor(this.getThemePalette().divider).margin({ left: 4, right: 4 })
-
-            Text("保存")
-              .fontSize(14)
-              .fontColor(this.getThemePalette().primary)
-              .fontWeight(FontWeight.Bold)
-              .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-              .onClick(() => {
-                this.vm.save();
-                this.setUnsavedFlag(false);
-              })
-          }
+          void this.vm.moveToBacklog(item).then((): void => {
+            this.vm.refreshTimelineView();
+          }).catch((_error: Object): void => {
+            this.safeShowToast('暂存失败，请重试');
+          });
+        },
+        onConfirmDeleteEvent: (item: EventEntity): void => {
+          this.getUIContext().showAlertDialog({
+            title: '确认删除',
+            message: `确定要删除 "${item.name}" 吗？\n删除后无法恢复。`,
+            autoCancel: true,
+            alignment: DialogAlignment.Center,
+            primaryButton: {
+              value: '取消',
+              action: (): void => {}
+            },
+            secondaryButton: {
+              value: '删除',
+              fontColor: Color.White,
+              backgroundColor: '#2F7DFF',
+              action: (): void => {
+                void this.vm.hardDelete(item).then((): void => {
+                  this.vm.refreshTimelineView();
+                }).catch((_error: Object): void => {
+                  this.safeShowToast('删除失败，请重试');
+                });
+              }
+            }
+          });
+        },
+        onOpenGapOptimize: (): void => {
+          this.gapItem = null;
+          this.gapDialogController?.open();
+        },
+        onFilter: (): void => {
+          IndexEventHandlers.handleFilter((): void => this.openDateFilterDialog());
+        },
+        onAi: (): void => {
+          IndexEventHandlers.handleAiSuggestion(
+            this.vm.isArchived,
+            (): void => this.safeShowToast('归档计划不可操作'),
+            (): void => this.aiDialogController.open()
+          );
+        },
+        onAdd: (): void => {
+          IndexEventHandlers.handleAddItem(
+            this.vm.isArchived,
+            (): void => this.safeShowToast('归档计划不可操作'),
+            (): void => {
+              this.editingItemId = -1;
+              this.openDialog();
+            }
+          );
+        },
+        onUndo: (): void => {
+          void this.vm.loadData(this.vm.planId);
+          this.setUnsavedFlag(false);
+        },
+        onSave: (): void => {
+          this.vm.save();
+          this.setUnsavedFlag(false);
         }
-        .width('90%')
-        .height(56)
-        .padding({ left: 16, right: 8 })
-        .backgroundColor(this.getThemePalette().cardBg)
-        .borderRadius(28)
-        .shadow({ radius: 20, color: '#1A000000', offsetY: 8 })
-        .margin({ bottom: this.isCompanionMode ? 30 : 96 })
-        .transition({ type: TransitionType.All, opacity: 0, translate: { y: 20 } })
-      }
-      if (this.isCompanionMode) {
-        CompanionView({
-          vm: this.vm,
-          isShow: $isCompanionMode,
-          backRequestToken: $companionBackRequestToken
-        })
-          .zIndex(DomainConstants.COMPANION_OVERLAY_Z_INDEX) // 确保在最上层
-          .transition({
-            type: TransitionType.All,
-            opacity: 0,
-            translate: { y: 12 },
-            scale: { x: 0.985, y: 0.985 }
-          })
-      }
+      })
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(this.getThemePalette().pageBg)
-    }
+  }
 
 }
 

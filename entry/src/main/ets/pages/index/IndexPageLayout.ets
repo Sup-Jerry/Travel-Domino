@@ -43,6 +43,7 @@ export struct IndexPageLayout {
     toolboxBallDisabled: '#7A8A9E'
   };
   @Prop companionOverlayZIndex: number = 10;
+  @Prop companionBackRequestToken: number = 0;
 
   onBack: () => void = () => {};
   onOpenSettings: () => void = () => {};
@@ -188,7 +189,8 @@ export struct IndexPageLayout {
       IndexCompanionOverlay({
         vm: this.vm,
         isVisible: this.isCompanionMode,
-        overlayZIndex: this.companionOverlayZIndex
+        overlayZIndex: this.companionOverlayZIndex,
+        backRequestToken: this.companionBackRequestToken
       })
     }
     .width('100%')
