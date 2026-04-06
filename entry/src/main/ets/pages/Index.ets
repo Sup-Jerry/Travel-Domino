@@ -85,6 +85,7 @@ struct Index {
   @State pendingItem: PendingItemData | null = null;
   @State gapItem: EventEntity | null = null; // 用于传给弹窗
   @State isCompanionMode: boolean = false;
+  @State companionBackRequestToken: number = 0;
   @State hasUnsavedChanges: boolean = false;
   @State strategyMode: number = 0;
   @State currentStrategyExplanation: string = '';
@@ -236,6 +237,14 @@ struct Index {
     } catch (error) {
       hilog.warn(0x0000, 'Index', `[ARRIVAL][engine_start_failed] reason=${this.sanitizeError(error)}`);
     }
+  }
+
+  onBackPress(): boolean {
+    if (this.isCompanionMode) {
+      this.companionBackRequestToken += 1;
+      return true;
+    }
+    return false;
   }
 
   private bindReminderSubscriptions(): void {
@@ -1606,7 +1615,8 @@ struct Index {
   CompanionModeBuilder() {
     CompanionView({
       vm: this.vm, // 传递 ViewModel
-      isShow: $isCompanionMode // 双向绑定，用于内部关闭
+      isShow: $isCompanionMode, // 双向绑定，用于内部关闭
+      backRequestToken: $companionBackRequestToken
     })
   }
 
@@ -2138,7 +2148,8 @@ struct Index {
       if (this.isCompanionMode) {
         CompanionView({
           vm: this.vm,
-          isShow: $isCompanionMode
+          isShow: $isCompanionMode,
+          backRequestToken: $companionBackRequestToken
         })
           .zIndex(DomainConstants.COMPANION_OVERLAY_Z_INDEX) // 确保在最上层
           .transition({
