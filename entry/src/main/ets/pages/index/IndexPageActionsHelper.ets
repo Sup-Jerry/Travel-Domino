@@ -5,6 +5,7 @@ import { TimelineDatePolicy } from '../../domain/policy/TimelineDatePolicy';
 import { IndexDialogManager } from './IndexDialogManager';
 import { WeatherUserPreference } from '../../domain/services/WeatherModels';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { IndexAddDialogHelper } from './IndexAddDialogHelper';
 
 export interface EditDialogPrepared {
   editingItemId: number;
@@ -34,6 +35,25 @@ export interface SettingsActionContext {
   safeShowToast: (message: string) => void;
   openRenameDialog: () => void;
   openDatePicker: () => void;
+}
+
+export interface MoveToScheduleContext {
+  vm: TimelineViewModel;
+  setEditingItemId: (id: number) => void;
+  openDialog: (initData?: InitDialogData) => void;
+}
+
+export interface MoveToScheduleItem {
+  id?: number;
+  name: string;
+  note?: string;
+  duration?: number;
+}
+
+export interface BacklogActionContext {
+  vm: TimelineViewModel;
+  safeShowToast: (message: string) => void;
+  getUIContext: () => UIContext;
 }
 
 export class IndexPageActionsHelper {
@@ -136,6 +156,67 @@ export class IndexPageActionsHelper {
           }
         } catch (_error) {
           context.safeShowToast('天气偏好保存失败');
+        }
+      }
+    });
+  }
+
+  static moveItemToSchedule(context: MoveToScheduleContext, item: MoveToScheduleItem): void {
+    const suggestedDay = IndexPageActionsHelper.findLeastBusyDay(context.vm);
+    const smartTime = IndexAddDialogHelper.calculateSmartTime(context.vm.events, item.id ?? -1);
+    context.setEditingItemId(item.id ?? -1);
+    context.openDialog({
+      name: item.name,
+      note: item.note ?? '',
+      duration: item.duration ?? 60,
+      isAnchor: false,
+      fixedTime: smartTime,
+      dayOffset: suggestedDay,
+      isSchedule: true
+    });
+  }
+
+  static handleMoveAllToSchedule(context: BacklogActionContext): void {
+    const movedCount = context.vm.moveAllBacklogToSchedule();
+    if (movedCount > 0) {
+      context.safeShowToast(`已加入日程 ${movedCount} 个地点`);
+      return;
+    }
+    context.safeShowToast('暂存池暂无可加入地点');
+  }
+
+  static handleConfirmMoveToBacklog(context: BacklogActionContext, item: EventEntity): void {
+    if (item.status !== 1) {
+      context.safeShowToast('该地点不在日程表中');
+      return;
+    }
+    void context.vm.moveToBacklog(item).then((): void => {
+      context.vm.refreshTimelineView();
+    }).catch((_error: Object): void => {
+      context.safeShowToast('暂存失败，请重试');
+    });
+  }
+
+  static handleConfirmDeleteEvent(context: BacklogActionContext, item: EventEntity): void {
+    context.getUIContext().showAlertDialog({
+      title: '确认删除',
+      message: `确定要删除 "${item.name}" 吗？\n删除后无法恢复。`,
+      autoCancel: true,
+      alignment: DialogAlignment.Center,
+      primaryButton: {
+        value: '取消',
+        action: (): void => {}
+      },
+      secondaryButton: {
+        value: '删除',
+        fontColor: Color.White,
+        backgroundColor: '#2F7DFF',
+        action: (): void => {
+          void context.vm.hardDelete(item).then((): void => {
+            context.vm.refreshTimelineView();
+          }).catch((_error: Object): void => {
+            context.safeShowToast('删除失败，请重试');
+          });
         }
       }
     });

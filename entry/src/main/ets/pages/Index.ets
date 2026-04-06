@@ -36,7 +36,7 @@ import { IndexAddDialogHelper } from './index/IndexAddDialogHelper';
 import { IndexAddDialogFlowHelper } from './index/IndexAddDialogFlowHelper';
 import { ConflictFlowContext, IndexConflictFlowHelper } from './index/IndexConflictFlowHelper';
 import { IndexPageBehaviorHelper, ReminderDialogContext, StrategyDialogContext } from './index/IndexPageBehaviorHelper';
-import { IndexPageActionsHelper } from './index/IndexPageActionsHelper';
+import { BacklogActionContext, IndexPageActionsHelper, MoveToScheduleContext, MoveToScheduleItem } from './index/IndexPageActionsHelper';
 
 @Entry
 @Component
@@ -730,6 +730,28 @@ struct Index {
     return context;
   }
 
+  private getMoveToScheduleContext(): MoveToScheduleContext {
+    const context: MoveToScheduleContext = {
+      vm: this.vm,
+      setEditingItemId: (id: number): void => {
+        this.editingItemId = id;
+      },
+      openDialog: (initData?: InitDialogData): void => {
+        this.openDialog(initData);
+      }
+    };
+    return context;
+  }
+
+  private getBacklogActionContext(): BacklogActionContext {
+    const context: BacklogActionContext = {
+      vm: this.vm,
+      safeShowToast: (message: string): void => this.safeShowToast(message),
+      getUIContext: (): UIContext => this.getUIContext()
+    };
+    return context;
+  }
+
   private loadStrategyExplanation(): void {
     this.currentStrategyExplanation = IndexPageBehaviorHelper.loadStrategyExplanation(this.strategyMode);
   }
@@ -740,65 +762,6 @@ struct Index {
 
   private showStrategyAdaptationDialog(): void {
     IndexPageBehaviorHelper.showStrategyAdaptationDialog(this.getStrategyDialogContext());
-  }
-
-  @Builder
-  SwipeEndAction(item: EventEntity) {
-    Button({ type: ButtonType.Normal }) {
-      Text('暂存') // 改名为暂存更贴切
-        .fontSize(14).fontColor(Color.White)
-    }
-    .width(60).height('100%')
-    .backgroundColor('#FF9800') // 橙色
-    .onClick(async () => {
-      if (item.status !== 1) {
-        this.safeShowToast('该地点不在日程表中');
-        return;
-      }
-      try {
-        await this.vm.moveToBacklog(item);
-        this.vm.refreshTimelineView();
-      } catch (_error) {
-        this.safeShowToast('暂存失败，请重试');
-      }
-    })
-  }
-
-  @Builder
-  SwipeStartAction(item: EventEntity) {
-    Button({ type: ButtonType.Normal }) {
-      Text('删除')
-        .fontSize(14).fontColor(Color.White)
-    }
-    .width(60).height('100%')
-    .backgroundColor('#D32F2F') // 深红色
-    .onClick(() => {
-      // ✅ [修改] 增加二次确认弹窗
-      this.getUIContext().showAlertDialog({
-        title: '确认删除',
-        message: `确定要删除 "${item.name}" 吗？\n删除后无法恢复。`, // 如果有回收站逻辑可改为"移入回收站"
-        autoCancel: true,
-        alignment: DialogAlignment.Center,
-        primaryButton: {
-          value: '取消',
-          action: () => {}
-        },
-        secondaryButton: {
-          value: '删除',
-          fontColor: Color.White,
-          backgroundColor: '#2F7DFF',
-          action: async () => {
-            // 确认后才执行删除
-            try {
-              await this.vm.hardDelete(item);
-              this.vm.refreshTimelineView();
-            } catch (_error) {
-              this.safeShowToast('删除失败，请重试');
-            }
-          }
-        }
-      });
-    })
   }
 
   openEditDialog(item: EventEntity) {
@@ -837,9 +800,6 @@ struct Index {
     })
   }
 
-
-
-
   @Builder
   CompanionModeBuilder() {
     CompanionView({
@@ -847,95 +807,6 @@ struct Index {
       isShow: $isCompanionMode, // 双向绑定，用于内部关闭
       backRequestToken: $companionBackRequestToken
     })
-  }
-
-  @Builder
-  private PlanningWeatherHintPopupBuilder() {
-    Scroll() {
-      Column({ space: 2 }) {
-        Text(this.getPlanningHintLine(0))
-          .fontSize(12)
-          .lineHeight(20)
-          .fontColor('#1565C0')
-          .fontWeight(FontWeight.Medium)
-        Text(this.getPlanningHintLine(1))
-          .fontSize(12)
-          .lineHeight(20)
-          .fontColor('#2E7D32')
-          .fontWeight(FontWeight.Medium)
-        Text(this.getPlanningHintLine(2))
-          .fontSize(12)
-          .lineHeight(20)
-          .fontColor('#6A1B9A')
-          .fontWeight(FontWeight.Medium)
-        Text(this.getPlanningHintLine(3))
-          .fontSize(12)
-          .lineHeight(20)
-          .fontColor('#455A64')
-          .fontWeight(FontWeight.Medium)
-        Text('仅作为建议，不会自动改行程。')
-          .fontSize(12)
-          .lineHeight(20)
-          .fontColor('#D32F2F')
-          .fontWeight(FontWeight.Bold)
-      }
-      .padding(10)
-      .width('100%');
-    }
-    .height(230)
-    .width(280);
-  }
-
-  private getPlanningHintLine(index: number): string {
-    const lines = this.vm.buildPlanningWeatherHintExplanation().split('\n');
-    return lines[index] ?? '';
-  }
-
-  @Builder
-  private PlanningWeatherScorePopupBuilder() {
-    Scroll() {
-      Column({ space: 2 }) {
-        Text(this.getPlanningScoreLine(0))
-          .fontSize(12)
-          .lineHeight(20)
-          .fontColor('#1565C0')
-          .fontWeight(FontWeight.Bold)
-        Text(this.getPlanningScoreLine(1))
-          .fontSize(12)
-          .lineHeight(20)
-          .fontColor('#2E7D32')
-          .fontWeight(FontWeight.Medium)
-        Text(this.getPlanningScoreLine(2))
-          .fontSize(12)
-          .lineHeight(20)
-          .fontColor('#6A1B9A')
-          .fontWeight(FontWeight.Medium)
-        Text(this.getPlanningScoreLine(3))
-          .fontSize(12)
-          .lineHeight(20)
-          .fontColor('#455A64')
-          .fontWeight(FontWeight.Medium)
-        Text(this.getPlanningScoreLine(4))
-          .fontSize(12)
-          .lineHeight(20)
-          .fontColor('#EF6C00')
-          .fontWeight(FontWeight.Medium)
-        Text(this.getPlanningScoreLine(5))
-          .fontSize(12)
-          .lineHeight(20)
-          .fontColor('#1B5E20')
-          .fontWeight(FontWeight.Medium)
-      }
-      .padding(10)
-      .width('100%');
-    }
-    .height(230)
-    .width(280);
-  }
-
-  private getPlanningScoreLine(index: number): string {
-    const lines = this.vm.buildWeatherScoreExplanation(this.vm.weatherRouteScore).split('\n');
-    return lines[index] ?? '';
   }
 
   build() {
@@ -996,26 +867,16 @@ struct Index {
           this.onToggleBacklogExpand();
         },
         onMoveToSchedule: (item: TravelPlanItem): void => {
-          const suggestedDay = this.findLeastBusyDay();
-          const smartTime = IndexAddDialogHelper.calculateSmartTime(this.vm.events, item.id ?? -1);
-          this.editingItemId = item.id ?? -1;
-          this.openDialog({
+          const moveItem: MoveToScheduleItem = {
+            id: item.id,
             name: item.name,
-            note: item.note ?? '',
-            duration: item.duration ?? 60,
-            isAnchor: false,
-            fixedTime: smartTime,
-            dayOffset: suggestedDay,
-            isSchedule: true
-          });
+            note: item.note,
+            duration: item.duration
+          };
+          IndexPageActionsHelper.moveItemToSchedule(this.getMoveToScheduleContext(), moveItem);
         },
         onMoveAllToSchedule: (): void => {
-          const movedCount = this.vm.moveAllBacklogToSchedule();
-          if (movedCount > 0) {
-            this.safeShowToast(`已加入日程 ${movedCount} 个地点`);
-          } else {
-            this.safeShowToast('暂存池暂无可加入地点');
-          }
+          IndexPageActionsHelper.handleMoveAllToSchedule(this.getBacklogActionContext());
         },
         onIsDayCollapsed: (dayOffset: number): boolean => this.isDayCollapsed(dayOffset),
         onToggleDay: (dayOffset: number): void => this.toggleDayCollapse(dayOffset),
@@ -1029,39 +890,10 @@ struct Index {
           this.handleEventConflictAction(item, strategy, gapMinutes);
         },
         onConfirmMoveToBacklog: (item: EventEntity): void => {
-          if (item.status !== 1) {
-            this.safeShowToast('该地点不在日程表中');
-            return;
-          }
-          void this.vm.moveToBacklog(item).then((): void => {
-            this.vm.refreshTimelineView();
-          }).catch((_error: Object): void => {
-            this.safeShowToast('暂存失败，请重试');
-          });
+          IndexPageActionsHelper.handleConfirmMoveToBacklog(this.getBacklogActionContext(), item);
         },
         onConfirmDeleteEvent: (item: EventEntity): void => {
-          this.getUIContext().showAlertDialog({
-            title: '确认删除',
-            message: `确定要删除 "${item.name}" 吗？\n删除后无法恢复。`,
-            autoCancel: true,
-            alignment: DialogAlignment.Center,
-            primaryButton: {
-              value: '取消',
-              action: (): void => {}
-            },
-            secondaryButton: {
-              value: '删除',
-              fontColor: Color.White,
-              backgroundColor: '#2F7DFF',
-              action: (): void => {
-                void this.vm.hardDelete(item).then((): void => {
-                  this.vm.refreshTimelineView();
-                }).catch((_error: Object): void => {
-                  this.safeShowToast('删除失败，请重试');
-                });
-              }
-            }
-          });
+          IndexPageActionsHelper.handleConfirmDeleteEvent(this.getBacklogActionContext(), item);
         },
         onOpenGapOptimize: (): void => {
           this.gapItem = null;
@@ -1102,39 +934,3 @@ struct Index {
   }
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
