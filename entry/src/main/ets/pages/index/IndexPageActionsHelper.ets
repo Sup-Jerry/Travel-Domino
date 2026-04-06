@@ -1,5 +1,6 @@
 ﻿import { TimelineViewModel } from '../../viewmodel/TimelineViewModel';
 import { EventEntity } from '../../model/entity/EventEntity';
+import { TravelPlanItem } from '../../model/interface/IStandardEvent';
 import { InitDialogData } from './IndexTypes';
 import { TimelineDatePolicy } from '../../domain/policy/TimelineDatePolicy';
 import { IndexDialogManager } from './IndexDialogManager';
@@ -175,7 +176,14 @@ export class IndexPageActionsHelper {
       isSchedule: true
     });
   }
-
+  static moveTravelPlanItemToSchedule(context: MoveToScheduleContext, item: TravelPlanItem): void {
+    IndexPageActionsHelper.moveItemToSchedule(context, {
+      id: item.id,
+      name: item.name,
+      note: item.note,
+      duration: item.duration
+    });
+  }
   static handleMoveAllToSchedule(context: BacklogActionContext): void {
     const movedCount = context.vm.moveAllBacklogToSchedule();
     if (movedCount > 0) {
@@ -222,3 +230,4 @@ export class IndexPageActionsHelper {
     });
   }
 }
+
