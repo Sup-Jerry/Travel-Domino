@@ -8,18 +8,12 @@ import { TravelPlanItem } from '../model/interface/IStandardEvent';
 import { EventEntity } from '../model/entity/EventEntity';
 import { router } from '@kit.ArkUI';
 // 修改点：批量更新 Dialog 路径
-import { DateConflictDialog } from './components/dialogs/DateConflictDialog';
 import { DateUtil } from '../common/utils/DateUtil';
 import { promptAction } from '@kit.ArkUI';
 import { ComposableStrategy } from '../domain/strategy/TravelStrategyDimensions';
 import { StrategyService } from '../domain/strategy/StrategyService';
 
-import { SuggestionDialog } from './components/dialogs/SuggestionDialog';
-import { ConflictSelectionDialog } from './components/dialogs/ConflictSelectionDialog';
-import { ConflictCompressDialog } from './components/dialogs/ConflictCompressDialog';
-import { AdvanceAdjustDialog } from './components/dialogs/AdvanceAdjustDialog';
 import { TimelineInteractionHelper } from '../viewmodel/TimelineInteractionHelper';
-import { GapResolutionDialog } from './components/dialogs/GapResolutionDialog';
 import { CompanionView } from './components/views/CompanionView';
 import { PlanBottomActionBar } from './components/views/BottomNavBar';
 import { hilog } from '@kit.PerformanceAnalysisKit';
@@ -42,6 +36,8 @@ import { AddDialogDefaults, InitDialogData, PendingItemData } from './index/Inde
 import { IndexStateManager } from './index/IndexStateManager';
 import { IndexLifecycleHelper } from './index/IndexLifecycleHelper';
 import { IndexDialogManager } from './index/IndexDialogManager';
+import { IndexAddDialogHelper } from './index/IndexAddDialogHelper';
+import { IndexConflictHelper } from './index/IndexConflictHelper';
 
 @Entry
 @Component
@@ -355,20 +351,14 @@ struct Index {
     return ThemeCenter.getPalette(this.effectiveTheme);
   }
 
-  gapDialogController: CustomDialogController | null = new CustomDialogController({
-    builder: GapResolutionDialog({
-      vm: this.vm,
-      currentGap: this.gapItem  // ✅ 核心修复：属性名对齐
-    }),
-    alignment: DialogAlignment.Center,
-    offset: { dx: 0, dy: 0 },
-    customStyle: true
+  gapDialogController: CustomDialogController | null = IndexDialogManager.createGapResolutionController({
+    vm: this.vm,
+    currentGap: this.gapItem
   });
 
 
   // Index.ets 约 118 行开始替换
-  conflictDialogController: CustomDialogController = new CustomDialogController({
-    builder: DateConflictDialog({
+  conflictDialogController: CustomDialogController = IndexDialogManager.createDateConflictController({
       // 显示给用户看的冲突详情
       conflictDateStr: this.pendingItem ? DateUtil.formatDate(new Date(this.pendingItem.targetDateMs), 'MM月dd日') : '',
       planStartDateStr: DateUtil.formatDate(new Date(this.vm.planStartDate), 'MM月dd日'),
@@ -471,9 +461,6 @@ struct Index {
           this.pendingItem = null;
         }
       }
-    }),
-    autoCancel: false,
-    alignment: DialogAlignment.Center
   })
 
   // ✅ 新增：监听页面重新显示（从地图选点返回时会触发）
@@ -578,32 +565,7 @@ struct Index {
   }
 
   private calculateSmartTime(targetItemId: number): string {
-    // 1. 如果是列表为空，返回默认行程开始时间 (09:00)
-    if (this.vm.events.length === 0) return '09:00';
-
-    let prevItem: EventEntity | undefined;
-
-    // 2. 寻找参照物
-    if (targetItemId === -1) {
-      // Case A: 新增模式 -> 取列表最后一个作为参照
-      prevItem = this.vm.events[this.vm.events.length - 1];
-    } else {
-      // Case B: 编辑模式 -> 取当前元素的前一个作为参照
-      const index = this.vm.events.findIndex(e => e.id === targetItemId);
-      if (index > 0) {
-        prevItem = this.vm.events[index - 1];
-      }
-    }
-
-    // 3. 计算时间
-    if (prevItem) {
-      const startTime = prevItem.computed_time || prevItem.fixed_start_time || '09:00';
-      // 计算结束时间 (这里直接调用 DateUtil，假设它已引入)
-      return DateUtil.calculateEndTime(startTime, prevItem.duration);
-    }
-
-    // 4. 如果是第一个元素，返回 09:00
-    return '09:00';
+    return IndexAddDialogHelper.calculateSmartTime(this.vm.events, targetItemId);
   }
 
   private getDefaultAddTime(): string {
@@ -638,310 +600,140 @@ struct Index {
   }
 
   private recommendAddByDayOffset(dayOffset: number): string {
-    const sameDay = this.vm.events.filter((item: EventEntity) =>
-      item.status === 1 && TimelineDatePolicy.resolveEventDayOffset(item) === dayOffset
-    );
-    if (sameDay.length === 0) {
-      return this.getDefaultAddTime();
-    }
-    const anchor = sameDay[sameDay.length - 1];
-    return this.resolveEventEndTimeText(anchor);
+    return IndexAddDialogHelper.recommendAddByDayOffset(this.vm.events, dayOffset);
   }
 
   private resolveAddDialogDefaults(): AddDialogDefaults {
-    const latest = this.getLatestCreatedScheduleEvent();
-    if (!latest) {
-      const emptyDefaults = new AddDialogDefaults();
-      emptyDefaults.dayOffset = 0;
-      emptyDefaults.suggestedTime = this.getDefaultAddTime();
-      return emptyDefaults;
-    }
-    const dayOffset = TimelineDatePolicy.resolveEventDayOffset(latest);
-    const nextDefaults = new AddDialogDefaults();
-    nextDefaults.dayOffset = dayOffset;
-    nextDefaults.suggestedTime = this.resolveEventEndTimeText(latest);
-    return nextDefaults;
+    return IndexAddDialogHelper.resolveAddDialogDefaults(this.vm.events);
   }
   private resolveConflictGapMinutes(item: EventEntity, fallbackGap: number = 0): number {
-    if (item.gap_minutes > 0) {
-      return item.gap_minutes;
-    }
-
-    const match = (item.conflict_msg || '').match(/(\d+)/);
-    if (match && match.length > 1) {
-      const parsed = Number.parseInt(match[1], 10);
-      if (Number.isFinite(parsed) && parsed > 0) {
-        return parsed;
-      }
-    }
-
-    return fallbackGap > 0 ? fallbackGap : 0;
+    return IndexConflictHelper.resolveConflictGapMinutes(item, fallbackGap);
   }
 
   private getConflictTargetTime(item: EventEntity): string {
-    const raw = item.fixed_start_time || item.computed_time || '09:00';
-    const pure = DateUtil.extractPureTime(raw);
-    return pure && DateUtil.isValidTimeString(pure) ? pure : '09:00';
+    return IndexConflictHelper.getConflictTargetTime(item);
   }
 
   private async saveConflictTime(item: EventEntity, newTime?: string, onDone?: () => Promise<void> | void): Promise<void> {
-    if (newTime && item.id > 0) {
-      const effectiveDayOffset = TimelineDatePolicy.resolveEventDayOffset(item);
-      await this.vm.updateEventInfo(
-        item.id,
-        item.name,
-        item.duration,
-        newTime,
-        effectiveDayOffset,
-        item.lock_status === 1,
-        item.note,
-        item.priority,
-        item.latitude,
-        item.longitude
-      );
-    }
-
-    if (onDone) {
-      await onDone();
-    }
+    await IndexConflictHelper.saveConflictTime(this.vm, item, newTime, onDone);
   }
 
   private handleEventConflictAction(item: EventEntity, strategy: 'delay' | 'compress' | 'advance' | 'smart', gapMinutes: number,
     onDone?: () => void) {
-    const index = this.vm.events.indexOf(item);
-    if (index < 0) {
-      hilog.warn(0x0000, 'Index', `[CONFLICT_UI][missing_item] strategy=${strategy}, itemId=${item.id}`);
-      return;
-    }
-
-    const targetTime = this.getConflictTargetTime(item);
-    const saveCallback = (nextTime?: string) => {
-      void this.saveConflictTime(item, nextTime, onDone);
-    };
-    const reopenConflictMenu = () => {
-      const latestGap = this.resolveConflictGapMinutes(item, gapMinutes);
-      this.openConflictMenu(index, item, targetTime, latestGap, saveCallback);
-    };
-
-    hilog.info(
-      0x0000,
-      'Index',
-      `[CONFLICT_UI][action] strategy=${strategy}, itemId=${item.id}, targetTime=${targetTime}, gap=${gapMinutes}`
-    );
-
-    if (strategy === 'delay') {
-      const plan = this.vm.calculateDelayPlan(index);
-      this.openPreview(index, item, targetTime, plan, saveCallback, reopenConflictMenu);
-      return;
-    }
-
-    if (strategy === 'advance') {
-      this.openAdvanceAdjustDialog(index, item, targetTime, saveCallback);
-      return;
-    }
-
-    this.openCompressSelectionDialog(index, item, targetTime, saveCallback, reopenConflictMenu);
-  }
-
-  private openAdvanceAdjustDialog(index: number, item: EventEntity, targetTime: string, saveCallback: (t?: string) => void): void {
-    const context = this.vm.buildAdvanceAdjustContext(index);
-    if (!context || context.candidates.length === 0) {
-      this.safeShowToast('当前冲突前不存在可调整区间');
-      return;
-    }
-
-    this.conflictAdvanceController = new CustomDialogController({
-      builder: AdvanceAdjustDialog({
-        vm: this.vm,
-        targetIndex: index,
-        targetName: item.name,
-        onCancel: () => {},
-        onConfirm: (selectedIds: number[], nextStartTime: string) => {
-          void this.vm.applyAdvanceAdjust(index, new Set<number>(selectedIds), nextStartTime).then((result) => {
-            if (!result.success) {
-              this.safeShowToast(result.message || '前移调整失败');
-              this.openAdvanceAdjustDialog(index, item, targetTime, saveCallback);
-              return;
-            }
-            saveCallback(targetTime);
-            if (result.remainingGapMinutes > 0) {
-              this.safeShowToast(`已前移 ${result.appliedShiftMinutes} 分钟，仍有 ${result.remainingGapMinutes} 分钟冲突`);
-              this.openConflictMenu(index, item, targetTime, result.remainingGapMinutes, saveCallback);
-              return;
-            }
-            this.safeShowToast(`已前移 ${result.appliedShiftMinutes} 分钟`);
-          }).catch((_error: Object) => {
-            this.safeShowToast('前移调整失败');
-          });
-        }
-      }),
-      alignment: DialogAlignment.Center,
-      autoCancel: false
-    });
-    this.conflictAdvanceController.open();
-  }
-
-  private showCompressionBlockedDialog(index: number, item: EventEntity, targetTime: string, plan: import('../viewmodel/TimelineViewModel').CompressionPlan,
-    selectedIds: number[], mode: CompressionMode, saveCallback: (t?: string) => void, onBack: () => void) {
-    const remain = plan.remainingGapMinutes ?? 0;
-    const suggested = plan.suggestedTime || targetTime;
-    this.getUIContext().showAlertDialog({
-      title: '⛔ 压缩后仍冲突',
-      message: `已按所选范围压缩，但仍有 ${remain} 分钟冲突。\n建议最早开始时间：${suggested}\n\n请扩大压缩范围或改为向后顺延。`,
-      primaryButton: {
-        value: '返回重选',
-        action: () => {
-          this.openCompressSelectionDialog(index, item, targetTime, saveCallback, onBack, selectedIds, mode);
-        }
+    IndexConflictHelper.handleEventConflictAction(
+      this.vm,
+      item,
+      strategy,
+      gapMinutes,
+      onDone,
+      (index: number, target: EventEntity, targetTime: string, plan: import('../viewmodel/TimelineViewModel').CompressionPlan,
+        saveCallback: (t?: string) => void, onBack: () => void) => {
+        this.openPreview(index, target, targetTime, plan, saveCallback, onBack);
       },
-      secondaryButton: {
-        value: '改为顺延',
-        action: () => {
-          const delayPlan = this.vm.calculateDelayPlan(index);
-          this.openPreview(index, item, targetTime, delayPlan, saveCallback, onBack);
-        }
+      (index: number, target: EventEntity, targetTime: string, saveCallback: (t?: string) => void) => {
+        this.openAdvanceAdjustDialog(index, target, targetTime, saveCallback);
       },
-      alignment: DialogAlignment.Center,
-      autoCancel: false
-    });
-  }
-
-  private openCompressSelectionDialog(index: number, item: EventEntity, targetTime: string, saveCallback: (t?: string) => void,
-    onBack: () => void, presetSelectedIds: number[] = [], presetMode: CompressionMode = 'RATIO') {
-    const context = this.vm.buildCompressionSelectionContext(index, targetTime);
-    if (!context) {
-      this.safeShowToast('当前上下文无法计算压缩方案，请稍后重试');
-      return;
-    }
-    if (context.neededGapMinutes <= 0) {
-      saveCallback(targetTime);
-      return;
-    }
-
-    this.conflictCompressController = new CustomDialogController({
-      builder: ConflictCompressDialog({
-        vm: this.vm,
-        targetIndex: index,
-        targetTime: targetTime,
-        targetName: item.name,
-        initialMode: presetMode,
-        initialSelectedIds: presetSelectedIds,
-        onCancel: () => {
-          hilog.info(0x0000, 'Index', `[CONFLICT_UI][compress_dialog_cancel] itemId=${item.id}`);
-        },
-        onConfirm: (selectedIds: number[], mode: CompressionMode) => {
-          const plan = this.vm.calculateCompressionPlanBySelection(index, targetTime, new Set<number>(selectedIds), mode);
-          if (plan.status === 'NO_ACTION') {
-            saveCallback(targetTime);
-            return;
-          }
-          if (plan.status === 'OVERLOAD') {
-            this.showCompressionBlockedDialog(index, item, targetTime, plan, selectedIds, mode, saveCallback, onBack);
-            return;
-          }
-          this.openPreview(index, item, targetTime, plan, saveCallback, () => {
-            this.openCompressSelectionDialog(index, item, targetTime, saveCallback, onBack, selectedIds, mode);
-          });
-        }
-      }),
-      alignment: DialogAlignment.Center,
-      autoCancel: false
-    });
-    this.conflictCompressController.open();
-  }
-
-  private requestPlanDateUpdate(newDateTimestamp: number): void {
-    const nextDate = new Date(newDateTimestamp);
-    nextDate.setHours(0, 0, 0, 0);
-    const normalizedTimestamp = nextDate.getTime();
-
-    const preview = this.vm.previewPlanDateShift(normalizedTimestamp);
-    if (!preview.hasRigidConflict) {
-      hilog.info(0x0000, 'Index', `[SHIFT_UI][direct_apply] date=${normalizedTimestamp}`);
-      this.vm.updatePlanDate(normalizedTimestamp);
-      return;
-    }
-
-    const conflictItem = this.vm.events.find(e => e.id === preview.conflictItemId);
-    if (!conflictItem) {
-      hilog.warn(0x0000, 'Index', `[SHIFT_UI][fallback_apply] conflict item not found, date=${normalizedTimestamp}`);
-      this.vm.updatePlanDate(normalizedTimestamp);
-      return;
-    }
-
-    const conflictIndex = this.vm.events.indexOf(conflictItem);
-    if (conflictIndex < 0) {
-      this.vm.updatePlanDate(normalizedTimestamp);
-      return;
-    }
-
-    const targetTime = this.getConflictTargetTime(conflictItem);
-    const conflictGap = this.resolveConflictGapMinutes(conflictItem, preview.gapMinutes);
-
-    hilog.warn(
-      0x0000,
-      'Index',
-      `[SHIFT_UI][blocked_by_rigid] date=${normalizedTimestamp}, itemId=${conflictItem.id}, itemName=${conflictItem.name}, gap=${conflictGap}`
-    );
-
-    this.openConflictMenu(
-      conflictIndex,
-      conflictItem,
-      targetTime,
-      conflictGap,
-      (suggestedTime?: string) => {
-        void this.saveConflictTime(conflictItem, suggestedTime, async () => {
-          await this.vm.updatePlanDate(normalizedTimestamp);
-        });
+      (index: number, target: EventEntity, targetTime: string, saveCallback: (t?: string) => void, onBack: () => void) => {
+        this.openCompressSelectionDialog(index, target, targetTime, saveCallback, onBack);
+      },
+      (index: number, target: EventEntity, targetTime: string, gap: number, saveCallback: (t?: string) => void) => {
+        this.openConflictMenu(index, target, targetTime, gap, saveCallback);
       }
     );
   }
 
-  openConflictMenu(index: number, item: EventEntity, targetTime: string, gap: number, saveCallback: (t?: string) => void) {
-    hilog.info(0x0000, 'Index', `[CONFLICT_UI][menu_open] index=${index}, itemId=${item.id}, targetTime=${targetTime}, gap=${gap}`);
-    this.conflictSelectionController = new CustomDialogController({
-      builder: ConflictSelectionDialog({
-        gapMinutes: gap,
+  private openAdvanceAdjustDialog(index: number, item: EventEntity, targetTime: string, saveCallback: (t?: string) => void): void {
+    this.conflictAdvanceController = IndexConflictHelper.openAdvanceAdjustDialog(
+      this.vm,
+      index,
+      item,
+      targetTime,
+      saveCallback,
+      (message: string): void => {
+        this.safeShowToast(message);
+      },
+      (): void => {
+        this.openAdvanceAdjustDialog(index, item, targetTime, saveCallback);
+      },
+      (gap: number): void => {
+        this.openConflictMenu(index, item, targetTime, gap, saveCallback);
+      }
+    );
+  }
 
-        // 方案 1: 延迟 Y
-        onDelayY: () => {
-          hilog.info(0x0000, 'Index', `[CONFLICT_UI][menu_delay] itemId=${item.id}`);
-          const plan = this.vm.calculateDelayPlan(index);
-          this.openPreview(index, item, targetTime, plan, saveCallback, () => {
-            // 如果在预览点返回，重新打开菜单
-            this.openConflictMenu(index, item, targetTime, gap, saveCallback);
-          });
-        },
+  private showCompressionBlockedDialog(index: number, item: EventEntity, targetTime: string, plan: import('../viewmodel/TimelineViewModel').CompressionPlan,
+    selectedIds: number[], mode: CompressionMode, saveCallback: (t?: string) => void, onBack: () => void) {
+    IndexConflictHelper.showCompressionBlockedDialog(
+      this.getUIContext(),
+      index,
+      item,
+      targetTime,
+      plan,
+      selectedIds,
+      mode,
+      saveCallback,
+      onBack,
+      (indexVal: number, itemVal: EventEntity, targetTimeVal: string, saveFn: (t?: string) => void, backFn: () => void,
+        presetSelectedIds: number[], presetMode: CompressionMode) => {
+        this.openCompressSelectionDialog(indexVal, itemVal, targetTimeVal, saveFn, backFn, presetSelectedIds, presetMode);
+      },
+      (indexVal: number, itemVal: EventEntity, targetTimeVal: string, nextPlan: import('../viewmodel/TimelineViewModel').CompressionPlan,
+        saveFn: (t?: string) => void, backFn: () => void) => {
+        this.openPreview(indexVal, itemVal, targetTimeVal, nextPlan, saveFn, backFn);
+      },
+      this.vm
+    );
+  }
 
-        // 方案 2: 压缩前序（可选范围）
-        onCompressX: () => {
-          hilog.info(0x0000, 'Index', `[CONFLICT_UI][menu_compress] itemId=${item.id}`);
-          this.openCompressSelectionDialog(index, item, targetTime, saveCallback, () => {
-            this.openConflictMenu(index, item, targetTime, gap, saveCallback);
-          });
-        },
+  private openCompressSelectionDialog(index: number, item: EventEntity, targetTime: string, saveCallback: (t?: string) => void,
+    onBack: () => void, presetSelectedIds: number[] = [], presetMode: CompressionMode = 'RATIO') {
+    this.conflictCompressController = IndexConflictHelper.openCompressSelectionDialog(
+      this.vm,
+      index,
+      item,
+      targetTime,
+      saveCallback,
+      onBack,
+      (message: string) => this.safeShowToast(message),
+      (indexVal: number, itemVal: EventEntity, targetTimeVal: string, plan: import('../viewmodel/TimelineViewModel').CompressionPlan,
+        saveFn: (t?: string) => void, backFn: () => void) => {
+        this.openPreview(indexVal, itemVal, targetTimeVal, plan, saveFn, backFn);
+      },
+      (indexVal: number, itemVal: EventEntity, targetTimeVal: string, plan: import('../viewmodel/TimelineViewModel').CompressionPlan,
+        selectedIds: number[], mode: CompressionMode, saveFn: (t?: string) => void, backFn: () => void) => {
+        this.showCompressionBlockedDialog(indexVal, itemVal, targetTimeVal, plan, selectedIds, mode, saveFn, backFn);
+      },
+      presetSelectedIds,
+      presetMode
+    );
+  }
 
-        onAdvanceAdjust: () => {
-          hilog.info(0x0000, 'Index', `[CONFLICT_UI][menu_advance_adjust] itemId=${item.id}`);
-          this.openAdvanceAdjustDialog(index, item, targetTime, saveCallback);
-        },
-        onShiftSameDay: () => {
-          hilog.info(0x0000, 'Index', `[CONFLICT_UI][menu_shift_same_day_compat] itemId=${item.id}`);
-          this.openAdvanceAdjustDialog(index, item, targetTime, saveCallback);
-        },
-
-        // 兼容入口：智能均衡并入压缩前序
-        onSmartAdjust: () => {
-          hilog.info(0x0000, 'Index', `[CONFLICT_UI][menu_smart] itemId=${item.id}`);
-          this.openCompressSelectionDialog(index, item, targetTime, saveCallback, () => {
-            this.openConflictMenu(index, item, targetTime, gap, saveCallback);
-          });
-        }
-      }),
-      alignment: DialogAlignment.Center,
-      autoCancel: false
+  private requestPlanDateUpdate(newDateTimestamp: number): void {
+    IndexConflictHelper.requestPlanDateUpdate(this.vm, newDateTimestamp, (index: number, item: EventEntity, targetTime: string,
+      gap: number, saveCallback: (t?: string) => void) => {
+      this.openConflictMenu(index, item, targetTime, gap, saveCallback);
     });
-    this.conflictSelectionController.open();
+  }
+
+  openConflictMenu(index: number, item: EventEntity, targetTime: string, gap: number, saveCallback: (t?: string) => void) {
+    this.conflictSelectionController = IndexConflictHelper.openConflictMenu(
+      this.vm,
+      index,
+      item,
+      targetTime,
+      gap,
+      saveCallback,
+      (indexVal: number, itemVal: EventEntity, targetTimeVal: string, plan: import('../viewmodel/TimelineViewModel').CompressionPlan,
+        saveFn: (t?: string) => void, backFn: () => void) => {
+        this.openPreview(indexVal, itemVal, targetTimeVal, plan, saveFn, backFn);
+      },
+      (indexVal: number, itemVal: EventEntity, targetTimeVal: string, saveFn: (t?: string) => void, backFn: () => void) => {
+        this.openCompressSelectionDialog(indexVal, itemVal, targetTimeVal, saveFn, backFn);
+      },
+      (indexVal: number, itemVal: EventEntity, targetTimeVal: string, saveFn: (t?: string) => void) => {
+        this.openAdvanceAdjustDialog(indexVal, itemVal, targetTimeVal, saveFn);
+      }
+    );
   }
 
   private async initBacklogExpandedState(planId: number, isNewPlan: boolean): Promise<void> {
@@ -963,45 +755,26 @@ struct Index {
 
   // [新增] 抽离出来的预览逻辑
   openPreview(index: number, item: EventEntity, targetTime: string, plan: import('../viewmodel/TimelineViewModel').CompressionPlan, saveCallback: (t?: string) => void, onBack: () => void) {
-
-    // 构建详情文本
-    let detailMsg = '';
-    if (plan.affectedItems.length === 0) {
-      detailMsg = '• 没有前序行程受到压缩，仅调整当前开始时间。';
-    } else {
-      plan.affectedItems.forEach(aff => {
-        detailMsg += `• ${aff.name}: ${aff.oldVal}m ➔ ${aff.newVal}m\n`;
-      });
-    }
-
+    const detailMsg = plan.affectedItems.length === 0
+      ? '• 没有前序行程受到压缩，仅调整当前开始时间。'
+      : plan.affectedItems.map((aff) => `• ${aff.name}: ${aff.oldVal}m ➔ ${aff.newVal}m`).join('\n');
     const prevItem = index > 0 ? this.vm.events[index - 1] : null;
-    const conflictName = prevItem ? prevItem.name : '前序行程';
-
-    this.suggestionDialogController = new CustomDialogController({
-      builder: SuggestionDialog({
-        itemName: item.name,
-        conflictName: conflictName,
-        targetTime: targetTime,
-        suggestedTime: plan.suggestedTime || targetTime,
-        detailMsg: detailMsg,
-
-        onConfirm: () => {
-          if (plan.suggestedTime) {
-            // 这里要注意：如果是 Delay 方案，affectedItems 是空的，只需应用时间
-            // 如果是压缩方案，需要 applyCompressionPlan
-            if (plan.affectedItems.length > 0) {
-              // 注意：这里需要构造一个临时的 plan 对象传回去，或者直接用 plan
-              // 因为 applyCompressionPlan 只认 affectedItems
-              this.vm.applyCompressionPlan(plan);
-            }
-            saveCallback(plan.suggestedTime);
-          }
-        },
-        onBack: onBack // 🔙 传递返回能力
-      }),
-      alignment: DialogAlignment.Center,
-      autoCancel: false,
-      customStyle: true
+    this.suggestionDialogController = IndexDialogManager.createSuggestionController({
+      itemName: item.name,
+      conflictName: prevItem ? prevItem.name : '前序行程',
+      targetTime: targetTime,
+      suggestedTime: plan.suggestedTime || targetTime,
+      detailMsg: detailMsg,
+      onConfirm: (): void => {
+        if (!plan.suggestedTime) {
+          return;
+        }
+        if (plan.affectedItems.length > 0) {
+          this.vm.applyCompressionPlan(plan);
+        }
+        saveCallback(plan.suggestedTime);
+      },
+      onBack: onBack
     });
     this.suggestionDialogController.open();
   }
