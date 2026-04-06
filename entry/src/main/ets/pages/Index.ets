@@ -1,26 +1,17 @@
 ﻿import { TimelineViewModel } from '../viewmodel/TimelineViewModel';
 // 修改点：View 组件指向 views 目录
-import { EventItemView } from './components/views/EventItemView';
-import { BacklogView } from './components/views/BacklogView';
 // 修改点：Dialog 组件指向 dialogs 目录
 import { TravelPlanItem } from '../model/interface/IStandardEvent';
 import { EventEntity } from '../model/entity/EventEntity';
-import { router } from '@kit.ArkUI';
 // 修改点：批量更新 Dialog 路径
-import { DateUtil } from '../common/utils/DateUtil';
 import { promptAction } from '@kit.ArkUI';
 import { ComposableStrategy } from '../domain/strategy/TravelStrategyDimensions';
-
-import { CompanionView } from './components/views/CompanionView';
-import { PlanBottomActionBar } from './components/views/BottomNavBar';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { ThemeCenter } from '../common/utils/ThemeCenter';
 import { NavigationHelper } from '../common/utils/NavigationHelper';
 import { WeatherReminderCoordinator } from '../infrastructure/services/WeatherReminderCoordinator';
 import { WeatherReminderPayload } from '../common/utils/weather/WeatherReminderStore';
 import { PlanAppService } from '../viewmodel/PlanAppService';
-import { TimelineDatePolicy } from '../domain/policy/TimelineDatePolicy';
-import { PageDraftRecovery } from '../common/utils/PageDraftRecovery';
 import { AppStorageKeys } from '../common/constants/AppStorageKeys';
 import { DomainConstants } from '../common/constants/DomainConstants';
 import { PlanRepositoryImpl } from '../infrastructure/persistence/PlanRepositoryImpl';
@@ -34,10 +25,11 @@ import { IndexLifecycleHelper } from './index/IndexLifecycleHelper';
 import { IndexDialogManager } from './index/IndexDialogManager';
 import { IndexAddDialogHelper } from './index/IndexAddDialogHelper';
 import { IndexAddDialogFlowHelper } from './index/IndexAddDialogFlowHelper';
+import { IndexDateConflictDialogFlowHelper } from './index/IndexDateConflictDialogFlowHelper';
 import { ConflictFlowContext, IndexConflictFlowHelper } from './index/IndexConflictFlowHelper';
 import { IndexPageBehaviorHelper, ReminderDialogContext, StrategyDialogContext } from './index/IndexPageBehaviorHelper';
-import { BacklogActionContext, IndexPageActionsHelper, MoveToScheduleContext, MoveToScheduleItem } from './index/IndexPageActionsHelper';
-
+import { IndexPageActionsHelper, MoveToScheduleItem } from './index/IndexPageActionsHelper';
+import { IndexPageShowHelper } from './index/IndexPageShowHelper';
 @Entry
 @Component
 struct Index {
@@ -70,7 +62,6 @@ struct Index {
   private readonly arrivalCoordinator: ArrivalReminderCoordinator = ArrivalReminderCoordinator.getInstance();
   private strategyAdaptationCheckTimer: number = -1;
   dialogController: CustomDialogController | null = null;
-
   settingsDialogController: CustomDialogController | null = null;
   dateFilterController: CustomDialogController | null = null;
   conflictSelectionController: CustomDialogController | null = null;
@@ -78,7 +69,6 @@ struct Index {
   conflictAdvanceController: CustomDialogController | null = null;
   timeDialogController: CustomDialogController | null = null;
   suggestionDialogController: CustomDialogController | null = null;
-
   onTrafficSignal() {
     hilog.info(0x0000, 'Index', '收到高德数据更新信号，触发 UI 重算');
     // 路况异步回填到达后，强制重拉通勤并全量重排，确保跨天分组及时生效。
@@ -89,11 +79,9 @@ struct Index {
       this.vm.clearFilter();
     }
   }
-
   private scopedStorageKey(base: string): string {
     return IndexStateManager.scopedStorageKey(base, this.currentPlanId);
   }
-
   private clearDialogDraftStorage(): void {
     IndexStateManager.clearDialogDraftStorage(
       this.currentPlanId,
@@ -101,18 +89,15 @@ struct Index {
       AppStorageKeys.PICKED_LOCATION_STR
     );
   }
-
   private readDraftStorageWithFallback(key: string): string {
     return IndexStateManager.readDraftStorageWithFallback(this.currentPlanId, key);
   }
-
   private sanitizeError(error: Object): string {
     if (error instanceof Error && typeof error.message === 'string' && error.message.length > 0) {
       return error.message;
     }
     return 'unknown_error';
   }
-
   private safeShowToast(message: string): void {
     try {
       promptAction.openToast({ message: message });
@@ -120,7 +105,6 @@ struct Index {
       hilog.warn(0x0000, 'Index', `[TOAST_FAIL] ${this.sanitizeError(error as Object)}`);
     }
   }
-
   private async resolveConflictPlanName(planId: number): Promise<string> {
     if (planId === this.currentPlanId) {
       const localTitle = (this.planTitle || '').trim();
@@ -134,7 +118,6 @@ struct Index {
       return `计划 #${planId}`;
     }
   }
-
   private async showActiveConflictDialog(conflictPlanId: number, conflictName: string): Promise<void> {
     const planName = await this.resolveConflictPlanName(conflictPlanId);
     const safeName = (conflictName || '').trim().length > 0 ? conflictName : '其他地点';
@@ -149,7 +132,6 @@ struct Index {
       }
     });
   }
-
   private async tryStartEventWithConflictPrompt(eventId: number): Promise<boolean> {
     const conflict = await this.vm.getStartConflictInfo(eventId);
     if (conflict) {
@@ -168,11 +150,9 @@ struct Index {
     }
     return true;
   }
-
   private refreshUnsavedFlag(): void {
     this.hasUnsavedChanges = IndexStateManager.readUnsavedFlag(this.currentPlanId, AppStorageKeys.HAS_UNSAVED_POSTPONE);
   }
-
   private setUnsavedFlag(value: boolean): void {
     this.hasUnsavedChanges = IndexStateManager.setUnsavedFlag(
       this.currentPlanId,
@@ -180,11 +160,9 @@ struct Index {
       value
     );
   }
-
   private hasScopedUnsavedChanges(): boolean {
     return IndexStateManager.readUnsavedFlag(this.currentPlanId, AppStorageKeys.HAS_UNSAVED_POSTPONE);
   }
-
   private startArrivalReminderEngine(): void {
     if (this.currentPlanId <= 0) {
       return;
@@ -196,7 +174,6 @@ struct Index {
       hilog.warn(0x0000, 'Index', `[ARRIVAL][engine_start_failed] reason=${this.sanitizeError(error)}`);
     }
   }
-
   onBackPress(): boolean {
     if (this.isCompanionMode) {
       this.companionBackRequestToken += 1;
@@ -204,13 +181,11 @@ struct Index {
     }
     return false;
   }
-
   private bindReminderSubscriptions(): void {
     this.unbindReminderSubscriptions();
     if (this.currentPlanId <= 0) {
       return;
     }
-
     this.weatherReminderUnsubscribe = this.weatherCoordinator.subscribePlan(this.currentPlanId, {
       isDialogOpen: (): boolean => this.isWeatherDialogOpen,
       onShow: (payload: WeatherReminderPayload): void => {
@@ -223,7 +198,6 @@ struct Index {
         this.isWeatherDialogOpen = false;
       }
     });
-
     this.arrivalReminderUnsubscribe = this.arrivalCoordinator.subscribePlan(this.currentPlanId, {
       isDialogOpen: (): boolean => this.isArrivalDialogOpen,
       resolveEvents: (): EventEntity[] => this.vm.events,
@@ -232,7 +206,6 @@ struct Index {
       }
     });
   }
-
   private unbindReminderSubscriptions(): void {
     if (this.weatherReminderUnsubscribe) {
       this.weatherReminderUnsubscribe();
@@ -243,7 +216,6 @@ struct Index {
       this.arrivalReminderUnsubscribe = null;
     }
   }
-
   private async handlePagePullRefresh(): Promise<void> {
     if (this.isPageRefreshing || this.currentPlanId <= 0) {
       return;
@@ -267,7 +239,6 @@ struct Index {
       this.isPageRefreshing = false;
     }
   }
-
   private getReminderDialogContext(): ReminderDialogContext {
     const context: ReminderDialogContext = {
       vm: this.vm,
@@ -291,173 +262,66 @@ struct Index {
     };
     return context;
   }
-
   private showWeatherReminderDialog(payload: WeatherReminderPayload): void {
     IndexPageBehaviorHelper.showWeatherReminderDialog(this.getReminderDialogContext(), payload);
   }
-
   private showArrivalReminderDialog(payload: ArrivalReminderPayload): void {
     IndexPageBehaviorHelper.showArrivalReminderDialog(this.getReminderDialogContext(), payload);
   }
-
   private getThemePalette() {
     return ThemeCenter.getPalette(this.effectiveTheme);
   }
-
   gapDialogController: CustomDialogController | null = IndexDialogManager.createGapResolutionController({
     vm: this.vm,
     currentGap: this.gapItem
   });
-
-
-  // Index.ets 约 118 行开始替换
-  conflictDialogController: CustomDialogController = IndexDialogManager.createDateConflictController({
-      // 显示给用户看的冲突详情
-      conflictDateStr: this.pendingItem ? DateUtil.formatDate(new Date(this.pendingItem.targetDateMs), 'MM月dd日') : '',
-      planStartDateStr: DateUtil.formatDate(new Date(this.vm.planStartDate), 'MM月dd日'),
-      planStartDate: this.vm.planStartDate,
-
-      // 选项 1: 更改地点日期 (拉起 DatePicker -> 选好后直接入库)
-      onChangeItemDate: () => {
-        if (this.pendingItem) {
-          // 延迟一会儿弹出，避免弹窗冲突
-          setTimeout(() => {
-            this.getUIContext().showDatePickerDialog({
-              start: new Date(this.vm.planStartDate),
-              end: new Date("2100-12-31"),
-              selected: new Date(this.vm.planStartDate),
-              onAccept: async (value: DatePickerResult) => {
-                // 1. 计算新的 DayOffset
-                const newSelectedDate = new Date();
-                newSelectedDate.setFullYear(value.year, value.month, value.day);
-                const newOffset = TimelineDatePolicy.timestampToDayOffset(this.vm.planStartDate, newSelectedDate.getTime());
-
-                // 2. 直接保存并入库
-                if (this.pendingItem) {
-                  if (this.pendingItem.id !== -1) {
-                    // ✨ 关键点：如果是从已有项移动来的，调用更新
-                    await this.vm.updateEventInfo(
-                      this.pendingItem.id,
-                      this.pendingItem.name,
-                      this.pendingItem.duration,
-                      this.pendingItem.fixedTime,
-                      newOffset,
-                      false,
-                      this.pendingItem.note
-                    );
-                  } else {
-                    // 只有确实是全新添加的，才调用新增
-                    await this.vm.addNewItem(this.pendingItem.name, this.pendingItem.duration, true, this.pendingItem.fixedTime, newOffset, -1, false, this.pendingItem.note);
-                  }
-                  this.pendingItem = null;
-                  this.safeShowToast("已更新日期并移至日程");
-                }
-              },
-              onCancel: () => {
-                console.info("DatePicker cancelled, returning to ConflictDialog");
-                // 重新拉起冲突解决弹窗，让用户选别的选项（比如改主计划或入池）
-                this.conflictDialogController.open();
-              }
-            })
-          }, 200);
-        }
+  conflictDialogController: CustomDialogController = this.createConflictDialogController();
+  private createConflictDialogController(): CustomDialogController {
+    return IndexDateConflictDialogFlowHelper.createController({
+      vm: this.vm,
+      getUIContext: (): UIContext => this.getUIContext(),
+      getPendingItem: (): PendingItemData | null => this.pendingItem,
+      setPendingItem: (item: PendingItemData | null): void => {
+        this.pendingItem = item;
       },
-
-
-      // 选项 2: 放入暂存池 (清洗数据)
-      onMoveToBacklog: async () => {
-        if (this.pendingItem) {
-          // 调用 VM 中刚写好的清洗方法
-          await this.vm.resolveConflictByBacklog(
-            this.pendingItem.id,       // ✨ 必须把 id 作为第一个参数传进去
-            this.pendingItem.name,
-            this.pendingItem.duration,
-            this.pendingItem.note
-          );
-          this.pendingItem = null;
-          this.safeShowToast("已移至暂存池");
-        }
+      openDialog: (initData?: InitDialogData): void => {
+        this.openDialog(initData);
       },
-
-      // 选项 3: 更改计划出发日期 (整体平移)
-      onChangePlanStartDate: async () => {
-        if (this.pendingItem) {
-          // 调用平移方法
-          await this.vm.resolveConflictByMovingPlan(
-            this.pendingItem.id,             // ✨ 同样，id 必须是第一个参数
-            this.pendingItem.targetDateMs,
-            this.pendingItem.name,
-            this.pendingItem.duration,
-            this.pendingItem.isSchedule,
-            this.pendingItem.fixedTime,
-            this.pendingItem.note
-          );
-          this.pendingItem = null;
-          this.safeShowToast("计划出发日期已更新");
-        }
+      reopenConflictDialog: (): void => {
+        this.openConflictDialog();
       },
-
-      onCancel: () => {
-        if (this.pendingItem) {
-          console.info("Conflict handling cancelled, returning to AddItemDialog");
-          const data = this.pendingItem;
-          this.openDialog({
-            name: data.name,
-            note: data.note,
-            duration: data.duration,
-            isAnchor: false, // 可根据需要保持或设为默认
-            fixedTime: data.fixedTime || '',
-            dayOffset: data.dayOffset,
-            isSchedule: data.isSchedule
-          });
-          // 只有回到 AddItemDialog 且用户再次点取消，或者成功保存后，pendingItem 才最终销毁
-          this.pendingItem = null;
-        }
+      safeShowToast: (message: string): void => {
+        this.safeShowToast(message);
       }
-  })
-
-  // ✅ 新增：监听页面重新显示（从地图选点返回时会触发）
-  onPageShow() {
-    this.startArrivalReminderEngine();
-    this.vm.reloadMinEventDurationLimit().catch((error: Error) => {
-      const reason: string = this.sanitizeError(error);
-      hilog.warn(0x0000, 'Index', `[SETTING_UI][min_duration_reload_failed] reason=${reason}`);
     });
-    this.vm.reloadRouteSwitches().catch((error: Error) => {
-      const reason: string = this.sanitizeError(error);
-      hilog.warn(0x0000, 'Index', `[SETTING_UI][route_switch_reload_failed] reason=${reason}`);
-    });
-
-    this.refreshUnsavedFlag();
-    const tempStateStr = this.readDraftStorageWithFallback(AppStorageKeys.TEMP_DIALOG_STATE);
-    const pickedLocStr = this.readDraftStorageWithFallback(AppStorageKeys.PICKED_LOCATION_STR);
-    const recovery = PageDraftRecovery.recover(tempStateStr, pickedLocStr);
-    if (recovery.shouldClear) {
-      this.clearDialogDraftStorage();
-    }
-    if (recovery.shouldRestore && recovery.restored) {
-      this.openDialog({
-        name: recovery.restored.name,
-        note: recovery.restored.note,
-        duration: recovery.restored.duration,
-        isAnchor: recovery.restored.isAnchor,
-        fixedTime: recovery.restored.fixedTime,
-        dayOffset: recovery.restored.dayOffset,
-        isSchedule: recovery.restored.isSchedule,
-        lat: recovery.restored.lat,
-        lng: recovery.restored.lng
-      });
-    } else if (recovery.reason === 'temp_invalid') {
-      this.safeShowToast('草稿已损坏，已自动清理。');
-    } else if (recovery.reason === 'picked_invalid') {
-      this.safeShowToast('地图选点缓存损坏，已自动清理。');
-    }
-
   }
-
-
+  private openConflictDialog(): void {
+    this.conflictDialogController = this.createConflictDialogController();
+    this.conflictDialogController.open();
+  }
+  onPageShow() {
+    IndexPageShowHelper.handlePageShow({
+      vm: this.vm,
+      onStartArrivalReminderEngine: (): void => {
+        this.startArrivalReminderEngine();
+      },
+      onRefreshUnsavedFlag: (): void => {
+        this.refreshUnsavedFlag();
+      },
+      onReadDraftStorage: (key: string): string => this.readDraftStorageWithFallback(key),
+      onClearDraftStorage: (): void => {
+        this.clearDialogDraftStorage();
+      },
+      onOpenDialog: (initData?: InitDialogData): void => {
+        this.openDialog(initData);
+      },
+      onSafeToast: (message: string): void => {
+        this.safeShowToast(message);
+      },
+      onSanitizeError: (error: Object): string => this.sanitizeError(error)
+    });
+  }
   private onGapFoundCallback = (item: EventEntity) => {}
-
   aiDialogController: CustomDialogController = IndexDialogManager.createAiDialogController({
     hasAiHistory: this.vm.hasAiHistory(),
     onConfirm: async (text: string, strategy: number, customStrategy?: ComposableStrategy): Promise<void> => {
@@ -484,10 +348,6 @@ struct Index {
       }
     }
   });
-  openTimeEditDialog(_item: EventEntity) {
-    // 保留入口，具体冲突调整由统一冲突流程接管。
-  }
-
   private getConflictFlowContext(): ConflictFlowContext {
     const context: ConflictFlowContext = {
       vm: this.vm,
@@ -508,37 +368,26 @@ struct Index {
     };
     return context;
   }
-
   private handleEventConflictAction(item: EventEntity, strategy: 'delay' | 'compress' | 'advance' | 'smart', gapMinutes: number,
     onDone?: () => void): void {
     IndexConflictFlowHelper.handleEventConflictAction(this.getConflictFlowContext(), item, strategy, gapMinutes, onDone);
   }
-
   private requestPlanDateUpdate(newDateTimestamp: number): void {
     IndexConflictFlowHelper.requestPlanDateUpdate(this.getConflictFlowContext(), newDateTimestamp);
   }
-
   private async initBacklogExpandedState(planId: number, isNewPlan: boolean): Promise<void> {
     this.backlogExpanded = await IndexStateManager.initBacklogExpandedState(planId, isNewPlan);
   }
-
   private onToggleBacklogExpand(): void {
     this.backlogExpanded = !this.backlogExpanded;
     IndexStateManager.persistBacklogExpanded(this.currentPlanId, this.backlogExpanded);
   }
-
   private isDayCollapsed(dayOffset: number): boolean {
     return IndexStateManager.isDayCollapsed(this.collapsedDayOffsets, dayOffset);
   }
-
   private toggleDayCollapse(dayOffset: number): void {
     this.collapsedDayOffsets = IndexStateManager.toggleDayCollapse(this.collapsedDayOffsets, dayOffset);
   }
-
-  private findLeastBusyDay(): number {
-    return IndexPageActionsHelper.findLeastBusyDay(this.vm);
-  }
-
   openDialog(initData?: InitDialogData) {
     const prepared = IndexAddDialogFlowHelper.prepareDialogState(this.vm.events, this.editingItemId, initData);
     hilog.info(
@@ -591,15 +440,13 @@ struct Index {
           this.pendingItem = result.pendingItem;
         }
         if (result.openConflictDialog) {
-          setTimeout(() => { this.conflictDialogController.open(); }, 100);
+          setTimeout(() => { this.openConflictDialog(); }, 100);
         }
         this.editingItemId = result.nextEditingItemId;
       }
     });
     this.dialogController.open();
   }
-
-
   // ✅ [修改] 打开高颜值筛选弹窗 (支持范围选择)
   openDateFilterDialog() {
     this.dateFilterController = IndexPageActionsHelper.openDateFilterDialog({
@@ -607,7 +454,6 @@ struct Index {
       getUIContext: (): UIContext => this.getUIContext()
     });
   }
-
   // [新增] 提取日期选择逻辑
   openDatePicker() {
     IndexPageActionsHelper.openDatePicker({
@@ -618,7 +464,6 @@ struct Index {
       }
     });
   }
-
   // ✅ [修复步骤 2] 修改打开菜单的方法
   openSettingsDialog() {
     this.settingsDialogController = IndexPageActionsHelper.openSettingsDialog({
@@ -634,10 +479,8 @@ struct Index {
         this.openDatePicker();
       }
     });
-
     this.settingsDialogController.open();
   }
-
   // [Priority 2 新增] 打开重命名弹窗
   openRenameDialog() {
     this.dialogController = IndexPageActionsHelper.openRenameDialog({
@@ -649,7 +492,6 @@ struct Index {
     });
     this.dialogController.open();
   }
-
   aboutToAppear() {
     this.collapsedDayOffsets = [];
     this.vm.clearFilter();
@@ -695,7 +537,6 @@ struct Index {
       }
     });
   }
-
   aboutToDisappear() {
     IndexLifecycleHelper.handleAboutToDisappear({
       strategyAdaptationCheckTimer: this.strategyAdaptationCheckTimer,
@@ -719,7 +560,6 @@ struct Index {
       }
     });
   }
-
   private getStrategyDialogContext(): StrategyDialogContext {
     const context: StrategyDialogContext = {
       vm: this.vm,
@@ -729,86 +569,17 @@ struct Index {
     };
     return context;
   }
-
-  private getMoveToScheduleContext(): MoveToScheduleContext {
-    const context: MoveToScheduleContext = {
-      vm: this.vm,
-      setEditingItemId: (id: number): void => {
-        this.editingItemId = id;
-      },
-      openDialog: (initData?: InitDialogData): void => {
-        this.openDialog(initData);
-      }
-    };
-    return context;
-  }
-
-  private getBacklogActionContext(): BacklogActionContext {
-    const context: BacklogActionContext = {
-      vm: this.vm,
-      safeShowToast: (message: string): void => this.safeShowToast(message),
-      getUIContext: (): UIContext => this.getUIContext()
-    };
-    return context;
-  }
-
   private loadStrategyExplanation(): void {
     this.currentStrategyExplanation = IndexPageBehaviorHelper.loadStrategyExplanation(this.strategyMode);
   }
-
   private startStrategyAdaptationCheck(): void {
     this.strategyAdaptationCheckTimer = IndexPageBehaviorHelper.startStrategyAdaptationCheck(this.getStrategyDialogContext());
   }
-
-  private showStrategyAdaptationDialog(): void {
-    IndexPageBehaviorHelper.showStrategyAdaptationDialog(this.getStrategyDialogContext());
-  }
-
   openEditDialog(item: EventEntity) {
     const prepared = IndexPageActionsHelper.prepareEditDialog(item);
     this.editingItemId = prepared.editingItemId;
     this.openDialog(prepared.initData);
   }
-
-  @Builder
-  BuildDateHeader(text: string, dayOffset: number) {
-    Row() {
-      Text(this.isDayCollapsed(dayOffset) ? '▶' : '▼')
-        .fontSize(12)
-        .fontColor(this.getThemePalette().textTertiary)
-        .margin({ right: 8 })
-
-      Column()
-        .width(4)
-        .height(14)
-        .backgroundColor(this.getThemePalette().warning)
-        .margin({ right: 8 })
-        .borderRadius(2)
-
-      Text(text)
-        .fontSize(16)
-        .fontColor(this.getThemePalette().textPrimary)
-        .fontWeight(FontWeight.Bold)
-    }
-    .width('100%')
-    .padding({ top: 16, bottom: 8, left: 4 })
-    .backgroundColor(this.getThemePalette().pageBg) // 保持与背景一致
-    .onClick(() => {
-      this.getUIContext().animateTo({ duration: 220, curve: Curve.FastOutSlowIn }, () => {
-        this.toggleDayCollapse(dayOffset);
-      });
-    })
-  }
-
-  @Builder
-  CompanionModeBuilder() {
-    CompanionView({
-      vm: this.vm, // 传递 ViewModel
-      isShow: $isCompanionMode, // 双向绑定，用于内部关闭
-      backRequestToken: $companionBackRequestToken
-    })
-  }
-
   build() {
     Column() {
       IndexPageLayout({
@@ -873,10 +644,22 @@ struct Index {
             note: item.note,
             duration: item.duration
           };
-          IndexPageActionsHelper.moveItemToSchedule(this.getMoveToScheduleContext(), moveItem);
+          IndexPageActionsHelper.moveItemToSchedule({
+            vm: this.vm,
+            setEditingItemId: (id: number): void => {
+              this.editingItemId = id;
+            },
+            openDialog: (initData?: InitDialogData): void => {
+              this.openDialog(initData);
+            }
+          }, moveItem);
         },
         onMoveAllToSchedule: (): void => {
-          IndexPageActionsHelper.handleMoveAllToSchedule(this.getBacklogActionContext());
+          IndexPageActionsHelper.handleMoveAllToSchedule({
+            vm: this.vm,
+            safeShowToast: (message: string): void => this.safeShowToast(message),
+            getUIContext: (): UIContext => this.getUIContext()
+          });
         },
         onIsDayCollapsed: (dayOffset: number): boolean => this.isDayCollapsed(dayOffset),
         onToggleDay: (dayOffset: number): void => this.toggleDayCollapse(dayOffset),
@@ -884,16 +667,24 @@ struct Index {
           void this.handlePagePullRefresh();
         },
         onOpenEditDialog: (item: EventEntity): void => this.openEditDialog(item),
-        onOpenTimeEditDialog: (item: EventEntity): void => this.openTimeEditDialog(item),
+        onOpenTimeEditDialog: (_item: EventEntity): void => {},
         onGapFound: (item: EventEntity): void => this.onGapFoundCallback(item),
         onResolveConflictAction: (item: EventEntity, strategy: 'delay' | 'compress' | 'advance' | 'smart', gapMinutes: number): void => {
           this.handleEventConflictAction(item, strategy, gapMinutes);
         },
         onConfirmMoveToBacklog: (item: EventEntity): void => {
-          IndexPageActionsHelper.handleConfirmMoveToBacklog(this.getBacklogActionContext(), item);
+          IndexPageActionsHelper.handleConfirmMoveToBacklog({
+            vm: this.vm,
+            safeShowToast: (message: string): void => this.safeShowToast(message),
+            getUIContext: (): UIContext => this.getUIContext()
+          }, item);
         },
         onConfirmDeleteEvent: (item: EventEntity): void => {
-          IndexPageActionsHelper.handleConfirmDeleteEvent(this.getBacklogActionContext(), item);
+          IndexPageActionsHelper.handleConfirmDeleteEvent({
+            vm: this.vm,
+            safeShowToast: (message: string): void => this.safeShowToast(message),
+            getUIContext: (): UIContext => this.getUIContext()
+          }, item);
         },
         onOpenGapOptimize: (): void => {
           this.gapItem = null;
@@ -932,5 +723,4 @@ struct Index {
     .width('100%')
     .height('100%')
   }
-
 }
