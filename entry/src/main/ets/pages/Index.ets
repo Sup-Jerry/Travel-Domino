@@ -1,11 +1,8 @@
-﻿import { TimelineViewModel } from '../viewmodel/TimelineViewModel';
+import { TimelineViewModel } from '../viewmodel/TimelineViewModel';
 import { EventEntity } from '../model/entity/EventEntity';
-import { TravelPlanItem } from '../model/interface/IStandardEvent';
 import { promptAction } from '@kit.ArkUI';
-import { ComposableStrategy } from '../domain/strategy/TravelStrategyDimensions';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { ThemeCenter } from '../common/utils/ThemeCenter';
-import { NavigationHelper } from '../common/utils/NavigationHelper';
 import { WeatherReminderCoordinator } from '../infrastructure/services/WeatherReminderCoordinator';
 import { WeatherReminderPayload } from '../common/utils/weather/WeatherReminderStore';
 import { PlanAppService } from '../viewmodel/PlanAppService';
@@ -18,17 +15,15 @@ import { InitDialogData, PendingItemData } from './index/IndexTypes';
 import { IndexStateManager } from './index/IndexStateManager';
 import { IndexLifecycleHelper } from './index/IndexLifecycleHelper';
 import { IndexDialogManager } from './index/IndexDialogManager';
-import { IndexAddDialogControllerHelper } from './index/IndexAddDialogControllerHelper';
 import { IndexDateConflictDialogFlowHelper } from './index/IndexDateConflictDialogFlowHelper';
 import { ConflictFlowContext, IndexConflictFlowHelper } from './index/IndexConflictFlowHelper';
 import { IndexPageBehaviorHelper, ReminderDialogContext, StrategyDialogContext } from './index/IndexPageBehaviorHelper';
-import { IndexPageActionsHelper } from './index/IndexPageActionsHelper';
 import { IndexPageShowHelper } from './index/IndexPageShowHelper';
 import { IndexPageContextFactory } from './index/IndexPageContextFactory';
 import { IndexReminderSubscriptionHelper } from './index/IndexReminderSubscriptionHelper';
 import { IndexStartEventGuardHelper } from './index/IndexStartEventGuardHelper';
-import { IndexSettingsDialogFlowHelper } from './index/IndexSettingsDialogFlowHelper';
-import { IndexLayoutCallbacksHelper } from './index/IndexLayoutCallbacksHelper';
+import { IndexDialogBindingsHelper } from './index/IndexDialogBindingsHelper';
+import { IndexLayoutCallbacksBuilder } from './index/IndexLayoutCallbacksBuilder';
 @Entry
 @Component
 struct Index {
@@ -112,6 +107,18 @@ struct Index {
       hilog.warn(0x0000, 'Index', `[ARRIVAL][engine_start_failed] reason=${this.sanitizeError(error)}`);
     }
   }
+  private async tryStartEventWithConflictPrompt(eventId: number): Promise<boolean> {
+    return IndexStartEventGuardHelper.tryStartEventWithConflictPrompt({
+      vm: this.vm,
+      currentPlanId: this.currentPlanId,
+      planTitle: this.planTitle,
+      getUIContext: (): UIContext => this.getUIContext(),
+      safeShowToast: (message: string): void => this.safeShowToast(message)
+    }, eventId);
+  }
+  private refreshUnsavedChangesFlag(): void {
+    this.hasUnsavedChanges = IndexStateManager.readUnsavedFlag(this.currentPlanId, AppStorageKeys.HAS_UNSAVED_POSTPONE);
+  }
   onBackPress(): boolean {
     if (this.isCompanionMode) {
       this.companionBackRequestToken += 1;
@@ -177,13 +184,7 @@ struct Index {
       weatherCoordinator: this.weatherCoordinator,
       arrivalCoordinator: this.arrivalCoordinator,
       tryStartEventWithConflictPrompt: async (eventId: number): Promise<boolean> => {
-        return IndexStartEventGuardHelper.tryStartEventWithConflictPrompt({
-          vm: this.vm,
-          currentPlanId: this.currentPlanId,
-          planTitle: this.planTitle,
-          getUIContext: (): UIContext => this.getUIContext(),
-          safeShowToast: (message: string): void => this.safeShowToast(message)
-        }, eventId);
+        return this.tryStartEventWithConflictPrompt(eventId);
       },
       setWeatherDialogOpen: (value: boolean): void => {
         this.isWeatherDialogOpen = value;
@@ -234,7 +235,7 @@ struct Index {
         this.startArrivalReminderEngine();
       },
       onRefreshUnsavedFlag: (): void => {
-        this.hasUnsavedChanges = IndexStateManager.readUnsavedFlag(this.currentPlanId, AppStorageKeys.HAS_UNSAVED_POSTPONE);
+        this.refreshUnsavedChangesFlag();
       },
       onReadDraftStorage: (key: string): string => this.readDraftStorageWithFallback(key),
       onClearDraftStorage: (): void => {
@@ -250,31 +251,10 @@ struct Index {
     });
   }
   private onGapFoundCallback = (item: EventEntity) => {}
-  aiDialogController: CustomDialogController = IndexDialogManager.createAiDialogController({
-    hasAiHistory: this.vm.hasAiHistory(),
-    onConfirm: async (text: string, strategy: number, customStrategy?: ComposableStrategy): Promise<void> => {
-      try {
-        await this.vm.generateByAi(text, strategy, customStrategy);
-        this.safeShowToast('AI 生成成功，已加入暂存池！');
-        this.aiDialogController.close();
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : '生成失败';
-        this.safeShowToast(msg);
-        this.aiDialogController.close();
-      }
-    },
-    onRegenerate: async (): Promise<void> => {
-      try {
-        await this.vm.regenerateByCurrentStrategy();
-        this.safeShowToast('重新生成成功');
-        this.aiDialogController.close();
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : '重新生成失败';
-        console.error('[Index] AI重新规划失败:', JSON.stringify(error));
-        this.safeShowToast(msg);
-        this.aiDialogController.close();
-      }
-    }
+  aiDialogController: CustomDialogController = IndexDialogBindingsHelper.createAiDialogController({
+    vm: this.vm,
+    safeShowToast: (message: string): void => this.safeShowToast(message),
+    onCloseDialog: (): void => this.aiDialogController.close()
   });
   private getConflictFlowContext(): ConflictFlowContext {
     return IndexPageContextFactory.createConflictFlowContext({
@@ -299,7 +279,7 @@ struct Index {
     this.backlogExpanded = await IndexStateManager.initBacklogExpandedState(planId, isNewPlan);
   }
   openDialog(initData?: InitDialogData) {
-    this.dialogController = IndexAddDialogControllerHelper.create({
+    this.dialogController = IndexDialogBindingsHelper.createAddDialogController({
       vm: this.vm,
       editingItemId: this.editingItemId,
       currentPlanId: this.currentPlanId,
@@ -307,10 +287,6 @@ struct Index {
       setCollapsedDayOffsets: (offsets: number[]): void => {
         this.collapsedDayOffsets = offsets;
       },
-      clearFilter: (): void => {
-        this.vm.clearFilter();
-      },
-      hasActiveFilter: this.vm.filterStart > 0 || this.vm.filterEnd > 0,
       onGapFoundCallback: this.onGapFoundCallback,
       setPendingItem: (item: PendingItemData | null): void => {
         this.pendingItem = item;
@@ -340,7 +316,7 @@ struct Index {
         this.hasManualPlanningWeatherRefresh = value;
       },
       onRefreshUnsavedFlag: (): void => {
-        this.hasUnsavedChanges = IndexStateManager.readUnsavedFlag(this.currentPlanId, AppStorageKeys.HAS_UNSAVED_POSTPONE);
+        this.refreshUnsavedChangesFlag();
       },
       onSetPlanTitle: (title: string): void => {
         this.planTitle = title;
@@ -358,13 +334,7 @@ struct Index {
         this.isCompanionMode = value;
       },
       onTryStartEvent: async (eventId: number): Promise<boolean> => {
-        return IndexStartEventGuardHelper.tryStartEventWithConflictPrompt({
-          vm: this.vm,
-          currentPlanId: this.currentPlanId,
-          planTitle: this.planTitle,
-          getUIContext: (): UIContext => this.getUIContext(),
-          safeShowToast: (message: string): void => this.safeShowToast(message)
-        }, eventId);
+        return this.tryStartEventWithConflictPrompt(eventId);
       },
       onStartArrivalReminderEngine: (): void => {
         this.startArrivalReminderEngine();
@@ -434,9 +404,12 @@ struct Index {
         themePalette: ThemeCenter.getPalette(this.effectiveTheme),
         companionOverlayZIndex: DomainConstants.COMPANION_OVERLAY_Z_INDEX,
         companionBackRequestToken: this.companionBackRequestToken,
-        callbacks: IndexLayoutCallbacksHelper.create({
+        callbacks: IndexLayoutCallbacksBuilder.create({
           vm: this.vm,
           planTitle: this.planTitle,
+          currentPlanId: this.currentPlanId,
+          collapsedDayOffsets: this.collapsedDayOffsets,
+          backlogExpanded: this.backlogExpanded,
           getUIContext: (): UIContext => this.getUIContext(),
           safeShowToast: (message: string): void => this.safeShowToast(message),
           setCompanionMode: (value: boolean): void => {
@@ -445,98 +418,45 @@ struct Index {
           setManualPlanningWeatherRefresh: (value: boolean): void => {
             this.hasManualPlanningWeatherRefresh = value;
           },
-          onToggleHint: (): void => {
-            this.showPlanningWeatherHintPopup = !this.showPlanningWeatherHintPopup;
-          },
-          onToggleScore: (): void => {
-            this.showPlanningWeatherScorePopup = !this.showPlanningWeatherScorePopup;
-          },
           setHintPopupVisible: (value: boolean): void => {
             this.showPlanningWeatherHintPopup = value;
           },
           setScorePopupVisible: (value: boolean): void => {
             this.showPlanningWeatherScorePopup = value;
           },
-          onToggleBacklogExpand: (): void => {
-            this.backlogExpanded = !this.backlogExpanded;
-            IndexStateManager.persistBacklogExpanded(this.currentPlanId, this.backlogExpanded);
+          toggleHintPopup: (): void => {
+            this.showPlanningWeatherHintPopup = !this.showPlanningWeatherHintPopup;
           },
-          onMoveToSchedule: (item: TravelPlanItem): void => {
-            IndexPageActionsHelper.moveTravelPlanItemToSchedule({
-              vm: this.vm,
-              setEditingItemId: (id: number): void => {
-                this.editingItemId = id;
-              },
-              openDialog: (initData?: InitDialogData): void => {
-                this.openDialog(initData);
-              }
-            }, item);
+          toggleScorePopup: (): void => {
+            this.showPlanningWeatherScorePopup = !this.showPlanningWeatherScorePopup;
           },
-          onMoveAllToSchedule: (): void => {
-            IndexPageActionsHelper.handleMoveAllToSchedule({
-              vm: this.vm,
-              safeShowToast: (message: string): void => this.safeShowToast(message),
-              getUIContext: (): UIContext => this.getUIContext()
-            });
+          setBacklogExpanded: (value: boolean): void => {
+            this.backlogExpanded = value;
           },
-          onIsDayCollapsed: (dayOffset: number): boolean => IndexStateManager.isDayCollapsed(this.collapsedDayOffsets, dayOffset),
-          onToggleDay: (dayOffset: number): void => {
-            this.collapsedDayOffsets = IndexStateManager.toggleDayCollapse(this.collapsedDayOffsets, dayOffset);
+          setCollapsedDayOffsets: (offsets: number[]): void => {
+            this.collapsedDayOffsets = offsets;
+          },
+          setEditingItemId: (id: number): void => {
+            this.editingItemId = id;
+          },
+          setHasUnsavedChanges: (value: boolean): void => {
+            this.hasUnsavedChanges = value;
           },
           onScheduleRefresh: (): void => { void this.handlePagePullRefresh(); },
-          onOpenEditDialog: (item: EventEntity): void => {
-            const prepared = IndexPageActionsHelper.prepareEditDialog(item);
-            this.editingItemId = prepared.editingItemId;
-            this.openDialog(prepared.initData);
-          },
           onGapFound: (item: EventEntity): void => this.onGapFoundCallback(item),
-          onResolveConflictAction: (item: EventEntity, strategy: 'delay' | 'compress' | 'advance' | 'smart', gapMinutes: number): void => {
-            IndexConflictFlowHelper.handleEventConflictAction(this.getConflictFlowContext(), item, strategy, gapMinutes);
+          getConflictFlowContext: (): ConflictFlowContext => this.getConflictFlowContext(),
+          setGapItem: (item: EventEntity | null): void => {
+            this.gapItem = item;
           },
-          onConfirmMoveToBacklog: (item: EventEntity): void => {
-            IndexPageActionsHelper.handleConfirmMoveToBacklog({
-              vm: this.vm,
-              safeShowToast: (message: string): void => this.safeShowToast(message),
-              getUIContext: (): UIContext => this.getUIContext()
-            }, item);
-          },
-          onConfirmDeleteEvent: (item: EventEntity): void => {
-            IndexPageActionsHelper.handleConfirmDeleteEvent({
-              vm: this.vm,
-              safeShowToast: (message: string): void => this.safeShowToast(message),
-              getUIContext: (): UIContext => this.getUIContext()
-            }, item);
-          },
-          onOpenGapOptimize: (): void => {
-            this.gapItem = null;
+          openGapDialog: (): void => {
             this.gapDialogController?.open();
           },
-          onFilterOpenDialog: (): void => {
-            this.dateFilterController = IndexPageActionsHelper.openDateFilterDialog({
-              vm: this.vm,
-              getUIContext: (): UIContext => this.getUIContext()
-            });
+          setDateFilterController: (controller: CustomDialogController | null): void => {
+            this.dateFilterController = controller;
           },
-          onOpenAiDialog: (): void => this.aiDialogController.open(),
-          onAdd: (): void => {
-            this.editingItemId = -1;
-            this.openDialog();
-          },
-          onUndo: (): void => {
-            void this.vm.loadData(this.vm.planId);
-            this.hasUnsavedChanges = IndexStateManager.setUnsavedFlag(
-              this.currentPlanId,
-              AppStorageKeys.HAS_UNSAVED_POSTPONE,
-              false
-            );
-          },
-          onSave: (): void => {
-            this.vm.save();
-            this.hasUnsavedChanges = IndexStateManager.setUnsavedFlag(
-              this.currentPlanId,
-              AppStorageKeys.HAS_UNSAVED_POSTPONE,
-              false
-            );
+          openAiDialog: (): void => this.aiDialogController.open(),
+          openDialog: (initData?: InitDialogData): void => {
+            this.openDialog(initData);
           },
           setPlanTitle: (title: string): void => {
             this.planTitle = title;
@@ -557,3 +477,4 @@ struct Index {
     .height('100%')
   }
 }
+
