@@ -16,7 +16,7 @@ import { IndexStateManager } from './index/IndexStateManager';
 import { IndexLifecycleHelper } from './index/IndexLifecycleHelper';
 import { IndexDialogManager } from './index/IndexDialogManager';
 import { IndexDateConflictDialogFlowHelper } from './index/IndexDateConflictDialogFlowHelper';
-import { ConflictFlowContext, IndexConflictFlowHelper } from './index/IndexConflictFlowHelper';
+import { ConflictFlowContext } from './index/IndexConflictFlowHelper';
 import { IndexPageBehaviorHelper, ReminderDialogContext, StrategyDialogContext } from './index/IndexPageBehaviorHelper';
 import { IndexPageShowHelper } from './index/IndexPageShowHelper';
 import { IndexPageContextFactory } from './index/IndexPageContextFactory';
@@ -24,6 +24,8 @@ import { IndexReminderSubscriptionHelper } from './index/IndexReminderSubscripti
 import { IndexStartEventGuardHelper } from './index/IndexStartEventGuardHelper';
 import { IndexDialogBindingsHelper } from './index/IndexDialogBindingsHelper';
 import { IndexLayoutCallbacksBuilder } from './index/IndexLayoutCallbacksBuilder';
+import { IndexLayoutCallbacksContextFactory } from './index/IndexLayoutCallbacksContextFactory';
+import { IndexLayoutPropsBuilder } from './index/IndexLayoutPropsBuilder';
 @Entry
 @Component
 struct Index {
@@ -231,22 +233,12 @@ struct Index {
   onPageShow() {
     IndexPageShowHelper.handlePageShow({
       vm: this.vm,
-      onStartArrivalReminderEngine: (): void => {
-        this.startArrivalReminderEngine();
-      },
-      onRefreshUnsavedFlag: (): void => {
-        this.refreshUnsavedChangesFlag();
-      },
+      onStartArrivalReminderEngine: (): void => { this.startArrivalReminderEngine(); },
+      onRefreshUnsavedFlag: (): void => { this.refreshUnsavedChangesFlag(); },
       onReadDraftStorage: (key: string): string => this.readDraftStorageWithFallback(key),
-      onClearDraftStorage: (): void => {
-        this.clearDialogDraftStorage();
-      },
-      onOpenDialog: (initData?: InitDialogData): void => {
-        this.openDialog(initData);
-      },
-      onSafeToast: (message: string): void => {
-        this.safeShowToast(message);
-      },
+      onClearDraftStorage: (): void => { this.clearDialogDraftStorage(); },
+      onOpenDialog: (initData?: InitDialogData): void => { this.openDialog(initData); },
+      onSafeToast: (message: string): void => { this.safeShowToast(message); },
       onSanitizeError: (error: Object): string => this.sanitizeError(error)
     });
   }
@@ -309,68 +301,31 @@ struct Index {
     IndexLifecycleHelper.handleAboutToAppear({
       uiContext: this.getUIContext(),
       vm: this.vm,
-      onSetCurrentPlanId: (planId: number): void => {
-        this.currentPlanId = planId;
-      },
-      onSetManualWeatherRefresh: (value: boolean): void => {
-        this.hasManualPlanningWeatherRefresh = value;
-      },
-      onRefreshUnsavedFlag: (): void => {
-        this.refreshUnsavedChangesFlag();
-      },
-      onSetPlanTitle: (title: string): void => {
-        this.planTitle = title;
-      },
-      onBindReminderSubscriptions: (): void => {
-        this.bindReminderSubscriptions();
-      },
-      onSetStrategyMode: (mode: number): void => {
-        this.strategyMode = mode;
-      },
-      onLoadStrategyExplanation: (): void => {
-        this.loadStrategyExplanation();
-      },
-      onSetCompanionMode: (value: boolean): void => {
-        this.isCompanionMode = value;
-      },
-      onTryStartEvent: async (eventId: number): Promise<boolean> => {
-        return this.tryStartEventWithConflictPrompt(eventId);
-      },
-      onStartArrivalReminderEngine: (): void => {
-        this.startArrivalReminderEngine();
-      },
-      onStartStrategyAdaptationCheck: (): void => {
-        this.startStrategyAdaptationCheck();
-      },
-      onInitBacklogExpandedState: async (planId: number, isNewPlan: boolean): Promise<void> => {
-        await this.initBacklogExpandedState(planId, isNewPlan);
-      },
-      onLoadDataError: (reason: string): void => {
-        hilog.error(0x0000, 'Index', `[ARRIVAL][load_data_failed] reason=${reason}`);
-      }
+      onSetCurrentPlanId: (planId: number): void => { this.currentPlanId = planId; },
+      onSetManualWeatherRefresh: (value: boolean): void => { this.hasManualPlanningWeatherRefresh = value; },
+      onRefreshUnsavedFlag: (): void => { this.refreshUnsavedChangesFlag(); },
+      onSetPlanTitle: (title: string): void => { this.planTitle = title; },
+      onBindReminderSubscriptions: (): void => { this.bindReminderSubscriptions(); },
+      onSetStrategyMode: (mode: number): void => { this.strategyMode = mode; },
+      onLoadStrategyExplanation: (): void => { this.loadStrategyExplanation(); },
+      onSetCompanionMode: (value: boolean): void => { this.isCompanionMode = value; },
+      onTryStartEvent: async (eventId: number): Promise<boolean> => this.tryStartEventWithConflictPrompt(eventId),
+      onStartArrivalReminderEngine: (): void => { this.startArrivalReminderEngine(); },
+      onStartStrategyAdaptationCheck: (): void => { this.startStrategyAdaptationCheck(); },
+      onInitBacklogExpandedState: async (planId: number, isNewPlan: boolean): Promise<void> =>
+        this.initBacklogExpandedState(planId, isNewPlan),
+      onLoadDataError: (reason: string): void => { hilog.error(0x0000, 'Index', `[ARRIVAL][load_data_failed] reason=${reason}`); }
     });
   }
   aboutToDisappear() {
     IndexLifecycleHelper.handleAboutToDisappear({
       strategyAdaptationCheckTimer: this.strategyAdaptationCheckTimer,
-      onUnbindReminderSubscriptions: (): void => {
-        this.unbindReminderSubscriptions();
-      },
-      onStopArrivalEngine: (): void => {
-        this.planService.stopArrivalEngine();
-      },
-      onStopExecutionWeatherScheduler: (): void => {
-        this.vm.stopExecutionWeatherScheduler();
-      },
-      onUnbindPlanState: (): void => {
-        this.vm.unbindPlanState();
-      },
-      onClearDialogDraftStorage: (): void => {
-        this.clearDialogDraftStorage();
-      },
-      onSetStrategyAdaptationCheckTimer: (timer: number): void => {
-        this.strategyAdaptationCheckTimer = timer;
-      }
+      onUnbindReminderSubscriptions: (): void => { this.unbindReminderSubscriptions(); },
+      onStopArrivalEngine: (): void => { this.planService.stopArrivalEngine(); },
+      onStopExecutionWeatherScheduler: (): void => { this.vm.stopExecutionWeatherScheduler(); },
+      onUnbindPlanState: (): void => { this.vm.unbindPlanState(); },
+      onClearDialogDraftStorage: (): void => { this.clearDialogDraftStorage(); },
+      onSetStrategyAdaptationCheckTimer: (timer: number): void => { this.strategyAdaptationCheckTimer = timer; }
     });
   }
   private getStrategyDialogContext(): StrategyDialogContext {
@@ -389,7 +344,7 @@ struct Index {
   }
   build() {
     Column() {
-      IndexPageLayout({
+      IndexPageLayout(IndexLayoutPropsBuilder.create({
         vm: this.vm,
         planTitle: this.planTitle,
         strategyMode: this.strategyMode,
@@ -404,7 +359,7 @@ struct Index {
         themePalette: ThemeCenter.getPalette(this.effectiveTheme),
         companionOverlayZIndex: DomainConstants.COMPANION_OVERLAY_Z_INDEX,
         companionBackRequestToken: this.companionBackRequestToken,
-        callbacks: IndexLayoutCallbacksBuilder.create({
+        callbacks: IndexLayoutCallbacksBuilder.create(IndexLayoutCallbacksContextFactory.create({
           vm: this.vm,
           planTitle: this.planTitle,
           currentPlanId: this.currentPlanId,
@@ -412,69 +367,29 @@ struct Index {
           backlogExpanded: this.backlogExpanded,
           getUIContext: (): UIContext => this.getUIContext(),
           safeShowToast: (message: string): void => this.safeShowToast(message),
-          setCompanionMode: (value: boolean): void => {
-            this.isCompanionMode = value;
-          },
-          setManualPlanningWeatherRefresh: (value: boolean): void => {
-            this.hasManualPlanningWeatherRefresh = value;
-          },
-          setHintPopupVisible: (value: boolean): void => {
-            this.showPlanningWeatherHintPopup = value;
-          },
-          setScorePopupVisible: (value: boolean): void => {
-            this.showPlanningWeatherScorePopup = value;
-          },
-          toggleHintPopup: (): void => {
-            this.showPlanningWeatherHintPopup = !this.showPlanningWeatherHintPopup;
-          },
-          toggleScorePopup: (): void => {
-            this.showPlanningWeatherScorePopup = !this.showPlanningWeatherScorePopup;
-          },
-          setBacklogExpanded: (value: boolean): void => {
-            this.backlogExpanded = value;
-          },
-          setCollapsedDayOffsets: (offsets: number[]): void => {
-            this.collapsedDayOffsets = offsets;
-          },
-          setEditingItemId: (id: number): void => {
-            this.editingItemId = id;
-          },
-          setHasUnsavedChanges: (value: boolean): void => {
-            this.hasUnsavedChanges = value;
-          },
+          setCompanionMode: (value: boolean): void => { this.isCompanionMode = value; },
+          setManualPlanningWeatherRefresh: (value: boolean): void => { this.hasManualPlanningWeatherRefresh = value; },
+          setHintPopupVisible: (value: boolean): void => { this.showPlanningWeatherHintPopup = value; },
+          setScorePopupVisible: (value: boolean): void => { this.showPlanningWeatherScorePopup = value; },
+          toggleHintPopup: (): void => { this.showPlanningWeatherHintPopup = !this.showPlanningWeatherHintPopup; },
+          toggleScorePopup: (): void => { this.showPlanningWeatherScorePopup = !this.showPlanningWeatherScorePopup; },
+          setBacklogExpanded: (value: boolean): void => { this.backlogExpanded = value; },
+          setCollapsedDayOffsets: (offsets: number[]): void => { this.collapsedDayOffsets = offsets; },
+          setEditingItemId: (id: number): void => { this.editingItemId = id; },
+          setHasUnsavedChanges: (value: boolean): void => { this.hasUnsavedChanges = value; },
           onScheduleRefresh: (): void => { void this.handlePagePullRefresh(); },
           onGapFound: (item: EventEntity): void => this.onGapFoundCallback(item),
           getConflictFlowContext: (): ConflictFlowContext => this.getConflictFlowContext(),
-          setGapItem: (item: EventEntity | null): void => {
-            this.gapItem = item;
-          },
-          openGapDialog: (): void => {
-            this.gapDialogController?.open();
-          },
-          setDateFilterController: (controller: CustomDialogController | null): void => {
-            this.dateFilterController = controller;
-          },
+          setGapItem: (item: EventEntity | null): void => { this.gapItem = item; },
+          openGapDialog: (): void => { this.gapDialogController?.open(); },
+          setDateFilterController: (controller: CustomDialogController | null): void => { this.dateFilterController = controller; },
           openAiDialog: (): void => this.aiDialogController.open(),
-          openDialog: (initData?: InitDialogData): void => {
-            this.openDialog(initData);
-          },
-          setPlanTitle: (title: string): void => {
-            this.planTitle = title;
-          },
-          requestPlanDateUpdate: (dateMs: number): void => {
-            IndexConflictFlowHelper.requestPlanDateUpdate(this.getConflictFlowContext(), dateMs);
-          },
-          setDialogController: (controller: CustomDialogController | null): void => {
-            this.dialogController = controller;
-          },
-          setSettingsDialogController: (controller: CustomDialogController | null): void => {
-            this.settingsDialogController = controller;
-          }
-        })
-      })
-    }
-    .width('100%')
-    .height('100%')
+          openDialog: (initData?: InitDialogData): void => { this.openDialog(initData); },
+          setPlanTitle: (title: string): void => { this.planTitle = title; },
+          setDialogController: (controller: CustomDialogController | null): void => { this.dialogController = controller; },
+          setSettingsDialogController: (controller: CustomDialogController | null): void => { this.settingsDialogController = controller; }
+        }))
+      }))
+    }.width('100%').height('100%')
   }
 }
-
