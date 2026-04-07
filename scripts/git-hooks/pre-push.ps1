@@ -11,7 +11,10 @@ if ($currentBranch -eq 'main' -and -not $allowMainPush) {
 }
 
 function Get-UpstreamRef {
-  $upstream = git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>$null
+  $previousPreference = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  $upstream = & git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>$null
+  $ErrorActionPreference = $previousPreference
   if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($upstream)) {
     return $upstream.Trim()
   }

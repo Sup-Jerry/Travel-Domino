@@ -6,6 +6,7 @@ import { IndexHelpers } from './IndexHelpers';
 import { IndexCompanionOverlay } from './IndexCompanionOverlay';
 import { IndexScheduleArea } from './IndexScheduleArea';
 import { IndexTopArea } from './IndexTopArea';
+import { IndexLayoutCallbacksHelper, IndexPageLayoutCallbacks } from './IndexLayoutCallbacksHelper';
 
 @Component
 export struct IndexPageLayout {
@@ -43,34 +44,9 @@ export struct IndexPageLayout {
     toolboxBallDisabled: '#7A8A9E'
   };
   @Prop companionOverlayZIndex: number = 10;
+  @Prop companionBackRequestToken: number = 0;
 
-  onBack: () => void = () => {};
-  onOpenSettings: () => void = () => {};
-  onEnterCompanion: () => void = () => {};
-  onRefreshWeather: () => void = () => {};
-  onToggleHint: () => void = () => {};
-  onToggleScore: () => void = () => {};
-  onHintPopupVisibleChange: (visible: boolean) => void = (_visible: boolean) => {};
-  onScorePopupVisibleChange: (visible: boolean) => void = (_visible: boolean) => {};
-  onToggleBacklogExpand: () => void = () => {};
-  onMoveToSchedule: (item: TravelPlanItem) => void = (_item: TravelPlanItem) => {};
-  onMoveAllToSchedule: () => void = () => {};
-  onIsDayCollapsed: (dayOffset: number) => boolean = (_dayOffset: number) => false;
-  onToggleDay: (dayOffset: number) => void = (_dayOffset: number) => {};
-  onScheduleRefresh: () => void = () => {};
-  onOpenEditDialog: (item: EventEntity) => void = (_item: EventEntity) => {};
-  onOpenTimeEditDialog: (item: EventEntity) => void = (_item: EventEntity) => {};
-  onGapFound: (item: EventEntity) => void = (_item: EventEntity) => {};
-  onResolveConflictAction: (item: EventEntity, strategy: 'delay' | 'compress' | 'advance' | 'smart', gapMinutes: number) => void =
-    (_item: EventEntity, _strategy: 'delay' | 'compress' | 'advance' | 'smart', _gapMinutes: number) => {};
-  onConfirmMoveToBacklog: (item: EventEntity) => void = (_item: EventEntity) => {};
-  onConfirmDeleteEvent: (item: EventEntity) => void = (_item: EventEntity) => {};
-  onOpenGapOptimize: () => void = () => {};
-  onFilter: () => void = () => {};
-  onAi: () => void = () => {};
-  onAdd: () => void = () => {};
-  onUndo: () => void = () => {};
-  onSave: () => void = () => {};
+  @Prop callbacks: IndexPageLayoutCallbacks = IndexLayoutCallbacksHelper.createEmpty();
 
   private isWeatherHintVisible(): boolean {
     return this.vm.isWeatherFeatureEnabled() && this.hasManualPlanningWeatherRefresh && !!this.vm.weatherPlanningHint;
@@ -125,17 +101,17 @@ export struct IndexPageLayout {
             textPrimary: this.themePalette.textPrimary,
             cardBgSoft: this.themePalette.cardBgSoft
           },
-          onBack: () => this.onBack(),
-          onOpenSettings: () => this.onOpenSettings(),
-          onEnterCompanion: () => this.onEnterCompanion(),
-          onRefreshWeather: () => this.onRefreshWeather(),
-          onToggleHint: () => this.onToggleHint(),
-          onToggleScore: () => this.onToggleScore(),
-          onHintPopupVisibleChange: (visible: boolean) => this.onHintPopupVisibleChange(visible),
-          onScorePopupVisibleChange: (visible: boolean) => this.onScorePopupVisibleChange(visible),
-          onToggleBacklogExpand: () => this.onToggleBacklogExpand(),
-          onMoveToSchedule: (item: TravelPlanItem) => this.onMoveToSchedule(item),
-          onMoveAllToSchedule: () => this.onMoveAllToSchedule()
+          onBack: () => this.callbacks.onBack(),
+          onOpenSettings: () => this.callbacks.onOpenSettings(),
+          onEnterCompanion: () => this.callbacks.onEnterCompanion(),
+          onRefreshWeather: () => this.callbacks.onRefreshWeather(),
+          onToggleHint: () => this.callbacks.onToggleHint(),
+          onToggleScore: () => this.callbacks.onToggleScore(),
+          onHintPopupVisibleChange: (visible: boolean) => this.callbacks.onHintPopupVisibleChange(visible),
+          onScorePopupVisibleChange: (visible: boolean) => this.callbacks.onScorePopupVisibleChange(visible),
+          onToggleBacklogExpand: () => this.callbacks.onToggleBacklogExpand(),
+          onMoveToSchedule: (item: TravelPlanItem) => this.callbacks.onMoveToSchedule(item),
+          onMoveAllToSchedule: () => this.callbacks.onMoveAllToSchedule()
         })
 
         IndexScheduleArea({
@@ -162,23 +138,23 @@ export struct IndexPageLayout {
             primary: this.themePalette.primary,
             cardBg: this.themePalette.cardBg
           },
-          onIsDayCollapsed: (dayOffset: number) => this.onIsDayCollapsed(dayOffset),
-          onToggleDay: (dayOffset: number) => this.onToggleDay(dayOffset),
-          onRefresh: () => this.onScheduleRefresh(),
-          onOpenEditDialog: (item: EventEntity) => this.onOpenEditDialog(item),
-          onOpenTimeEditDialog: (item: EventEntity) => this.onOpenTimeEditDialog(item),
-          onGapFound: (item: EventEntity) => this.onGapFound(item),
+          onIsDayCollapsed: (dayOffset: number) => this.callbacks.onIsDayCollapsed(dayOffset),
+          onToggleDay: (dayOffset: number) => this.callbacks.onToggleDay(dayOffset),
+          onRefresh: () => this.callbacks.onScheduleRefresh(),
+          onOpenEditDialog: (item: EventEntity) => this.callbacks.onOpenEditDialog(item),
+          onOpenTimeEditDialog: (item: EventEntity) => this.callbacks.onOpenTimeEditDialog(item),
+          onGapFound: (item: EventEntity) => this.callbacks.onGapFound(item),
           onResolveConflictAction: (item: EventEntity, strategy: 'delay' | 'compress' | 'advance' | 'smart', gapMinutes: number) => {
-            this.onResolveConflictAction(item, strategy, gapMinutes);
+            this.callbacks.onResolveConflictAction(item, strategy, gapMinutes);
           },
-          onConfirmMoveToBacklog: (item: EventEntity) => this.onConfirmMoveToBacklog(item),
-          onConfirmDeleteEvent: (item: EventEntity) => this.onConfirmDeleteEvent(item),
-          onOpenGapOptimize: () => this.onOpenGapOptimize(),
-          onFilter: () => this.onFilter(),
-          onAi: () => this.onAi(),
-          onAdd: () => this.onAdd(),
-          onUndo: () => this.onUndo(),
-          onSave: () => this.onSave()
+          onConfirmMoveToBacklog: (item: EventEntity) => this.callbacks.onConfirmMoveToBacklog(item),
+          onConfirmDeleteEvent: (item: EventEntity) => this.callbacks.onConfirmDeleteEvent(item),
+          onOpenGapOptimize: () => this.callbacks.onOpenGapOptimize(),
+          onFilter: () => this.callbacks.onFilter(),
+          onAi: () => this.callbacks.onAi(),
+          onAdd: () => this.callbacks.onAdd(),
+          onUndo: () => this.callbacks.onUndo(),
+          onSave: () => this.callbacks.onSave()
         })
       }
       .width('100%')
@@ -188,7 +164,8 @@ export struct IndexPageLayout {
       IndexCompanionOverlay({
         vm: this.vm,
         isVisible: this.isCompanionMode,
-        overlayZIndex: this.companionOverlayZIndex
+        overlayZIndex: this.companionOverlayZIndex,
+        backRequestToken: this.companionBackRequestToken
       })
     }
     .width('100%')

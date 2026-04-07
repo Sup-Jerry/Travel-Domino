@@ -13,10 +13,10 @@
 
 $ErrorActionPreference = 'Stop'
 
-function Invoke-Git([string]$Args) {
-  & git $Args
+function Invoke-Git([string]$GitArgsLine) {
+  & cmd /c "git $GitArgsLine"
   if ($LASTEXITCODE -ne 0) {
-    throw "git command failed: git $Args"
+    throw "git command failed: git $GitArgsLine"
   }
 }
 
@@ -138,7 +138,7 @@ if ([string]::IsNullOrWhiteSpace($Scope)) {
   }
 }
 
-Invoke-Git "commit -m \"$commitMsg\""
+Invoke-Git "commit -m `"$commitMsg`""
 
 if ($AllowMainPush) {
   $env:ALLOW_MAIN_PUSH = '1'
