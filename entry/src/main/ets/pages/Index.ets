@@ -15,7 +15,6 @@ import { InitDialogData, PendingItemData } from './index/IndexTypes';
 import { IndexStateManager } from './index/IndexStateManager';
 import { IndexLifecycleHelper } from './index/IndexLifecycleHelper';
 import { IndexDialogManager } from './index/IndexDialogManager';
-import { IndexDateConflictDialogFlowHelper } from './index/IndexDateConflictDialogFlowHelper';
 import { ConflictFlowContext } from './index/IndexConflictFlowHelper';
 import { IndexPageBehaviorHelper, ReminderDialogContext, StrategyDialogContext } from './index/IndexPageBehaviorHelper';
 import { IndexPageShowHelper } from './index/IndexPageShowHelper';
@@ -23,20 +22,18 @@ import { IndexPageContextFactory } from './index/IndexPageContextFactory';
 import { IndexReminderSubscriptionHelper } from './index/IndexReminderSubscriptionHelper';
 import { IndexStartEventGuardHelper } from './index/IndexStartEventGuardHelper';
 import { IndexDialogBindingsHelper } from './index/IndexDialogBindingsHelper';
-import { IndexLayoutCallbacksBuilder } from './index/IndexLayoutCallbacksBuilder';
-import { IndexLayoutCallbacksContextFactory } from './index/IndexLayoutCallbacksContextFactory';
-import { IndexLayoutPropsBuilder } from './index/IndexLayoutPropsBuilder';
+import { IndexPageBindingsBuilder } from './index/IndexPageBindingsBuilder';
 @Entry
 @Component
 struct Index {
   @State vm: TimelineViewModel = new TimelineViewModel();
-  @State planTitle: string = '行程详情';
+  @State planTitle: string = '閻炴稑鐬奸埢鑲╂嫚閿旇棄鍓?;
   @State editingItemId: number = -1;
   @State currentPlanId: number = -1;
   @State backlogExpanded: boolean = false;
   @State collapsedDayOffsets: number[] = [];
   @State pendingItem: PendingItemData | null = null;
-  @State gapItem: EventEntity | null = null; // 用于传给弹窗
+  @State gapItem: EventEntity | null = null; // 闁活潿鍔嬬花顒佸閻樼數鑸剁€殿喖婀遍悰?
   @State isCompanionMode: boolean = false;
   @State companionBackRequestToken: number = 0;
   @State hasUnsavedChanges: boolean = false;
@@ -66,8 +63,8 @@ struct Index {
   timeDialogController: CustomDialogController | null = null;
   suggestionDialogController: CustomDialogController | null = null;
   onTrafficSignal() {
-    hilog.info(0x0000, 'Index', '收到高德数据更新信号，触发 UI 重算');
-    // 路况异步回填到达后，强制重拉通勤并全量重排，确保跨天分组及时生效。
+    hilog.info(0x0000, 'Index', '闁衡偓鐠哄搫鐓傚Δ鍌浢惀澶愬极閻楀牆绁﹂柡鍥х摠閺屽﹥绌遍垾鍐插▏闁挎稑鐭佽闁?UI 闂佹彃绉堕悾?);
+    // 閻犱警鍨伴崰灞筋嚕閸屾侗鍔勯柛銉у仜閿濈偤宕氶幏灞惧涧闁告艾鍑界槐婵嗩嚕閸濆嫬鐓戦梺鎻掔У婵椽鏌呭顒€鐝舵鐐舵硾閸欏繘鏌岃箛娑樻闁圭儤甯槐婵堟兜椤旇崵绠介悹鎭掑妼閵囧宕氶崱娆戠煁闁告瑥锕ュ鍌炴偨閻斿憡娅忛柕?
     this.vm.testAllCommute();
     this.collapsedDayOffsets = [];
     this.dayGroupRenderVersion += 1;
@@ -208,7 +205,7 @@ struct Index {
   });
   conflictDialogController: CustomDialogController = this.createConflictDialogController();
   private createConflictDialogController(): CustomDialogController {
-    return IndexDateConflictDialogFlowHelper.createController({
+    return IndexPageBindingsBuilder.createConflictDialogController({
       vm: this.vm,
       getUIContext: (): UIContext => this.getUIContext(),
       getPendingItem: (): PendingItemData | null => this.pendingItem,
@@ -271,7 +268,7 @@ struct Index {
     this.backlogExpanded = await IndexStateManager.initBacklogExpandedState(planId, isNewPlan);
   }
   openDialog(initData?: InitDialogData) {
-    this.dialogController = IndexDialogBindingsHelper.createAddDialogController({
+    this.dialogController = IndexPageBindingsBuilder.createAddDialogController({
       vm: this.vm,
       editingItemId: this.editingItemId,
       currentPlanId: this.currentPlanId,
@@ -344,7 +341,7 @@ struct Index {
   }
   build() {
     Column() {
-      IndexPageLayout(IndexLayoutPropsBuilder.create({
+      IndexPageLayout(IndexPageBindingsBuilder.createLayoutProps({
         vm: this.vm,
         planTitle: this.planTitle,
         strategyMode: this.strategyMode,
@@ -359,36 +356,31 @@ struct Index {
         themePalette: ThemeCenter.getPalette(this.effectiveTheme),
         companionOverlayZIndex: DomainConstants.COMPANION_OVERLAY_Z_INDEX,
         companionBackRequestToken: this.companionBackRequestToken,
-        callbacks: IndexLayoutCallbacksBuilder.create(IndexLayoutCallbacksContextFactory.create({
-          vm: this.vm,
-          planTitle: this.planTitle,
-          currentPlanId: this.currentPlanId,
-          collapsedDayOffsets: this.collapsedDayOffsets,
-          backlogExpanded: this.backlogExpanded,
-          getUIContext: (): UIContext => this.getUIContext(),
-          safeShowToast: (message: string): void => this.safeShowToast(message),
-          setCompanionMode: (value: boolean): void => { this.isCompanionMode = value; },
-          setManualPlanningWeatherRefresh: (value: boolean): void => { this.hasManualPlanningWeatherRefresh = value; },
-          setHintPopupVisible: (value: boolean): void => { this.showPlanningWeatherHintPopup = value; },
-          setScorePopupVisible: (value: boolean): void => { this.showPlanningWeatherScorePopup = value; },
-          toggleHintPopup: (): void => { this.showPlanningWeatherHintPopup = !this.showPlanningWeatherHintPopup; },
-          toggleScorePopup: (): void => { this.showPlanningWeatherScorePopup = !this.showPlanningWeatherScorePopup; },
-          setBacklogExpanded: (value: boolean): void => { this.backlogExpanded = value; },
-          setCollapsedDayOffsets: (offsets: number[]): void => { this.collapsedDayOffsets = offsets; },
-          setEditingItemId: (id: number): void => { this.editingItemId = id; },
-          setHasUnsavedChanges: (value: boolean): void => { this.hasUnsavedChanges = value; },
-          onScheduleRefresh: (): void => { void this.handlePagePullRefresh(); },
-          onGapFound: (item: EventEntity): void => this.onGapFoundCallback(item),
-          getConflictFlowContext: (): ConflictFlowContext => this.getConflictFlowContext(),
-          setGapItem: (item: EventEntity | null): void => { this.gapItem = item; },
-          openGapDialog: (): void => { this.gapDialogController?.open(); },
-          setDateFilterController: (controller: CustomDialogController | null): void => { this.dateFilterController = controller; },
-          openAiDialog: (): void => this.aiDialogController.open(),
-          openDialog: (initData?: InitDialogData): void => { this.openDialog(initData); },
-          setPlanTitle: (title: string): void => { this.planTitle = title; },
-          setDialogController: (controller: CustomDialogController | null): void => { this.dialogController = controller; },
-          setSettingsDialogController: (controller: CustomDialogController | null): void => { this.settingsDialogController = controller; }
-        }))
+        currentPlanId: this.currentPlanId,
+        collapsedDayOffsets: this.collapsedDayOffsets,
+        getUIContext: (): UIContext => this.getUIContext(),
+        safeShowToast: (message: string): void => this.safeShowToast(message),
+        setCompanionMode: (value: boolean): void => { this.isCompanionMode = value; },
+        setManualPlanningWeatherRefresh: (value: boolean): void => { this.hasManualPlanningWeatherRefresh = value; },
+        setHintPopupVisible: (value: boolean): void => { this.showPlanningWeatherHintPopup = value; },
+        setScorePopupVisible: (value: boolean): void => { this.showPlanningWeatherScorePopup = value; },
+        toggleHintPopup: (): void => { this.showPlanningWeatherHintPopup = !this.showPlanningWeatherHintPopup; },
+        toggleScorePopup: (): void => { this.showPlanningWeatherScorePopup = !this.showPlanningWeatherScorePopup; },
+        setBacklogExpanded: (value: boolean): void => { this.backlogExpanded = value; },
+        setCollapsedDayOffsets: (offsets: number[]): void => { this.collapsedDayOffsets = offsets; },
+        setEditingItemId: (id: number): void => { this.editingItemId = id; },
+        setHasUnsavedChanges: (value: boolean): void => { this.hasUnsavedChanges = value; },
+        onScheduleRefresh: (): void => { void this.handlePagePullRefresh(); },
+        onGapFound: (item: EventEntity): void => this.onGapFoundCallback(item),
+        getConflictFlowContext: (): ConflictFlowContext => this.getConflictFlowContext(),
+        setGapItem: (item: EventEntity | null): void => { this.gapItem = item; },
+        openGapDialog: (): void => { this.gapDialogController?.open(); },
+        setDateFilterController: (controller: CustomDialogController | null): void => { this.dateFilterController = controller; },
+        openAiDialog: (): void => this.aiDialogController.open(),
+        openDialog: (initData?: InitDialogData): void => { this.openDialog(initData); },
+        setPlanTitle: (title: string): void => { this.planTitle = title; },
+        setDialogController: (controller: CustomDialogController | null): void => { this.dialogController = controller; },
+        setSettingsDialogController: (controller: CustomDialogController | null): void => { this.settingsDialogController = controller; }
       }))
     }.width('100%').height('100%')
   }
