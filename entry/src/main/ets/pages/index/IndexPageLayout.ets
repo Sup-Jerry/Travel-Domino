@@ -1,4 +1,4 @@
-import { ThemeCenter, ThemePalette } from '../../common/utils/ThemeCenter';
+﻿import { ThemeCenter, ThemePalette } from '../../common/utils/ThemeCenter';
 import { EventEntity } from '../../model/entity/EventEntity';
 import { TravelPlanItem } from '../../model/interface/IStandardEvent';
 import { TimelineViewModel } from '../../viewmodel/TimelineViewModel';
@@ -7,7 +7,7 @@ import { IndexCompanionOverlay } from './IndexCompanionOverlay';
 import { IndexScheduleArea } from './IndexScheduleArea';
 import { IndexTopArea } from './IndexTopArea';
 import { IndexLayoutCallbacksHelper, IndexPageLayoutCallbacks } from './IndexLayoutCallbacksHelper';
-import { NavigationHelper } from '../../common/utils/NavigationHelper';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 
 @Component
 export struct IndexPageLayout {
@@ -46,9 +46,12 @@ export struct IndexPageLayout {
   };
   @Prop companionOverlayZIndex: number = 10;
   @Prop companionBackRequestToken: number = 0;
+  onTopBack: () => void = () => {};
+  onTopOpenSettings: () => void = () => {};
+  onTopEnterCompanion: () => void = () => {};
+  onTopRefreshWeather: () => void = () => {};
 
-  @Prop callbacks: IndexPageLayoutCallbacks = IndexLayoutCallbacksHelper.createEmpty();
-  private callbacksCache: IndexPageLayoutCallbacks = IndexLayoutCallbacksHelper.createEmpty();
+  callbacks: IndexPageLayoutCallbacks = IndexLayoutCallbacksHelper.createEmpty();
 
   private getThemePalette(): ThemePalette {
     return this.themePalette ?? ThemeCenter.getPalette('light');
@@ -59,41 +62,25 @@ export struct IndexPageLayout {
   }
 
   private getCallbacks(): IndexPageLayoutCallbacks {
-    if (this.callbacks) {
-      this.callbacksCache = this.callbacks;
-      return this.callbacks;
-    }
-    return this.callbacksCache;
+    return this.callbacks ?? IndexLayoutCallbacksHelper.createEmpty();
   }
 
   private getCompanionModeSafe(): boolean {
-    if (!this.callbacks) {
-      return false;
-    }
     return this.isCompanionMode;
   }
 
   private callBack(): void {
-    const callbacks = this.getCallbacks();
-    if (callbacks && typeof callbacks.onBack === 'function') {
-      callbacks.onBack();
-      return;
-    }
-    void NavigationHelper.backOrFallbackToPlanList(this.getUIContext());
+    this.onTopBack();
   }
 
   private callOpenSettings(): void {
-    const callbacks = this.getCallbacks();
-    if (callbacks && typeof callbacks.onOpenSettings === 'function') {
-      callbacks.onOpenSettings();
-    }
+    hilog.info(0x0000, 'IndexPageLayout', '[TOP_NAV][layout] action=open_settings');
+    this.onTopOpenSettings();
   }
 
   private callEnterCompanion(): void {
-    const callbacks = this.getCallbacks();
-    if (callbacks && typeof callbacks.onEnterCompanion === 'function') {
-      callbacks.onEnterCompanion();
-    }
+    hilog.info(0x0000, 'IndexPageLayout', '[TOP_NAV][layout] action=enter_companion');
+    this.onTopEnterCompanion();
   }
 
   private callAdd(): void {
@@ -159,7 +146,10 @@ export struct IndexPageLayout {
           onBack: () => this.callBack(),
           onOpenSettings: () => this.callOpenSettings(),
           onEnterCompanion: () => this.callEnterCompanion(),
-          onRefreshWeather: () => this.getCallbacks().onRefreshWeather(),
+          onRefreshWeather: () => {
+            hilog.info(0x0000, 'IndexPageLayout', '[TOP_NAV][layout] action=refresh_weather');
+            this.onTopRefreshWeather();
+          },
           onToggleHint: () => this.getCallbacks().onToggleHint(),
           onToggleScore: () => this.getCallbacks().onToggleScore(),
           onHintPopupVisibleChange: (visible: boolean) => this.getCallbacks().onHintPopupVisibleChange(visible),
@@ -216,16 +206,19 @@ export struct IndexPageLayout {
       .height('100%')
       .backgroundColor(this.getThemePalette().pageBg)
 
-      IndexCompanionOverlay({
-        vm: this.getVm(),
-        isVisible: this.getCompanionModeSafe(),
-        overlayZIndex: this.companionOverlayZIndex,
-        backRequestToken: this.companionBackRequestToken
-      })
+      if (this.getCompanionModeSafe()) {
+        IndexCompanionOverlay({
+          vm: this.getVm(),
+          isVisible: this.getCompanionModeSafe(),
+          overlayZIndex: this.companionOverlayZIndex,
+          backRequestToken: this.companionBackRequestToken
+        })
+      }
     }
     .width('100%')
     .height('100%')
     .backgroundColor(this.getThemePalette().pageBg)
   }
 }
+
 

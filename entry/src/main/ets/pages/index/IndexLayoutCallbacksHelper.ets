@@ -1,4 +1,4 @@
-import { EventEntity } from '../../model/entity/EventEntity';
+﻿import { EventEntity } from '../../model/entity/EventEntity';
 import { TravelPlanItem } from '../../model/interface/IStandardEvent';
 import { TimelineViewModel } from '../../viewmodel/TimelineViewModel';
 import { InitDialogData } from './IndexTypes';
@@ -109,6 +109,8 @@ export class IndexLayoutCallbacksHelper {
         void NavigationHelper.backOrFallbackToPlanList(context.getUIContext());
       },
       onOpenSettings: (): void => {
+        hilog.info(0x0000, 'IndexLayoutCallbacks',
+          `[TOP_NAV][callbacks] action=open_settings, archived=${context.vm.isArchived ? 1 : 0}`);
         if (context.vm.isArchived) {
           return;
         }
@@ -124,6 +126,8 @@ export class IndexLayoutCallbacksHelper {
         });
       },
       onEnterCompanion: (): void => {
+        hilog.info(0x0000, 'IndexLayoutCallbacks',
+          `[TOP_NAV][callbacks] action=enter_companion, archived=${context.vm.isArchived ? 1 : 0}`);
         hilog.info(0x0000, 'Index', '[DUAL_MODE_ACCEPT][mode_switch][click_enter]');
         if (context.vm.isArchived) {
           context.safeShowToast('归档计划不可进入伴游');
@@ -132,10 +136,14 @@ export class IndexLayoutCallbacksHelper {
         context.setCompanionMode(true);
       },
       onRefreshWeather: (): void => {
+        hilog.info(0x0000, 'IndexLayoutCallbacks',
+          `[TOP_NAV][callbacks] action=refresh_weather, archived=${context.vm.isArchived ? 1 : 0}, loading=${context.vm.weatherLoading ? 1 : 0}`);
         context.setManualPlanningWeatherRefresh(true);
         void context.vm.refreshPlanningWeather(true).then((): void => {
+          hilog.info(0x0000, 'IndexLayoutCallbacks', '[TOP_NAV][callbacks] action=refresh_weather, result=success');
           context.safeShowToast('天气已刷新');
         }).catch((_error: Object): void => {
+          hilog.warn(0x0000, 'IndexLayoutCallbacks', '[TOP_NAV][callbacks] action=refresh_weather, result=failed');
           context.safeShowToast('天气刷新失败');
         });
       },
@@ -173,3 +181,4 @@ export class IndexLayoutCallbacksHelper {
     };
   }
 }
+

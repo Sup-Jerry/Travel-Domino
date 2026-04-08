@@ -1,4 +1,7 @@
-﻿export interface IndexToolbarTheme {
+﻿import { hilog } from '@kit.PerformanceAnalysisKit';
+import { window } from '@kit.ArkUI';
+
+export interface IndexToolbarTheme {
   primary: string;
   textTertiary: string;
   cardBgSoft: string;
@@ -14,6 +17,7 @@ export struct IndexToolbar {
   @Prop isArchived: boolean = false;
   @Prop weatherFeatureEnabled: boolean = false;
   @Prop weatherLoading: boolean = false;
+  @State safeTopInset: number = 0;
   @Prop theme: IndexToolbarTheme = {
     primary: '#2F7DFF',
     textTertiary: '#8C8C8C',
@@ -25,6 +29,26 @@ export struct IndexToolbar {
   onOpenSettings: () => void = () => {};
   onEnterCompanion: () => void = () => {};
   onRefreshWeather: () => void = () => {};
+
+  aboutToAppear() {
+    this.updateSafeTopInset();
+  }
+
+  private updateSafeTopInset(): void {
+    window.getLastWindow(this.getUIContext().getHostContext()).then((mainWindow: window.Window) => {
+      const systemArea = mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM);
+      const cutoutArea = mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_CUTOUT);
+      const cutoutTopPx = cutoutArea.topRect.height > 0 ? cutoutArea.topRect.top + cutoutArea.topRect.height : 0;
+      const safeTopPx = Math.max(systemArea.topRect.height, cutoutTopPx);
+      this.safeTopInset = this.getUIContext().px2vp(safeTopPx);
+    }).catch((_error: Object) => {
+      this.safeTopInset = 0;
+    });
+  }
+
+  private getContainerTopPadding(): number {
+    return this.safeTopInset + 8;
+  }
 
   private getSafePlanTitle(): string {
     return this.planTitle ?? '';
@@ -79,10 +103,13 @@ export struct IndexToolbar {
       .backgroundColor(Color.Transparent)
       .padding({ left: 10, right: 10, top: 6, bottom: 6 })
       .borderRadius(8)
-      .onClick(() => this.onBack())
+      .onClick(() => {
+        hilog.info(0x0000, 'IndexToolbar', '[TOP_NAV][tap] action=back');
+        this.onBack();
+      })
 
       Column() {
-        Text(this.getSafePlanTitle().length > 7 ? `${this.getSafePlanTitle().substring(0, 7)}...` : this.getSafePlanTitle())
+        Text(this.getSafePlanTitle().length > 0 ? this.getSafePlanTitle() : '行程详情')
           .fontSize(18)
           .fontWeight(FontWeight.Bold)
           .maxLines(1)
@@ -108,11 +135,15 @@ export struct IndexToolbar {
         Text('点击修改日期')
           .fontSize(10)
           .fontColor(this.getSafeTheme().textTertiary)
-          .margin({ top: 2 })
+          .margin({ top: 4 })
       }
       .layoutWeight(1)
       .justifyContent(FlexAlign.Center)
+      .padding({ left: 8, right: 8, top: 8, bottom: 8 })
+      .borderRadius(12)
       .onClick(() => {
+        hilog.info(0x0000, 'IndexToolbar',
+          `[TOP_NAV][tap] action=open_settings, archived=${this.isArchived ? 1 : 0}`);
         if (this.isArchived) {
           return;
         }
@@ -122,9 +153,15 @@ export struct IndexToolbar {
       Row() {
         Text('伴游').fontSize(14)
       }
-      .padding(8)
+      .padding({ left: 10, right: 10, top: 8, bottom: 8 })
       .margin({ right: 4 })
-      .onClick(() => this.onEnterCompanion())
+      .borderRadius(10)
+      .backgroundColor(this.isCompanionMode ? this.getSafeTheme().cardBgSoft : Color.Transparent)
+      .onClick(() => {
+        hilog.info(0x0000, 'IndexToolbar',
+          `[TOP_NAV][tap] action=enter_companion, archived=${this.isArchived ? 1 : 0}`);
+        this.onEnterCompanion();
+      })
 
       if (!this.isCompanionMode && this.weatherFeatureEnabled) {
         Button(this.weatherLoading ? '...' : '天气')
@@ -134,11 +171,16 @@ export struct IndexToolbar {
           .backgroundColor(this.getSafeTheme().cardBgSoft)
           .fontColor(this.getSafeTheme().textPrimary)
           .enabled(!this.weatherLoading)
-          .onClick(() => this.onRefreshWeather())
+          .onClick(() => {
+            hilog.info(0x0000, 'IndexToolbar',
+              `[TOP_NAV][tap] action=refresh_weather, loading=${this.weatherLoading ? 1 : 0}`);
+            this.onRefreshWeather();
+          })
       }
     }
     .width('100%')
-    .padding(16)
+    .padding({ left: 16, right: 16, top: this.getContainerTopPadding(), bottom: 12 })
+    .constraintSize({ minHeight: 96 })
     .backgroundColor(Color.Transparent)
   }
 }

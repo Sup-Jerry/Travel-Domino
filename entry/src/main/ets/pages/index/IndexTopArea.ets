@@ -1,3 +1,4 @@
+﻿import { hilog } from '@kit.PerformanceAnalysisKit';
 import { EventEntity } from '../../model/entity/EventEntity';
 import { TravelPlanItem } from '../../model/interface/IStandardEvent';
 import { IndexBacklogView } from './IndexBacklogView';
@@ -80,9 +81,18 @@ export struct IndexTopArea {
         weatherLoading: this.weatherLoading,
         theme: this.getSafeToolbarTheme(),
         onBack: () => this.onBack(),
-        onOpenSettings: () => this.onOpenSettings(),
-        onEnterCompanion: () => this.onEnterCompanion(),
-        onRefreshWeather: () => this.onRefreshWeather()
+        onOpenSettings: () => {
+          hilog.info(0x0000, 'IndexTopArea', '[TOP_NAV][forward] action=open_settings');
+          this.onOpenSettings();
+        },
+        onEnterCompanion: () => {
+          hilog.info(0x0000, 'IndexTopArea', '[TOP_NAV][forward] action=enter_companion');
+          this.onEnterCompanion();
+        },
+        onRefreshWeather: () => {
+          hilog.info(0x0000, 'IndexTopArea', '[TOP_NAV][forward] action=refresh_weather');
+          this.onRefreshWeather();
+        }
       })
 
       IndexWeatherHintBar({

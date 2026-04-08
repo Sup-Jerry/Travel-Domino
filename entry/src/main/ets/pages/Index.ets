@@ -262,7 +262,12 @@ struct Index {
         collapsedDayOffsets: this.collapsedDayOffsets,
         getUIContext: (): UIContext => this.getUIContext(),
         safeShowToast: (message: string): void => this.safeShowToast(message),
-        setCompanionMode: (value: boolean): void => { this.isCompanionMode = value; },
+        setCompanionMode: (value: boolean): void => {
+          const before = this.isCompanionMode;
+          this.isCompanionMode = value;
+          hilog.info(0x0000, 'Index',
+            `[TOP_NAV][state] key=isCompanionMode, before=${before ? 1 : 0}, after=${this.isCompanionMode ? 1 : 0}`);
+        },
         setManualPlanningWeatherRefresh: (value: boolean): void => { this.hasManualPlanningWeatherRefresh = value; },
         setHintPopupVisible: (value: boolean): void => { this.showPlanningWeatherHintPopup = value; },
         setScorePopupVisible: (value: boolean): void => { this.showPlanningWeatherScorePopup = value; },

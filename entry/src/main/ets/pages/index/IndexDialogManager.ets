@@ -178,7 +178,7 @@ export class IndexDialogManager {
       }),
       alignment: DialogAlignment.Bottom,
       customStyle: true,
-      autoCancel: true
+      autoCancel: false
     });
   }
 

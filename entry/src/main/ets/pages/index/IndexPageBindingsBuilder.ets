@@ -8,6 +8,9 @@ import { InitDialogData, PendingItemData } from './IndexTypes';
 import { IndexDialogBindingsHelper } from './IndexDialogBindingsHelper';
 import { IndexDateConflictDialogFlowHelper } from './IndexDateConflictDialogFlowHelper';
 import { TimelineViewModel } from '../../viewmodel/TimelineViewModel';
+import { IndexSettingsDialogFlowHelper } from './IndexSettingsDialogFlowHelper';
+import { IndexConflictFlowHelper } from './IndexConflictFlowHelper';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 
 export interface IndexPageLayoutBindingsInput {
   vm: TimelineViewModel;
@@ -77,6 +80,36 @@ export interface IndexConflictDialogBindingsInput {
 
 export class IndexPageBindingsBuilder {
   static createLayoutProps(input: IndexPageLayoutBindingsInput): IndexLayoutProps {
+    const callbacks = IndexLayoutCallbacksBuilder.create(IndexLayoutCallbacksContextFactory.create({
+      vm: input.vm,
+      planTitle: input.planTitle,
+      currentPlanId: input.currentPlanId,
+      collapsedDayOffsets: input.collapsedDayOffsets,
+      backlogExpanded: input.backlogExpanded,
+      getUIContext: (): UIContext => input.getUIContext(),
+      safeShowToast: (message: string): void => input.safeShowToast(message),
+      setCompanionMode: (value: boolean): void => input.setCompanionMode(value),
+      setManualPlanningWeatherRefresh: (value: boolean): void => input.setManualPlanningWeatherRefresh(value),
+      setHintPopupVisible: (value: boolean): void => input.setHintPopupVisible(value),
+      setScorePopupVisible: (value: boolean): void => input.setScorePopupVisible(value),
+      toggleHintPopup: (): void => input.toggleHintPopup(),
+      toggleScorePopup: (): void => input.toggleScorePopup(),
+      setBacklogExpanded: (value: boolean): void => input.setBacklogExpanded(value),
+      setCollapsedDayOffsets: (offsets: number[]): void => input.setCollapsedDayOffsets(offsets),
+      setEditingItemId: (id: number): void => input.setEditingItemId(id),
+      setHasUnsavedChanges: (value: boolean): void => input.setHasUnsavedChanges(value),
+      onScheduleRefresh: (): void => input.onScheduleRefresh(),
+      onGapFound: (item: EventEntity): void => input.onGapFound(item),
+      getConflictFlowContext: (): ConflictFlowContext => input.getConflictFlowContext(),
+      setGapItem: (item: EventEntity | null): void => input.setGapItem(item),
+      openGapDialog: (): void => input.openGapDialog(),
+      setDateFilterController: (controller: CustomDialogController | null): void => input.setDateFilterController(controller),
+      openAiDialog: (): void => input.openAiDialog(),
+      openDialog: (initData?: InitDialogData): void => input.openDialog(initData),
+      setPlanTitle: (title: string): void => input.setPlanTitle(title),
+      setDialogController: (controller: CustomDialogController | null): void => input.setDialogController(controller),
+      setSettingsDialogController: (controller: CustomDialogController | null): void => input.setSettingsDialogController(controller)
+    }));
     return IndexLayoutPropsBuilder.create({
       vm: input.vm ?? new TimelineViewModel(),
       planTitle: input.planTitle,
@@ -92,36 +125,50 @@ export class IndexPageBindingsBuilder {
       themePalette: input.themePalette ?? ThemeCenter.getPalette('light'),
       companionOverlayZIndex: input.companionOverlayZIndex,
       companionBackRequestToken: input.companionBackRequestToken,
-      callbacks: IndexLayoutCallbacksBuilder.create(IndexLayoutCallbacksContextFactory.create({
-        vm: input.vm,
-        planTitle: input.planTitle,
-        currentPlanId: input.currentPlanId,
-        collapsedDayOffsets: input.collapsedDayOffsets,
-        backlogExpanded: input.backlogExpanded,
-        getUIContext: (): UIContext => input.getUIContext(),
-        safeShowToast: (message: string): void => input.safeShowToast(message),
-        setCompanionMode: (value: boolean): void => input.setCompanionMode(value),
-        setManualPlanningWeatherRefresh: (value: boolean): void => input.setManualPlanningWeatherRefresh(value),
-        setHintPopupVisible: (value: boolean): void => input.setHintPopupVisible(value),
-        setScorePopupVisible: (value: boolean): void => input.setScorePopupVisible(value),
-        toggleHintPopup: (): void => input.toggleHintPopup(),
-        toggleScorePopup: (): void => input.toggleScorePopup(),
-        setBacklogExpanded: (value: boolean): void => input.setBacklogExpanded(value),
-        setCollapsedDayOffsets: (offsets: number[]): void => input.setCollapsedDayOffsets(offsets),
-        setEditingItemId: (id: number): void => input.setEditingItemId(id),
-        setHasUnsavedChanges: (value: boolean): void => input.setHasUnsavedChanges(value),
-        onScheduleRefresh: (): void => input.onScheduleRefresh(),
-        onGapFound: (item: EventEntity): void => input.onGapFound(item),
-        getConflictFlowContext: (): ConflictFlowContext => input.getConflictFlowContext(),
-        setGapItem: (item: EventEntity | null): void => input.setGapItem(item),
-        openGapDialog: (): void => input.openGapDialog(),
-        setDateFilterController: (controller: CustomDialogController | null): void => input.setDateFilterController(controller),
-        openAiDialog: (): void => input.openAiDialog(),
-        openDialog: (initData?: InitDialogData): void => input.openDialog(initData),
-        setPlanTitle: (title: string): void => input.setPlanTitle(title),
-        setDialogController: (controller: CustomDialogController | null): void => input.setDialogController(controller),
-        setSettingsDialogController: (controller: CustomDialogController | null): void => input.setSettingsDialogController(controller)
-      }))
+      callbacks: callbacks,
+      onTopBack: (): void => callbacks.onBack(),
+      onTopOpenSettings: (): void => {
+        hilog.info(0x0000, 'IndexPageBindings', `[TOP_NAV][direct] action=open_settings, archived=${input.vm.isArchived ? 1 : 0}`);
+        if (input.vm.isArchived) {
+          return;
+        }
+        IndexSettingsDialogFlowHelper.open({
+          vm: input.vm,
+          planTitle: input.planTitle,
+          getUIContext: (): UIContext => input.getUIContext(),
+          safeShowToast: (message: string): void => input.safeShowToast(message),
+          setPlanTitle: (title: string): void => input.setPlanTitle(title),
+          requestPlanDateUpdate: (dateMs: number): void => {
+            IndexConflictFlowHelper.requestPlanDateUpdate(input.getConflictFlowContext(), dateMs);
+          },
+          setDialogController: (controller: CustomDialogController | null): void => input.setDialogController(controller),
+          setSettingsDialogController: (controller: CustomDialogController | null): void => input.setSettingsDialogController(controller)
+        });
+        input.safeShowToast('设置面板已打开');
+      },
+      onTopEnterCompanion: (): void => {
+        hilog.info(0x0000, 'IndexPageBindings', `[TOP_NAV][direct] action=enter_companion, archived=${input.vm.isArchived ? 1 : 0}`);
+        if (input.vm.isArchived) {
+          input.safeShowToast('归档计划不可进入伴游');
+          return;
+        }
+        if (input.isCompanionMode) {
+          input.safeShowToast('已在伴游模式');
+          return;
+        }
+        input.setCompanionMode(true);
+        input.safeShowToast('已进入伴游模式');
+      },
+      onTopRefreshWeather: (): void => {
+        hilog.info(0x0000, 'IndexPageBindings',
+          `[TOP_NAV][direct] action=refresh_weather, loading=${input.vm.weatherLoading ? 1 : 0}`);
+        input.setManualPlanningWeatherRefresh(true);
+        void input.vm.refreshPlanningWeather(true).then((): void => {
+          input.safeShowToast('天气已刷新');
+        }).catch((_error: Object): void => {
+          input.safeShowToast('天气刷新失败');
+        });
+      }
     });
   }
 

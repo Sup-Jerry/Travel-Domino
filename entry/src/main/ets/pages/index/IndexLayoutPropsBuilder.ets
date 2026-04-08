@@ -19,6 +19,10 @@ export interface IndexLayoutProps {
   companionOverlayZIndex: number;
   companionBackRequestToken: number;
   callbacks: IndexPageLayoutCallbacks;
+  onTopBack: () => void;
+  onTopOpenSettings: () => void;
+  onTopEnterCompanion: () => void;
+  onTopRefreshWeather: () => void;
 }
 
 export class IndexLayoutPropsBuilder {
@@ -38,7 +42,11 @@ export class IndexLayoutPropsBuilder {
       themePalette: params.themePalette ?? ThemeCenter.getPalette('light'),
       companionOverlayZIndex: params.companionOverlayZIndex,
       companionBackRequestToken: params.companionBackRequestToken,
-      callbacks: params.callbacks
+      callbacks: params.callbacks,
+      onTopBack: params.onTopBack,
+      onTopOpenSettings: params.onTopOpenSettings,
+      onTopEnterCompanion: params.onTopEnterCompanion,
+      onTopRefreshWeather: params.onTopRefreshWeather
     };
   }
 }

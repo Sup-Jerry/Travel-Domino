@@ -25,5 +25,7 @@ export struct IndexCompanionOverlay {
           })
       }
     }
+    .width('100%')
+    .height('100%')
   }
 }

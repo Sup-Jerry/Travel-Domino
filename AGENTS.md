@@ -1,5 +1,9 @@
 ﻿# AGENTS.md instructions for E:\Travel
 
+## Hard Rules (Highest Priority)
+- ArkUI/ArkTS 中 @Prop **禁止承载函数类型**。事件回调必须使用普通字段（非装饰器）或通过回调对象传递。
+- 修改组件属性定义时，提交前必须自检装饰器类型约束（@Prop/@State/@Link/@StorageLink），禁止再次引入函数型 @Prop。
+
 ## Skills
 A skill is a set of local instructions to follow that is stored in a `SKILL.md` file. Below is the list of skills that can be used in this project.
 
@@ -33,3 +37,4 @@ A skill is a set of local instructions to follow that is stored in a `SKILL.md` 
 
 任何密码、密钥、签名信息，都不写进 Git 跟踪文件。
 开发环境和构建环境都不用手填真实秘密到仓库文件中。
+
