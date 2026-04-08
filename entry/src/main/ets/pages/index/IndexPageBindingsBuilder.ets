@@ -1,5 +1,5 @@
 ﻿import { EventEntity } from '../../model/entity/EventEntity';
-import { ThemePalette } from '../../common/utils/ThemeCenter';
+import { ThemeCenter, ThemePalette } from '../../common/utils/ThemeCenter';
 import { IndexLayoutProps, IndexLayoutPropsBuilder } from './IndexLayoutPropsBuilder';
 import { IndexLayoutCallbacksBuilder } from './IndexLayoutCallbacksBuilder';
 import { IndexLayoutCallbacksContextFactory } from './IndexLayoutCallbacksContextFactory';
@@ -78,7 +78,7 @@ export interface IndexConflictDialogBindingsInput {
 export class IndexPageBindingsBuilder {
   static createLayoutProps(input: IndexPageLayoutBindingsInput): IndexLayoutProps {
     return IndexLayoutPropsBuilder.create({
-      vm: input.vm,
+      vm: input.vm ?? new TimelineViewModel(),
       planTitle: input.planTitle,
       strategyMode: input.strategyMode,
       currentStrategyExplanation: input.currentStrategyExplanation,
@@ -89,7 +89,7 @@ export class IndexPageBindingsBuilder {
       backlogExpanded: input.backlogExpanded,
       isPageRefreshing: input.isPageRefreshing,
       hasUnsavedChanges: input.hasUnsavedChanges,
-      themePalette: input.themePalette,
+      themePalette: input.themePalette ?? ThemeCenter.getPalette('light'),
       companionOverlayZIndex: input.companionOverlayZIndex,
       companionBackRequestToken: input.companionBackRequestToken,
       callbacks: IndexLayoutCallbacksBuilder.create(IndexLayoutCallbacksContextFactory.create({

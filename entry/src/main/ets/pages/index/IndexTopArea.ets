@@ -47,6 +47,27 @@ export struct IndexTopArea {
   onMoveToSchedule: (item: TravelPlanItem) => void = (_item: TravelPlanItem) => {};
   onMoveAllToSchedule: () => void = () => {};
 
+  private getSafeEvents(): EventEntity[] {
+    return this.events ?? [];
+  }
+
+  private getSafeToolbarTheme(): IndexToolbarTheme {
+    return this.toolbarTheme ?? {
+      primary: '#2F7DFF',
+      textTertiary: '#8C8C8C',
+      cardBgSoft: '#F4F6FA',
+      textPrimary: '#1F1F1F'
+    };
+  }
+
+  private getSafeWeatherTheme(): IndexWeatherHintTheme {
+    return this.weatherTheme ?? {
+      primary: '#2F7DFF',
+      textPrimary: '#1F2937',
+      cardBgSoft: '#F5F7FA'
+    };
+  }
+
   build() {
     Column() {
       IndexToolbar({
@@ -57,7 +78,7 @@ export struct IndexTopArea {
         isArchived: this.isArchived,
         weatherFeatureEnabled: this.weatherFeatureEnabled,
         weatherLoading: this.weatherLoading,
-        theme: this.toolbarTheme,
+        theme: this.getSafeToolbarTheme(),
         onBack: () => this.onBack(),
         onOpenSettings: () => this.onOpenSettings(),
         onEnterCompanion: () => this.onEnterCompanion(),
@@ -72,7 +93,7 @@ export struct IndexTopArea {
         scorePopupVisible: this.scorePopupVisible,
         hintLines: this.hintLines,
         scoreLines: this.scoreLines,
-        theme: this.weatherTheme,
+        theme: this.getSafeWeatherTheme(),
         onToggleHint: () => this.onToggleHint(),
         onToggleScore: () => this.onToggleScore(),
         onHintPopupVisibleChange: (visible: boolean) => this.onHintPopupVisibleChange(visible),
@@ -80,7 +101,7 @@ export struct IndexTopArea {
       })
 
       IndexBacklogView({
-        events: this.events,
+        events: this.getSafeEvents(),
         isExpanded: this.backlogExpanded,
         dividerColor: this.dividerColor,
         onToggleExpand: () => this.onToggleBacklogExpand(),

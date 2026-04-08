@@ -1,4 +1,4 @@
-import { ThemePalette } from '../../common/utils/ThemeCenter';
+import { ThemeCenter, ThemePalette } from '../../common/utils/ThemeCenter';
 import { EventEntity } from '../../model/entity/EventEntity';
 import { TravelPlanItem } from '../../model/interface/IStandardEvent';
 import { TimelineViewModel } from '../../viewmodel/TimelineViewModel';
@@ -7,6 +7,7 @@ import { IndexCompanionOverlay } from './IndexCompanionOverlay';
 import { IndexScheduleArea } from './IndexScheduleArea';
 import { IndexTopArea } from './IndexTopArea';
 import { IndexLayoutCallbacksHelper, IndexPageLayoutCallbacks } from './IndexLayoutCallbacksHelper';
+import { NavigationHelper } from '../../common/utils/NavigationHelper';
 
 @Component
 export struct IndexPageLayout {
@@ -47,26 +48,80 @@ export struct IndexPageLayout {
   @Prop companionBackRequestToken: number = 0;
 
   @Prop callbacks: IndexPageLayoutCallbacks = IndexLayoutCallbacksHelper.createEmpty();
+  private callbacksCache: IndexPageLayoutCallbacks = IndexLayoutCallbacksHelper.createEmpty();
+
+  private getThemePalette(): ThemePalette {
+    return this.themePalette ?? ThemeCenter.getPalette('light');
+  }
+
+  private getVm(): TimelineViewModel {
+    return this.vm ?? new TimelineViewModel();
+  }
+
+  private getCallbacks(): IndexPageLayoutCallbacks {
+    if (this.callbacks) {
+      this.callbacksCache = this.callbacks;
+      return this.callbacks;
+    }
+    return this.callbacksCache;
+  }
+
+  private getCompanionModeSafe(): boolean {
+    if (!this.callbacks) {
+      return false;
+    }
+    return this.isCompanionMode;
+  }
+
+  private callBack(): void {
+    const callbacks = this.getCallbacks();
+    if (callbacks && typeof callbacks.onBack === 'function') {
+      callbacks.onBack();
+      return;
+    }
+    void NavigationHelper.backOrFallbackToPlanList(this.getUIContext());
+  }
+
+  private callOpenSettings(): void {
+    const callbacks = this.getCallbacks();
+    if (callbacks && typeof callbacks.onOpenSettings === 'function') {
+      callbacks.onOpenSettings();
+    }
+  }
+
+  private callEnterCompanion(): void {
+    const callbacks = this.getCallbacks();
+    if (callbacks && typeof callbacks.onEnterCompanion === 'function') {
+      callbacks.onEnterCompanion();
+    }
+  }
+
+  private callAdd(): void {
+    const callbacks = this.getCallbacks();
+    if (callbacks && typeof callbacks.onAdd === 'function') {
+      callbacks.onAdd();
+    }
+  }
 
   private isWeatherHintVisible(): boolean {
-    return this.vm.isWeatherFeatureEnabled() && this.hasManualPlanningWeatherRefresh && !!this.vm.weatherPlanningHint;
+    return this.getVm().isWeatherFeatureEnabled() && this.hasManualPlanningWeatherRefresh && !!this.getVm().weatherPlanningHint;
   }
 
   private buildWeatherSuggestionText(): string {
     return IndexHelpers.buildWeatherSuggestionText({
-      collabLabel: this.vm.weatherCollabLabel,
-      planningHint: this.vm.weatherPlanningHint,
-      collabSummary: this.vm.weatherCollabSummary,
-      strategyHint: this.vm.weatherStrategyHint
+      collabLabel: this.getVm().weatherCollabLabel,
+      planningHint: this.getVm().weatherPlanningHint,
+      collabSummary: this.getVm().weatherCollabSummary,
+      strategyHint: this.getVm().weatherStrategyHint
     });
   }
 
   private buildHintLines(): string[] {
-    return IndexHelpers.splitLines(this.vm.buildPlanningWeatherHintExplanation());
+    return IndexHelpers.splitLines(this.getVm().buildPlanningWeatherHintExplanation());
   }
 
   private buildScoreLines(): string[] {
-    return IndexHelpers.splitLines(this.vm.buildWeatherScoreExplanation(this.vm.weatherRouteScore));
+    return IndexHelpers.splitLines(this.getVm().buildWeatherScoreExplanation(this.getVm().weatherRouteScore));
   }
 
   build() {
@@ -76,100 +131,101 @@ export struct IndexPageLayout {
           planTitle: this.planTitle,
           strategyMode: this.strategyMode,
           currentStrategyExplanation: this.currentStrategyExplanation,
-          isCompanionMode: this.isCompanionMode,
-          isArchived: this.vm.isArchived,
-          weatherFeatureEnabled: this.vm.isWeatherFeatureEnabled(),
-          weatherLoading: this.vm.weatherLoading,
+          isCompanionMode: this.getCompanionModeSafe(),
+          isArchived: this.getVm().isArchived,
+          weatherFeatureEnabled: this.getVm().isWeatherFeatureEnabled(),
+          weatherLoading: this.getVm().weatherLoading,
           weatherHintVisible: this.isWeatherHintVisible(),
           weatherSuggestionText: this.buildWeatherSuggestionText(),
-          weatherRouteScore: this.vm.weatherRouteScore,
+          weatherRouteScore: this.getVm().weatherRouteScore,
           hintPopupVisible: this.showPlanningWeatherHintPopup,
           scorePopupVisible: this.showPlanningWeatherScorePopup,
           hintLines: this.buildHintLines(),
           scoreLines: this.buildScoreLines(),
-          events: this.vm.events,
+          events: this.getVm().events,
           backlogExpanded: this.backlogExpanded,
-          dividerColor: this.themePalette.divider,
+          dividerColor: this.getThemePalette().divider,
           toolbarTheme: {
-            primary: this.themePalette.primary,
-            textTertiary: this.themePalette.textTertiary,
-            cardBgSoft: this.themePalette.cardBgSoft,
-            textPrimary: this.themePalette.textPrimary
+            primary: this.getThemePalette().primary,
+            textTertiary: this.getThemePalette().textTertiary,
+            cardBgSoft: this.getThemePalette().cardBgSoft,
+            textPrimary: this.getThemePalette().textPrimary
           },
           weatherTheme: {
-            primary: this.themePalette.primary,
-            textPrimary: this.themePalette.textPrimary,
-            cardBgSoft: this.themePalette.cardBgSoft
+            primary: this.getThemePalette().primary,
+            textPrimary: this.getThemePalette().textPrimary,
+            cardBgSoft: this.getThemePalette().cardBgSoft
           },
-          onBack: () => this.callbacks.onBack(),
-          onOpenSettings: () => this.callbacks.onOpenSettings(),
-          onEnterCompanion: () => this.callbacks.onEnterCompanion(),
-          onRefreshWeather: () => this.callbacks.onRefreshWeather(),
-          onToggleHint: () => this.callbacks.onToggleHint(),
-          onToggleScore: () => this.callbacks.onToggleScore(),
-          onHintPopupVisibleChange: (visible: boolean) => this.callbacks.onHintPopupVisibleChange(visible),
-          onScorePopupVisibleChange: (visible: boolean) => this.callbacks.onScorePopupVisibleChange(visible),
-          onToggleBacklogExpand: () => this.callbacks.onToggleBacklogExpand(),
-          onMoveToSchedule: (item: TravelPlanItem) => this.callbacks.onMoveToSchedule(item),
-          onMoveAllToSchedule: () => this.callbacks.onMoveAllToSchedule()
+          onBack: () => this.callBack(),
+          onOpenSettings: () => this.callOpenSettings(),
+          onEnterCompanion: () => this.callEnterCompanion(),
+          onRefreshWeather: () => this.getCallbacks().onRefreshWeather(),
+          onToggleHint: () => this.getCallbacks().onToggleHint(),
+          onToggleScore: () => this.getCallbacks().onToggleScore(),
+          onHintPopupVisibleChange: (visible: boolean) => this.getCallbacks().onHintPopupVisibleChange(visible),
+          onScorePopupVisibleChange: (visible: boolean) => this.getCallbacks().onScorePopupVisibleChange(visible),
+          onToggleBacklogExpand: () => this.getCallbacks().onToggleBacklogExpand(),
+          onMoveToSchedule: (item: TravelPlanItem) => this.getCallbacks().onMoveToSchedule(item),
+          onMoveAllToSchedule: () => this.getCallbacks().onMoveAllToSchedule()
         })
 
         IndexScheduleArea({
-          vm: this.vm,
-          groupedEvents: this.vm.groupedEvents,
-          allEvents: this.vm.events,
-          isArchived: this.vm.isArchived,
-          isCompanionMode: this.isCompanionMode,
-          showWeather: this.vm.isWeatherFeatureEnabled(),
+          vm: this.getVm(),
+          groupedEvents: this.getVm().groupedEvents,
+          allEvents: this.getVm().events,
+          isArchived: this.getVm().isArchived,
+          isCompanionMode: this.getCompanionModeSafe(),
+          showWeather: this.getVm().isWeatherFeatureEnabled(),
           isPageRefreshing: this.isPageRefreshing,
-          gapsCount: this.vm.getSortedGaps().length,
+          gapsCount: this.getVm().getSortedGaps().length,
           hasUnsavedChanges: this.hasUnsavedChanges,
           timelineTheme: {
-            pageBg: this.themePalette.pageBg,
-            textPrimary: this.themePalette.textPrimary,
-            textSecondary: this.themePalette.textSecondary,
-            textTertiary: this.themePalette.textTertiary,
-            warning: this.themePalette.warning
+            pageBg: this.getThemePalette().pageBg,
+            textPrimary: this.getThemePalette().textPrimary,
+            textSecondary: this.getThemePalette().textSecondary,
+            textTertiary: this.getThemePalette().textTertiary,
+            warning: this.getThemePalette().warning
           },
           unsavedTheme: {
-            textPrimary: this.themePalette.textPrimary,
-            textSecondary: this.themePalette.textSecondary,
-            divider: this.themePalette.divider,
-            primary: this.themePalette.primary,
-            cardBg: this.themePalette.cardBg
+            textPrimary: this.getThemePalette().textPrimary,
+            textSecondary: this.getThemePalette().textSecondary,
+            divider: this.getThemePalette().divider,
+            primary: this.getThemePalette().primary,
+            cardBg: this.getThemePalette().cardBg
           },
-          onIsDayCollapsed: (dayOffset: number) => this.callbacks.onIsDayCollapsed(dayOffset),
-          onToggleDay: (dayOffset: number) => this.callbacks.onToggleDay(dayOffset),
-          onRefresh: () => this.callbacks.onScheduleRefresh(),
-          onOpenEditDialog: (item: EventEntity) => this.callbacks.onOpenEditDialog(item),
-          onOpenTimeEditDialog: (item: EventEntity) => this.callbacks.onOpenTimeEditDialog(item),
-          onGapFound: (item: EventEntity) => this.callbacks.onGapFound(item),
+          onIsDayCollapsed: (dayOffset: number) => this.getCallbacks().onIsDayCollapsed(dayOffset),
+          onToggleDay: (dayOffset: number) => this.getCallbacks().onToggleDay(dayOffset),
+          onRefresh: () => this.getCallbacks().onScheduleRefresh(),
+          onOpenEditDialog: (item: EventEntity) => this.getCallbacks().onOpenEditDialog(item),
+          onOpenTimeEditDialog: (item: EventEntity) => this.getCallbacks().onOpenTimeEditDialog(item),
+          onGapFound: (item: EventEntity) => this.getCallbacks().onGapFound(item),
           onResolveConflictAction: (item: EventEntity, strategy: 'delay' | 'compress' | 'advance' | 'smart', gapMinutes: number) => {
-            this.callbacks.onResolveConflictAction(item, strategy, gapMinutes);
+            this.getCallbacks().onResolveConflictAction(item, strategy, gapMinutes);
           },
-          onConfirmMoveToBacklog: (item: EventEntity) => this.callbacks.onConfirmMoveToBacklog(item),
-          onConfirmDeleteEvent: (item: EventEntity) => this.callbacks.onConfirmDeleteEvent(item),
-          onOpenGapOptimize: () => this.callbacks.onOpenGapOptimize(),
-          onFilter: () => this.callbacks.onFilter(),
-          onAi: () => this.callbacks.onAi(),
-          onAdd: () => this.callbacks.onAdd(),
-          onUndo: () => this.callbacks.onUndo(),
-          onSave: () => this.callbacks.onSave()
+          onConfirmMoveToBacklog: (item: EventEntity) => this.getCallbacks().onConfirmMoveToBacklog(item),
+          onConfirmDeleteEvent: (item: EventEntity) => this.getCallbacks().onConfirmDeleteEvent(item),
+          onOpenGapOptimize: () => this.getCallbacks().onOpenGapOptimize(),
+          onFilter: () => this.getCallbacks().onFilter(),
+          onAi: () => this.getCallbacks().onAi(),
+          onAdd: () => this.callAdd(),
+          onUndo: () => this.getCallbacks().onUndo(),
+          onSave: () => this.getCallbacks().onSave()
         })
       }
       .width('100%')
       .height('100%')
-      .backgroundColor(this.themePalette.pageBg)
+      .backgroundColor(this.getThemePalette().pageBg)
 
       IndexCompanionOverlay({
-        vm: this.vm,
-        isVisible: this.isCompanionMode,
+        vm: this.getVm(),
+        isVisible: this.getCompanionModeSafe(),
         overlayZIndex: this.companionOverlayZIndex,
         backRequestToken: this.companionBackRequestToken
       })
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(this.themePalette.pageBg)
+    .backgroundColor(this.getThemePalette().pageBg)
   }
 }
+

@@ -1,6 +1,7 @@
 import { ThemePalette } from '../../common/utils/ThemeCenter';
 import { TimelineViewModel } from '../../viewmodel/TimelineViewModel';
 import { IndexPageLayoutCallbacks } from './IndexLayoutCallbacksHelper';
+import { ThemeCenter } from '../../common/utils/ThemeCenter';
 
 export interface IndexLayoutProps {
   vm: TimelineViewModel;
@@ -23,7 +24,7 @@ export interface IndexLayoutProps {
 export class IndexLayoutPropsBuilder {
   static create(params: IndexLayoutProps): IndexLayoutProps {
     return {
-      vm: params.vm,
+      vm: params.vm ?? new TimelineViewModel(),
       planTitle: params.planTitle,
       strategyMode: params.strategyMode,
       currentStrategyExplanation: params.currentStrategyExplanation,
@@ -34,7 +35,7 @@ export class IndexLayoutPropsBuilder {
       backlogExpanded: params.backlogExpanded,
       isPageRefreshing: params.isPageRefreshing,
       hasUnsavedChanges: params.hasUnsavedChanges,
-      themePalette: params.themePalette,
+      themePalette: params.themePalette ?? ThemeCenter.getPalette('light'),
       companionOverlayZIndex: params.companionOverlayZIndex,
       companionBackRequestToken: params.companionBackRequestToken,
       callbacks: params.callbacks

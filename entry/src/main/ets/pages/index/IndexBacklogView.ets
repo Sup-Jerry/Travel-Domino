@@ -13,7 +13,7 @@ export struct IndexBacklogView {
   onMoveAllToSchedule: () => void = () => {};
 
   private resolveBacklogItems(): TravelPlanItem[] {
-    return this.events
+    return (this.events ?? [])
       .filter((event: EventEntity) => event.status !== 1)
       .map((event: EventEntity) => event.toInterface());
   }
