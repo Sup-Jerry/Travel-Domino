@@ -1315,7 +1315,7 @@ struct Index {
       // 防止页面重进时沿用上次折叠/筛选状态导致“日程看起来消失”
       this.collapsedDayOffsets = [];
       this.vm.clearFilter();
-      this.vm.setHasUnsavedPostponeStorageKey(this.scopedStorageKey(AppStorageKeys.HAS_UNSAVED_POSTPONE));
+      this.vm.setHasUnsavedPostponeStorageKey(IndexStateManager.scopedStorageKey(this.currentPlanId, AppStorageKeys.HAS_UNSAVED_POSTPONE));
       this.refreshUnsavedFlag();
       this.planTitle = params['title'] as string || '行程详情';
       this.bindReminderSubscriptions();
