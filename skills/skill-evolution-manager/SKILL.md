@@ -126,6 +126,9 @@ Agent 调用 `scripts/smart_stitch.py`，将 `evolution.json` 的内容转化为
 - ????????????GitHub????????????? app-size-pruner?????????????
 - 当用户明确要求精简/瘦身时，禁止使用仅格式压缩或行数优化作为主要交付，必须给出职责下沉或冗余删除等结构性变化。
 - 在里程碑汇报中必须区分"结构性瘦身"与"样式压缩"，并量化各自占比，避免误导。
+- 当用户指定从某个提交继续开发时，先验证该提交是否在当前分支并汇报基线。
+- 用户明确要求结构性拆分时，禁止把格式压缩当作主要交付。
+- 当用户追问是否使用skill时，必须直接说明并立即纠偏执行。
 
 ### Known Fixes & Workarounds
 - Before any edit, restate user intent and explicitly state whether code will be changed.
@@ -189,7 +192,9 @@ Agent 调用 `scripts/smart_stitch.py`，将 `evolution.json` 的内容转化为
 - Index 页面需 onBackPress 拦截伴游态返回，并通过 token 下发到 CompanionView 处理内部回退。
 - Windows/PowerShell ??? JSON ? merge_evolution ?????????????????????????????
 - 若用户对结果提出"投机取巧"反馈，下一轮先执行反思沉淀再继续开发，并在同轮给出约束落库证据。
+- Windows 沙箱/防火墙偶发失败时，优先改为串行命令重试，避免并行调用扩大失败面。
+- 在复盘+瘦身+上传场景，固定顺序为：经验沉淀 -> 瘦身执行 -> Git同步。
 
 ### Custom Instruction Injection
 
-用户要求精简时，默认执行语义级瘦身：优先拆分职责、删除冗余路径、收敛接口；禁止以格式压缩凑目标。
+回顾多轮对话时，先抽取可执行约束，再落库到evolution并给出可验证证据。

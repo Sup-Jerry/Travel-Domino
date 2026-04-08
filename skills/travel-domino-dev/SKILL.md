@@ -243,6 +243,9 @@ description: 用于 Travel Domino（HarmonyOS 行程规划项目）的定向开�
 - ??????+??+??GitHub?????????????? -> ???? -> git-auto-publish???
 - 执行拆分计划时，禁止以格式压缩凑行数；每轮至少落地一个职责簇迁移（context/builder/flow/action）并保持行为不变。
 - 当用户要求"一次性推进多个里程碑"时，优先做可回滚的结构下沉，而非样式变更。
+- 执行Index M4/M5时，若用户指定基线提交，先对齐基线再开始拆分。
+- 结构拆分优先下沉context/builder/flow，保持行为不变。
+- 用户明确要求不要格式压缩时，提交说明必须标注为结构性变更。
 
 ### Known Fixes & Workarounds
 - For cross-day domino shifts, user-facing date and writeback inputs must prefer dynamic_day_offset; do not mix with day_offset in one flow.
@@ -342,7 +345,8 @@ description: 用于 Travel Domino（HarmonyOS 行程规划项目）的定向开�
 - ArkTS ??????? props ??????????? (: void/: boolean) ??? arkts-no-implicit-return-types?
 - ? assembleApp ????????? CompileArkTS ? PackageHap ???????????????????????????
 - 里程碑汇报必须附"本轮新增/迁移文件清单 + 结构性变更点"，避免把格式变化计入核心进展。
+- 编译校验应优先关注CompileArkTS是否通过，再区分历史打包问题。
 
 ### Custom Instruction Injection
 
-Index瘦身默认策略：结构迁移优先、行为不变、可回滚；禁止以纯格式调整充当阶段完成。
+Travel Domino 改造默认走最小可回滚结构拆分：先抽编排层，再抽上下文装配层。

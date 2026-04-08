@@ -18,16 +18,15 @@ import { IndexDialogManager } from './index/IndexDialogManager';
 import { ConflictFlowContext } from './index/IndexConflictFlowHelper';
 import { IndexPageBehaviorHelper, ReminderDialogContext, StrategyDialogContext } from './index/IndexPageBehaviorHelper';
 import { IndexPageShowHelper } from './index/IndexPageShowHelper';
-import { IndexPageContextFactory } from './index/IndexPageContextFactory';
-import { IndexReminderSubscriptionHelper } from './index/IndexReminderSubscriptionHelper';
 import { IndexStartEventGuardHelper } from './index/IndexStartEventGuardHelper';
 import { IndexDialogBindingsHelper } from './index/IndexDialogBindingsHelper';
 import { IndexPageBindingsBuilder } from './index/IndexPageBindingsBuilder';
+import { IndexPageRuntimeBindingsBuilder } from './index/IndexPageRuntimeBindingsBuilder';
 @Entry
 @Component
 struct Index {
   @State vm: TimelineViewModel = new TimelineViewModel();
-  @State planTitle: string = '閻炴稑鐬奸埢鑲╂嫚閿旇棄鍓?;
+  @State planTitle: string = '�г�����';
   @State editingItemId: number = -1;
   @State currentPlanId: number = -1;
   @State backlogExpanded: boolean = false;
@@ -63,7 +62,7 @@ struct Index {
   timeDialogController: CustomDialogController | null = null;
   suggestionDialogController: CustomDialogController | null = null;
   onTrafficSignal() {
-    hilog.info(0x0000, 'Index', '闁衡偓鐠哄搫鐓傚Δ鍌浢惀澶愬极閻楀牆绁﹂柡鍥х摠閺屽﹥绌遍垾鍐插▏闁挎稑鐭佽闁?UI 闂佹彃绉堕悾?);
+    hilog.info(0x0000, 'Index', '�յ��ߵ����ݸ����źţ����� UI ����');
     // 閻犱警鍨伴崰灞筋嚕閸屾侗鍔勯柛銉у仜閿濈偤宕氶幏灞惧涧闁告艾鍑界槐婵嗩嚕閸濆嫬鐓戦梺鎻掔У婵椽鏌呭顒€鐝舵鐐舵硾閸欏繘鏌岃箛娑樻闁圭儤甯槐婵堟兜椤旇崵绠介悹鎭掑妼閵囧宕氶崱娆戠煁闁告瑥锕ュ鍌炴偨閻斿憡娅忛柕?
     this.vm.testAllCommute();
     this.collapsedDayOffsets = [];
@@ -127,7 +126,7 @@ struct Index {
   }
   private bindReminderSubscriptions(): void {
     this.unbindReminderSubscriptions();
-    const result = IndexReminderSubscriptionHelper.bind({
+    const result = IndexPageRuntimeBindingsBuilder.bindReminderSubscriptions({
       currentPlanId: this.currentPlanId,
       vm: this.vm,
       weatherCoordinator: this.weatherCoordinator,
@@ -148,7 +147,10 @@ struct Index {
     this.arrivalReminderUnsubscribe = result.arrivalUnsubscribe;
   }
   private unbindReminderSubscriptions(): void {
-    const result = IndexReminderSubscriptionHelper.unbind(this.weatherReminderUnsubscribe, this.arrivalReminderUnsubscribe);
+    const result = IndexPageRuntimeBindingsBuilder.unbindReminderSubscriptions(
+      this.weatherReminderUnsubscribe,
+      this.arrivalReminderUnsubscribe
+    );
     this.weatherReminderUnsubscribe = result.weatherUnsubscribe;
     this.arrivalReminderUnsubscribe = result.arrivalUnsubscribe;
   }
@@ -158,7 +160,7 @@ struct Index {
     }
     this.isPageRefreshing = true;
     try {
-      await IndexReminderSubscriptionHelper.handlePagePullRefresh({
+      await IndexPageRuntimeBindingsBuilder.handlePagePullRefresh({
         currentPlanId: this.currentPlanId,
         vm: this.vm,
         planService: this.planService,
@@ -176,7 +178,7 @@ struct Index {
     }
   }
   private getReminderDialogContext(): ReminderDialogContext {
-    return IndexPageContextFactory.createReminderDialogContext({
+    return IndexPageRuntimeBindingsBuilder.createReminderDialogContext({
       vm: this.vm,
       currentPlanId: this.currentPlanId,
       getUIContext: (): UIContext => this.getUIContext(),
@@ -246,7 +248,7 @@ struct Index {
     onCloseDialog: (): void => this.aiDialogController.close()
   });
   private getConflictFlowContext(): ConflictFlowContext {
-    return IndexPageContextFactory.createConflictFlowContext({
+    return IndexPageRuntimeBindingsBuilder.createConflictFlowContext({
       vm: this.vm,
       getUIContext: (): UIContext => this.getUIContext(),
       safeShowToast: (message: string): void => this.safeShowToast(message),
@@ -326,7 +328,7 @@ struct Index {
     });
   }
   private getStrategyDialogContext(): StrategyDialogContext {
-    return IndexPageContextFactory.createStrategyDialogContext({
+    return IndexPageRuntimeBindingsBuilder.createStrategyDialogContext({
       vm: this.vm,
       strategyMode: this.strategyMode,
       getUIContext: (): UIContext => this.getUIContext(),
@@ -385,3 +387,4 @@ struct Index {
     }.width('100%').height('100%')
   }
 }
+
