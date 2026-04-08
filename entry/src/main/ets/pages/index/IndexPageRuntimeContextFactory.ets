@@ -4,35 +4,6 @@ import { WeatherReminderCoordinator } from '../../infrastructure/services/Weathe
 import { ArrivalReminderCoordinator } from '../../infrastructure/services/ArrivalReminderCoordinator';
 import { IndexPageRuntimeOrchestratorContext } from './IndexPageRuntimeOrchestrator';
 
-export interface IndexPageRuntimeContextFactoryParams {
-  currentPlanId: number;
-  vm: TimelineViewModel;
-  planService: PlanAppService;
-  weatherCoordinator: WeatherReminderCoordinator;
-  arrivalCoordinator: ArrivalReminderCoordinator;
-  strategyMode: number;
-  isWeatherDialogOpen: boolean;
-  isArrivalDialogOpen: boolean;
-  weatherReminderUnsubscribe: (() => void) | null;
-  arrivalReminderUnsubscribe: (() => void) | null;
-  strategyAdaptationCheckTimer: number;
-  getUIContext: () => UIContext;
-  safeShowToast: (message: string) => void;
-  tryStartEventWithConflictPrompt: (eventId: number) => Promise<boolean>;
-  setWeatherDialogOpen: (value: boolean) => void;
-  setArrivalDialogOpen: (value: boolean) => void;
-  setCompanionMode: (value: boolean) => void;
-  setManualPlanningWeatherRefresh: (value: boolean) => void;
-  setWeatherReminderUnsubscribe: (unsubscribe: (() => void) | null) => void;
-  setArrivalReminderUnsubscribe: (unsubscribe: (() => void) | null) => void;
-  setConflictSelectionController: (controller: CustomDialogController | null) => void;
-  setConflictCompressController: (controller: CustomDialogController | null) => void;
-  setConflictAdvanceController: (controller: CustomDialogController | null) => void;
-  setSuggestionDialogController: (controller: CustomDialogController | null) => void;
-  setCurrentStrategyExplanation: (explanation: string) => void;
-  setStrategyAdaptationCheckTimer: (timer: number) => void;
-}
-
 export class IndexPageRuntimeContextFactory {
   static create(
     currentPlanId: number,

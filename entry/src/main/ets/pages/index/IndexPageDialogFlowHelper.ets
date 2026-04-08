@@ -3,30 +3,6 @@ import { TimelineViewModel } from '../../viewmodel/TimelineViewModel';
 import { InitDialogData, PendingItemData } from './IndexTypes';
 import { IndexPageBindingsBuilder } from './IndexPageBindingsBuilder';
 
-export interface OpenAddDialogParams {
-  vm: TimelineViewModel;
-  editingItemId: number;
-  currentPlanId: number;
-  collapsedDayOffsets: number[];
-  onGapFoundCallback: (item: EventEntity) => void;
-  onSetCollapsedDayOffsets: (offsets: number[]) => void;
-  onSetPendingItem: (item: PendingItemData | null) => void;
-  onOpenConflictDialog: () => void;
-  onSetEditingItemId: (id: number) => void;
-  safeShowToast: (message: string) => void;
-  initData?: InitDialogData;
-}
-
-export interface OpenConflictDialogParams {
-  vm: TimelineViewModel;
-  getUIContext: () => UIContext;
-  getPendingItem: () => PendingItemData | null;
-  onSetPendingItem: (item: PendingItemData | null) => void;
-  onOpenAddDialog: (initData?: InitDialogData) => void;
-  onReopenConflictDialog: () => void;
-  safeShowToast: (message: string) => void;
-}
-
 export class IndexPageDialogFlowHelper {
   static openAddDialog(
     vm: TimelineViewModel,
