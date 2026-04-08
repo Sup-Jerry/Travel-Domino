@@ -44,9 +44,11 @@ export class IndexLifecycleHelper {
     const autoStartFromReminder = (routeParams['autoStartFromReminder'] as boolean) === true;
     const forceCompanionMode = (routeParams['forceCompanionMode'] as boolean) === true;
     const reminderEventId = Number(routeParams['reminderEventId'] as number) || -1;
+    const shouldForceCompanionFromReminder = forceCompanionMode && reminderEventId > 0;
 
     params.onSetCurrentPlanId(planId);
     params.onSetManualWeatherRefresh(false);
+    params.onSetCompanionMode(false);
     params.vm.setHasUnsavedPostponeStorageKey(
       IndexStateManager.scopedStorageKey(AppStorageKeys.HAS_UNSAVED_POSTPONE, planId)
     );
@@ -68,8 +70,12 @@ export class IndexLifecycleHelper {
       if (autoStartFromReminder && reminderEventId > 0) {
         params.onSetCompanionMode(true);
         void params.onTryStartEvent(reminderEventId);
-      } else if (forceCompanionMode) {
+      } else if (shouldForceCompanionFromReminder) {
         params.onSetCompanionMode(true);
+      } else {
+        // Normal plan-entry path should always keep companion mode off,
+        // otherwise bottom add bar may stay hidden from stale state.
+        params.onSetCompanionMode(false);
       }
       params.onStartArrivalReminderEngine();
       params.onStartStrategyAdaptationCheck();
@@ -94,3 +100,4 @@ export class IndexLifecycleHelper {
     }
   }
 }
+
