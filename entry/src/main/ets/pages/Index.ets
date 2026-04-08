@@ -20,6 +20,8 @@ import { IndexDialogBindingsHelper } from './index/IndexDialogBindingsHelper';
 import { IndexPageBindingsBuilder } from './index/IndexPageBindingsBuilder';
 import { IndexPageLifecycleBindingsBuilder } from './index/IndexPageLifecycleBindingsBuilder';
 import { IndexPageRuntimeOrchestrator, IndexPageRuntimeOrchestratorContext } from './index/IndexPageRuntimeOrchestrator';
+import { IndexPageRuntimeContextFactory } from './index/IndexPageRuntimeContextFactory';
+import { IndexPageDialogFlowHelper } from './index/IndexPageDialogFlowHelper';
 @Entry
 @Component
 struct Index {
@@ -112,87 +114,61 @@ struct Index {
       safeShowToast: (message: string): void => this.safeShowToast(message)
     }, eventId);
   }
-  private refreshUnsavedChangesFlag(): void {
-    this.hasUnsavedChanges = IndexStateManager.readUnsavedFlag(this.currentPlanId, AppStorageKeys.HAS_UNSAVED_POSTPONE);
-  }
   onBackPress(): boolean {
-    if (this.isCompanionMode) {
-      this.companionBackRequestToken += 1;
-      return true;
-    }
-    return false;
+    this.companionBackRequestToken += this.isCompanionMode ? 1 : 0;
+    return this.isCompanionMode;
   }
   private createRuntimeOrchestratorContext(): IndexPageRuntimeOrchestratorContext {
-    return {
-      currentPlanId: this.currentPlanId,
-      vm: this.vm,
-      planService: this.planService,
-      weatherCoordinator: this.weatherCoordinator,
-      arrivalCoordinator: this.arrivalCoordinator,
-      strategyMode: this.strategyMode,
-      isWeatherDialogOpen: this.isWeatherDialogOpen,
-      isArrivalDialogOpen: this.isArrivalDialogOpen,
-      weatherReminderUnsubscribe: this.weatherReminderUnsubscribe,
-      arrivalReminderUnsubscribe: this.arrivalReminderUnsubscribe,
-      strategyAdaptationCheckTimer: this.strategyAdaptationCheckTimer,
-      getUIContext: (): UIContext => this.getUIContext(),
-      safeShowToast: (message: string): void => this.safeShowToast(message),
-      tryStartEventWithConflictPrompt: async (eventId: number): Promise<boolean> => this.tryStartEventWithConflictPrompt(eventId),
-      setWeatherDialogOpen: (value: boolean): void => { this.isWeatherDialogOpen = value; },
-      setArrivalDialogOpen: (value: boolean): void => { this.isArrivalDialogOpen = value; },
-      setCompanionMode: (value: boolean): void => { this.isCompanionMode = value; },
-      setManualPlanningWeatherRefresh: (value: boolean): void => { this.hasManualPlanningWeatherRefresh = value; },
-      setWeatherReminderUnsubscribe: (unsubscribe: (() => void) | null): void => { this.weatherReminderUnsubscribe = unsubscribe; },
-      setArrivalReminderUnsubscribe: (unsubscribe: (() => void) | null): void => { this.arrivalReminderUnsubscribe = unsubscribe; },
-      setConflictSelectionController: (controller: CustomDialogController | null): void => {
-        this.conflictSelectionController = controller;
-      },
-      setConflictCompressController: (controller: CustomDialogController | null): void => {
-        this.conflictCompressController = controller;
-      },
-      setConflictAdvanceController: (controller: CustomDialogController | null): void => {
-        this.conflictAdvanceController = controller;
-      },
-      setSuggestionDialogController: (controller: CustomDialogController | null): void => {
-        this.suggestionDialogController = controller;
-      },
-      setCurrentStrategyExplanation: (explanation: string): void => { this.currentStrategyExplanation = explanation; },
-      setStrategyAdaptationCheckTimer: (timer: number): void => { this.strategyAdaptationCheckTimer = timer; }
-    };
+    return IndexPageRuntimeContextFactory.create(
+      this.currentPlanId,
+      this.vm,
+      this.planService,
+      this.weatherCoordinator,
+      this.arrivalCoordinator,
+      this.strategyMode,
+      this.isWeatherDialogOpen,
+      this.isArrivalDialogOpen,
+      this.weatherReminderUnsubscribe,
+      this.arrivalReminderUnsubscribe,
+      this.strategyAdaptationCheckTimer,
+      (): UIContext => this.getUIContext(),
+      (message: string): void => this.safeShowToast(message),
+      async (eventId: number): Promise<boolean> => this.tryStartEventWithConflictPrompt(eventId),
+      (value: boolean): void => { this.isWeatherDialogOpen = value; },
+      (value: boolean): void => { this.isArrivalDialogOpen = value; },
+      (value: boolean): void => { this.isCompanionMode = value; },
+      (value: boolean): void => { this.hasManualPlanningWeatherRefresh = value; },
+      (unsubscribe: (() => void) | null): void => { this.weatherReminderUnsubscribe = unsubscribe; },
+      (unsubscribe: (() => void) | null): void => { this.arrivalReminderUnsubscribe = unsubscribe; },
+      (controller: CustomDialogController | null): void => { this.conflictSelectionController = controller; },
+      (controller: CustomDialogController | null): void => { this.conflictCompressController = controller; },
+      (controller: CustomDialogController | null): void => { this.conflictAdvanceController = controller; },
+      (controller: CustomDialogController | null): void => { this.suggestionDialogController = controller; },
+      (explanation: string): void => { this.currentStrategyExplanation = explanation; },
+      (timer: number): void => { this.strategyAdaptationCheckTimer = timer; }
+    );
   }
   gapDialogController: CustomDialogController | null = IndexDialogManager.createGapResolutionController({
     vm: this.vm,
     currentGap: this.gapItem
   });
-  conflictDialogController: CustomDialogController = this.createConflictDialogController();
-  private createConflictDialogController(): CustomDialogController {
-    return IndexPageBindingsBuilder.createConflictDialogController({
-      vm: this.vm,
-      getUIContext: (): UIContext => this.getUIContext(),
-      getPendingItem: (): PendingItemData | null => this.pendingItem,
-      setPendingItem: (item: PendingItemData | null): void => {
-        this.pendingItem = item;
-      },
-      openDialog: (initData?: InitDialogData): void => {
-        this.openDialog(initData);
-      },
-      reopenConflictDialog: (): void => {
-        this.openConflictDialog();
-      },
-      safeShowToast: (message: string): void => {
-        this.safeShowToast(message);
-      }
-    });
-  }
+  conflictDialogController: CustomDialogController | null = null;
   private openConflictDialog(): void {
-    this.conflictDialogController = this.createConflictDialogController();
-    this.conflictDialogController.open();
+    this.conflictDialogController = IndexPageDialogFlowHelper.openConflictDialog(
+      this.vm,
+      (): UIContext => this.getUIContext(),
+      (): PendingItemData | null => this.pendingItem,
+      (item: PendingItemData | null): void => { this.pendingItem = item; },
+      (initData?: InitDialogData): void => { this.openDialog(initData); },
+      (): void => { this.openConflictDialog(); },
+      (message: string): void => { this.safeShowToast(message); }
+    );
   }
   onPageShow() {
     IndexPageShowHelper.handlePageShow(IndexPageLifecycleBindingsBuilder.createPageShowParams({
       vm: this.vm,
       onStartArrivalReminderEngine: (): void => { this.startArrivalReminderEngine(); },
-      onRefreshUnsavedFlag: (): void => { this.refreshUnsavedChangesFlag(); },
+      onRefreshUnsavedFlag: (): void => { this.hasUnsavedChanges = IndexStateManager.readUnsavedFlag(this.currentPlanId, AppStorageKeys.HAS_UNSAVED_POSTPONE); },
       onReadDraftStorage: (key: string): string => this.readDraftStorageWithFallback(key),
       onClearDraftStorage: (): void => { this.clearDialogDraftStorage(); },
       onOpenDialog: (initData?: InitDialogData): void => { this.openDialog(initData); },
@@ -206,33 +182,20 @@ struct Index {
     safeShowToast: (message: string): void => this.safeShowToast(message),
     onCloseDialog: (): void => this.aiDialogController.close()
   });
-  private async initBacklogExpandedState(planId: number, isNewPlan: boolean): Promise<void> {
-    this.backlogExpanded = await IndexStateManager.initBacklogExpandedState(planId, isNewPlan);
-  }
   openDialog(initData?: InitDialogData) {
-    this.dialogController = IndexPageBindingsBuilder.createAddDialogController({
-      vm: this.vm,
-      editingItemId: this.editingItemId,
-      currentPlanId: this.currentPlanId,
-      collapsedDayOffsets: this.collapsedDayOffsets,
-      setCollapsedDayOffsets: (offsets: number[]): void => {
-        this.collapsedDayOffsets = offsets;
-      },
-      onGapFoundCallback: this.onGapFoundCallback,
-      setPendingItem: (item: PendingItemData | null): void => {
-        this.pendingItem = item;
-      },
-      openConflictDialog: (): void => {
-        this.openConflictDialog();
-      },
-      setEditingItemId: (id: number): void => {
-        this.editingItemId = id;
-      },
-      safeShowToast: (message: string): void => {
-        this.safeShowToast(message);
-      }
-    });
-    this.dialogController.open();
+    this.dialogController = IndexPageDialogFlowHelper.openAddDialog(
+      this.vm,
+      this.editingItemId,
+      this.currentPlanId,
+      this.collapsedDayOffsets,
+      this.onGapFoundCallback,
+      (offsets: number[]): void => { this.collapsedDayOffsets = offsets; },
+      (item: PendingItemData | null): void => { this.pendingItem = item; },
+      (): void => { this.openConflictDialog(); },
+      (id: number): void => { this.editingItemId = id; },
+      (message: string): void => { this.safeShowToast(message); },
+      initData
+    );
   }
   aboutToAppear() {
     this.collapsedDayOffsets = [];
@@ -242,7 +205,9 @@ struct Index {
       vm: this.vm,
       onSetCurrentPlanId: (planId: number): void => { this.currentPlanId = planId; },
       onSetManualWeatherRefresh: (value: boolean): void => { this.hasManualPlanningWeatherRefresh = value; },
-      onRefreshUnsavedFlag: (): void => { this.refreshUnsavedChangesFlag(); },
+      onRefreshUnsavedFlag: (): void => {
+        this.hasUnsavedChanges = IndexStateManager.readUnsavedFlag(this.currentPlanId, AppStorageKeys.HAS_UNSAVED_POSTPONE);
+      },
       onSetPlanTitle: (title: string): void => { this.planTitle = title; },
       onBindReminderSubscriptions: (): void => {
         IndexPageRuntimeOrchestrator.bindReminderSubscriptions(this.createRuntimeOrchestratorContext());
@@ -257,8 +222,9 @@ struct Index {
       onStartStrategyAdaptationCheck: (): void => {
         IndexPageRuntimeOrchestrator.startStrategyAdaptationCheck(this.createRuntimeOrchestratorContext());
       },
-      onInitBacklogExpandedState: async (planId: number, isNewPlan: boolean): Promise<void> =>
-        this.initBacklogExpandedState(planId, isNewPlan),
+      onInitBacklogExpandedState: async (planId: number, isNewPlan: boolean): Promise<void> => {
+        this.backlogExpanded = await IndexStateManager.initBacklogExpandedState(planId, isNewPlan);
+      },
       onLoadDataError: (reason: string): void => { hilog.error(0x0000, 'Index', '[ARRIVAL][load_data_failed] reason=' + reason); }
     }));
   }
