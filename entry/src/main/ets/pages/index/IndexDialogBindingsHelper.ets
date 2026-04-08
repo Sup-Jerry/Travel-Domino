@@ -15,6 +15,7 @@ export interface IndexAddDialogControllerContext {
   vm: TimelineViewModel;
   editingItemId: number;
   currentPlanId: number;
+  initData?: InitDialogData;
   collapsedDayOffsets: number[];
   setCollapsedDayOffsets: (offsets: number[]) => void;
   onGapFoundCallback: (item: EventEntity) => void;
@@ -80,6 +81,6 @@ export class IndexDialogBindingsHelper {
       safeShowToast: (message: string): void => {
         context.safeShowToast(message);
       }
-    });
+    }, context.initData);
   }
 }

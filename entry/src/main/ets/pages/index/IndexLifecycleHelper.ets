@@ -47,6 +47,7 @@ export class IndexLifecycleHelper {
 
     params.onSetCurrentPlanId(planId);
     params.onSetManualWeatherRefresh(false);
+    params.onSetCompanionMode(false);
     params.vm.setHasUnsavedPostponeStorageKey(
       IndexStateManager.scopedStorageKey(AppStorageKeys.HAS_UNSAVED_POSTPONE, planId)
     );

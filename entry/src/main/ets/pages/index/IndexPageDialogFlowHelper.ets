@@ -21,6 +21,7 @@ export class IndexPageDialogFlowHelper {
       vm: vm,
       editingItemId: editingItemId,
       currentPlanId: currentPlanId,
+      initData: initData,
       collapsedDayOffsets: collapsedDayOffsets,
       setCollapsedDayOffsets: (offsets: number[]): void => onSetCollapsedDayOffsets(offsets),
       onGapFoundCallback: onGapFoundCallback,

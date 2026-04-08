@@ -26,7 +26,7 @@ import { IndexPageDialogFlowHelper } from './index/IndexPageDialogFlowHelper';
 @Component
 struct Index {
   @State vm: TimelineViewModel = new TimelineViewModel();
-  @State planTitle: string = '�г�����';
+  @State planTitle: string = '�г�����';
   @State editingItemId: number = -1;
   @State currentPlanId: number = -1;
   @State backlogExpanded: boolean = false;
@@ -62,7 +62,7 @@ struct Index {
   timeDialogController: CustomDialogController | null = null;
   suggestionDialogController: CustomDialogController | null = null;
   onTrafficSignal() {
-    hilog.info(0x0000, 'Index', '�յ��ߵ����ݸ����źţ����� UI ����');
+    hilog.info(0x0000, 'Index', '�յ��ߵ����ݸ����źţ����� UI ����');
     // 閻犱警鍨伴崰灞筋嚕閸屾侗鍔勯柛銉у仜閿濈偤宕氶幏灞惧涧闁告艾鍑界槐婵嗩嚕閸濆嫬鐓戦梺鎻掔У婵椽鏌呭顒€鐝舵鐐舵硾閸欏繘鏌岃箛娑樻闁圭儤甯槐婵堟兜椤旇崵绠介悹鎭掑妼閵囧宕氶崱娆戠煁闁告瑥锕ュ鍌炴偨閻斿憡娅忛柕?
     this.vm.testAllCommute();
     this.collapsedDayOffsets = [];
@@ -297,8 +297,3 @@ struct Index {
     }.width('100%').height('100%')
   }
 }
-
-
-
-
-

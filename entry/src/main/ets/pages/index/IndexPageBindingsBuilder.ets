@@ -55,6 +55,7 @@ export interface IndexAddDialogBindingsInput {
   vm: TimelineViewModel;
   editingItemId: number;
   currentPlanId: number;
+  initData?: InitDialogData;
   collapsedDayOffsets: number[];
   setCollapsedDayOffsets: (offsets: number[]) => void;
   onGapFoundCallback: (item: EventEntity) => void;
@@ -129,6 +130,7 @@ export class IndexPageBindingsBuilder {
       vm: input.vm,
       editingItemId: input.editingItemId,
       currentPlanId: input.currentPlanId,
+      initData: input.initData,
       collapsedDayOffsets: input.collapsedDayOffsets,
       setCollapsedDayOffsets: (offsets: number[]): void => input.setCollapsedDayOffsets(offsets),
       onGapFoundCallback: input.onGapFoundCallback,
