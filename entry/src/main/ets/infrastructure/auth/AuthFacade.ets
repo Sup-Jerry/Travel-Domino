@@ -19,6 +19,8 @@ export class AuthFacade {
   private static readonly LOG_DOMAIN: number = 0x0000;
   private static readonly LOG_TAG: string = 'AuthFacade';
   private static readonly USERNAME_PATTERN: RegExp = /^[\u4E00-\u9FFFa-zA-Z0-9_ ]+$/;
+  private static readonly LOCAL_GUEST_ACCOUNT_ID: string = 'guest_local';
+  private static readonly LOCAL_GUEST_SESSION_TTL_MS: number = 30 * 24 * 60 * 60 * 1000;
   private static instance: AuthFacade = new AuthFacade();
   private readonly sessionManager: SessionManager = SessionManager.getInstance();
   private readonly huaweiProvider: HuaweiAccountProvider = HuaweiAccountProvider.getInstance();
@@ -282,23 +284,67 @@ export class AuthFacade {
 
   private async tryGuestFallback(): Promise<AuthResult<UserSession>> {
     hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] guestFallback start');
-    const guest = await AuthGateway.createGuest(this.makeDeviceInfo());
-    if (guest.code !== 0) {
-      hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, `[LOGIN_TRACE][facade] guestFallback fail code=${guest.code}`);
-      return this.failure(guest.code, guest.message || 'guest_login_failed', 'GUEST_FALLBACK', LoginStatus.LOGIN_FAILED);
+    try {
+      const guest = await AuthGateway.createGuest(this.makeDeviceInfo());
+      if (guest.code !== 0) {
+        hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, `[LOGIN_TRACE][facade] guestFallback fail code=${guest.code}`);
+        const offlineResult = await this.tryOfflineGuestFallback(`gateway_code_${guest.code}`, guest.message || 'guest_login_failed');
+        if (offlineResult) {
+          return offlineResult;
+        }
+        return this.failure(guest.code, guest.message || 'guest_login_failed', 'GUEST_FALLBACK', LoginStatus.LOGIN_FAILED);
+      }
+      const payload = guest.data as AuthLoginResult;
+      const session = this.convertSession(payload);
+      if (!session) {
+        hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] guestFallback fail session_empty');
+        const offlineResult = await this.tryOfflineGuestFallback('session_empty', 'guest_session_empty');
+        if (offlineResult) {
+          return offlineResult;
+        }
+        return this.failure(-1, 'guest_session_empty', 'GUEST_FALLBACK', LoginStatus.LOGIN_FAILED);
+      }
+      session.isGuest = true;
+      await this.onLoginSuccess(session);
+      if (this.appContext) {
+        await this.sessionManager.markGuestChosen(this.appContext);
+      }
+      hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] guestFallback success');
+      return this.success(session, 'GUEST_FALLBACK');
+    } catch (error) {
+      const normalized = this.normalizeError(error);
+      hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, `[LOGIN_TRACE][facade] guestFallback exception=${normalized}`);
+      const offlineResult = await this.tryOfflineGuestFallback('gateway_exception', normalized);
+      if (offlineResult) {
+        return offlineResult;
+      }
+      return this.failure(-1, normalized, 'GUEST_FALLBACK', LoginStatus.LOGIN_FAILED);
     }
-    const payload = guest.data as AuthLoginResult;
-    const session = this.convertSession(payload);
-    if (!session) {
-      hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] guestFallback fail session_empty');
-      return this.failure(-1, 'guest_session_empty', 'GUEST_FALLBACK', LoginStatus.LOGIN_FAILED);
-    }
+  }
+
+  private async tryOfflineGuestFallback(reason: string, detail: string): Promise<AuthResult<UserSession> | null> {
+    const now = Date.now();
+    const session = new UserSession();
+    session.isLogin = true;
+    session.accountId = AuthFacade.LOCAL_GUEST_ACCOUNT_ID;
+    session.userId = AuthFacade.LOCAL_GUEST_ACCOUNT_ID;
+    session.loginType = 'guest';
+    session.lastLoginAt = now;
+    session.accessToken = '';
+    session.refreshToken = '';
+    session.expireAt = now + AuthFacade.LOCAL_GUEST_SESSION_TTL_MS;
+    session.sessionId = `offline_guest_${now}`;
     session.isGuest = true;
+    session.loginMethod = 'GUEST_OFFLINE';
     await this.onLoginSuccess(session);
     if (this.appContext) {
       await this.sessionManager.markGuestChosen(this.appContext);
     }
-    hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] guestFallback success');
+    hilog.warn(
+      AuthFacade.LOG_DOMAIN,
+      AuthFacade.LOG_TAG,
+      `[LOGIN_TRACE][facade] guestFallback offline_local_session reason=${reason}, detail=${detail}`
+    );
     return this.success(session, 'GUEST_FALLBACK');
   }
 

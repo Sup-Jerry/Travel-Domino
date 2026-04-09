@@ -56,7 +56,6 @@ type HistoryViewMode = 'timeline' | 'detail';
 export struct CompanionView {
   @Link vm: TimelineViewModel;
   @Link isShow: boolean;
-  @Link @Watch('onBackRequestTokenChanged') backRequestToken: number;
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
   // region state
   @State context: CompanionContext = {
@@ -379,50 +378,6 @@ export struct CompanionView {
     this.showSearchPage = false;
     this.searchKeyword = '';
     this.searchResults = [];
-  }
-
-  private onBackRequestTokenChanged(): void {
-    this.handleCompanionBackRequest();
-  }
-
-  private handleCompanionBackRequest(): void {
-    if (!this.isShow) {
-      return;
-    }
-
-    if (this.showFilterPage) {
-      this.closeFilterPage();
-      return;
-    }
-
-    if (this.showSearchPage) {
-      this.closeSearchPage();
-      return;
-    }
-
-    if (this.showHistoryPage) {
-      if (this.historyViewMode === 'detail') {
-        this.historyViewMode = 'timeline';
-        this.selectedHistoryTimelineItem = null;
-        this.selectedHistoryPlaceName = '';
-        this.historySummary = null;
-        return;
-      }
-      this.showHistoryPage = false;
-      this.historyViewMode = 'timeline';
-      this.historyTimelineFilter = 'all';
-      this.selectedHistoryTimelineItem = null;
-      this.selectedHistoryPlaceName = '';
-      this.historySummary = null;
-      return;
-    }
-
-    if (this.companionSubMode === 'control') {
-      this.enterImmersiveMode();
-      return;
-    }
-
-    this.exitCompanion();
   }
 
   private pickSearchResult(event: EventEntity): void {
@@ -970,7 +925,12 @@ export struct CompanionView {
           this.exitCompanion();
         },
         onRefreshWeather: () => {
-          void this.vm.refreshExecutionWeather(true, 'MANUAL');
+          this.safeShowToast('正在刷新天气...');
+          void this.vm.refreshExecutionWeather(true, 'MANUAL').then(() => {
+            this.safeShowToast('天气已刷新');
+          }).catch((_error: Object) => {
+            this.safeShowToast('天气刷新失败，请稍后重试');
+          });
         },
         onToggleExpanded: () => {
           this.weatherExpanded = !this.weatherExpanded;
@@ -1095,60 +1055,61 @@ export struct CompanionView {
       })
       .translate({ x: 0, y: this.companionSubMode === 'control' ? 0 : 10 });
 
-      CompanionOverlayPages({
-        showHistoryPage: this.showHistoryPage,
-        historyTimelineSummary: this.historyTimelineSummary,
-        historyTimelineItems: this.historyTimelineItems,
-        historyTimelineFilter: this.historyTimelineFilter,
-        historyViewMode: this.historyViewMode,
-        historySummary: this.historySummary,
-        vm: this.vm,
-        selectedHistoryTimelineItem: this.selectedHistoryTimelineItem,
-        showSearchPage: this.showSearchPage,
-        searchKeyword: this.searchKeyword,
-        searchResults: this.searchResults,
-        showFilterPage: this.showFilterPage,
-        companionFilterState: this.companionFilterState,
-        safeTopInset: this.safeTopInset,
-        safeBottomInset: this.safeBottomInset,
-        onHistoryClose: () => {
-          this.showHistoryPage = false;
-          this.historyViewMode = 'timeline';
-          this.historyTimelineFilter = 'all';
-          this.selectedHistoryTimelineItem = null;
-          this.selectedHistoryPlaceName = '';
-          this.historySummary = null;
-        },
-        onHistoryBack: () => {
-          this.historyViewMode = 'timeline';
-          this.selectedHistoryTimelineItem = null;
-          this.selectedHistoryPlaceName = '';
-          this.historySummary = null;
-        },
-        onHistoryFilterChange: (filter: HistoryTimelineFilter) => {
-          this.historyTimelineFilter = filter;
-        },
-        onHistoryItemClick: (item: HistoryTimelineItem) => {
-          this.openHistoryDetailFromTimeline(item);
-        },
-        onSearchClose: () => {
-          this.closeSearchPage();
-        },
-        onSearch: (keyword: string) => {
-          this.searchKeyword = keyword;
-          this.refreshSearchResults();
-        },
-        onSearchResultClick: (item: EventEntity) => {
-          this.pickSearchResult(item);
-        },
-        onFilterClose: () => {
-          this.closeFilterPage();
-        },
-        onFilterSelect: (state: CompanionFilterState) => {
-          this.applyFilter(state);
-        }
-      })
-      .zIndex(20);
+      if (this.showHistoryPage || this.showSearchPage || this.showFilterPage) {
+        CompanionOverlayPages({
+          showHistoryPage: this.showHistoryPage,
+          historyTimelineSummary: this.historyTimelineSummary,
+          historyTimelineItems: this.historyTimelineItems,
+          historyTimelineFilter: this.historyTimelineFilter,
+          historyViewMode: this.historyViewMode,
+          historySummary: this.historySummary,
+          vm: this.vm,
+          selectedHistoryTimelineItem: this.selectedHistoryTimelineItem,
+          showSearchPage: this.showSearchPage,
+          searchKeyword: this.searchKeyword,
+          searchResults: this.searchResults,
+          showFilterPage: this.showFilterPage,
+          companionFilterState: this.companionFilterState,
+          safeTopInset: this.safeTopInset,
+          safeBottomInset: this.safeBottomInset,
+          onHistoryClose: () => {
+            this.showHistoryPage = false;
+            this.historyViewMode = 'timeline';
+            this.historyTimelineFilter = 'all';
+            this.selectedHistoryTimelineItem = null;
+            this.selectedHistoryPlaceName = '';
+            this.historySummary = null;
+          },
+          onHistoryBack: () => {
+            this.historyViewMode = 'timeline';
+            this.selectedHistoryTimelineItem = null;
+            this.selectedHistoryPlaceName = '';
+            this.historySummary = null;
+          },
+          onHistoryFilterChange: (filter: HistoryTimelineFilter) => {
+            this.historyTimelineFilter = filter;
+          },
+          onHistoryItemClick: (item: HistoryTimelineItem) => {
+            this.openHistoryDetailFromTimeline(item);
+          },
+          onSearchClose: () => {
+            this.closeSearchPage();
+          },
+          onSearch: (keyword: string) => {
+            this.searchKeyword = keyword;
+            this.refreshSearchResults();
+          },
+          onSearchResultClick: (item: EventEntity) => {
+            this.pickSearchResult(item);
+          },
+          onFilterClose: () => {
+            this.closeFilterPage();
+          },
+          onFilterSelect: (state: CompanionFilterState) => {
+            this.applyFilter(state);
+          }
+        });
+      }
     }
     .width('100%')
     .height('100%')

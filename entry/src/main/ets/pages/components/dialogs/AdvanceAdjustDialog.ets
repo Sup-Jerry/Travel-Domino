@@ -20,6 +20,7 @@ export struct AdvanceAdjustDialog {
   @State preview: AdvanceAdjustPreview | null = null;
 
   aboutToAppear(): void {
+    console.info('[ADVANCE_DIALOG] open');
     this.context = this.vm.compressionCoordinator.buildAdvanceAdjustContext(this.targetIndex);
     if (!this.context || this.context.candidates.length === 0) {
       this.preview = null;
@@ -76,16 +77,16 @@ export struct AdvanceAdjustDialog {
 
   build() {
     Column() {
-      Text('鍓嶇Щ璋冩暣')
+      Text('前移调整')
         .fontSize(20)
         .fontWeight(FontWeight.Bold)
         .width('100%')
-      Text(`鐩爣鍐茬獊鐐癸細${this.targetName}`)
+      Text(`目标冲突点：${this.targetName}`)
         .fontSize(12)
         .fontColor($r('app.color.text_secondary'))
         .width('100%')
         .margin({ top: 4, bottom: 10 })
-      Text('请选择连续地点，并设置所选首地点的新开始时间')
+      Text('请选择连续地点，并设置首个地点的新开始时间')
         .fontSize(13)
         .fontColor($r('app.color.text_secondary'))
         .width('100%')
@@ -145,7 +146,7 @@ export struct AdvanceAdjustDialog {
         .margin({ top: 10 })
 
         Column() {
-          Text(`宸查€?${this.preview?.selectedCount ?? 0} 涓紝棰勮鍓嶇Щ ${this.preview?.shiftMinutes ?? 0} 鍒嗛挓`)
+          Text(`已选 ${this.preview?.selectedCount ?? 0} 个，预计前移 ${this.preview?.shiftMinutes ?? 0} 分钟`)
             .fontSize(12)
             .fontColor($r('app.color.text_secondary'))
             .width('100%')
@@ -155,7 +156,7 @@ export struct AdvanceAdjustDialog {
             .width('100%')
             .margin({ top: 4 })
           if (!(this.preview?.valid ?? false)) {
-            Text(this.preview?.message ?? '褰撳墠閫夋嫨鏃犳晥')
+            Text(this.preview?.message ?? '当前选择无效')
               .fontSize(12)
               .fontColor('#FF4D4F')
               .width('100%')
@@ -167,7 +168,7 @@ export struct AdvanceAdjustDialog {
       }
 
       Row() {
-        Button('鍙栨秷', { type: ButtonType.Capsule })
+        Button('取消', { type: ButtonType.Capsule })
           .width('40%')
           .backgroundColor('#F2F4F7')
           .fontColor($r('app.color.text_secondary'))
@@ -175,7 +176,7 @@ export struct AdvanceAdjustDialog {
             this.controller.close();
             this.onCancel();
           })
-        Button('纭鍓嶇Щ', { type: ButtonType.Capsule })
+        Button('确认前移', { type: ButtonType.Capsule })
           .width('45%')
           .backgroundColor($r('app.color.accent_primary'))
           .fontColor(Color.White)

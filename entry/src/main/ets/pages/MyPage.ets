@@ -31,6 +31,7 @@ struct MyPage {
   @State currentRemoteAvatarUrl: string = '';
   @State showUsernameEditor: boolean = false;
   @State usernameDraft: string = '';
+  @State profileReady: boolean = false;
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
   private readonly authFacade: AuthFacade = AuthFacade.getInstance();
   private avatarService: AvatarService | null = null;
@@ -54,6 +55,7 @@ struct MyPage {
   }
 
   aboutToAppear(): void {
+    this.profileReady = false;
     void this.refreshUserState();
   }
 
@@ -61,6 +63,12 @@ struct MyPage {
     if (this.loadingProfile) {
       return;
     }
+    const quickSession = SessionManager.getInstance().load();
+    hilog.info(
+      MyPage.LOG_DOMAIN,
+      MyPage.LOG_TAG,
+      `[PROFILE_TRACE][page] refresh_start hasSession=${quickSession ? 1 : 0} sessionGuest=${quickSession?.isGuest ? 1 : 0}`
+    );
     const hostContext = this.getUIContext().getHostContext() as common.Context;
     this.authFacade.bindContext(hostContext);
     const profileViewModel = ProfileViewModel.getInstance();
@@ -113,6 +121,12 @@ struct MyPage {
       this.useDefaultAvatar = false;
     } finally {
       this.loadingProfile = false;
+      this.profileReady = true;
+      hilog.info(
+        MyPage.LOG_DOMAIN,
+        MyPage.LOG_TAG,
+        `[PROFILE_TRACE][page] refresh_done ready=1 isGuest=${this.isGuestUser ? 1 : 0} userId=${this.currentUserId}`
+      );
     }
   }
 
@@ -397,7 +411,7 @@ struct MyPage {
         .backgroundColor(this.getThemePalette().cardBg)
         .borderRadius(14);
 
-        if (this.isGuestUser) {
+        if (this.profileReady && this.isGuestUser) {
           Column({ space: 10 }) {
             Text('使用华为登录')
               .fontSize(16)

@@ -178,9 +178,16 @@ export class TrafficEngine {
       const duration = await this.mapService.getDurationByMode(from, to, mode, startTime);
       const fromCoordValid = this.isValidCoordinate(from.latitude, from.longitude);
       const toCoordValid = this.isValidCoordinate(to.latitude, to.longitude);
-      const canCacheDuration = !(duration === TrafficEngine.FALLBACK_MINUTES && (!fromCoordValid || !toCoordValid));
+      const canCacheDuration = Number.isFinite(duration) && duration > 0;
       if (canCacheDuration) {
         this.cache.set(key, duration);
+        if (duration === TrafficEngine.FALLBACK_MINUTES && (!fromCoordValid || !toCoordValid)) {
+          hilog.warn(
+            0x0000,
+            TAG,
+            `${ROUTE_DIAG_PREFIX}[engine] fallback_60_cached_for_invalid_coord key=${key} from_coord=${fromCoordValid} to_coord=${toCoordValid}`
+          );
+        }
       } else {
         this.cache.delete(key);
       }

@@ -180,16 +180,20 @@ export class TimelineCompressionService implements ITimelineCompressionService {
     return this.calculateCompressionPlanBySelection(targetIndex, newTimeStr, selectedIds, 'RATIO');
   }
 
-  private resolveCompressionChainStart(targetIndex: number): number {
-    let chainStartIndex = 0;
+  private resolveSameDayScheduleStartIndex(targetIndex: number, targetDayOffset: number): number {
+    let dayStartIndex = targetIndex;
     for (let i = targetIndex - 1; i >= 0; i--) {
       const item = this.host.events[i];
-      if (item.lock_status === 1 && item.fixed_start_time) {
-        chainStartIndex = i;
-        break;
+      if (item.status !== 1) {
+        continue;
       }
+      const dayOffset = this.host.getEffectiveDayOffset(item);
+      if (dayOffset !== targetDayOffset) {
+        continue;
+      }
+      dayStartIndex = i;
     }
-    return chainStartIndex;
+    return dayStartIndex;
   }
 
   private buildCompressionSelectionContextInternal(targetIndex: number, targetTime: string): CompressionSelectionContext | null {
@@ -204,13 +208,27 @@ export class TimelineCompressionService implements ITimelineCompressionService {
     const targetMinutes = DateUtil.timeToMinutes(targetTime);
     const targetDayOffset = this.host.getEffectiveDayOffset(this.host.events[targetIndex]);
     const neededGapMinutes = naturalArrivalMinutes - (targetDayOffset * 24 * 60 + targetMinutes);
-    const chainStartIndex = this.resolveCompressionChainStart(targetIndex);
+    const sameDayStartIndex = this.resolveSameDayScheduleStartIndex(targetIndex, targetDayOffset);
+    let chainStartIndex = sameDayStartIndex;
+    for (let i = targetIndex - 1; i >= sameDayStartIndex; i--) {
+      const item = this.host.events[i];
+      if (item.status !== 1 || this.host.getEffectiveDayOffset(item) !== targetDayOffset) {
+        continue;
+      }
+      if (item.lock_status === 1 && item.fixed_start_time) {
+        chainStartIndex = i;
+        break;
+      }
+    }
     const minKeepDuration = this.host.getMinEventDurationLimit();
 
     const candidates: CompressionSelectionCandidate[] = [];
     for (let i = 0; i < targetIndex; i++) {
       const item = this.host.events[i];
       if (item.status !== 1) {
+        continue;
+      }
+      if (this.host.getEffectiveDayOffset(item) !== targetDayOffset) {
         continue;
       }
 
@@ -823,26 +841,38 @@ export class TimelineCompressionService implements ITimelineCompressionService {
   }
 
   public calculateNaturalArrival(targetIndex: number): number {
-    let chainStartIndex = 0;
-
-    let startMinutes = DateUtil.timeToMinutes(this.host.globalStartTime);
-
-    for (let i = targetIndex - 1; i >= 0; i--) {
+    const target = this.host.events[targetIndex];
+    if (!target || target.status !== 1) {
+      return 0;
+    }
+    const targetDayOffset = this.host.getEffectiveDayOffset(target);
+    const sameDayStartIndex = this.resolveSameDayScheduleStartIndex(targetIndex, targetDayOffset);
+    let chainStartIndex = sameDayStartIndex;
+    for (let i = targetIndex - 1; i >= sameDayStartIndex; i--) {
       const item = this.host.events[i];
+      if (item.status !== 1 || this.host.getEffectiveDayOffset(item) !== targetDayOffset) {
+        continue;
+      }
       if (item.lock_status === 1 && item.fixed_start_time) {
         chainStartIndex = i;
-        startMinutes = DateUtil.timeToMinutes(item.fixed_start_time);
         break;
       }
     }
 
+    let startMinutes = 0;
     const chainStartItem = this.host.events[chainStartIndex];
-    const chainDayOffset = chainStartItem ? this.host.getEffectiveDayOffset(chainStartItem) : 0;
-    startMinutes += chainDayOffset * 24 * 60;
+    if (chainStartItem) {
+      startMinutes = this.resolvePlannedStartMinutes(chainStartItem);
+    } else {
+      startMinutes = targetDayOffset * 24 * 60 + this.host.resolveEffectiveGlobalStartMinutes();
+    }
 
     let currentCursor = startMinutes;
     for (let i = chainStartIndex; i < targetIndex; i++) {
       const item = this.host.events[i];
+      if (item.status !== 1 || this.host.getEffectiveDayOffset(item) !== targetDayOffset) {
+        continue;
+      }
       if (i > chainStartIndex) {
         currentCursor += this.resolveEffectiveTravelMinutes(item);
       }
