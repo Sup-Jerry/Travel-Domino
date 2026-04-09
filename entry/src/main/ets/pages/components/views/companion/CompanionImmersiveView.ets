@@ -66,10 +66,9 @@ export struct CompanionImmersiveView {
                 }
                 await this.onStartEvent(current);
               });
-          }
-          if (this.isCurrentEventActive() || this.context.runtimeState === 'PAUSED') {
+          } else if (this.isCurrentEventActive() || this.context.runtimeState === 'PAUSED') {
             Button('结束')
-              .layoutWeight(1)
+              .layoutWeight(2)
               .height(50)
               .enabled(this.canEndFocused(this.context.currentEvent))
               .backgroundColor(this.getThemePalette().warning)

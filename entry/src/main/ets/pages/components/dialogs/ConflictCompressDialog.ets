@@ -17,6 +17,7 @@ export struct ConflictCompressDialog {
   targetName: string = '';
   initialMode: CompressionMode = 'RATIO';
   initialSelectedIds: number[] = [];
+  forcedGapMinutes: number = 0;
 
   onConfirm: (selectedIds: number[], mode: CompressionMode) => void = () => {};
   onCancel: () => void = () => {};
@@ -39,7 +40,11 @@ export struct ConflictCompressDialog {
 
   aboutToAppear() {
     this.mode = this.initialMode;
-    this.context = this.vm.compressionCoordinator.buildCompressionSelectionContext(this.targetIndex, this.targetTime);
+    this.context = this.vm.compressionCoordinator.buildCompressionSelectionContext(
+      this.targetIndex,
+      this.targetTime,
+      this.forcedGapMinutes
+    );
     if (!this.context) {
       this.previewPlan = null;
       return;
@@ -72,7 +77,8 @@ export struct ConflictCompressDialog {
       this.targetIndex,
       this.targetTime,
       this.selectedIds,
-      this.mode
+      this.mode,
+      this.forcedGapMinutes
     );
   }
 

@@ -132,6 +132,10 @@ export struct CompanionView {
   private immersiveDistanceTrigger: number = 90;
   private immersiveVelocityTrigger: number = 0.65;
   private immersiveWindow?: window.Window;
+  private realtimeWatchTimer: number = -1;
+  private observedScheduleVersion: number = -1;
+  private observedRuntimeState: string = '';
+  private observedBackRequest: number = 0;
   private onWindowAvoidAreaChange: (avoidOptions: window.AvoidAreaOptions) => void = (_avoidOptions) => {
     this.updateSafeAreaInsets();
   };
@@ -184,15 +188,59 @@ export struct CompanionView {
     this.bindImmersiveWindowContext();
     this.immersiveText = pickRandomCompanionImmersiveText();
     this.ensureFocusReady();
+    this.startRealtimeWatch();
   }
 
   aboutToDisappear() {
+    this.stopRealtimeWatch();
     this.unbindImmersiveWindowContext();
     this.setSystemBarVisible(true);
   }
 
   private getThemePalette() {
     return ThemeCenter.getPalette(this.effectiveTheme);
+  }
+
+  private startRealtimeWatch(): void {
+    this.observedScheduleVersion = this.vm.getScheduleVersion();
+    this.observedRuntimeState = this.context.runtimeState;
+    this.observedBackRequest = Number(AppStorage.get('COMPANION_BACK_REQUEST') as number) || 0;
+    if (this.realtimeWatchTimer !== -1) {
+      clearInterval(this.realtimeWatchTimer);
+      this.realtimeWatchTimer = -1;
+    }
+    this.realtimeWatchTimer = setInterval(() => {
+      const backLevel = this.showHistoryPage || this.showSearchPage || this.showFilterPage
+        ? 'overlay'
+        : (this.companionSubMode === 'control' ? 'control' : 'immersive');
+      AppStorage.setOrCreate('COMPANION_BACK_LEVEL', backLevel);
+      const latestBackRequest = Number(AppStorage.get('COMPANION_BACK_REQUEST') as number) || 0;
+      if (latestBackRequest !== this.observedBackRequest) {
+        this.observedBackRequest = latestBackRequest;
+        this.handleCompanionBackNavigation();
+      }
+
+      const nextVersion = this.vm.getScheduleVersion();
+      const nextRuntime = this.vm.getCompanionContext().runtimeState;
+      if (nextVersion !== this.observedScheduleVersion || nextRuntime !== this.observedRuntimeState) {
+        hilog.info(
+          0x0000,
+          'CompanionView',
+          `[COMPANION][card_state_refresh] version=${this.observedScheduleVersion}->${nextVersion}, runtime=${this.observedRuntimeState}->${nextRuntime}`
+        );
+        this.observedScheduleVersion = nextVersion;
+        this.observedRuntimeState = nextRuntime;
+        this.refreshContext();
+      }
+    }, 300);
+  }
+
+  private stopRealtimeWatch(): void {
+    if (this.realtimeWatchTimer !== -1) {
+      clearInterval(this.realtimeWatchTimer);
+      this.realtimeWatchTimer = -1;
+    }
+    AppStorage.setOrCreate('COMPANION_BACK_LEVEL', 'none');
   }
 
   private bindImmersiveWindowContext(): void {
@@ -636,6 +684,7 @@ export struct CompanionView {
         }
         return;
       }
+      hilog.info(0x0000, 'CompanionView', `[COMPANION][action_start] eventId=${focused.id}, name=${focused.name}`);
       this.refreshContext();
       this.applyFocusById(focused.id, 'tap');
       this.enterImmersiveMode();
@@ -782,6 +831,30 @@ export struct CompanionView {
     this.isShow = false;
   }
 
+  private handleCompanionBackNavigation(): boolean {
+    if (this.showHistoryPage || this.showSearchPage || this.showFilterPage) {
+      this.showHistoryPage = false;
+      this.showSearchPage = false;
+      this.showFilterPage = false;
+      this.historyViewMode = 'timeline';
+      this.selectedHistoryTimelineItem = null;
+      this.selectedHistoryPlaceName = '';
+      this.historySummary = null;
+      this.safeShowToast('已返回伴游上一级');
+      hilog.info(0x0000, 'CompanionView', '[COMPANION][back_hierarchy] close_overlay');
+      return true;
+    }
+    if (this.companionSubMode === 'control') {
+      this.enterImmersiveMode();
+      this.safeShowToast('已返回沉浸模式');
+      hilog.info(0x0000, 'CompanionView', '[COMPANION][back_hierarchy] control_to_immersive');
+      return true;
+    }
+    this.exitCompanion();
+    hilog.info(0x0000, 'CompanionView', '[COMPANION][back_hierarchy] exit_companion');
+    return true;
+  }
+
   private handleImmersiveSwipeStart(): void {
     const now = Date.now();
     this.swipeStartTs = now;
@@ -854,6 +927,7 @@ export struct CompanionView {
           },
           onEndEvent: async (event: EventEntity) => {
             await this.vm.updateActualTime(event.id, 'actual_end_time', Date.now());
+            hilog.info(0x0000, 'CompanionView', `[COMPANION][action_end] eventId=${event.id}, name=${event.name}`);
             this.refreshContext();
           },
           onNavigate: (event?: EventEntity) => {
@@ -922,7 +996,7 @@ export struct CompanionView {
         timelineCount: this.getVisibleTimelineCount(),
         timelineScroller: this.timelineScroller,
         onExit: () => {
-          this.exitCompanion();
+          this.handleCompanionBackNavigation();
         },
         onRefreshWeather: () => {
           this.safeShowToast('正在刷新天气...');
@@ -1013,6 +1087,7 @@ export struct CompanionView {
         },
         onEndFocused: async (event: EventEntity) => {
           await this.vm.updateActualTime(event.id, 'actual_end_time', Date.now());
+          hilog.info(0x0000, 'CompanionView', `[COMPANION][action_end] eventId=${event.id}, name=${event.name}`);
           this.refreshContext();
         },
         onReopenFocused: async () => {
@@ -1034,15 +1109,19 @@ export struct CompanionView {
           this.handleTimelineScrollStop();
         },
         onHistory: () => {
+          hilog.info(0x0000, 'CompanionView', '[COMPANION_NAV][tap] action=history');
           this.openHistoryList();
         },
         onImmersive: () => {
+          hilog.info(0x0000, 'CompanionView', '[COMPANION_NAV][tap] action=immersive');
           this.enterImmersiveMode();
         },
         onSearch: () => {
+          hilog.info(0x0000, 'CompanionView', '[COMPANION_NAV][tap] action=search');
           this.openSearchPage();
         },
         onFilter: () => {
+          hilog.info(0x0000, 'CompanionView', '[COMPANION_NAV][tap] action=filter');
           this.openFilterPage();
         }
       })

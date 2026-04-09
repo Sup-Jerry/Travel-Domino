@@ -292,7 +292,8 @@ export struct CompanionControlPage {
         onFilter: () => {
           this.onFilter();
         }
-      });
+      })
+        .zIndex(20);
     }
     .width('100%')
     .height('100%')

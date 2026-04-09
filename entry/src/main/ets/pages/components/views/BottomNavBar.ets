@@ -364,7 +364,12 @@ export struct CompanionBottomActionBar {
     .justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Center)
     .onClick(() => {
-      onTap();
+      hilog.info(0x0000, NAV_TAG, `[COMPANION_NAV][tap] label=${label}`);
+      try {
+        onTap();
+      } catch (_error) {
+        promptAction.openToast({ message: '按钮响应失败，请重试' });
+      }
     });
   }
 

@@ -65,6 +65,20 @@ export struct AdvanceAdjustDialog {
     this.preview = this.vm.compressionCoordinator.previewAdvanceAdjust(this.targetIndex, this.selectedIds, this.targetStartTime);
   }
 
+  private openTargetTimePicker(): void {
+    const minutes = this.timeToMinutes(this.targetStartTime);
+    const selected = new Date();
+    selected.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
+    this.getUIContext().showTimePickerDialog({
+      selected: selected,
+      useMilitaryTime: true,
+      onAccept: (val) => {
+        this.targetStartTime = this.minutesToTime(val.hour * 60 + val.minute);
+        this.refreshPreview();
+      }
+    });
+  }
+
   private toggleOne(id: number, checked: boolean): void {
     if (checked) {
       this.selectedIds.add(id);
@@ -132,14 +146,16 @@ export struct AdvanceAdjustDialog {
           Text('新开始时间')
             .fontSize(13)
             .fontColor($r('app.color.text_secondary'))
-          TextInput({ text: this.targetStartTime, placeholder: 'HH:mm' })
-            .type(InputType.Normal)
-            .width(120)
-            .height(38)
+          Text(this.targetStartTime)
+            .fontSize(16)
+            .fontWeight(FontWeight.Medium)
+            .fontColor($r('app.color.text_primary'))
+            .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+            .backgroundColor('#F0F8FF')
+            .borderRadius(8)
             .margin({ left: 10 })
-            .onChange((value: string) => {
-              this.targetStartTime = value.trim();
-              this.refreshPreview();
+            .onClick(() => {
+              this.openTargetTimePicker();
             })
         }
         .width('100%')

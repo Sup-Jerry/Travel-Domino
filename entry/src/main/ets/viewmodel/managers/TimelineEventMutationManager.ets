@@ -174,11 +174,12 @@ export class TimelineEventMutationManager {
     this.host.recalculateFromIndex(recalculateStartIndex);
   }
 
-  public moveAllBacklogToSchedule(): number {
+  public async moveAllBacklogToSchedule(): Promise<number> {
     const backlogItems = this.host.events.filter((event: EventEntity) => event.status !== 1);
     if (backlogItems.length === 0) {
       return 0;
     }
+    hilog.info(0x0000, TAG, `[BACKLOG][move_all_begin] total=${backlogItems.length}`);
 
     const scheduleItems = this.host.events.filter((event: EventEntity) => event.status === 1);
     let maxSort = scheduleItems.reduce((max: number, cur: EventEntity) => cur.sort_order > max ? cur.sort_order : max, 0);
@@ -202,8 +203,12 @@ export class TimelineEventMutationManager {
       }
       return a.sort_order - b.sort_order;
     });
+    this.host.refreshTimelineView();
     this.host.recalculateFromIndex(0);
-    void this.host.save();
+    hilog.info(0x0000, TAG, '[BACKLOG][move_all_recalc_done] fromIndex=0');
+    await this.host.save();
+    this.host.refreshTimelineView();
+    hilog.info(0x0000, TAG, '[BACKLOG][move_all_ui_refreshed]');
     return backlogItems.length;
   }
 

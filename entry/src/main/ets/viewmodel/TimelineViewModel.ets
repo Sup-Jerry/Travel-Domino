@@ -525,7 +525,7 @@ export class TimelineViewModel implements
     await this.eventMutationManager.moveEvent(index, direction);
   }
 
-  public moveAllBacklogToSchedule(): number {
+  public async moveAllBacklogToSchedule(): Promise<number> {
     return this.eventMutationManager.moveAllBacklogToSchedule();
   }
 
@@ -1115,17 +1115,22 @@ export class TimelineViewModel implements
     return this.compressionCoordinator.applyAdvanceAdjust(targetIndex, selectedIds, targetStartTime);
   }
 
-  public buildCompressionSelectionContext(targetIndex: number, targetTime: string): CompressionSelectionContext | null {
-    return this.compressionCoordinator.buildCompressionSelectionContext(targetIndex, targetTime);
+  public buildCompressionSelectionContext(
+    targetIndex: number,
+    targetTime: string,
+    forcedGapMinutes?: number
+  ): CompressionSelectionContext | null {
+    return this.compressionCoordinator.buildCompressionSelectionContext(targetIndex, targetTime, forcedGapMinutes);
   }
 
   public calculateCompressionPlanBySelection(
     targetIndex: number,
     targetTime: string,
     selectedIds: Set<number>,
-    mode: CompressionMode
+    mode: CompressionMode,
+    forcedGapMinutes?: number
   ): CompressionPlan {
-    return this.compressionCoordinator.calculateCompressionPlanBySelection(targetIndex, targetTime, selectedIds, mode);
+    return this.compressionCoordinator.calculateCompressionPlanBySelection(targetIndex, targetTime, selectedIds, mode, forcedGapMinutes);
   }
 
   public applyCompressionPlan(plan: CompressionPlan): void {

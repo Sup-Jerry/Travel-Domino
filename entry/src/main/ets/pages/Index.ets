@@ -772,7 +772,7 @@ struct Index {
       return;
     }
 
-    this.openCompressSelectionDialog(index, item, targetTime, saveCallback, reopenConflictMenu);
+    this.openCompressSelectionDialog(index, item, targetTime, saveCallback, reopenConflictMenu, [], 'RATIO', gapMinutes);
   }
 
   private openAdvanceAdjustDialog(index: number, item: EventEntity, targetTime: string, saveCallback: (t?: string) => void): void {
@@ -823,7 +823,7 @@ struct Index {
       primaryButton: {
         value: '返回重选',
         action: () => {
-          this.openCompressSelectionDialog(index, item, targetTime, saveCallback, onBack, selectedIds, mode);
+          this.openCompressSelectionDialog(index, item, targetTime, saveCallback, onBack, selectedIds, mode, remain);
         }
       },
       secondaryButton: {
@@ -839,16 +839,31 @@ struct Index {
   }
 
   private openCompressSelectionDialog(index: number, item: EventEntity, targetTime: string, saveCallback: (t?: string) => void,
-    onBack: () => void, presetSelectedIds: number[] = [], presetMode: CompressionMode = 'RATIO') {
-    const context = this.vm.buildCompressionSelectionContext(index, targetTime);
+    onBack: () => void, presetSelectedIds: number[] = [], presetMode: CompressionMode = 'RATIO', forcedGapMinutes: number = 0) {
+    const normalizedForcedGap = Math.max(0, Math.floor(forcedGapMinutes));
+    const fallbackGap = this.resolveConflictGapMinutes(item, normalizedForcedGap);
+    const effectiveGap = Math.max(normalizedForcedGap, fallbackGap);
+    hilog.info(
+      0x0000,
+      'Index',
+      `[CONFLICT_UI][compress_context_begin] itemId=${item.id}, targetTime=${targetTime}, forcedGap=${normalizedForcedGap}, fallbackGap=${fallbackGap}, effectiveGap=${effectiveGap}`
+    );
+    const context = this.vm.buildCompressionSelectionContext(index, targetTime, effectiveGap);
     if (!context) {
+      hilog.warn(0x0000, 'Index', `[CONFLICT_UI][compress_context_missing] itemId=${item.id}, targetTime=${targetTime}, effectiveGap=${effectiveGap}`);
       this.safeShowToast('当前上下文无法计算压缩方案，请稍后重试');
       return;
     }
     if (context.neededGapMinutes <= 0) {
-      saveCallback(targetTime);
+      hilog.warn(0x0000, 'Index', `[CONFLICT_UI][compress_no_need] itemId=${item.id}, needed=${context.neededGapMinutes}, effectiveGap=${effectiveGap}`);
+      this.safeShowToast('当前无需压缩，建议先尝试顺延或前移调整');
       return;
     }
+    hilog.info(
+      0x0000,
+      'Index',
+      `[CONFLICT_UI][compress_context_ready] itemId=${item.id}, needed=${context.neededGapMinutes}, candidateCount=${context.candidates.length}, effectiveGap=${effectiveGap}`
+    );
 
     this.conflictCompressController = new CustomDialogController({
       builder: ConflictCompressDialog({
@@ -856,13 +871,14 @@ struct Index {
         targetIndex: index,
         targetTime: targetTime,
         targetName: item.name,
+        forcedGapMinutes: effectiveGap,
         initialMode: presetMode,
         initialSelectedIds: presetSelectedIds,
         onCancel: () => {
           hilog.info(0x0000, 'Index', `[CONFLICT_UI][compress_dialog_cancel] itemId=${item.id}`);
         },
         onConfirm: (selectedIds: number[], mode: CompressionMode) => {
-          const plan = this.vm.calculateCompressionPlanBySelection(index, targetTime, new Set<number>(selectedIds), mode);
+          const plan = this.vm.calculateCompressionPlanBySelection(index, targetTime, new Set<number>(selectedIds), mode, effectiveGap);
           if (plan.status === 'NO_ACTION') {
             saveCallback(targetTime);
             return;
@@ -872,7 +888,7 @@ struct Index {
             return;
           }
           this.openPreview(index, item, targetTime, plan, saveCallback, () => {
-            this.openCompressSelectionDialog(index, item, targetTime, saveCallback, onBack, selectedIds, mode);
+            this.openCompressSelectionDialog(index, item, targetTime, saveCallback, onBack, selectedIds, mode, effectiveGap);
           });
         }
       }),
@@ -950,7 +966,7 @@ struct Index {
           hilog.info(0x0000, 'Index', `[CONFLICT_UI][menu_compress] itemId=${item.id}`);
           this.openCompressSelectionDialog(index, item, targetTime, saveCallback, () => {
             this.openConflictMenu(index, item, targetTime, gap, saveCallback);
-          });
+          }, [], 'RATIO', gap);
         },
 
         onAdvanceAdjust: () => {
@@ -967,7 +983,7 @@ struct Index {
           hilog.info(0x0000, 'Index', `[CONFLICT_UI][menu_smart] itemId=${item.id}`);
           this.openCompressSelectionDialog(index, item, targetTime, saveCallback, () => {
             this.openConflictMenu(index, item, targetTime, gap, saveCallback);
-          });
+          }, [], 'RATIO', gap);
         }
       }),
       alignment: DialogAlignment.Center,
@@ -1439,6 +1455,22 @@ struct Index {
       clearInterval(this.strategyAdaptationCheckTimer);
       this.strategyAdaptationCheckTimer = -1;
     }
+  }
+
+  onBackPress(): boolean {
+    if (this.isCompanionMode) {
+      const level = String(AppStorage.get('COMPANION_BACK_LEVEL') || 'immersive');
+      if (level === 'overlay' || level === 'control') {
+        const currentRequest = Number(AppStorage.get('COMPANION_BACK_REQUEST') as number) || 0;
+        AppStorage.setOrCreate('COMPANION_BACK_REQUEST', currentRequest + 1);
+        hilog.info(0x0000, 'Index', `[COMPANION][back_intercept] delegate level=${level}, request=${currentRequest + 1}`);
+        return true;
+      }
+      hilog.info(0x0000, 'Index', `[COMPANION][back_intercept] close companion level=${level}`);
+      this.isCompanionMode = false;
+      return true;
+    }
+    return false;
   }
 
   private loadStrategyExplanation() {
@@ -1939,12 +1971,15 @@ struct Index {
             });
           },
           onMoveAllToSchedule: () => {
-            const movedCount = this.vm.moveAllBacklogToSchedule();
-            if (movedCount > 0) {
-              this.safeShowToast(`已加入日程 ${movedCount} 个地点`);
-            } else {
-              this.safeShowToast('暂存池暂无可加入地点');
-            }
+            void this.vm.moveAllBacklogToSchedule().then((movedCount: number) => {
+              if (movedCount > 0) {
+                this.safeShowToast(`已加入日程 ${movedCount} 个地点`);
+              } else {
+                this.safeShowToast('暂存池暂无可加入地点');
+              }
+            }).catch((_error: Object) => {
+              this.safeShowToast('一键加入失败，请稍后重试');
+            });
           }
         })
           .constraintSize({ maxHeight: '30%' })

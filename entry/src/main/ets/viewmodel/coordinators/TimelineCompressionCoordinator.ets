@@ -23,14 +23,26 @@ export class TimelineCompressionCoordinator {
     await this.compressionService.smartFixConflict(targetItem);
   }
 
-  public calculateCompressionPlan(targetIndex: number, newTimeStr: string): CompressionPlan {
-    hilog.info(0x0000, TAG, `[ACPT][COMPRESS][calculateCompressionPlan] targetIndex=${targetIndex}, newTime=${newTimeStr}`);
-    return this.compressionService.calculateCompressionPlan(targetIndex, newTimeStr);
+  public calculateCompressionPlan(targetIndex: number, newTimeStr: string, forcedGapMinutes?: number): CompressionPlan {
+    hilog.info(
+      0x0000,
+      TAG,
+      `[ACPT][COMPRESS][calculateCompressionPlan] targetIndex=${targetIndex}, newTime=${newTimeStr}, forcedGap=${forcedGapMinutes ?? -1}`
+    );
+    return this.compressionService.calculateCompressionPlan(targetIndex, newTimeStr, forcedGapMinutes);
   }
 
-  public buildCompressionSelectionContext(targetIndex: number, targetTime: string): CompressionSelectionContext | null {
-    hilog.info(0x0000, TAG, `[ACPT][COMPRESS][buildSelectionContext] targetIndex=${targetIndex}, targetTime=${targetTime}`);
-    return this.compressionService.buildCompressionSelectionContext(targetIndex, targetTime);
+  public buildCompressionSelectionContext(
+    targetIndex: number,
+    targetTime: string,
+    forcedGapMinutes?: number
+  ): CompressionSelectionContext | null {
+    hilog.info(
+      0x0000,
+      TAG,
+      `[ACPT][COMPRESS][buildSelectionContext] targetIndex=${targetIndex}, targetTime=${targetTime}, forcedGap=${forcedGapMinutes ?? -1}`
+    );
+    return this.compressionService.buildCompressionSelectionContext(targetIndex, targetTime, forcedGapMinutes);
   }
 
   public buildAdvanceAdjustContext(targetIndex: number): AdvanceAdjustContext | null {
@@ -63,9 +75,10 @@ export class TimelineCompressionCoordinator {
     targetIndex: number,
     targetTime: string,
     selectedIds: Set<number>,
-    mode: CompressionMode = 'RATIO'
+    mode: CompressionMode = 'RATIO',
+    forcedGapMinutes?: number
   ): CompressionPlan {
-    return this.compressionService.calculateCompressionPlanBySelection(targetIndex, targetTime, selectedIds, mode);
+    return this.compressionService.calculateCompressionPlanBySelection(targetIndex, targetTime, selectedIds, mode, forcedGapMinutes);
   }
 
   public applyCompressionPlan(plan: CompressionPlan): void {

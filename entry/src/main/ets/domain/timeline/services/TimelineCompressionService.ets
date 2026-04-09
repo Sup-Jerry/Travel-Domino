@@ -106,8 +106,8 @@ export interface ITimelineCompressionHost {
 export interface ITimelineCompressionService {
   fixConflict(item: TravelPlanItem | EventEntity, shiftMinutes: number): Promise<void>;
   smartFixConflict(targetItem: EventEntity): Promise<void>;
-  calculateCompressionPlan(targetIndex: number, newTimeStr: string): CompressionPlan;
-  buildCompressionSelectionContext(targetIndex: number, targetTime: string): CompressionSelectionContext | null;
+  calculateCompressionPlan(targetIndex: number, newTimeStr: string, forcedGapMinutes?: number): CompressionPlan;
+  buildCompressionSelectionContext(targetIndex: number, targetTime: string, forcedGapMinutes?: number): CompressionSelectionContext | null;
   buildAdvanceAdjustContext(targetIndex: number): AdvanceAdjustContext | null;
   previewAdvanceAdjust(targetIndex: number, selectedIds: Set<number>, targetStartTime: string): AdvanceAdjustPreview;
   applyAdvanceAdjust(targetIndex: number, selectedIds: Set<number>, targetStartTime: string): Promise<AdvanceAdjustApplyResult>;
@@ -115,7 +115,8 @@ export interface ITimelineCompressionService {
     targetIndex: number,
     targetTime: string,
     selectedIds: Set<number>,
-    mode?: CompressionMode
+    mode?: CompressionMode,
+    forcedGapMinutes?: number
   ): CompressionPlan;
   applyCompressionPlan(plan: CompressionPlan): void;
   calculateDelayPlan(targetIndex: number): CompressionPlan;
@@ -165,8 +166,8 @@ export class TimelineCompressionService implements ITimelineCompressionService {
     }
   }
 
-  public calculateCompressionPlan(targetIndex: number, newTimeStr: string): CompressionPlan {
-    const context = this.buildCompressionSelectionContext(targetIndex, newTimeStr);
+  public calculateCompressionPlan(targetIndex: number, newTimeStr: string, forcedGapMinutes?: number): CompressionPlan {
+    const context = this.buildCompressionSelectionContext(targetIndex, newTimeStr, forcedGapMinutes);
     if (!context || context.neededGapMinutes <= 0) {
       return { status: 'NO_ACTION', msg: '时间充裕', affectedItems: [] };
     }
@@ -177,7 +178,7 @@ export class TimelineCompressionService implements ITimelineCompressionService {
         selectedIds.add(candidate.id);
       }
     });
-    return this.calculateCompressionPlanBySelection(targetIndex, newTimeStr, selectedIds, 'RATIO');
+    return this.calculateCompressionPlanBySelection(targetIndex, newTimeStr, selectedIds, 'RATIO', forcedGapMinutes);
   }
 
   private resolveSameDayScheduleStartIndex(targetIndex: number, targetDayOffset: number): number {
@@ -196,7 +197,11 @@ export class TimelineCompressionService implements ITimelineCompressionService {
     return dayStartIndex;
   }
 
-  private buildCompressionSelectionContextInternal(targetIndex: number, targetTime: string): CompressionSelectionContext | null {
+  private buildCompressionSelectionContextInternal(
+    targetIndex: number,
+    targetTime: string,
+    forcedGapMinutes?: number
+  ): CompressionSelectionContext | null {
     if (targetIndex <= 0 || !this.host.events[targetIndex]) {
       return null;
     }
@@ -207,7 +212,9 @@ export class TimelineCompressionService implements ITimelineCompressionService {
     const naturalArrivalMinutes = this.calculateNaturalArrival(targetIndex);
     const targetMinutes = DateUtil.timeToMinutes(targetTime);
     const targetDayOffset = this.host.getEffectiveDayOffset(this.host.events[targetIndex]);
-    const neededGapMinutes = naturalArrivalMinutes - (targetDayOffset * 24 * 60 + targetMinutes);
+    const computedGapMinutes = naturalArrivalMinutes - (targetDayOffset * 24 * 60 + targetMinutes);
+    const forcedGap = Number.isFinite(forcedGapMinutes) ? Math.max(0, Math.floor(forcedGapMinutes ?? 0)) : 0;
+    const neededGapMinutes = Math.max(computedGapMinutes, forcedGap);
     const sameDayStartIndex = this.resolveSameDayScheduleStartIndex(targetIndex, targetDayOffset);
     let chainStartIndex = sameDayStartIndex;
     for (let i = targetIndex - 1; i >= sameDayStartIndex; i--) {
@@ -270,8 +277,8 @@ export class TimelineCompressionService implements ITimelineCompressionService {
     };
   }
 
-  public buildCompressionSelectionContext(targetIndex: number, targetTime: string): CompressionSelectionContext | null {
-    return this.buildCompressionSelectionContextInternal(targetIndex, targetTime);
+  public buildCompressionSelectionContext(targetIndex: number, targetTime: string, forcedGapMinutes?: number): CompressionSelectionContext | null {
+    return this.buildCompressionSelectionContextInternal(targetIndex, targetTime, forcedGapMinutes);
   }
 
   private formatMinuteOnDay(totalMinutes: number): string {
@@ -594,9 +601,10 @@ export class TimelineCompressionService implements ITimelineCompressionService {
     targetIndex: number,
     targetTime: string,
     selectedIds: Set<number>,
-    mode: CompressionMode = 'RATIO'
+    mode: CompressionMode = 'RATIO',
+    forcedGapMinutes?: number
   ): CompressionPlan {
-    const context = this.buildCompressionSelectionContextInternal(targetIndex, targetTime);
+    const context = this.buildCompressionSelectionContextInternal(targetIndex, targetTime, forcedGapMinutes);
     if (!context) {
       return { status: 'NO_ACTION', msg: '无需操作', affectedItems: [], mode: mode };
     }
