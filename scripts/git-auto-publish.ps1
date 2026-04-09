@@ -101,10 +101,22 @@ if ([string]::IsNullOrWhiteSpace($Body)) {
 }
 
 Write-Step "创建 Draft PR -> base:$BaseBranch head:$branch"
-$createOutput = gh pr create --base $BaseBranch --head $branch --title $Title --body $Body --draft 2>&1
-if ($LASTEXITCODE -ne 0) {
-  Write-Warn "自动创建 Draft PR 失败: $createOutput"
-  exit 0
+$prevNativePref = $false
+$hasNativePref = $false
+if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue) {
+  $hasNativePref = $true
+  $prevNativePref = $PSNativeCommandUseErrorActionPreference
+  $PSNativeCommandUseErrorActionPreference = $false
 }
-
-Write-Ok "Draft PR 已创建: $createOutput"
+try {
+  $createOutput = gh pr create --base $BaseBranch --head $branch --title $Title --body $Body --draft 2>&1
+  if ($LASTEXITCODE -ne 0) {
+    Write-Warn "自动创建 Draft PR 失败: $createOutput"
+    exit 0
+  }
+  Write-Ok "Draft PR 已创建: $createOutput"
+} finally {
+  if ($hasNativePref) {
+    $PSNativeCommandUseErrorActionPreference = $prevNativePref
+  }
+}
