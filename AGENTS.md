@@ -31,5 +31,19 @@ A skill is a set of local instructions to follow that is stored in a `SKILL.md` 
 - 口令例外：若用户明确说“只本地提交 / 不推送 / 不要PR”，按用户指令覆盖默认行为。
 - 迭代进化：使用 `skill-evolution-manager`。
 
+## 上传到 GitHub 标准流程
+1. 先确认当前分支不是 `main`（除非用户当次明确授权直推 `main`）。
+2. 默认使用：
+   `./scripts/git-auto-publish.ps1 -Message "<提交信息>"`
+3. 只提交指定文件时，必须显式传 `-Files`，避免把未完成改动一起提交：
+   `./scripts/git-auto-publish.ps1 -Message "<提交信息>" -Files "path/a","path/b"`
+4. 用户说“只本地提交/不推送”时：
+   `./scripts/git-auto-publish.ps1 -Message "<提交信息>" -NoPush`
+5. 用户说“不要 PR”时：
+   `./scripts/git-auto-publish.ps1 -Message "<提交信息>" -NoPR`
+6. 若 `git-auto-publish.ps1` 不可用或异常，回退：
+   `./scripts/git-flow.ps1 -Message "<提交信息>" [-Files ...] [-NoPush]`
+7. 禁止直接手工裸 `git push` 作为默认流程；必须经过上述脚本入口。
+
 任何密码、密钥、签名信息，都不写进 Git 跟踪文件。
 开发环境和构建环境都不用手填真实秘密到仓库文件中。
