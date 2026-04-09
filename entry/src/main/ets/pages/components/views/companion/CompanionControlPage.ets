@@ -277,8 +277,7 @@ export struct CompanionControlPage {
       .width('100%')
       .height('100%')
       .padding({ left: 12, right: 12, bottom: this.safeBottomInset + 90 })
-      .backgroundColor(this.getThemePalette().companionBg)
-      .zIndex(1);
+      .backgroundColor(this.getThemePalette().companionBg);
 
       CompanionBottomActionBar({
         onHistory: () => {
@@ -293,8 +292,7 @@ export struct CompanionControlPage {
         onFilter: () => {
           this.onFilter();
         }
-      })
-      .zIndex(10);
+      });
     }
     .width('100%')
     .height('100%')

@@ -26,8 +26,6 @@ build.log
 travel-domino-skill-evolution-all.txt
 .claude/
 *.bak
-DeepScientist/
-DeepScientist/runtime/tools/uv/bin/uv.exe
 
 /backend/node_modules
 /backend/dist

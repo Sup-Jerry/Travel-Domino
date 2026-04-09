@@ -13,24 +13,24 @@ import { ScheduleOrchestrator } from './internal/ScheduleOrchestrator';
 import { PlanPersistenceFacade } from './internal/PlanPersistenceFacade';
 import { ReminderFacade } from './internal/ReminderFacade';
 import {
-  ApplyResultFlags,
+  ApplyResultFlags as TimelineApplyResultFlags,
   AdvanceAdjustApplyResult,
   AdvanceAdjustContext,
   AdvanceAdjustPreview,
   CompressionMode,
   CompressionPlan,
   CompressionSelectionContext,
-  CompanionActions,
-  CompanionContext,
-  CompanionRuntimeState,
+  CompanionActions as TimelineCompanionActions,
+  CompanionContext as TimelineCompanionContext,
+  CompanionRuntimeState as TimelineCompanionRuntimeState,
   ExecutionSuggestionApplyResult,
-  HistoryTimelineActionType,
-  HistoryTimelineFilter,
-  HistoryTimelineItem,
-  HistoryTimelineSummary,
-  PlanDateShiftPreview,
-  ReflowHint,
-  SolverCalculatedItem,
+  HistoryTimelineActionType as TimelineHistoryTimelineActionType,
+  HistoryTimelineFilter as TimelineHistoryTimelineFilter,
+  HistoryTimelineItem as TimelineHistoryTimelineItem,
+  HistoryTimelineSummary as TimelineHistoryTimelineSummary,
+  PlanDateShiftPreview as TimelinePlanDateShiftPreview,
+  ReflowHint as TimelineReflowHint,
+  SolverCalculatedItem as TimelineSolverCalculatedItem,
   StartConflictInfo
 } from './types/TimelineTypes';
 import {
@@ -109,21 +109,23 @@ export {
   AdvanceAdjustPreview,
   AdvanceAdjustApplyResult,
   ExecutionSuggestionApplyResult,
-  StartConflictInfo,
-  PlanDateShiftPreview,
-  HistoryTimelineFilter,
-  HistoryTimelineActionType,
-  HistoryTimelineItem,
-  HistoryTimelineSummary,
-  CompanionRuntimeState,
-  ReflowHint,
-  CompanionActions,
-  CompanionContext,
-  SolverCalculatedItem,
-  ApplyResultFlags
+  StartConflictInfo
 } from './types/TimelineTypes';
 
+export type PlanDateShiftPreview = TimelinePlanDateShiftPreview;
+export type HistoryTimelineFilter = TimelineHistoryTimelineFilter;
+export type HistoryTimelineActionType = TimelineHistoryTimelineActionType;
+export type HistoryTimelineItem = TimelineHistoryTimelineItem;
+export type HistoryTimelineSummary = TimelineHistoryTimelineSummary;
+export type CompanionRuntimeState = TimelineCompanionRuntimeState;
+export type ReflowHint = TimelineReflowHint;
+export type CompanionActions = TimelineCompanionActions;
+
+export type CompanionContext = TimelineCompanionContext;
+
 const TAG = 'TimelineViewModel';
+export type SolverCalculatedItem = TimelineSolverCalculatedItem;
+export type ApplyResultFlags = TimelineApplyResultFlags;
 
 interface ActualTimeMutationMeta {
   beforeNextTs: number;
@@ -656,6 +658,13 @@ export class TimelineViewModel implements
 
   public recalculate(): void {
     this.recalculationManager.recalculate();
+  }
+
+  public recalculateTrafficOnly(): void {
+    this.recalculationManager.recalculateTrafficOnly();
+  }
+  public resolveGapBySync(item: EventEntity) {
+    this.distributionCoordinator.resolveGapBySync(item);
   }
 
   public getSortedGaps(): EventEntity[] {

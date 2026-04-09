@@ -6,15 +6,13 @@ export struct IndexCompanionOverlay {
   @Prop vm: TimelineViewModel = new TimelineViewModel();
   @Prop isVisible: boolean = false;
   @Prop overlayZIndex: number = 10;
-  @Prop backRequestToken: number = 0;
 
   build() {
     Stack() {
       if (this.isVisible) {
         CompanionView({
           vm: this.vm,
-          isShow: $isVisible,
-          backRequestToken: $backRequestToken
+          isShow: $isVisible
         })
           .zIndex(this.overlayZIndex)
           .transition({

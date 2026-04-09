@@ -1,4 +1,4 @@
-﻿export interface IndexToolbarTheme {
+export interface IndexToolbarTheme {
   primary: string;
   textTertiary: string;
   cardBgSoft: string;
@@ -26,32 +26,15 @@ export struct IndexToolbar {
   onEnterCompanion: () => void = () => {};
   onRefreshWeather: () => void = () => {};
 
-  private getSafePlanTitle(): string {
-    return this.planTitle ?? '';
-  }
-
-  private getSafeStrategyExplanation(): string {
-    return this.currentStrategyExplanation ?? '';
-  }
-
-  private getSafeTheme(): IndexToolbarTheme {
-    return this.theme ?? {
-      primary: '#2F7DFF',
-      textTertiary: '#8C8C8C',
-      cardBgSoft: '#F4F6FA',
-      textPrimary: '#1F1F1F'
-    };
-  }
-
   private getModeLabel(): string {
     if (this.strategyMode === 1) {
-      return '特种兵模式';
+      return '🚀 特种兵模式';
     }
     if (this.strategyMode === 2) {
-      return '休闲模式';
+      return '🌴 休闲模式';
     }
     if (this.strategyMode === -1) {
-      return '自定义策略';
+      return '🎛 自定义策略';
     }
     return '';
   }
@@ -66,7 +49,7 @@ export struct IndexToolbar {
     if (this.strategyMode === -1) {
       return '#2196F3';
     }
-    return this.getSafeTheme().textTertiary;
+    return this.theme.textTertiary;
   }
 
   build() {
@@ -74,7 +57,7 @@ export struct IndexToolbar {
       Button({ type: ButtonType.Normal, stateEffect: true }) {
         Text('返回')
           .fontSize(16)
-          .fontColor(this.getSafeTheme().primary)
+          .fontColor(this.theme.primary)
       }
       .backgroundColor(Color.Transparent)
       .padding({ left: 10, right: 10, top: 6, bottom: 6 })
@@ -82,7 +65,7 @@ export struct IndexToolbar {
       .onClick(() => this.onBack())
 
       Column() {
-        Text(this.getSafePlanTitle().length > 7 ? `${this.getSafePlanTitle().substring(0, 7)}...` : this.getSafePlanTitle())
+        Text(this.planTitle.length > 7 ? `${this.planTitle.substring(0, 7)}...` : this.planTitle)
           .fontSize(18)
           .fontWeight(FontWeight.Bold)
           .maxLines(1)
@@ -96,8 +79,8 @@ export struct IndexToolbar {
             .margin({ top: 2 })
         }
 
-        if (this.strategyMode !== 0 && this.getSafeStrategyExplanation()) {
-          Text(this.getSafeStrategyExplanation())
+        if (this.strategyMode !== 0 && this.currentStrategyExplanation) {
+          Text(this.currentStrategyExplanation)
             .fontSize(10)
             .fontColor(this.getModeColor())
             .margin({ top: 1 })
@@ -107,7 +90,7 @@ export struct IndexToolbar {
 
         Text('点击修改日期')
           .fontSize(10)
-          .fontColor(this.getSafeTheme().textTertiary)
+          .fontColor(this.theme.textTertiary)
           .margin({ top: 2 })
       }
       .layoutWeight(1)
@@ -120,19 +103,19 @@ export struct IndexToolbar {
       })
 
       Row() {
-        Text('伴游').fontSize(14)
+        Text('🚀').fontSize(18)
       }
       .padding(8)
       .margin({ right: 4 })
       .onClick(() => this.onEnterCompanion())
 
       if (!this.isCompanionMode && this.weatherFeatureEnabled) {
-        Button(this.weatherLoading ? '...' : '天气')
+        Button(this.weatherLoading ? '⏳' : '🌤️')
           .height(30)
           .fontSize(16)
           .padding({ left: 10, right: 10 })
-          .backgroundColor(this.getSafeTheme().cardBgSoft)
-          .fontColor(this.getSafeTheme().textPrimary)
+          .backgroundColor(this.theme.cardBgSoft)
+          .fontColor(this.theme.textPrimary)
           .enabled(!this.weatherLoading)
           .onClick(() => this.onRefreshWeather())
       }

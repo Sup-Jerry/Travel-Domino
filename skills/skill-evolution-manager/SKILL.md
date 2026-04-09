@@ -117,18 +117,8 @@ Agent 调用 `scripts/smart_stitch.py`，将 `evolution.json` 的内容转化为
 - 当用户要求"复盘+上传GitHub+瘦身"时，固定执行顺序：复盘沉淀 -> Git同步状态确认 -> 瘦身执行 -> 提交推送。
 - 瘦身默认先处理可验证安全项：先删无引用的 tracked 冗余文件，再清理本地可再生产物。
 - When merge_evolution CLI argument parsing fails on PowerShell, call merge_evolution via python import with file-loaded JSON to avoid quoting issues.
-- ?????????????????????????-??-??-????
-- ?????????? merge_evolution ? smart_stitch??????????
-- 当用户反馈‘你改错了’或出现回归时，先按最小补丁回退拦截层，再继续功能修复。
-- 伴游页交互问题优先检查层级与手势命中链路：zIndex/常驻全屏容器/隐藏态是否拦截事件。
-- 用户要求‘侧滑返回只退一级’时，必须实现分层返回栈：Overlay详情->Overlay列表->控制页->沉浸页->退出伴游。
-- ???????????????? merge_evolution ? smart_stitch?????????????
-- ????????????GitHub????????????? app-size-pruner?????????????
-- 当用户明确要求精简/瘦身时，禁止使用仅格式压缩或行数优化作为主要交付，必须给出职责下沉或冗余删除等结构性变化。
-- 在里程碑汇报中必须区分"结构性瘦身"与"样式压缩"，并量化各自占比，避免误导。
-- 当用户指定从某个提交继续开发时，先验证该提交是否在当前分支并汇报基线。
-- 用户明确要求结构性拆分时，禁止把格式压缩当作主要交付。
-- 当用户追问是否使用skill时，必须直接说明并立即纠偏执行。
+- 当用户明确指定多个skill和执行顺序时，先按顺序完成skill流程，再进入代码或Git操作。
+- 复盘沉淀输出应附带可验证证据：merge/stitch命令执行结果与last_updated时间。
 
 ### Known Fixes & Workarounds
 - Before any edit, restate user intent and explicitly state whether code will be changed.
@@ -186,15 +176,8 @@ Agent 调用 `scripts/smart_stitch.py`，将 `evolution.json` 的内容转化为
 - Docker Compose v2 场景下移除 compose 文件中的 version 字段，避免持续 warning 干扰排查。
 - 执行瘦身前先做引用扫描（rg）和 tracked 校验（git ls-files），防止误删运行时资源。
 - If user requires commit-msg gate but hook file is missing, create the gate first before push workflow.
-- ???/?????????????????????? stash?
-- ???? git ??????????????????????????
-- CompanionOverlayPages 在隐藏态若常驻全屏容器会吞掉沉浸上滑手势；应仅在 showHistory/showSearch/showFilter 任一为 true 时渲染。
-- Index 页面需 onBackPress 拦截伴游态返回，并通过 token 下发到 CompanionView 处理内部回退。
-- Windows/PowerShell ??? JSON ? merge_evolution ?????????????????????????????
-- 若用户对结果提出"投机取巧"反馈，下一轮先执行反思沉淀再继续开发，并在同轮给出约束落库证据。
-- Windows 沙箱/防火墙偶发失败时，优先改为串行命令重试，避免并行调用扩大失败面。
-- 在复盘+瘦身+上传场景，固定顺序为：经验沉淀 -> 瘦身执行 -> Git同步。
+- PowerShell下merge_evolution优先使用Python文件读取调用，避免JSON argv转义失败。
 
 ### Custom Instruction Injection
 
-回顾多轮对话时，先抽取可执行约束，再落库到evolution并给出可验证证据。
+复盘请求默认执行：识别目标skill -> merge_evolution -> smart_stitch -> 时间戳与区块校验。

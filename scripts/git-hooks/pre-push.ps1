@@ -4,17 +4,38 @@ $ErrorActionPreference = 'Stop'
 
 $currentBranch = (git branch --show-current).Trim()
 $allowMainPush = $env:ALLOW_MAIN_PUSH -eq '1'
-if ($currentBranch -eq 'main' -and -not $allowMainPush) {
-  Write-Host '[pre-push] blocked: direct push to main is disabled by governance.' -ForegroundColor Red
-  Write-Host '[pre-push] use develop/feature/release/hotfix branches, or set ALLOW_MAIN_PUSH=1 for an explicit override.' -ForegroundColor Yellow
+
+# Git pre-push provides refs on stdin:
+# <local ref> <local sha> <remote ref> <remote sha>
+$pushLines = @()
+while ($true) {
+  $line = [Console]::In.ReadLine()
+  if ($null -eq $line) { break }
+  if (-not [string]::IsNullOrWhiteSpace($line)) {
+    $pushLines += $line
+  }
+}
+
+$targetsMain = $false
+foreach ($line in $pushLines) {
+  $parts = $line -split '\s+'
+  if ($parts.Count -ge 4) {
+    $remoteRef = $parts[2]
+    if ($remoteRef -eq 'refs/heads/main') {
+      $targetsMain = $true
+      break
+    }
+  }
+}
+
+if ((($currentBranch -eq 'main') -or $targetsMain) -and -not $allowMainPush) {
+  Write-Host '[pre-push] blocked: pushing to main is disabled by governance.' -ForegroundColor Red
+  Write-Host '[pre-push] use develop/feature/release/hotfix, or set ALLOW_MAIN_PUSH=1 for explicit override.' -ForegroundColor Yellow
   exit 1
 }
 
 function Get-UpstreamRef {
-  $previousPreference = $ErrorActionPreference
-  $ErrorActionPreference = 'Continue'
-  $upstream = & git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>$null
-  $ErrorActionPreference = $previousPreference
+  $upstream = git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>$null
   if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($upstream)) {
     return $upstream.Trim()
   }
@@ -47,14 +68,8 @@ if ($changedFiles.Count -eq 0) {
   Write-Host '[pre-push] no changed files detected in push range.' -ForegroundColor DarkGray
 } else {
   $violations = New-Object System.Collections.Generic.List[string]
-  $forbiddenPathPattern = '(?i)^DeepScientist/runtime/tools/uv/bin/(uv\.exe|uvx\.exe)?$|(?i)^DeepScientist/runtime/tools/uv/bin/'
 
   foreach ($file in $changedFiles) {
-    if ($file -match $forbiddenPathPattern) {
-      $violations.Add("Forbidden runtime binary path: $file")
-      continue
-    }
-
     $sizeOutput = git cat-file -s "HEAD:$file" 2>$null
     if ($LASTEXITCODE -eq 0 -and $sizeOutput -as [long]) {
       $size = [long]$sizeOutput

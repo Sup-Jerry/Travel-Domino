@@ -46,15 +46,12 @@ description: Clean oversized application workspaces by scanning removable large 
 - When user asks to clean project, run preview first and explicitly explain MinSizeMB threshold impact before apply.
 - When user reports remaining size after cleanup, provide top directory size breakdown first, then offer safe second pass.
 - 瘦身默认先预览再执行删除，并回报释放空间和JSON报告路径。
-- 用户要求瘦身时，先preview后apply，并在结果里给出释放空间与报告路径。
-- 瘦身后若还要上传Git，优先提交代码与配置变更，不提交临时清理报告。
 
 ### Known Fixes & Workarounds
 - Default MinSizeMB 20 can miss many 1-20MB build artifacts; run a second scan with MinSizeMB 1 for safe whitelist cleanup when user still needs more space.
 - After cleanup, explicitly explain that .git and dependency folders such as oh_modules or node_modules are expected remaining size and are not safe-garbage targets by default.
 - 瘦身执行后若释放不足，按规则降阈值二次扫描（例如MinSizeMB从20降到1）并分别汇报两轮结果。
-- 当项目仍需继续开发时，清理范围优先限定为可再生产物和缓存目录。
 
 ### Custom Instruction Injection
 
-app-size-pruner流程固定为 preview -> apply -> 结果核对，避免直接盲删。
+瘦身流程固定：preview -> apply -> 报告路径与释放量核对。
