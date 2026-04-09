@@ -1971,8 +1971,31 @@ struct Index {
             });
           },
           onMoveAllToSchedule: () => {
+            const targetDayOffsets: number[] = [];
+            this.vm.events.forEach((event: EventEntity) => {
+              if (event.status === 1) {
+                return;
+              }
+              const effectiveOffset = this.vm.getEffectiveDayOffset(event);
+              if (targetDayOffsets.indexOf(effectiveOffset) < 0) {
+                targetDayOffsets.push(effectiveOffset);
+              }
+            });
             void this.vm.moveAllBacklogToSchedule().then((movedCount: number) => {
               if (movedCount > 0) {
+                if (this.vm.filterStart > 0 || this.vm.filterEnd > 0) {
+                  this.vm.clearFilter();
+                  hilog.info(0x0000, 'IndexPage', '[BACKLOG_ADD_UI][clear_filter_for_visibility] reason=move_all_to_schedule');
+                }
+                if (targetDayOffsets.length > 0 && this.collapsedDayOffsets.length > 0) {
+                  const nextCollapsed = this.collapsedDayOffsets.filter((offset: number) =>
+                    targetDayOffsets.indexOf(offset) < 0
+                  );
+                  if (nextCollapsed.length !== this.collapsedDayOffsets.length) {
+                    this.collapsedDayOffsets = [...nextCollapsed];
+                  }
+                }
+                this.vm.refreshTimelineView();
                 this.safeShowToast(`已加入日程 ${movedCount} 个地点`);
               } else {
                 this.safeShowToast('暂存池暂无可加入地点');
