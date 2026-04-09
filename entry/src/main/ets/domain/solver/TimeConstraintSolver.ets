@@ -123,6 +123,11 @@ export class TimeConstraintSolver {
       : TimeConstraintSolver.DEFAULT_IDLE_GAP_TRIGGER_MINUTES;
     const idleGapTriggerMs = idleGapTriggerMinutes * TimeConstraintSolver.MINUTE_MS;
     const slackRatio = options?.slackRatio ?? 0.25;
+    hilog.info(
+      0x0000,
+      'TimeConstraintSolver',
+      `[SHIFT_SOLVER][config] autoRoute=${autoRouteEnabled} idleGapEnabled=${idleGapDetectionEnabled} idleGapMin=${idleGapTriggerMinutes} slackRatio=${slackRatio}`
+    );
 
     let cursorTimestamp = baseTimestamp + (globalStartMin * TimeConstraintSolver.MINUTE_MS);
     let naturalCursorTimestamp = cursorTimestamp;
@@ -374,7 +379,15 @@ export class TimeConstraintSolver {
       }
 
       naturalCursorTimestamp = endObj.getTime();
-      cursorTimestamp = endObj.getTime() + (60 * slackRatio * TimeConstraintSolver.MINUTE_MS);
+      const slackPaddingMs = slackRatio > 0 ? (60 * slackRatio * TimeConstraintSolver.MINUTE_MS) : 0;
+      if (slackPaddingMs > 0) {
+        hilog.info(
+          0x0000,
+          'TimeConstraintSolver',
+          `[SHIFT_SOLVER][slack_padding] id=${item.id ?? -1}, name=${item.name}, slackMinutes=${Math.floor(slackPaddingMs / TimeConstraintSolver.MINUTE_MS)}`
+        );
+      }
+      cursorTimestamp = endObj.getTime() + slackPaddingMs;
       previousItem = item;
       previousFinalDayOffset = finalDayOffset;
     }

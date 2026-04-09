@@ -21,7 +21,8 @@ export class StrategyPresets {
   private static readonly DEFAULT_PROFILE: TravelStrategyProfile = {
     dailyPoiTarget: { min: 3, max: 5 },
     moveTolerance: 35,
-    slackRatio: 0.25,
+    // 默认策略不额外注入留白，避免用户未显式选择节奏时产生隐式 +15min 漂移。
+    slackRatio: 0,
     preferCompactSchedule: false,
     avoidBacktracking: false
   };
