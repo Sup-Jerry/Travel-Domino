@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-05T22:28:33.340282",
+  "last_updated": "2026-04-10T09:10:34.623353",
   "preferences": [
     "If user says no code changes, stop code edits and switch to retrospective output.",
     "Default retrospective language is Chinese with fixed structure: issues-root causes-improvements-next steps.",
@@ -55,7 +55,11 @@
     "瘦身默认先处理可验证安全项：先删无引用的 tracked 冗余文件，再清理本地可再生产物。",
     "When merge_evolution CLI argument parsing fails on PowerShell, call merge_evolution via python import with file-loaded JSON to avoid quoting issues.",
     "当用户明确指定多个skill和执行顺序时，先按顺序完成skill流程，再进入代码或Git操作。",
-    "复盘沉淀输出应附带可验证证据：merge/stitch命令执行结果与last_updated时间。"
+    "复盘沉淀输出应附带可验证证据：merge/stitch命令执行结果与last_updated时间。",
+    "用户要求复盘迭代时，必须在同一轮执行merge_evolution和smart_stitch并回传证据。",
+    "当用户有顺序要求（先复盘再瘦身）时，严格按顺序执行并分段汇报。",
+    "???????????????skill-evolution????app-size-pruner?????GitHub???",
+    "??????????????????????????"
   ],
   "fixes": [
     "Before any edit, restate user intent and explicitly state whether code will be changed.",
@@ -113,9 +117,13 @@
     "Docker Compose v2 场景下移除 compose 文件中的 version 字段，避免持续 warning 干扰排查。",
     "执行瘦身前先做引用扫描（rg）和 tracked 校验（git ls-files），防止误删运行时资源。",
     "If user requires commit-msg gate but hook file is missing, create the gate first before push workflow.",
-    "PowerShell下merge_evolution优先使用Python文件读取调用，避免JSON argv转义失败。"
+    "PowerShell下merge_evolution优先使用Python文件读取调用，避免JSON argv转义失败。",
+    "PowerShell环境下merge_evolution参数优先走文件读取传参，避免JSON引号转义失败。",
+    "在自动发布脚本链路中，外部命令失败（如gh pr create）要可控降级，不应让整条流程误报失败。",
+    "PowerShell ? evolution payload ???BOM UTF-8 ?? + Python????? JSON argv/?????? merge ???",
+    "???????????? -Files ???????????????????"
   ],
-  "custom_prompts": "复盘请求默认执行：识别目标skill -> merge_evolution -> smart_stitch -> 时间戳与区块校验。",
+  "custom_prompts": "???????+??+???????????????????????",
   "contexts": [
     "Case: Toolbox package missing in ohpm registry, switched to vendored local source and local exports.",
     "Case: Expansion/drag issues caused by oversized wrapper (200x200) and positioned container; fixed with 58x58 wrapper and origin position.",

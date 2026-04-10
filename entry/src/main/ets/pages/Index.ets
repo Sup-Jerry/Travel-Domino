@@ -707,7 +707,10 @@ struct Index {
       }
     }
 
-    return fallbackGap > 0 ? fallbackGap : 0;
+    if (item.is_conflict) {
+      return fallbackGap > 0 ? fallbackGap : 0;
+    }
+    return 0;
   }
 
   private getConflictTargetTime(item: EventEntity): string {
@@ -865,31 +868,6 @@ struct Index {
     this.conflictAdvanceController.open();
   }
 
-  private showCompressionBlockedDialog(index: number, item: EventEntity, targetTime: string, plan: import('../viewmodel/TimelineViewModel').CompressionPlan,
-    selectedIds: number[], mode: CompressionMode, saveCallback: (t?: string) => void, onBack: () => void) {
-    const remain = plan.remainingGapMinutes ?? 0;
-    const suggested = plan.suggestedTime || targetTime;
-    this.getUIContext().showAlertDialog({
-      title: '⛔ 压缩后仍冲突',
-      message: `已按所选范围压缩，但仍有 ${remain} 分钟冲突。\n建议最早开始时间：${suggested}\n\n请扩大压缩范围或改为向后顺延。`,
-      primaryButton: {
-        value: '返回重选',
-        action: () => {
-          this.openCompressSelectionDialog(index, item, targetTime, saveCallback, onBack, selectedIds, mode, remain);
-        }
-      },
-      secondaryButton: {
-        value: '改为顺延',
-        action: () => {
-          const delayPlan = this.vm.calculateDelayPlan(index);
-          this.openPreview(index, item, targetTime, delayPlan, saveCallback, onBack);
-        }
-      },
-      alignment: DialogAlignment.Center,
-      autoCancel: false
-    });
-  }
-
   private openCompressSelectionDialog(index: number, item: EventEntity, targetTime: string, saveCallback: (t?: string) => void,
     onBack: () => void, presetSelectedIds: number[] = [], presetMode: CompressionMode = 'RATIO', forcedGapMinutes: number = 0) {
     const normalizedForcedGap = Math.max(0, Math.floor(forcedGapMinutes));
@@ -938,7 +916,7 @@ struct Index {
           let latestTargetTime = latestTarget ? this.getConflictTargetTime(latestTarget) : targetTime;
           let remainingGap = latestTarget ? this.resolveConflictGapMinutes(latestTarget, effectiveGap) : effectiveGap;
           let round = 0;
-          let overloadPlan: import('../viewmodel/TimelineViewModel').CompressionPlan | null = null;
+          let stoppedByOverload = false;
 
           while (remainingGap > 0 && round < 8) {
             if (latestIndex < 0) {
@@ -964,14 +942,14 @@ struct Index {
             if (plan.status === 'NO_ACTION') {
               break;
             }
-            if (plan.status === 'OVERLOAD') {
-              overloadPlan = plan;
-              break;
-            }
             if (!plan.affectedItems || plan.affectedItems.length === 0) {
+              if (plan.status === 'OVERLOAD') {
+                stoppedByOverload = true;
+              }
               break;
             }
 
+            const isOverloadPlan = plan.status === 'OVERLOAD';
             this.vm.applyCompressionPlan(plan);
             round++;
 
@@ -989,6 +967,11 @@ struct Index {
               'Index',
               `[CONFLICT_DEBUG][compress_round_result] itemId=${item.id}, round=${round}, nextGap=${nextGap}, gapField=${latestTarget.gap_minutes}, isConflict=${latestTarget.is_conflict ? 1 : 0}, fixed=${latestTarget.fixed_start_time || ''}, computed=${latestTarget.computed_time || ''}`
             );
+            if (isOverloadPlan) {
+              stoppedByOverload = true;
+              remainingGap = nextGap;
+              break;
+            }
             if (nextGap >= remainingGap) {
               // 无进展，避免死循环
               remainingGap = nextGap;
@@ -1003,30 +986,18 @@ struct Index {
             const finalTarget = item.id > 0
               ? this.vm.events.find((event: EventEntity) => event.id === item.id)
               : this.vm.events[index];
-            const finalGap = finalTarget ? this.resolveConflictGapMinutes(finalTarget, remainingGap) : remainingGap;
+            const finalGap = finalTarget ? this.resolveConflictGapMinutes(finalTarget, 0) : Math.max(0, remainingGap);
             hilog.info(
               0x0000,
               'Index',
-              `[CONFLICT_DEBUG][compress_post_apply] itemId=${item.id}, liveGap=${finalGap}, gapField=${finalTarget?.gap_minutes ?? -1}, isConflict=${finalTarget?.is_conflict ? 1 : 0}, msg=${finalTarget?.conflict_msg || ''}, fixed=${finalTarget?.fixed_start_time || ''}, computed=${finalTarget?.computed_time || ''}, rounds=${round}`
+              `[CONFLICT_DEBUG][compress_post_apply] itemId=${item.id}, liveGap=${finalGap}, gapField=${finalTarget?.gap_minutes ?? -1}, isConflict=${finalTarget?.is_conflict ? 1 : 0}, msg=${finalTarget?.conflict_msg || ''}, fixed=${finalTarget?.fixed_start_time || ''}, computed=${finalTarget?.computed_time || ''}, rounds=${round}, stoppedByOverload=${stoppedByOverload ? 1 : 0}`
             );
             if (finalGap > 0) {
-              if (overloadPlan) {
-                this.showCompressionBlockedDialog(
-                  latestIndex >= 0 ? latestIndex : index,
-                  finalTarget ?? item,
-                  finalTarget ? this.getConflictTargetTime(finalTarget) : targetTime,
-                  overloadPlan,
-                  selectedIds,
-                  mode,
-                  saveCallback,
-                  onBack
-                );
-              } else {
-                this.safeShowToast(`已自动压缩 ${round} 轮，仍有 ${finalGap} 分钟冲突`);
-              }
+              const suffix = stoppedByOverload ? '（可压缩量已耗尽）' : '';
+              this.safeShowToast(`已应用压缩调整，仍有 ${finalGap} 分钟冲突${suffix}`);
               return;
             }
-            this.safeShowToast(`已应用压缩调整（${round}轮）`);
+            this.safeShowToast('已应用压缩调整');
           }, 220);
         }
       }),
