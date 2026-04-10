@@ -115,6 +115,12 @@ export class TimelineAiService implements ITimelineAiService {
   public async generateByAi(userPrompt: string, strategyMode: number = 0, customStrategy?: ComposableStrategy): Promise<void> {
     try {
       this.host.currentStrategyMode = strategyMode;
+      const requestedDays = AiService.resolveRequestedDaysFromPrompt(userPrompt);
+      hilog.info(
+        0x0000,
+        TAG,
+        `[AI_DEBUG][timeline_generate_begin] mode=${strategyMode}, custom=${customStrategy ? 1 : 0}, requestedDays=${requestedDays}, promptLen=${userPrompt.length}, eventsBefore=${this.host.events.length}`
+      );
 
       const existingPlaces = this.host.events
         .filter((event: EventEntity) => event.source === 1)
@@ -172,6 +178,14 @@ export class TimelineAiService implements ITimelineAiService {
         strategyMode: customStrategy ? -1 : strategyMode,
         customStrategy: customStrategy
       });
+      const scenicCount = aiItems.filter((item) => item.type === 0).length;
+      const foodCount = aiItems.filter((item) => item.type === 1).length;
+      const hotelCount = aiItems.filter((item) => item.type === 2).length;
+      hilog.info(
+        0x0000,
+        TAG,
+        `[AI_DEBUG][timeline_generate_result] mode=${strategyMode}, requestedDays=${requestedDays}, itemCount=${aiItems.length}, scenic=${scenicCount}, food=${foodCount}, hotel=${hotelCount}`
+      );
 
       if (!aiItems || aiItems.length === 0) {
         throw new Error('AI 未返回可用地点，请调整描述后重试');
@@ -198,8 +212,12 @@ export class TimelineAiService implements ITimelineAiService {
       const baseDayOffset = existingSchedule.length > 0
         ? Math.max(...existingSchedule.map((event: EventEntity) => event.day_offset || 0)) + 1
         : 0;
-      const requestedDays = AiService.resolveRequestedDaysFromPrompt(userPrompt);
       const allocatedDayOffsets = TimelineAiService.buildAiDayOffsets(aiItems.length, requestedDays, baseDayOffset);
+      hilog.info(
+        0x0000,
+        TAG,
+        `[AI_DEBUG][timeline_day_offset_alloc] mode=${strategyMode}, baseDayOffset=${baseDayOffset}, requestedDays=${requestedDays}, allocatedCount=${allocatedDayOffsets.length}`
+      );
 
       for (let i = 0; i < aiItems.length; i++) {
         const item = aiItems[i];
@@ -234,8 +252,18 @@ export class TimelineAiService implements ITimelineAiService {
 
       this.host.markScheduleChanged();
       this.host.events = [...this.host.events];
+      hilog.info(
+        0x0000,
+        TAG,
+        `[AI_DEBUG][timeline_generate_done] mode=${strategyMode}, eventsAfter=${this.host.events.length}`
+      );
     } catch (error) {
       console.error(TAG, 'AI Generation Failed');
+      hilog.error(
+        0x0000,
+        TAG,
+        `[AI_DEBUG][timeline_generate_fail] mode=${strategyMode}, reason=${error instanceof Error ? error.message : JSON.stringify(error)}`
+      );
 
       if (error instanceof Error) {
         throw error;

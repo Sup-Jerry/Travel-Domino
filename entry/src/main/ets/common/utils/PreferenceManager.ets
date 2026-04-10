@@ -32,6 +32,20 @@ interface AvatarProfileSnapshot {
   updatedAt?: number;
 }
 
+export interface AiDailyPoiRangeConfig {
+  defaultMin: number;
+  defaultMax: number;
+  soldierMin: number;
+  soldierMax: number;
+  leisureMin: number;
+  leisureMax: number;
+}
+
+interface MinMaxRange {
+  min: number;
+  max: number;
+}
+
 export class PreferenceManager {
   private static instance: PreferenceManager;
   private pref: preferences.Preferences | null = null;
@@ -57,6 +71,12 @@ export class PreferenceManager {
   static readonly KEY_SESSION_CACHE = StorageKeys.SESSION_CACHE;
   static readonly KEY_PROFILE_CACHE_PREFIX = StorageKeys.PROFILE_CACHE_PREFIX;
   static readonly KEY_AVATAR_CACHE_PREFIX = StorageKeys.AVATAR_CACHE_PREFIX;
+  static readonly KEY_AI_POI_MIN_DEFAULT = 'aiPoiMinDefault';
+  static readonly KEY_AI_POI_MAX_DEFAULT = 'aiPoiMaxDefault';
+  static readonly KEY_AI_POI_MIN_SOLDIER = 'aiPoiMinSoldier';
+  static readonly KEY_AI_POI_MAX_SOLDIER = 'aiPoiMaxSoldier';
+  static readonly KEY_AI_POI_MIN_LEISURE = 'aiPoiMinLeisure';
+  static readonly KEY_AI_POI_MAX_LEISURE = 'aiPoiMaxLeisure';
 
   // 新增：是否允许调用高德路线 API
   static readonly KEY_ENABLE_AMAP_ROUTE_API = 'enableAmapRouteApi';
@@ -101,6 +121,38 @@ export class PreferenceManager {
       safe = 720;
     }
     return safe;
+  }
+
+  public static normalizeAiPoiCount(raw: preferences.ValueType, fallback: number): number {
+    const fallbackInt = Number.isFinite(Number(fallback)) ? Math.max(1, Math.floor(Number(fallback))) : 1;
+    let safe = Number(raw);
+    if (!Number.isFinite(safe)) {
+      safe = fallbackInt;
+    }
+    safe = Math.floor(safe);
+    if (safe < 1) {
+      return 1;
+    }
+    if (safe > 12) {
+      return 12;
+    }
+    return safe;
+  }
+
+  private normalizeAiPoiRangePair(
+    minRaw: preferences.ValueType,
+    maxRaw: preferences.ValueType,
+    fallbackMin: number,
+    fallbackMax: number
+  ): MinMaxRange {
+    const min = PreferenceManager.normalizeAiPoiCount(minRaw, fallbackMin);
+    const max = PreferenceManager.normalizeAiPoiCount(maxRaw, fallbackMax);
+    if (min > max) {
+      const swapped: MinMaxRange = { min: max, max: min };
+      return swapped;
+    }
+    const result: MinMaxRange = { min: min, max: max };
+    return result;
   }
 
   public static normalizeWeatherPreferenceLevel(raw: preferences.ValueType): WeatherPreferenceLevel {
@@ -231,6 +283,48 @@ export class PreferenceManager {
   public async setIdleGapTriggerMinutes(minutes: number): Promise<void> {
     const safe = this.sanitizeIdleGapTriggerMinutes(minutes);
     await this.setValue(PreferenceManager.KEY_IDLE_GAP_TRIGGER_MINUTES, safe);
+  }
+
+  public async getAiDailyPoiRangeConfig(): Promise<AiDailyPoiRangeConfig> {
+    const defaultPair = this.normalizeAiPoiRangePair(
+      await this.getValue(PreferenceManager.KEY_AI_POI_MIN_DEFAULT, 4),
+      await this.getValue(PreferenceManager.KEY_AI_POI_MAX_DEFAULT, 6),
+      4,
+      6
+    );
+    const soldierPair = this.normalizeAiPoiRangePair(
+      await this.getValue(PreferenceManager.KEY_AI_POI_MIN_SOLDIER, 5),
+      await this.getValue(PreferenceManager.KEY_AI_POI_MAX_SOLDIER, 8),
+      5,
+      8
+    );
+    const leisurePair = this.normalizeAiPoiRangePair(
+      await this.getValue(PreferenceManager.KEY_AI_POI_MIN_LEISURE, 3),
+      await this.getValue(PreferenceManager.KEY_AI_POI_MAX_LEISURE, 5),
+      3,
+      5
+    );
+    return {
+      defaultMin: defaultPair.min,
+      defaultMax: defaultPair.max,
+      soldierMin: soldierPair.min,
+      soldierMax: soldierPair.max,
+      leisureMin: leisurePair.min,
+      leisureMax: leisurePair.max
+    };
+  }
+
+  public async setAiDailyPoiRangeConfig(config: AiDailyPoiRangeConfig): Promise<void> {
+    const safeDefault = this.normalizeAiPoiRangePair(config.defaultMin, config.defaultMax, 4, 6);
+    const safeSoldier = this.normalizeAiPoiRangePair(config.soldierMin, config.soldierMax, 5, 8);
+    const safeLeisure = this.normalizeAiPoiRangePair(config.leisureMin, config.leisureMax, 3, 5);
+
+    await this.setValue(PreferenceManager.KEY_AI_POI_MIN_DEFAULT, safeDefault.min);
+    await this.setValue(PreferenceManager.KEY_AI_POI_MAX_DEFAULT, safeDefault.max);
+    await this.setValue(PreferenceManager.KEY_AI_POI_MIN_SOLDIER, safeSoldier.min);
+    await this.setValue(PreferenceManager.KEY_AI_POI_MAX_SOLDIER, safeSoldier.max);
+    await this.setValue(PreferenceManager.KEY_AI_POI_MIN_LEISURE, safeLeisure.min);
+    await this.setValue(PreferenceManager.KEY_AI_POI_MAX_LEISURE, safeLeisure.max);
   }
 
   public async getWeatherUserPreference(): Promise<WeatherUserPreference> {
