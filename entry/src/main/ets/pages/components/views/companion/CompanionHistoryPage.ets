@@ -8,8 +8,6 @@
 import { DateUtil } from '../../../../common/utils/DateUtil';
 import { CompanionPresentationHelper } from '../CompanionPresentationHelper';
 import { ThemeCenter } from '../../../../common/utils/ThemeCenter';
-import { EventEntity } from '../../../../model/entity/EventEntity';
-import { TimelineExecutionState } from '../../../../domain/policy/TimelineExecutionState';
 
 export type HistoryViewMode = 'timeline' | 'detail';
 
@@ -207,40 +205,77 @@ export struct CompanionHistoryPage {
     return this.getThemePalette().primary;
   }
 
-  private getHistoryAddress(placeName: string): string {
-    if (!this.vm) {
+  private getCurrentHistoryPlaceName(): string {
+    if (this.historySummary && (this.historySummary.placeName || '').trim().length > 0) {
+      return this.historySummary.placeName.trim();
+    }
+    if (this.selectedHistoryTimelineItem && (this.selectedHistoryTimelineItem.placeName || '').trim().length > 0) {
+      return this.selectedHistoryTimelineItem.placeName.trim();
+    }
+    return '';
+  }
+
+  private isNewerHistoryItem(candidate: HistoryTimelineItem, current: HistoryTimelineItem): boolean {
+    if (candidate.displayTs !== current.displayTs) {
+      return candidate.displayTs > current.displayTs;
+    }
+    if (candidate.actualEnd !== current.actualEnd) {
+      return candidate.actualEnd > current.actualEnd;
+    }
+    if (candidate.actualStart !== current.actualStart) {
+      return candidate.actualStart > current.actualStart;
+    }
+    return candidate.id > current.id;
+  }
+
+  private getCurrentHistoryLatestItem(): HistoryTimelineItem | null {
+    const placeName = this.getCurrentHistoryPlaceName();
+    if (placeName.length === 0) {
+      return null;
+    }
+    let latest: HistoryTimelineItem | null = null;
+    this.historyTimelineItems.forEach((item: HistoryTimelineItem) => {
+      if ((item.placeName || '').trim() !== placeName) {
+        return;
+      }
+      if (!latest || this.isNewerHistoryItem(item, latest)) {
+        latest = item;
+      }
+    });
+    if (latest) {
+      return latest;
+    }
+    if (this.selectedHistoryTimelineItem && (this.selectedHistoryTimelineItem.placeName || '').trim() === placeName) {
+      return this.selectedHistoryTimelineItem;
+    }
+    return null;
+  }
+
+  private getHistoryAddress(_placeName: string): string {
+    const latestItem = this.getCurrentHistoryLatestItem();
+    if (!latestItem) {
       return '--';
     }
-    return this.vm.historyManager.getPlaceAddress(placeName);
-  }
-
-  private getLatestEventForPlace(placeName: string): EventEntity | null {
-    if (!this.vm) {
-      return null;
-    }
-    return this.vm.historyManager.getLatestEventForPlace(placeName);
-  }
-
-  private getCurrentHistoryLatestEvent(): EventEntity | null {
-    if (!this.historySummary) {
-      return null;
-    }
-    return this.getLatestEventForPlace(this.historySummary.placeName);
+    const address = (latestItem.address || '').trim();
+    return address.length > 0 ? address : '--';
   }
 
   private getCurrentHistoryStatusText(): string {
-    const latestEvent = this.getCurrentHistoryLatestEvent();
-    if (!latestEvent) {
+    const latestItem = this.getCurrentHistoryLatestItem();
+    if (!latestItem) {
       return '--';
     }
-    if (TimelineExecutionState.isSkipped(latestEvent)) {
+    if (latestItem.actionType === 'SKIP' || latestItem.status === 2) {
       return '已跳过';
     }
-    if (TimelineExecutionState.isActive(latestEvent)) {
+    if (latestItem.actionType === 'ACTIVE') {
       return '进行中';
     }
-    if (TimelineExecutionState.isCompleted(latestEvent)) {
+    if (latestItem.actionType === 'LEAVE' || latestItem.status === 1 || latestItem.actualEnd > latestItem.actualStart) {
       return '已离开';
+    }
+    if (latestItem.actionType === 'ARRIVE' || latestItem.actualStart > 0) {
+      return '进行中';
     }
     return '未开始';
   }
@@ -249,47 +284,50 @@ export struct CompanionHistoryPage {
     if (this.selectedHistoryTimelineItem && this.selectedHistoryTimelineItem.plannedStart > 0) {
       return CompanionPresentationHelper.formatTs(this.selectedHistoryTimelineItem.plannedStart);
     }
-    const latestEvent = this.getCurrentHistoryLatestEvent();
-    if (!latestEvent) {
+    const latestItem = this.getCurrentHistoryLatestItem();
+    if (!latestItem || latestItem.plannedStart <= 0) {
       return '--:--';
     }
-    if (latestEvent.dynamic_start_time > 0) {
-      return CompanionPresentationHelper.formatTs(latestEvent.dynamic_start_time);
-    }
-    return latestEvent.computed_time || latestEvent.fixed_start_time || '--:--';
+    return CompanionPresentationHelper.formatTs(latestItem.plannedStart);
   }
 
   private getCurrentHistoryActualStartText(): string {
-    const latestEvent = this.getCurrentHistoryLatestEvent();
-    if (!latestEvent || latestEvent.actual_start_time <= 0) {
+    const latestItem = this.getCurrentHistoryLatestItem();
+    if (!latestItem || latestItem.actualStart <= 0) {
       return '--:--';
     }
-    return CompanionPresentationHelper.formatTs(latestEvent.actual_start_time);
+    return CompanionPresentationHelper.formatTs(latestItem.actualStart);
   }
 
   private getCurrentHistoryActualEndText(): string {
-    const latestEvent = this.getCurrentHistoryLatestEvent();
-    if (!latestEvent || latestEvent.actual_end_time <= 0) {
+    const latestItem = this.getCurrentHistoryLatestItem();
+    if (!latestItem || latestItem.actualEnd <= 0) {
       return '--:--';
     }
-    return CompanionPresentationHelper.formatTs(latestEvent.actual_end_time);
+    return CompanionPresentationHelper.formatTs(latestItem.actualEnd);
   }
 
   private getCurrentHistoryStayText(): string {
-    const latestEvent = this.getCurrentHistoryLatestEvent();
-    if (!latestEvent || latestEvent.actual_start_time <= 0 || latestEvent.actual_end_time <= latestEvent.actual_start_time) {
+    const latestItem = this.getCurrentHistoryLatestItem();
+    if (!latestItem) {
       return '0 分钟';
     }
-    const stayMinutes = Math.round((latestEvent.actual_end_time - latestEvent.actual_start_time) / 60000);
+    if (latestItem.stayMinutes > 0) {
+      return `${latestItem.stayMinutes} 分钟`;
+    }
+    if (latestItem.actualStart <= 0 || latestItem.actualEnd <= latestItem.actualStart) {
+      return '0 分钟';
+    }
+    const stayMinutes = Math.round((latestItem.actualEnd - latestItem.actualStart) / 60000);
     return `${stayMinutes} 分钟`;
   }
 
   private getCurrentHistoryDeviationText(): string {
-    const latestEvent = this.getCurrentHistoryLatestEvent();
-    if (!latestEvent || latestEvent.actual_start_time <= 0 || latestEvent.dynamic_start_time <= 0) {
+    const latestItem = this.getCurrentHistoryLatestItem();
+    if (!latestItem) {
       return '--';
     }
-    const delta = Math.round((latestEvent.actual_start_time - latestEvent.dynamic_start_time) / 60000);
+    const delta = latestItem.deviationMinutes;
     if (delta > 0) {
       return `晚到 ${delta} 分钟`;
     }
@@ -300,11 +338,11 @@ export struct CompanionHistoryPage {
   }
 
   private getCurrentHistoryNoteText(): string {
-    const latestEvent = this.getCurrentHistoryLatestEvent();
-    if (!latestEvent) {
+    const latestItem = this.getCurrentHistoryLatestItem();
+    if (!latestItem) {
       return '--';
     }
-    const note = (latestEvent.note || '').trim();
+    const note = (latestItem.note || '').trim();
     return note.length > 0 ? note : '--';
   }
 

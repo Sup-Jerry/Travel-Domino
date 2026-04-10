@@ -48,15 +48,15 @@ export struct CompanionTimelineSection {
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis });
 
-        if (item.id === this.focusedEventId) {
-          Row({ space: 6 }) {
-            Text(this.getEventStateLabel(item))
-              .fontSize(10)
-              .fontColor(this.getStateTagTextColor(item))
-              .padding({ left: 6, right: 6, top: 2, bottom: 2 })
-              .backgroundColor(this.getStateTagBackgroundColor(item))
-              .border({ width: 1, color: this.getStateBorderColor(item), radius: 8 })
-              .borderRadius(8);
+        Row({ space: 6 }) {
+          Text(this.getEventStateLabel(item))
+            .fontSize(10)
+            .fontColor(this.getStateTagTextColor(item))
+            .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+            .backgroundColor(this.getStateTagBackgroundColor(item))
+            .border({ width: 1, color: this.getStateBorderColor(item), radius: 8 })
+            .borderRadius(8);
+          if (item.id === this.focusedEventId) {
             Text(this.getTimelineSupplement(item))
               .fontSize(11)
               .fontColor(this.getThemePalette().textTertiary)
@@ -64,8 +64,8 @@ export struct CompanionTimelineSection {
               .textOverflow({ overflow: TextOverflow.Ellipsis })
               .layoutWeight(1);
           }
-          .width('100%');
         }
+        .width('100%');
       }
       .layoutWeight(1)
       .alignItems(HorizontalAlign.Start);

@@ -1126,7 +1126,7 @@ export struct CompanionView {
         }
       })
       .zIndex(this.companionSubMode === 'control' ? 3 : 2)
-      .enabled(getCompanionInteractiveEnabled('control', this.interactionMode))
+      .enabled(this.companionSubMode === 'control' || getCompanionInteractiveEnabled('control', this.interactionMode))
       .opacity(this.companionSubMode === 'control' ? 1 : 0)
       .scale({
         x: this.companionSubMode === 'control' ? 1 : 0.992,
@@ -1187,7 +1187,8 @@ export struct CompanionView {
           onFilterSelect: (state: CompanionFilterState) => {
             this.applyFilter(state);
           }
-        });
+        })
+          .zIndex(40);
       }
     }
     .width('100%')

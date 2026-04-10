@@ -52,30 +52,26 @@ export struct CompanionImmersiveView {
           .borderRadius(16);
 
         Row({ space: 10 }) {
-          if (this.isCurrentEventPending()) {
-            Button('开始')
+          if (this.isCurrentEventPending() || this.isCurrentEventActive() || this.context.runtimeState === 'PAUSED') {
+            Button(this.isCurrentEventPending() ? '开始' : '结束')
               .layoutWeight(2)
               .height(50)
-              .enabled(this.canStartFocused(this.context.currentEvent))
-              .backgroundColor(this.getThemePalette().success)
+              .enabled(
+                this.isCurrentEventPending()
+                  ? this.canStartFocused(this.context.currentEvent)
+                  : this.canEndFocused(this.context.currentEvent)
+              )
+              .backgroundColor(
+                this.isCurrentEventPending() ? this.getThemePalette().success : this.getThemePalette().warning
+              )
               .fontColor(Color.White)
               .onClick(async () => {
                 const current = this.context.currentEvent;
                 if (!current) {
                   return;
                 }
-                await this.onStartEvent(current);
-              });
-          } else if (this.isCurrentEventActive() || this.context.runtimeState === 'PAUSED') {
-            Button('结束')
-              .layoutWeight(2)
-              .height(50)
-              .enabled(this.canEndFocused(this.context.currentEvent))
-              .backgroundColor(this.getThemePalette().warning)
-              .fontColor(Color.White)
-              .onClick(async () => {
-                const current = this.context.currentEvent;
-                if (!current) {
+                if (this.isCurrentEventPending()) {
+                  await this.onStartEvent(current);
                   return;
                 }
                 await this.onEndEvent(current);
