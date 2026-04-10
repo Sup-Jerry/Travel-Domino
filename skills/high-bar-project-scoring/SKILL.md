@@ -12,6 +12,13 @@ Strict project scoring workflow with evidence-first deductions and reproducible 
 - The user asks for stricter standards or high-threshold review.
 - The user expects score + reasons + actionable improvements.
 
+## Package Layout
+- `SKILL.md`: Entry workflow and hard constraints.
+- `references/scoring-rubric.md`: Full rubric, weights, deductions, caps.
+- `references/output-template.md`: Mandatory response template.
+- `references/quick-checklist.md`: Fast evidence collection checklist.
+- `scripts/score_project.ps1`: CLI helper to generate scoring draft.
+
 ## Output Language
 - Default: Chinese.
 - Scoring log file content: English only (ASCII preferred).
@@ -124,6 +131,20 @@ The final response must include:
 3. Collect evidence and map to all 6 dimensions.
 4. Check hard-cap rules first, then finalize score.
 5. Output in order: evidence -> judgment -> action.
+
+## Reference Loading Rules
+- Load `references/quick-checklist.md` before running commands.
+- Load `references/scoring-rubric.md` when computing deductions and caps.
+- Load `references/output-template.md` before final response formatting.
+- If user asks for "why this score", quote deduction lines from rubric directly.
+
+## Script Usage (Optional but Recommended)
+- Command:
+  - `powershell -ExecutionPolicy Bypass -File skills/high-bar-project-scoring/scripts/score_project.ps1 -ProjectRoot E:\Travel -Strictness H4`
+- Output:
+  - Markdown draft with command evidence and score placeholders.
+- Policy:
+  - Script output is a draft; final score still requires manual judgment.
 
 ## Scoring Log Policy (Mandatory)
 After each scoring run, update this file:

@@ -27,6 +27,13 @@ travel-domino-skill-evolution-all.txt
 .claude/
 *.bak
 
+# Local / generated Codex skills (do not commit)
+/skills/high-bar-project-scoring/agents/
+/skills/high-bar-project-scoring/references/
+/skills/high-bar-project-scoring/scripts/
+/skills/large-file-split-migration/
+/skills/unit-test-case-generator/
+
 /backend/node_modules
 /backend/dist
 
