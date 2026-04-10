@@ -17,6 +17,10 @@ interface UserStrategyProfileSnapshot {
   modeFrequency?: string;
   sampleCount?: number;
   updatedAt?: number;
+  manualOverrideEnabled?: boolean;
+  consistencyMatchCount?: number;
+  consistencyMismatchCount?: number;
+  lastConsistencyCheckAt?: number;
 }
 
 interface AvatarProfileSnapshot {
@@ -369,7 +373,17 @@ export class PreferenceManager {
       avgEnergy: DEFAULT_USER_PROFILE.avgEnergy,
       modeFrequency: DEFAULT_USER_PROFILE.modeFrequency,
       sampleCount: DEFAULT_USER_PROFILE.sampleCount,
-      updatedAt: DEFAULT_USER_PROFILE.updatedAt
+      updatedAt: DEFAULT_USER_PROFILE.updatedAt,
+      manualOverrideEnabled: DEFAULT_USER_PROFILE.manualOverrideEnabled === true,
+      consistencyMatchCount: Number(DEFAULT_USER_PROFILE.consistencyMatchCount) > 0
+        ? Math.floor(Number(DEFAULT_USER_PROFILE.consistencyMatchCount))
+        : 0,
+      consistencyMismatchCount: Number(DEFAULT_USER_PROFILE.consistencyMismatchCount) > 0
+        ? Math.floor(Number(DEFAULT_USER_PROFILE.consistencyMismatchCount))
+        : 0,
+      lastConsistencyCheckAt: Number(DEFAULT_USER_PROFILE.lastConsistencyCheckAt) > 0
+        ? Number(DEFAULT_USER_PROFILE.lastConsistencyCheckAt)
+        : 0
     };
   }
 
@@ -402,7 +416,23 @@ export class PreferenceManager {
           : DEFAULT_USER_PROFILE.sampleCount,
         updatedAt: Number.isFinite(Number(parsed.updatedAt))
           ? Number(parsed.updatedAt)
-          : DEFAULT_USER_PROFILE.updatedAt
+          : DEFAULT_USER_PROFILE.updatedAt,
+        manualOverrideEnabled: parsed.manualOverrideEnabled === true,
+        consistencyMatchCount: Number.isFinite(Number(parsed.consistencyMatchCount))
+          ? Math.max(0, Math.floor(Number(parsed.consistencyMatchCount)))
+          : (Number(DEFAULT_USER_PROFILE.consistencyMatchCount) > 0
+            ? Math.floor(Number(DEFAULT_USER_PROFILE.consistencyMatchCount))
+            : 0),
+        consistencyMismatchCount: Number.isFinite(Number(parsed.consistencyMismatchCount))
+          ? Math.max(0, Math.floor(Number(parsed.consistencyMismatchCount)))
+          : (Number(DEFAULT_USER_PROFILE.consistencyMismatchCount) > 0
+            ? Math.floor(Number(DEFAULT_USER_PROFILE.consistencyMismatchCount))
+            : 0),
+        lastConsistencyCheckAt: Number.isFinite(Number(parsed.lastConsistencyCheckAt))
+          ? Number(parsed.lastConsistencyCheckAt)
+          : (Number(DEFAULT_USER_PROFILE.lastConsistencyCheckAt) > 0
+            ? Number(DEFAULT_USER_PROFILE.lastConsistencyCheckAt)
+            : 0)
       };
     } catch (_error) {
       return this.cloneDefaultUserProfile();
@@ -417,7 +447,17 @@ export class PreferenceManager {
       avgEnergy: profile.avgEnergy,
       modeFrequency: profile.modeFrequency,
       sampleCount: profile.sampleCount,
-      updatedAt: profile.updatedAt
+      updatedAt: profile.updatedAt,
+      manualOverrideEnabled: profile.manualOverrideEnabled === true,
+      consistencyMatchCount: Number.isFinite(Number(profile.consistencyMatchCount))
+        ? Math.max(0, Math.floor(Number(profile.consistencyMatchCount)))
+        : 0,
+      consistencyMismatchCount: Number.isFinite(Number(profile.consistencyMismatchCount))
+        ? Math.max(0, Math.floor(Number(profile.consistencyMismatchCount)))
+        : 0,
+      lastConsistencyCheckAt: Number.isFinite(Number(profile.lastConsistencyCheckAt))
+        ? Math.max(0, Number(profile.lastConsistencyCheckAt))
+        : 0
     };
     await this.setValue(PreferenceManager.KEY_USER_STRATEGY_PROFILE, JSON.stringify(safe));
   }

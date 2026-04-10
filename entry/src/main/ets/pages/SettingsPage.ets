@@ -50,6 +50,12 @@ struct SettingsPage {
             });
 
             SettingCategoryItem({
+              title: '偏好画像',
+              desc: '查看天气与 AI 学习到的个性化偏好。',
+              onClickItem: () => this.openPage('pages/SettingsPreferenceInsightsPage')
+            });
+
+            SettingCategoryItem({
               title: '通用与外观',
               desc: '主题、天气、时间与行程基础配置。',
               onClickItem: () => this.openPage('pages/SettingsGeneralPage')

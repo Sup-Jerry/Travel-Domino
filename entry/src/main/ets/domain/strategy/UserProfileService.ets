@@ -37,6 +37,12 @@ export class UserProfileService {
       nextAvgPreference = UserProfileService.ewma(profile.avgPreference, custom.preference);
       nextAvgEnergy = UserProfileService.ewma(profile.avgEnergy, custom.energy);
     }
+    const expected = UserProfileService.getProfileTargetStrategy(profile);
+    const actual = UserProfileService.resolveActualStrategy(mode, profile, custom);
+    const consistent = UserProfileService.isStrategyConsistent(expected, actual);
+    const matchCount = UserProfileService.getSafeCounter(profile.consistencyMatchCount) + (consistent ? 1 : 0);
+    const mismatchCount = UserProfileService.getSafeCounter(profile.consistencyMismatchCount) + (consistent ? 0 : 1);
+    const now = Date.now();
 
     const nextProfile: UserStrategyProfile = {
       avgDensity: nextAvgDensity,
@@ -45,14 +51,19 @@ export class UserProfileService {
       avgEnergy: nextAvgEnergy,
       modeFrequency: UserProfileService.stringifyModeFrequency(frequency),
       sampleCount: profile.sampleCount + 1,
-      updatedAt: Date.now()
+      updatedAt: now,
+      manualOverrideEnabled: profile.manualOverrideEnabled === true,
+      consistencyMatchCount: matchCount,
+      consistencyMismatchCount: mismatchCount,
+      lastConsistencyCheckAt: now
     };
     await UserProfileService.saveProfile(nextProfile);
   }
 
   static async getRecommendedStrategy(): Promise<ComposableStrategy | null> {
     const profile = await UserProfileService.loadProfile();
-    if (profile.sampleCount < RECOMMEND_SAMPLE_THRESHOLD) {
+    const manualOverrideEnabled = profile.manualOverrideEnabled === true;
+    if (profile.sampleCount < RECOMMEND_SAMPLE_THRESHOLD && !manualOverrideEnabled) {
       return null;
     }
 
@@ -70,12 +81,16 @@ export class UserProfileService {
 
   static async getRecommendationHint(): Promise<string> {
     const profile = await UserProfileService.loadProfile();
-    if (profile.sampleCount < RECOMMEND_SAMPLE_THRESHOLD) {
+    const manualOverrideEnabled = profile.manualOverrideEnabled === true;
+    if (profile.sampleCount < RECOMMEND_SAMPLE_THRESHOLD && !manualOverrideEnabled) {
       return '';
     }
 
     const density = UserProfileService.getDensityText(profile.avgDensity);
     const style = UserProfileService.getStyleText(UserProfileService.parseModeFrequency(profile.modeFrequency), profile.avgPace);
+    if (manualOverrideEnabled) {
+      return `已按你手动画像推荐：${density}密度·${style}风格（会根据后续操作自动校正）`;
+    }
     return `根据你的${profile.sampleCount}次记录，偏好${density}密度·${style}风格`;
   }
 
@@ -191,5 +206,67 @@ export class UserProfileService {
       return;
     }
     frequency.modeDefault += 1;
+  }
+
+  private static getSafeCounter(raw: number | undefined): number {
+    if (!Number.isFinite(Number(raw))) {
+      return 0;
+    }
+    return Math.max(0, Math.floor(Number(raw)));
+  }
+
+  private static getProfileTargetStrategy(profile: UserStrategyProfile): ComposableStrategy {
+    return {
+      density: UserProfileService.clampInt(Math.round(profile.avgDensity), 0, 2) as DensityLevel,
+      pace: UserProfileService.clampInt(Math.round(profile.avgPace), 0, 2) as PaceLevel,
+      preference: UserProfileService.clampInt(Math.round(profile.avgPreference), 0, 4) as PreferenceType,
+      energy: UserProfileService.clampInt(Math.round(profile.avgEnergy), 0, 2) as EnergyLevel
+    };
+  }
+
+  private static resolveActualStrategy(
+    mode: number,
+    profile: UserStrategyProfile,
+    custom?: ComposableStrategy
+  ): ComposableStrategy {
+    if (mode === -1 && custom) {
+      return {
+        density: custom.density,
+        pace: custom.pace,
+        preference: custom.preference,
+        energy: custom.energy
+      };
+    }
+
+    const fallbackPreference = UserProfileService.clampInt(Math.round(profile.avgPreference), 0, 4) as PreferenceType;
+    if (mode === 1) {
+      return {
+        density: DensityLevel.HIGH,
+        pace: PaceLevel.COMPACT,
+        preference: fallbackPreference,
+        energy: EnergyLevel.HIGH
+      };
+    }
+    if (mode === 2) {
+      return {
+        density: DensityLevel.LOW,
+        pace: PaceLevel.RELAXED,
+        preference: fallbackPreference,
+        energy: EnergyLevel.LOW
+      };
+    }
+    return {
+      density: DensityLevel.MEDIUM,
+      pace: PaceLevel.BALANCED,
+      preference: fallbackPreference,
+      energy: EnergyLevel.MEDIUM
+    };
+  }
+
+  private static isStrategyConsistent(expected: ComposableStrategy, actual: ComposableStrategy): boolean {
+    return expected.density === actual.density &&
+      expected.pace === actual.pace &&
+      expected.preference === actual.preference &&
+      expected.energy === actual.energy;
   }
 }

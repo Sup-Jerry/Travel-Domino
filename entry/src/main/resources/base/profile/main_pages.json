@@ -10,6 +10,7 @@
     "pages/SettingsNotificationPage",
     "pages/SettingsPrivacyPage",
     "pages/SettingsGeneralPage",
+    "pages/SettingsPreferenceInsightsPage",
     "pages/SettingsAdvancedPage",
     "pages/TrashPage",
     "pages/ArchivePage",
