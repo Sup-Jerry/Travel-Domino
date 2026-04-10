@@ -6,6 +6,7 @@ A skill is a set of local instructions to follow that is stored in a `SKILL.md` 
 ### Available skills
 - bat: Windows batch/cmd automation helpers. (file: E:/Travel/skills/bat/SKILL.md)
 - github-to-skills: Convert/install GitHub resources into reusable skills. (file: E:/Travel/skills/github-to-skills/SKILL.md)
+- large-file-split-migration: 将数千行大文件按“保守迁移”方式拆分为 3-8 个职责模块，强调分批迁移、等价性验证与可回滚提交。 (file: E:/Travel/skills/large-file-split-migration/SKILL.md)
 - skill-evolution-manager: Review and evolve existing skills from usage feedback. (file: E:/Travel/skills/skill-evolution-manager/SKILL.md)
 - skill-manager: Skill inventory and lifecycle management workflows. (file: E:/Travel/skills/skill-manager/SKILL.md)
 - travel-domino-dev: Domain workflow for this travel timeline project. (file: E:/Travel/skills/travel-domino-dev/SKILL.md)
