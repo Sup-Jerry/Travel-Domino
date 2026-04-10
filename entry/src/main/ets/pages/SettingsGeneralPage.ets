@@ -1,6 +1,6 @@
 ﻿import { promptAction } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
-import { PreferenceManager } from '../common/utils/PreferenceManager';
+import { PreferenceManager, AiDailyPoiRangeConfig } from '../common/utils/PreferenceManager';
 import { AppStorageKeys } from '../common/constants/AppStorageKeys';
 import { ThemeCenter, ThemeMode } from '../common/utils/ThemeCenter';
 import { SettingSelectItem, SettingsSubPageHeader, SettingSwitchItem } from './components/views/SettingsItems';
@@ -14,6 +14,12 @@ struct SettingsGeneralPage {
   @State idleGapTriggerInput: string = '45';
   @State minEventDuration: number = 30;
   @State minEventDurationInput: string = '30';
+  @State aiDefaultMinInput: string = '4';
+  @State aiDefaultMaxInput: string = '6';
+  @State aiSoldierMinInput: string = '5';
+  @State aiSoldierMaxInput: string = '8';
+  @State aiLeisureMinInput: string = '3';
+  @State aiLeisureMaxInput: string = '5';
   @State loading: boolean = true;
   @State themeMode: ThemeMode = 'system';
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
@@ -77,6 +83,13 @@ struct SettingsGeneralPage {
       this.idleGapTriggerInput = `${this.idleGapTriggerMinutes}`;
       this.minEventDuration = await pref.getMinEventDuration();
       this.minEventDurationInput = `${this.minEventDuration}`;
+      const aiRange = await pref.getAiDailyPoiRangeConfig();
+      this.aiDefaultMinInput = `${aiRange.defaultMin}`;
+      this.aiDefaultMaxInput = `${aiRange.defaultMax}`;
+      this.aiSoldierMinInput = `${aiRange.soldierMin}`;
+      this.aiSoldierMaxInput = `${aiRange.soldierMax}`;
+      this.aiLeisureMinInput = `${aiRange.leisureMin}`;
+      this.aiLeisureMaxInput = `${aiRange.leisureMax}`;
       AppStorage.setOrCreate(AppStorageKeys.MIN_EVENT_DURATION, this.minEventDuration);
     } finally {
       this.loading = false;
@@ -156,46 +169,79 @@ struct SettingsGeneralPage {
     }
   }
 
+  private parseAiPoiInput(raw: string, fallback: number): number {
+    const parsed = parseInt(raw, 10);
+    const source = isNaN(parsed) ? fallback : parsed;
+    return PreferenceManager.normalizeAiPoiCount(source, fallback);
+  }
+
+  private async saveAiDailyPoiRanges(): Promise<void> {
+    try {
+      const pref = PreferenceManager.getInstance();
+      const current = await pref.getAiDailyPoiRangeConfig();
+      const next: AiDailyPoiRangeConfig = {
+        defaultMin: this.parseAiPoiInput(this.aiDefaultMinInput, current.defaultMin),
+        defaultMax: this.parseAiPoiInput(this.aiDefaultMaxInput, current.defaultMax),
+        soldierMin: this.parseAiPoiInput(this.aiSoldierMinInput, current.soldierMin),
+        soldierMax: this.parseAiPoiInput(this.aiSoldierMaxInput, current.soldierMax),
+        leisureMin: this.parseAiPoiInput(this.aiLeisureMinInput, current.leisureMin),
+        leisureMax: this.parseAiPoiInput(this.aiLeisureMaxInput, current.leisureMax)
+      };
+      await pref.setAiDailyPoiRangeConfig(next);
+      const stored = await pref.getAiDailyPoiRangeConfig();
+      this.aiDefaultMinInput = `${stored.defaultMin}`;
+      this.aiDefaultMaxInput = `${stored.defaultMax}`;
+      this.aiSoldierMinInput = `${stored.soldierMin}`;
+      this.aiSoldierMaxInput = `${stored.soldierMax}`;
+      this.aiLeisureMinInput = `${stored.leisureMin}`;
+      this.aiLeisureMaxInput = `${stored.leisureMax}`;
+      this.safeShowToast('AI 每日地点范围已保存并实时生效');
+    } catch (_error) {
+      this.safeShowToast('AI 每日地点范围保存失败');
+    }
+  }
+
   build() {
-    Column({ space: 10 }) {
-      SettingsSubPageHeader({ title: '通用与外观' });
+    Scroll() {
+      Column({ space: 10 }) {
+        SettingsSubPageHeader({ title: '通用与外观' });
 
-      SettingSelectItem({
-        title: '主题模式',
-        desc: '支持浅色、深色与跟随系统。',
-        valueText: this.getThemeModeText(),
-        textPrimary: this.getThemePalette().textPrimary,
-        textSecondary: this.getThemePalette().textSecondary,
-        cardBg: this.getThemePalette().cardBg,
-        actionColor: this.getThemePalette().primary,
-        onClickItem: () => this.showThemeModeDialog()
-      });
+        SettingSelectItem({
+          title: '主题模式',
+          desc: '支持浅色、深色与跟随系统。',
+          valueText: this.getThemeModeText(),
+          textPrimary: this.getThemePalette().textPrimary,
+          textSecondary: this.getThemePalette().textSecondary,
+          cardBg: this.getThemePalette().cardBg,
+          actionColor: this.getThemePalette().primary,
+          onClickItem: () => this.showThemeModeDialog()
+        });
 
-      SettingSwitchItem({
-        title: '启用天气功能',
-        desc: '关闭后隐藏天气展示、刷新与提醒能力。',
-        loading: this.loading,
-        checked: this.weatherFeatureEnabled,
-        textPrimary: this.getThemePalette().textPrimary,
-        textSecondary: this.getThemePalette().textSecondary,
-        cardBg: this.getThemePalette().cardBg,
-        onToggle: async (value: boolean) => {
-          await this.onWeatherFeatureChanged(value);
-        }
-      });
+        SettingSwitchItem({
+          title: '启用天气功能',
+          desc: '关闭后隐藏天气展示、刷新与提醒能力。',
+          loading: this.loading,
+          checked: this.weatherFeatureEnabled,
+          textPrimary: this.getThemePalette().textPrimary,
+          textSecondary: this.getThemePalette().textSecondary,
+          cardBg: this.getThemePalette().cardBg,
+          onToggle: async (value: boolean) => {
+            await this.onWeatherFeatureChanged(value);
+          }
+        });
 
-      SettingSwitchItem({
-        title: '启用空闲时间检测',
-        desc: '关闭后不再触发空闲时间优化提示。',
-        loading: this.loading,
-        checked: this.enableIdleGapDetection,
-        textPrimary: this.getThemePalette().textPrimary,
-        textSecondary: this.getThemePalette().textSecondary,
-        cardBg: this.getThemePalette().cardBg,
-        onToggle: async (value: boolean) => {
-          await this.onIdleGapDetectionChanged(value);
-        }
-      });
+        SettingSwitchItem({
+          title: '启用空闲时间检测',
+          desc: '关闭后不再触发空闲时间优化提示。',
+          loading: this.loading,
+          checked: this.enableIdleGapDetection,
+          textPrimary: this.getThemePalette().textPrimary,
+          textSecondary: this.getThemePalette().textSecondary,
+          cardBg: this.getThemePalette().cardBg,
+          onToggle: async (value: boolean) => {
+            await this.onIdleGapDetectionChanged(value);
+          }
+        });
 
       Row() {
         TextInput({ text: this.idleGapTriggerInput, placeholder: '空闲阈值(分钟)' })
@@ -272,24 +318,146 @@ struct SettingsGeneralPage {
       .backgroundColor(this.getThemePalette().cardBg)
       .borderRadius(12);
 
-      Column() {
-        Text('这里是通用设置页，适合放应用级开关与外观配置。')
-          .fontSize(13)
+      Column({ space: 8 }) {
+        Text('AI 每日地点范围')
+          .fontSize(15)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.getThemePalette().textPrimary)
+          .width('100%');
+
+        Text('按策略设置 AI 每天生成地点数区间，保存后对新一轮生成实时生效。')
+          .fontSize(12)
           .fontColor(this.getThemePalette().textSecondary)
           .width('100%');
+
+        Row({ space: 8 }) {
+          Text('默认')
+            .width(48)
+            .fontSize(13)
+            .fontColor(this.getThemePalette().textSecondary);
+          TextInput({ text: this.aiDefaultMinInput, placeholder: '最小' })
+            .type(InputType.Number)
+            .fontSize(13)
+            .textAlign(TextAlign.Center)
+            .width(72)
+            .height(36)
+            .backgroundColor(this.getThemePalette().cardBgSoft)
+            .borderRadius(8)
+            .onChange((value: string) => {
+              this.aiDefaultMinInput = value;
+            });
+          Text('-').fontSize(13).fontColor(this.getThemePalette().textSecondary);
+          TextInput({ text: this.aiDefaultMaxInput, placeholder: '最大' })
+            .type(InputType.Number)
+            .fontSize(13)
+            .textAlign(TextAlign.Center)
+            .width(72)
+            .height(36)
+            .backgroundColor(this.getThemePalette().cardBgSoft)
+            .borderRadius(8)
+            .onChange((value: string) => {
+              this.aiDefaultMaxInput = value;
+            });
+        }
+        .width('100%');
+
+        Row({ space: 8 }) {
+          Text('特种兵')
+            .width(48)
+            .fontSize(13)
+            .fontColor(this.getThemePalette().textSecondary);
+          TextInput({ text: this.aiSoldierMinInput, placeholder: '最小' })
+            .type(InputType.Number)
+            .fontSize(13)
+            .textAlign(TextAlign.Center)
+            .width(72)
+            .height(36)
+            .backgroundColor(this.getThemePalette().cardBgSoft)
+            .borderRadius(8)
+            .onChange((value: string) => {
+              this.aiSoldierMinInput = value;
+            });
+          Text('-').fontSize(13).fontColor(this.getThemePalette().textSecondary);
+          TextInput({ text: this.aiSoldierMaxInput, placeholder: '最大' })
+            .type(InputType.Number)
+            .fontSize(13)
+            .textAlign(TextAlign.Center)
+            .width(72)
+            .height(36)
+            .backgroundColor(this.getThemePalette().cardBgSoft)
+            .borderRadius(8)
+            .onChange((value: string) => {
+              this.aiSoldierMaxInput = value;
+            });
+        }
+        .width('100%');
+
+        Row({ space: 8 }) {
+          Text('休闲')
+            .width(48)
+            .fontSize(13)
+            .fontColor(this.getThemePalette().textSecondary);
+          TextInput({ text: this.aiLeisureMinInput, placeholder: '最小' })
+            .type(InputType.Number)
+            .fontSize(13)
+            .textAlign(TextAlign.Center)
+            .width(72)
+            .height(36)
+            .backgroundColor(this.getThemePalette().cardBgSoft)
+            .borderRadius(8)
+            .onChange((value: string) => {
+              this.aiLeisureMinInput = value;
+            });
+          Text('-').fontSize(13).fontColor(this.getThemePalette().textSecondary);
+          TextInput({ text: this.aiLeisureMaxInput, placeholder: '最大' })
+            .type(InputType.Number)
+            .fontSize(13)
+            .textAlign(TextAlign.Center)
+            .width(72)
+            .height(36)
+            .backgroundColor(this.getThemePalette().cardBgSoft)
+            .borderRadius(8)
+            .onChange((value: string) => {
+              this.aiLeisureMaxInput = value;
+            });
+        }
+        .width('100%');
+
+        Button('保存 AI 范围')
+          .width('100%')
+          .height(36)
+          .margin({ top: 8 })
+          .borderRadius(10)
+          .backgroundColor(this.getThemePalette().primary)
+          .fontColor(Color.White)
+          .onClick(async () => {
+            await this.saveAiDailyPoiRanges();
+          });
       }
       .width('100%')
-      .padding(16)
+      .padding(12)
       .backgroundColor(this.getThemePalette().cardBg)
       .borderRadius(12);
 
-      Blank().layoutWeight(1);
+        Column() {
+          Text('这里是通用设置页，适合放应用级开关与外观配置。')
+            .fontSize(13)
+            .fontColor(this.getThemePalette().textSecondary)
+            .width('100%');
+        }
+        .width('100%')
+        .padding(16)
+        .backgroundColor(this.getThemePalette().cardBg)
+        .borderRadius(12);
+      }
+      .width('100%')
+      .justifyContent(FlexAlign.Start)
+      .alignItems(HorizontalAlign.Start)
+      .padding({ left: 16, right: 16, top: 10, bottom: 24 });
     }
+    .scrollBar(BarState.Off)
     .width('100%')
     .height('100%')
-    .justifyContent(FlexAlign.Start)
-    .alignItems(HorizontalAlign.Start)
-    .padding({ left: 16, right: 16, bottom: 20 })
     .backgroundColor(this.getThemePalette().pageBg);
   }
 }

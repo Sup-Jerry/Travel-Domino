@@ -551,10 +551,16 @@ struct Index {
       onConfirm: async (text: string, strategy: number, customStrategy?: ComposableStrategy) => {
         try {
           await this.vm.generateByAi(text, strategy, customStrategy);
+          this.vm.refreshTimelineView();
           this.safeShowToast('AI 生成成功，已加入暂存池！');
           this.aiDialogController.close();
         } catch (error) {
           const msg = error instanceof Error ? error.message : '生成失败';
+          hilog.error(
+            0x0000,
+            'Index',
+            `[AI_DEBUG][index_generate_fail] strategy=${strategy}, custom=${customStrategy ? 1 : 0}, reason=${msg}`
+          );
           this.safeShowToast(msg);
           this.aiDialogController.close();
         }
@@ -562,6 +568,7 @@ struct Index {
       onRegenerate: async () => {
         try {
           await this.vm.regenerateByCurrentStrategy();
+          this.vm.refreshTimelineView();
           this.safeShowToast('重新生成成功');
           this.aiDialogController.close();
         } catch (error) {

@@ -3,7 +3,7 @@ import { TravelStrategyProfile } from './TravelStrategyProfile';
 
 export class StrategyPresets {
   private static readonly SOLDIER_PROFILE: TravelStrategyProfile = {
-    dailyPoiTarget: { min: 6, max: 8 },
+    dailyPoiTarget: { min: 5, max: 8 },
     moveTolerance: 45,
     slackRatio: 0.1,
     preferCompactSchedule: true,
@@ -11,7 +11,7 @@ export class StrategyPresets {
   };
 
   private static readonly LEISURE_PROFILE: TravelStrategyProfile = {
-    dailyPoiTarget: { min: 2, max: 4 },
+    dailyPoiTarget: { min: 3, max: 5 },
     moveTolerance: 30,
     slackRatio: 0.4,
     preferCompactSchedule: false,
@@ -19,7 +19,7 @@ export class StrategyPresets {
   };
 
   private static readonly DEFAULT_PROFILE: TravelStrategyProfile = {
-    dailyPoiTarget: { min: 3, max: 5 },
+    dailyPoiTarget: { min: 4, max: 6 },
     moveTolerance: 35,
     // 默认策略不额外注入留白，避免用户未显式选择节奏时产生隐式 +15min 漂移。
     slackRatio: 0,

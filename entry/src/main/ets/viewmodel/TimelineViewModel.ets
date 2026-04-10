@@ -848,6 +848,7 @@ export class TimelineViewModel implements
       `[ACPT][AI][generateByAi] strategyMode=${strategyMode}, custom=${customStrategy ? 'yes' : 'no'}, promptLen=${userPrompt.length}`
     );
     await this.strategyManager.generateByAi(userPrompt, strategyMode, customStrategy);
+    this.refreshTimelineView();
   }
 
   public getStrategyMode(): number {
@@ -908,14 +909,17 @@ export class TimelineViewModel implements
 
   public async regenerateWithCustomStrategy(strategy: ComposableStrategy): Promise<void> {
     await this.strategyManager.regenerateWithCustomStrategy(strategy);
+    this.refreshTimelineView();
   }
 
   public async regenerateByCurrentStrategy(): Promise<void> {
     await this.strategyManager.regenerateByCurrentStrategy();
+    this.refreshTimelineView();
   }
 
   public async changeStrategyAndRegenerate(mode: number): Promise<void> {
     await this.strategyManager.changeStrategyAndRegenerate(mode);
+    this.refreshTimelineView();
   }
 
 
