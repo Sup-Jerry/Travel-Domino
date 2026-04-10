@@ -1110,9 +1110,10 @@ export class TimelineViewModel implements
   public async applyAdvanceAdjust(
     targetIndex: number,
     selectedIds: Set<number>,
-    targetStartTime: string
+    targetStartTime: string,
+    forcedGapMinutes?: number
   ): Promise<AdvanceAdjustApplyResult> {
-    return this.compressionCoordinator.applyAdvanceAdjust(targetIndex, selectedIds, targetStartTime);
+    return this.compressionCoordinator.applyAdvanceAdjust(targetIndex, selectedIds, targetStartTime, forcedGapMinutes);
   }
 
   public buildCompressionSelectionContext(

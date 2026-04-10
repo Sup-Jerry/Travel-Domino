@@ -13,6 +13,7 @@ export struct SuggestionDialog {
   targetTime: string = '';
   suggestedTime: string = '';
   detailMsg: string = '';
+  summaryText: string = '';
 
   // 回调
   onConfirm: () => void = () => {};
@@ -25,26 +26,35 @@ export struct SuggestionDialog {
       Text('⏳ 调整预览')
         .fontSize(20).fontWeight(FontWeight.Bold).margin({ bottom: 16 })
 
-      // 核心文本 (双色区分)
-      Text() {
-        Span('地点 ')
-        Span(this.itemName)
-          .fontColor($r('app.color.text_secondary')) // 🔵 蓝色：当前修改的地点 X
-          .fontWeight(FontWeight.Bold)
-        Span(' 设定在 ' + this.targetTime + ' 无法实现，和地点 ')
-        Span(this.conflictName)
-          .fontColor('#7D00FF') // 🟣 紫色：冲突来源 Y
-          .fontWeight(FontWeight.Bold)
-        Span(' 冲突。\n\n系统建议方案：将 ')
-        Span(this.itemName)
-          .fontColor($r('app.color.text_secondary')) // 🔵 X
-          .fontWeight(FontWeight.Bold)
-        Span(' 调整为 ')
-        Span(this.suggestedTime)
-          .fontColor('#E65100') // 🟠 橙色：最终时间
-          .fontSize(18).fontWeight(FontWeight.Bold)
+      if ((this.summaryText || '').trim().length > 0) {
+        Text(this.summaryText)
+          .fontSize(16)
+          .fontColor($r('app.color.text_secondary'))
+          .lineHeight(24)
+          .width('100%')
+          .margin({ bottom: 12 })
+      } else {
+        // 核心文本 (双色区分)
+        Text() {
+          Span('地点 ')
+          Span(this.itemName)
+            .fontColor($r('app.color.text_secondary')) // 🔵 蓝色：当前修改的地点 X
+            .fontWeight(FontWeight.Bold)
+          Span(' 设定在 ' + this.targetTime + ' 无法实现，和地点 ')
+          Span(this.conflictName)
+            .fontColor('#7D00FF') // 🟣 紫色：冲突来源 Y
+            .fontWeight(FontWeight.Bold)
+          Span(' 冲突。\n\n系统建议方案：将 ')
+          Span(this.itemName)
+            .fontColor($r('app.color.text_secondary')) // 🔵 X
+            .fontWeight(FontWeight.Bold)
+          Span(' 调整为 ')
+          Span(this.suggestedTime)
+            .fontColor('#E65100') // 🟠 橙色：最终时间
+            .fontSize(18).fontWeight(FontWeight.Bold)
+        }
+        .fontSize(16).fontColor($r('app.color.text_secondary')).lineHeight(24).margin({ bottom: 12 })
       }
-      .fontSize(16).fontColor($r('app.color.text_secondary')).lineHeight(24).margin({ bottom: 12 })
 
       Text('⚠️ 后果预览：')
         .fontSize(14).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_secondary')).width('100%').margin({ bottom: 4 })

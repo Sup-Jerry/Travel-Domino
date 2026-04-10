@@ -78,6 +78,8 @@ export interface AdvanceAdjustPreview {
   message: string;
   selectedCount: number;
   shiftMinutes: number;
+  requiredGapMinutes: number;
+  remainingGapMinutes: number;
   firstNewStartTime: string;
   lastNewEndTime: string;
   items: AdvanceAdjustPreviewItem[];
@@ -109,8 +111,13 @@ export interface ITimelineCompressionService {
   calculateCompressionPlan(targetIndex: number, newTimeStr: string, forcedGapMinutes?: number): CompressionPlan;
   buildCompressionSelectionContext(targetIndex: number, targetTime: string, forcedGapMinutes?: number): CompressionSelectionContext | null;
   buildAdvanceAdjustContext(targetIndex: number): AdvanceAdjustContext | null;
-  previewAdvanceAdjust(targetIndex: number, selectedIds: Set<number>, targetStartTime: string): AdvanceAdjustPreview;
-  applyAdvanceAdjust(targetIndex: number, selectedIds: Set<number>, targetStartTime: string): Promise<AdvanceAdjustApplyResult>;
+  previewAdvanceAdjust(targetIndex: number, selectedIds: Set<number>, targetStartTime: string, forcedGapMinutes?: number): AdvanceAdjustPreview;
+  applyAdvanceAdjust(
+    targetIndex: number,
+    selectedIds: Set<number>,
+    targetStartTime: string,
+    forcedGapMinutes?: number
+  ): Promise<AdvanceAdjustApplyResult>;
   calculateCompressionPlanBySelection(
     targetIndex: number,
     targetTime: string,
@@ -309,6 +316,30 @@ export class TimelineCompressionService implements ITimelineCompressionService {
     return dayOffset * 24 * 60 + minute;
   }
 
+  private resolveConflictTargetTime(target: EventEntity): string {
+    const raw = DateUtil.extractPureTime(target.fixed_start_time || target.computed_time || '');
+    if (raw && DateUtil.isValidTimeString(raw)) {
+      return raw;
+    }
+    return this.formatMinuteOnDay(this.resolvePlannedStartMinutes(target));
+  }
+
+  private resolveRequiredGapMinutes(targetIndex: number, forcedGapMinutes?: number): number {
+    const fallbackGap = Number.isFinite(forcedGapMinutes)
+      ? Math.max(0, Math.floor(forcedGapMinutes ?? 0))
+      : 0;
+    const target = this.host.events[targetIndex];
+    if (!target || target.status !== 1) {
+      return fallbackGap;
+    }
+    const targetTime = this.resolveConflictTargetTime(target);
+    const context = this.buildCompressionSelectionContextInternal(targetIndex, targetTime, forcedGapMinutes);
+    if (!context) {
+      return fallbackGap;
+    }
+    return Math.max(0, context.neededGapMinutes);
+  }
+
   public buildAdvanceAdjustContext(targetIndex: number): AdvanceAdjustContext | null {
     const target = this.host.events[targetIndex];
     if (!target || target.status !== 1 || targetIndex <= 0) {
@@ -372,7 +403,13 @@ export class TimelineCompressionService implements ITimelineCompressionService {
     return true;
   }
 
-  public previewAdvanceAdjust(targetIndex: number, selectedIds: Set<number>, targetStartTime: string): AdvanceAdjustPreview {
+  public previewAdvanceAdjust(
+    targetIndex: number,
+    selectedIds: Set<number>,
+    targetStartTime: string,
+    forcedGapMinutes?: number
+  ): AdvanceAdjustPreview {
+    const requiredGapMinutes = this.resolveRequiredGapMinutes(targetIndex, forcedGapMinutes);
     const context = this.buildAdvanceAdjustContext(targetIndex);
     if (!context) {
       return {
@@ -380,6 +417,8 @@ export class TimelineCompressionService implements ITimelineCompressionService {
         message: '当前无可前移地点',
         selectedCount: 0,
         shiftMinutes: 0,
+        requiredGapMinutes: requiredGapMinutes,
+        remainingGapMinutes: requiredGapMinutes,
         firstNewStartTime: '',
         lastNewEndTime: '',
         items: []
@@ -391,6 +430,8 @@ export class TimelineCompressionService implements ITimelineCompressionService {
         message: '新开始时间格式无效',
         selectedCount: 0,
         shiftMinutes: 0,
+        requiredGapMinutes: requiredGapMinutes,
+        remainingGapMinutes: requiredGapMinutes,
         firstNewStartTime: '',
         lastNewEndTime: '',
         items: []
@@ -402,6 +443,8 @@ export class TimelineCompressionService implements ITimelineCompressionService {
         message: '仅支持选择连续地点',
         selectedCount: selectedIds.size,
         shiftMinutes: 0,
+        requiredGapMinutes: requiredGapMinutes,
+        remainingGapMinutes: requiredGapMinutes,
         firstNewStartTime: '',
         lastNewEndTime: '',
         items: []
@@ -417,6 +460,8 @@ export class TimelineCompressionService implements ITimelineCompressionService {
         message: '请至少选择一个地点',
         selectedCount: 0,
         shiftMinutes: 0,
+        requiredGapMinutes: requiredGapMinutes,
+        remainingGapMinutes: requiredGapMinutes,
         firstNewStartTime: '',
         lastNewEndTime: '',
         items: []
@@ -433,6 +478,8 @@ export class TimelineCompressionService implements ITimelineCompressionService {
         message: '新开始时间必须早于当前计划开始时间',
         selectedCount: selected.length,
         shiftMinutes: 0,
+        requiredGapMinutes: requiredGapMinutes,
+        remainingGapMinutes: requiredGapMinutes,
         firstNewStartTime: '',
         lastNewEndTime: '',
         items: []
@@ -458,6 +505,8 @@ export class TimelineCompressionService implements ITimelineCompressionService {
           message: '调整后将与前序边界冲突',
           selectedCount: selected.length,
           shiftMinutes: 0,
+          requiredGapMinutes: requiredGapMinutes,
+          remainingGapMinutes: requiredGapMinutes,
           firstNewStartTime: '',
           lastNewEndTime: '',
           items: []
@@ -513,6 +562,8 @@ export class TimelineCompressionService implements ITimelineCompressionService {
           message: '调整后将与后续地点冲突',
           selectedCount: selected.length,
           shiftMinutes: 0,
+          requiredGapMinutes: requiredGapMinutes,
+          remainingGapMinutes: requiredGapMinutes,
           firstNewStartTime: '',
           lastNewEndTime: '',
           items: previewItems
@@ -521,11 +572,16 @@ export class TimelineCompressionService implements ITimelineCompressionService {
     }
 
     const shiftMinutes = Math.max(0, firstCurrentStart - targetStartAbsolute);
+    const remainingGapMinutes = Math.max(0, requiredGapMinutes - shiftMinutes);
     return {
       valid: true,
-      message: '可应用前移调整',
+      message: remainingGapMinutes > 0
+        ? `可应用前移调整，仍差 ${remainingGapMinutes} 分钟可消除冲突`
+        : '可应用前移调整，可消除当前冲突',
       selectedCount: selected.length,
       shiftMinutes: shiftMinutes,
+      requiredGapMinutes: requiredGapMinutes,
+      remainingGapMinutes: remainingGapMinutes,
       firstNewStartTime: previewItems[0]?.newStartTime ?? '',
       lastNewEndTime: previewItems[previewItems.length - 1]?.newEndTime ?? '',
       items: previewItems
@@ -535,15 +591,18 @@ export class TimelineCompressionService implements ITimelineCompressionService {
   public async applyAdvanceAdjust(
     targetIndex: number,
     selectedIds: Set<number>,
-    targetStartTime: string
+    targetStartTime: string,
+    forcedGapMinutes?: number
   ): Promise<AdvanceAdjustApplyResult> {
-    const preview = this.previewAdvanceAdjust(targetIndex, selectedIds, targetStartTime);
+    const targetId = this.host.events[targetIndex]?.id ?? -1;
+    const preview = this.previewAdvanceAdjust(targetIndex, selectedIds, targetStartTime, forcedGapMinutes);
     if (!preview.valid || preview.items.length === 0) {
+      const currentGap = this.host.events[targetIndex]?.gap_minutes ?? 0;
       return {
         success: false,
         appliedCount: 0,
         appliedShiftMinutes: 0,
-        remainingGapMinutes: this.host.events[targetIndex]?.gap_minutes ?? 0,
+        remainingGapMinutes: Math.max(currentGap, preview.remainingGapMinutes),
         message: preview.message
       };
     }
@@ -567,7 +626,19 @@ export class TimelineCompressionService implements ITimelineCompressionService {
     if (minIndex !== Number.MAX_SAFE_INTEGER) {
       this.host.recalculateFromIndex(minIndex > 0 ? minIndex - 1 : 0);
     }
-    const remaining = this.host.events[targetIndex]?.gap_minutes ?? 0;
+    let liveRemaining = 0;
+    if (targetId > 0) {
+      const latestTarget = this.host.events.find((item: EventEntity) => item.id === targetId);
+      liveRemaining = latestTarget?.gap_minutes ?? 0;
+    } else {
+      liveRemaining = this.host.events[targetIndex]?.gap_minutes ?? 0;
+    }
+    const remaining = Math.max(0, liveRemaining);
+    hilog.info(
+      0x0000,
+      TAG,
+      `[CONFLICT_DEBUG][advance_apply] targetIndex=${targetIndex}, targetId=${targetId}, forcedGap=${forcedGapMinutes ?? -1}, appliedShift=${preview.shiftMinutes}, required=${preview.requiredGapMinutes}, liveRemaining=${liveRemaining}, finalRemaining=${remaining}`
+    );
     return {
       success: true,
       appliedCount: preview.items.length,
@@ -720,8 +791,16 @@ export class TimelineCompressionService implements ITimelineCompressionService {
     const affectedItems = this.buildCompressionAffectedItems(selected, reducedMap);
     const suggestedMinutes = context.naturalArrivalMinutes - reducedTotal;
     const suggestedTime = DateUtil.minutesToTime(suggestedMinutes);
+    const affectedDigest = affectedItems
+      .map((item: CompressionAffectedItem) => `${item.name}:${item.oldVal}->${item.newVal}`)
+      .join('|');
 
     if (remainingNeed > 0) {
+      hilog.info(
+        0x0000,
+        TAG,
+        `[CONFLICT_DEBUG][compress_calc] status=OVERLOAD, targetIndex=${targetIndex}, targetTime=${targetTime}, needed=${context.neededGapMinutes}, reduced=${reducedTotal}, remain=${remainingNeed}, forcedGap=${forcedGapMinutes ?? -1}, selected=${selected.length}, affected=${affectedDigest}`
+      );
       return {
         status: 'OVERLOAD',
         msg: `所选地点可压缩总量不足，仍冲突 ${remainingNeed} 分钟`,
@@ -737,6 +816,11 @@ export class TimelineCompressionService implements ITimelineCompressionService {
       0x0000,
       TAG,
       `[CONFLICT_VM][compress_plan_ready] targetIndex=${targetIndex}, mode=${mode}, needed=${context.neededGapMinutes}, capacity=${capacityMinutes}`
+    );
+    hilog.info(
+      0x0000,
+      TAG,
+      `[CONFLICT_DEBUG][compress_calc] status=COMPRESS_CONFIRM, targetIndex=${targetIndex}, targetTime=${targetTime}, needed=${context.neededGapMinutes}, reduced=${reducedTotal}, remain=0, forcedGap=${forcedGapMinutes ?? -1}, selected=${selected.length}, affected=${affectedDigest}`
     );
 
     return {

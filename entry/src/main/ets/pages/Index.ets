@@ -718,19 +718,32 @@ struct Index {
 
   private async saveConflictTime(item: EventEntity, newTime?: string, onDone?: () => Promise<void> | void): Promise<void> {
     if (newTime && item.id > 0) {
-      const effectiveDayOffset = TimelineDatePolicy.resolveEventDayOffset(item);
-      await this.vm.updateEventInfo(
-        item.id,
-        item.name,
-        item.duration,
-        newTime,
-        effectiveDayOffset,
-        item.lock_status === 1,
-        item.note,
-        item.priority,
-        item.latitude,
-        item.longitude
-      );
+      const incoming = DateUtil.extractPureTime(newTime || '');
+      const current = DateUtil.extractPureTime(item.fixed_start_time || item.computed_time || '');
+      const incomingValid = incoming && DateUtil.isValidTimeString(incoming);
+      const currentValid = current && DateUtil.isValidTimeString(current);
+      const sameTime = incomingValid && currentValid && incoming === current;
+      if (sameTime) {
+        hilog.info(
+          0x0000,
+          'Index',
+          `[CONFLICT_DEBUG][save_conflict_time_skip_same] itemId=${item.id}, time=${incoming}, reason=same_as_current`
+        );
+      } else {
+        const effectiveDayOffset = TimelineDatePolicy.resolveEventDayOffset(item);
+        await this.vm.updateEventInfo(
+          item.id,
+          item.name,
+          item.duration,
+          newTime,
+          effectiveDayOffset,
+          item.lock_status === 1,
+          item.note,
+          item.priority,
+          item.latitude,
+          item.longitude
+        );
+      }
     }
 
     if (onDone) {
@@ -760,6 +773,11 @@ struct Index {
       'Index',
       `[CONFLICT_UI][action] strategy=${strategy}, itemId=${item.id}, targetTime=${targetTime}, gap=${gapMinutes}`
     );
+    hilog.info(
+      0x0000,
+      'Index',
+      `[CONFLICT_DEBUG][action_input] itemId=${item.id}, name=${item.name}, strategy=${strategy}, fixed=${item.fixed_start_time || ''}, computed=${item.computed_time || ''}, gapField=${item.gap_minutes}, msg=${item.conflict_msg || ''}`
+    );
 
     if (strategy === 'delay') {
       const plan = this.vm.calculateDelayPlan(index);
@@ -768,14 +786,23 @@ struct Index {
     }
 
     if (strategy === 'advance') {
-      this.openAdvanceAdjustDialog(index, item, targetTime, saveCallback);
+      this.openAdvanceAdjustDialog(index, item, targetTime, saveCallback, gapMinutes);
       return;
     }
 
     this.openCompressSelectionDialog(index, item, targetTime, saveCallback, reopenConflictMenu, [], 'RATIO', gapMinutes);
   }
 
-  private openAdvanceAdjustDialog(index: number, item: EventEntity, targetTime: string, saveCallback: (t?: string) => void): void {
+  private openAdvanceAdjustDialog(
+    index: number,
+    item: EventEntity,
+    targetTime: string,
+    saveCallback: (t?: string) => void,
+    forcedGapMinutes: number = 0
+  ): void {
+    const normalizedForcedGap = Math.max(0, Math.floor(forcedGapMinutes));
+    const fallbackGap = this.resolveConflictGapMinutes(item, normalizedForcedGap);
+    const effectiveGap = Math.max(normalizedForcedGap, fallbackGap);
     const context = this.vm.buildAdvanceAdjustContext(index);
     if (!context || context.candidates.length === 0) {
       this.safeShowToast('当前冲突前不存在可调整区间');
@@ -787,21 +814,46 @@ struct Index {
         vm: this.vm,
         targetIndex: index,
         targetName: item.name,
+        forcedGapMinutes: effectiveGap,
         onCancel: () => {},
         onConfirm: (selectedIds: number[], nextStartTime: string) => {
-          void this.vm.applyAdvanceAdjust(index, new Set<number>(selectedIds), nextStartTime).then((result) => {
+          void this.vm.applyAdvanceAdjust(index, new Set<number>(selectedIds), nextStartTime, effectiveGap).then((result) => {
+            hilog.info(
+              0x0000,
+              'Index',
+              `[CONFLICT_DEBUG][advance_apply_result] itemId=${item.id}, name=${item.name}, selected=${selectedIds.length}, targetStart=${nextStartTime}, forcedGap=${effectiveGap}, appliedShift=${result.appliedShiftMinutes}, remainFromService=${result.remainingGapMinutes}, success=${result.success}`
+            );
             if (!result.success) {
               this.safeShowToast(result.message || '前移调整失败');
-              this.openAdvanceAdjustDialog(index, item, targetTime, saveCallback);
+              this.openAdvanceAdjustDialog(index, item, targetTime, saveCallback, effectiveGap);
               return;
             }
             saveCallback(targetTime);
-            if (result.remainingGapMinutes > 0) {
-              this.safeShowToast(`已前移 ${result.appliedShiftMinutes} 分钟，仍有 ${result.remainingGapMinutes} 分钟冲突`);
-              this.openConflictMenu(index, item, targetTime, result.remainingGapMinutes, saveCallback);
-              return;
-            }
-            this.safeShowToast(`已前移 ${result.appliedShiftMinutes} 分钟`);
+            // 等待 saveConflictTime 的异步写入和重算完成，再基于实时值判断是否仍冲突。
+            setTimeout(() => {
+              const latestTarget = item.id > 0
+                ? this.vm.events.find((event: EventEntity) => event.id === item.id)
+                : this.vm.events[index];
+              const liveGap = latestTarget
+                ? this.resolveConflictGapMinutes(latestTarget, result.remainingGapMinutes)
+                : Math.max(0, result.remainingGapMinutes);
+              hilog.info(
+                0x0000,
+                'Index',
+                `[CONFLICT_DEBUG][advance_post_save] itemId=${item.id}, liveGap=${liveGap}, gapField=${latestTarget?.gap_minutes ?? -1}, isConflict=${latestTarget?.is_conflict ? 1 : 0}, msg=${latestTarget?.conflict_msg || ''}, fixed=${latestTarget?.fixed_start_time || ''}, computed=${latestTarget?.computed_time || ''}`
+              );
+              if (liveGap > 0) {
+                const reopenTarget = latestTarget ?? item;
+                const reopenIndex = this.vm.events.indexOf(reopenTarget);
+                const reopenTime = this.getConflictTargetTime(reopenTarget);
+                this.safeShowToast(`已前移 ${result.appliedShiftMinutes} 分钟，仍有 ${liveGap} 分钟冲突`);
+                if (reopenIndex >= 0) {
+                  this.openConflictMenu(reopenIndex, reopenTarget, reopenTime, liveGap, saveCallback);
+                }
+                return;
+              }
+              this.safeShowToast(`已前移 ${result.appliedShiftMinutes} 分钟`);
+            }, 220);
           }).catch((_error: Object) => {
             this.safeShowToast('前移调整失败');
           });
@@ -878,18 +930,104 @@ struct Index {
           hilog.info(0x0000, 'Index', `[CONFLICT_UI][compress_dialog_cancel] itemId=${item.id}`);
         },
         onConfirm: (selectedIds: number[], mode: CompressionMode) => {
-          const plan = this.vm.calculateCompressionPlanBySelection(index, targetTime, new Set<number>(selectedIds), mode, effectiveGap);
-          if (plan.status === 'NO_ACTION') {
-            saveCallback(targetTime);
-            return;
+          const selectedSet = new Set<number>(selectedIds);
+          let latestTarget = item.id > 0
+            ? this.vm.events.find((event: EventEntity) => event.id === item.id)
+            : this.vm.events[index];
+          let latestIndex = latestTarget ? this.vm.events.indexOf(latestTarget) : index;
+          let latestTargetTime = latestTarget ? this.getConflictTargetTime(latestTarget) : targetTime;
+          let remainingGap = latestTarget ? this.resolveConflictGapMinutes(latestTarget, effectiveGap) : effectiveGap;
+          let round = 0;
+          let overloadPlan: import('../viewmodel/TimelineViewModel').CompressionPlan | null = null;
+
+          while (remainingGap > 0 && round < 8) {
+            if (latestIndex < 0) {
+              break;
+            }
+            const plan = this.vm.calculateCompressionPlanBySelection(
+              latestIndex,
+              latestTargetTime,
+              selectedSet,
+              mode,
+              remainingGap
+            );
+            const totalReduced = plan.affectedItems.reduce((sum: number, aff) => sum + (aff.oldVal - aff.newVal), 0);
+            const affectedDigest = plan.affectedItems
+              .map((aff) => `${aff.name}:${aff.oldVal}->${aff.newVal}`)
+              .join('|');
+            hilog.info(
+              0x0000,
+              'Index',
+              `[CONFLICT_DEBUG][compress_plan] itemId=${item.id}, round=${round + 1}, mode=${mode}, selected=${selectedIds.length}, effectiveGap=${remainingGap}, status=${plan.status}, reduced=${totalReduced}, remain=${plan.remainingGapMinutes ?? 0}, suggested=${plan.suggestedTime || ''}, affected=${affectedDigest}`
+            );
+
+            if (plan.status === 'NO_ACTION') {
+              break;
+            }
+            if (plan.status === 'OVERLOAD') {
+              overloadPlan = plan;
+              break;
+            }
+            if (!plan.affectedItems || plan.affectedItems.length === 0) {
+              break;
+            }
+
+            this.vm.applyCompressionPlan(plan);
+            round++;
+
+            latestTarget = item.id > 0
+              ? this.vm.events.find((event: EventEntity) => event.id === item.id)
+              : this.vm.events[latestIndex];
+            if (!latestTarget) {
+              break;
+            }
+            latestIndex = this.vm.events.indexOf(latestTarget);
+            latestTargetTime = this.getConflictTargetTime(latestTarget);
+            const nextGap = this.resolveConflictGapMinutes(latestTarget, 0);
+            hilog.info(
+              0x0000,
+              'Index',
+              `[CONFLICT_DEBUG][compress_round_result] itemId=${item.id}, round=${round}, nextGap=${nextGap}, gapField=${latestTarget.gap_minutes}, isConflict=${latestTarget.is_conflict ? 1 : 0}, fixed=${latestTarget.fixed_start_time || ''}, computed=${latestTarget.computed_time || ''}`
+            );
+            if (nextGap >= remainingGap) {
+              // 无进展，避免死循环
+              remainingGap = nextGap;
+              break;
+            }
+            remainingGap = nextGap;
           }
-          if (plan.status === 'OVERLOAD') {
-            this.showCompressionBlockedDialog(index, item, targetTime, plan, selectedIds, mode, saveCallback, onBack);
-            return;
-          }
-          this.openPreview(index, item, targetTime, plan, saveCallback, () => {
-            this.openCompressSelectionDialog(index, item, targetTime, saveCallback, onBack, selectedIds, mode, effectiveGap);
-          });
+
+          saveCallback(targetTime);
+
+          setTimeout(() => {
+            const finalTarget = item.id > 0
+              ? this.vm.events.find((event: EventEntity) => event.id === item.id)
+              : this.vm.events[index];
+            const finalGap = finalTarget ? this.resolveConflictGapMinutes(finalTarget, remainingGap) : remainingGap;
+            hilog.info(
+              0x0000,
+              'Index',
+              `[CONFLICT_DEBUG][compress_post_apply] itemId=${item.id}, liveGap=${finalGap}, gapField=${finalTarget?.gap_minutes ?? -1}, isConflict=${finalTarget?.is_conflict ? 1 : 0}, msg=${finalTarget?.conflict_msg || ''}, fixed=${finalTarget?.fixed_start_time || ''}, computed=${finalTarget?.computed_time || ''}, rounds=${round}`
+            );
+            if (finalGap > 0) {
+              if (overloadPlan) {
+                this.showCompressionBlockedDialog(
+                  latestIndex >= 0 ? latestIndex : index,
+                  finalTarget ?? item,
+                  finalTarget ? this.getConflictTargetTime(finalTarget) : targetTime,
+                  overloadPlan,
+                  selectedIds,
+                  mode,
+                  saveCallback,
+                  onBack
+                );
+              } else {
+                this.safeShowToast(`已自动压缩 ${round} 轮，仍有 ${finalGap} 分钟冲突`);
+              }
+              return;
+            }
+            this.safeShowToast(`已应用压缩调整（${round}轮）`);
+          }, 220);
         }
       }),
       alignment: DialogAlignment.Center,
@@ -971,11 +1109,11 @@ struct Index {
 
         onAdvanceAdjust: () => {
           hilog.info(0x0000, 'Index', `[CONFLICT_UI][menu_advance_adjust] itemId=${item.id}`);
-          this.openAdvanceAdjustDialog(index, item, targetTime, saveCallback);
+          this.openAdvanceAdjustDialog(index, item, targetTime, saveCallback, gap);
         },
         onShiftSameDay: () => {
           hilog.info(0x0000, 'Index', `[CONFLICT_UI][menu_shift_same_day_compat] itemId=${item.id}`);
-          this.openAdvanceAdjustDialog(index, item, targetTime, saveCallback);
+          this.openAdvanceAdjustDialog(index, item, targetTime, saveCallback, gap);
         },
 
         // 兼容入口：智能均衡并入压缩前序
@@ -1055,12 +1193,19 @@ struct Index {
 
     // 构建详情文本
     let detailMsg = '';
-    if (plan.affectedItems.length === 0) {
+    const isCompressPlan = plan.affectedItems.length > 0;
+    let summaryText = '';
+    if (!isCompressPlan) {
       detailMsg = '• 没有前序行程受到压缩，仅调整当前开始时间。';
+      summaryText = `地点 ${item.name} 设定在 ${targetTime} 会冲突，建议将开始时间调整为 ${plan.suggestedTime || targetTime}。`;
     } else {
+      const totalReduced = plan.affectedItems.reduce((sum: number, aff) => sum + (aff.oldVal - aff.newVal), 0);
+      detailMsg += `• 目标地点开始时间保持 ${targetTime} 不变\n`;
+      detailMsg += `• 前序地点合计压缩 ${totalReduced} 分钟\n`;
       plan.affectedItems.forEach(aff => {
         detailMsg += `• ${aff.name}: ${aff.oldVal}m ➔ ${aff.newVal}m\n`;
       });
+      summaryText = `地点 ${item.name} 设定在 ${targetTime} 会冲突，将通过压缩前序地点来消除冲突（当前地点开始时间不变）。`;
     }
 
     const prevItem = index > 0 ? this.vm.events[index - 1] : null;
@@ -1073,6 +1218,7 @@ struct Index {
         targetTime: targetTime,
         suggestedTime: plan.suggestedTime || targetTime,
         detailMsg: detailMsg,
+        summaryText: summaryText,
 
         onConfirm: () => {
           if (plan.suggestedTime) {

@@ -11,6 +11,7 @@ export struct AdvanceAdjustDialog {
   vm: TimelineViewModel = new TimelineViewModel();
   targetIndex: number = -1;
   targetName: string = '';
+  forcedGapMinutes: number = 0;
   onConfirm: (selectedIds: number[], targetStartTime: string) => void = () => {};
   onCancel: () => void = () => {};
 
@@ -30,7 +31,8 @@ export struct AdvanceAdjustDialog {
     this.selectedIds = new Set(this.selectedIds);
     const first = this.context.candidates[0];
     const firstMinutes = this.timeToMinutes(first.currentStartTime);
-    const defaultMinutes = Math.max(0, firstMinutes - 30);
+    const expectedShift = this.forcedGapMinutes > 0 ? this.forcedGapMinutes : 30;
+    const defaultMinutes = Math.max(0, firstMinutes - expectedShift);
     this.targetStartTime = this.minutesToTime(defaultMinutes);
     this.refreshPreview();
   }
@@ -62,7 +64,12 @@ export struct AdvanceAdjustDialog {
       this.preview = null;
       return;
     }
-    this.preview = this.vm.compressionCoordinator.previewAdvanceAdjust(this.targetIndex, this.selectedIds, this.targetStartTime);
+    this.preview = this.vm.compressionCoordinator.previewAdvanceAdjust(
+      this.targetIndex,
+      this.selectedIds,
+      this.targetStartTime,
+      this.forcedGapMinutes
+    );
   }
 
   private openTargetTimePicker(): void {
@@ -166,6 +173,13 @@ export struct AdvanceAdjustDialog {
             .fontSize(12)
             .fontColor($r('app.color.text_secondary'))
             .width('100%')
+          Text((this.preview?.remainingGapMinutes ?? 0) > 0
+            ? `最少前移 ${this.preview?.requiredGapMinutes ?? 0} 分钟；还差 ${this.preview?.remainingGapMinutes ?? 0} 分钟`
+            : `最少前移 ${this.preview?.requiredGapMinutes ?? 0} 分钟；已达到消冲突阈值`)
+            .fontSize(12)
+            .fontColor((this.preview?.remainingGapMinutes ?? 0) > 0 ? '#FF4D4F' : '#2E7D32')
+            .width('100%')
+            .margin({ top: 4 })
           Text(`首地点：${this.preview?.firstNewStartTime ?? '-'}，末地点：${this.preview?.lastNewEndTime ?? '-'}`)
             .fontSize(12)
             .fontColor($r('app.color.text_secondary'))

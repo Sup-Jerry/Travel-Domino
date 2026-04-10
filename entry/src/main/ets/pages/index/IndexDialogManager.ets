@@ -75,6 +75,7 @@ export interface AdvanceAdjustCallbacks {
   vm: TimelineViewModel;
   targetIndex: number;
   targetName: string;
+  forcedGapMinutes?: number;
   onCancel: () => void;
   onConfirm: (selectedIds: number[], nextStartTime: string) => void;
 }
@@ -261,6 +262,7 @@ export class IndexDialogManager {
         vm: callbacks.vm,
         targetIndex: callbacks.targetIndex,
         targetName: callbacks.targetName,
+        forcedGapMinutes: callbacks.forcedGapMinutes ?? 0,
         onCancel: callbacks.onCancel,
         onConfirm: callbacks.onConfirm
       }),

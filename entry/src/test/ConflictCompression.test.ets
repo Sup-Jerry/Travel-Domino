@@ -2,7 +2,14 @@ import { describe, it, expect } from '@ohos/hypium';
 import { EventEntity } from '../main/ets/model/entity/EventEntity';
 import { TimelineViewModel } from '../main/ets/viewmodel/TimelineViewModel';
 
-function buildEvent(id: number, name: string, duration: number, lockStatus: number = 0, fixedStartTime: string = ''): EventEntity {
+function buildEvent(
+  id: number,
+  name: string,
+  duration: number,
+  lockStatus: number = 0,
+  fixedStartTime: string = '',
+  preTravelMinutes: number = 0
+): EventEntity {
   const event = new EventEntity();
   event.id = id;
   event.name = name;
@@ -10,7 +17,7 @@ function buildEvent(id: number, name: string, duration: number, lockStatus: numb
   event.status = 1;
   event.lock_status = lockStatus;
   event.fixed_start_time = fixedStartTime;
-  event.pre_travel_min = 0;
+  event.pre_travel_min = preTravelMinutes;
   event.sort_order = id;
   return event;
 }
@@ -99,6 +106,44 @@ export default function conflictCompressionTest() {
       expect(plan.status).assertEqual('OVERLOAD');
       expect(plan.remainingGapMinutes ?? 0).assertEqual(60);
       expect(plan.suggestedTime !== undefined).assertEqual(true);
+    });
+
+    it('should_compute_min_required_gap_for_rigid_target_conflict', 0, () => {
+      const vm = new TimelineViewModel();
+      vm.globalStartTime = '09:00';
+      vm.events = [
+        buildEvent(1, 'A', 60),
+        buildEvent(2, 'B', 90),
+        buildEvent(3, 'RigidTarget', 60, 1, '12:00', 60)
+      ];
+
+      const context = vm.compressionCoordinator.buildCompressionSelectionContext(2, '12:00');
+      expect(context !== null).assertEqual(true);
+      expect(context?.neededGapMinutes ?? -1).assertEqual(30);
+
+      const plan = vm.compressionCoordinator.calculateCompressionPlanBySelection(2, '12:00', new Set<number>([1, 2]), 'RATIO');
+      expect(plan.status).assertEqual('COMPRESS_CONFIRM');
+      expect(sumReduced(plan)).assertEqual(30);
+    });
+
+    it('advance_preview_should_compare_shift_with_min_required_gap', 0, () => {
+      const vm = new TimelineViewModel();
+      vm.globalStartTime = '09:00';
+      vm.events = [
+        buildEvent(1, 'A', 60),
+        buildEvent(2, 'B', 90),
+        buildEvent(3, 'RigidTarget', 60, 1, '12:00', 60)
+      ];
+
+      const notEnough = vm.compressionCoordinator.previewAdvanceAdjust(2, new Set<number>([1, 2]), '08:40', 30);
+      expect(notEnough.valid).assertEqual(true);
+      expect(notEnough.requiredGapMinutes).assertEqual(30);
+      expect(notEnough.remainingGapMinutes).assertEqual(10);
+
+      const enough = vm.compressionCoordinator.previewAdvanceAdjust(2, new Set<number>([1, 2]), '08:30', 30);
+      expect(enough.valid).assertEqual(true);
+      expect(enough.requiredGapMinutes).assertEqual(30);
+      expect(enough.remainingGapMinutes).assertEqual(0);
     });
   });
 }

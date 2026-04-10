@@ -49,26 +49,32 @@ export class TimelineCompressionCoordinator {
     return this.compressionService.buildAdvanceAdjustContext(targetIndex);
   }
 
-  public previewAdvanceAdjust(targetIndex: number, selectedIds: Set<number>, targetStartTime: string): AdvanceAdjustPreview {
+  public previewAdvanceAdjust(
+    targetIndex: number,
+    selectedIds: Set<number>,
+    targetStartTime: string,
+    forcedGapMinutes?: number
+  ): AdvanceAdjustPreview {
     hilog.info(
       0x0000,
       TAG,
-      `[ACPT][COMPRESS][previewAdvanceAdjust] targetIndex=${targetIndex}, selected=${selectedIds.size}, targetStart=${targetStartTime}`
+      `[ACPT][COMPRESS][previewAdvanceAdjust] targetIndex=${targetIndex}, selected=${selectedIds.size}, targetStart=${targetStartTime}, forcedGap=${forcedGapMinutes ?? -1}`
     );
-    return this.compressionService.previewAdvanceAdjust(targetIndex, selectedIds, targetStartTime);
+    return this.compressionService.previewAdvanceAdjust(targetIndex, selectedIds, targetStartTime, forcedGapMinutes);
   }
 
   public async applyAdvanceAdjust(
     targetIndex: number,
     selectedIds: Set<number>,
-    targetStartTime: string
+    targetStartTime: string,
+    forcedGapMinutes?: number
   ): Promise<AdvanceAdjustApplyResult> {
     hilog.info(
       0x0000,
       TAG,
-      `[ACPT][COMPRESS][applyAdvanceAdjust] targetIndex=${targetIndex}, selected=${selectedIds.size}, targetStart=${targetStartTime}`
+      `[ACPT][COMPRESS][applyAdvanceAdjust] targetIndex=${targetIndex}, selected=${selectedIds.size}, targetStart=${targetStartTime}, forcedGap=${forcedGapMinutes ?? -1}`
     );
-    return this.compressionService.applyAdvanceAdjust(targetIndex, selectedIds, targetStartTime);
+    return this.compressionService.applyAdvanceAdjust(targetIndex, selectedIds, targetStartTime, forcedGapMinutes);
   }
 
   public calculateCompressionPlanBySelection(
