@@ -202,45 +202,46 @@ struct SettingsGeneralPage {
   }
 
   build() {
-    Column({ space: 10 }) {
-      SettingsSubPageHeader({ title: '通用与外观' });
+    Scroll() {
+      Column({ space: 10 }) {
+        SettingsSubPageHeader({ title: '通用与外观' });
 
-      SettingSelectItem({
-        title: '主题模式',
-        desc: '支持浅色、深色与跟随系统。',
-        valueText: this.getThemeModeText(),
-        textPrimary: this.getThemePalette().textPrimary,
-        textSecondary: this.getThemePalette().textSecondary,
-        cardBg: this.getThemePalette().cardBg,
-        actionColor: this.getThemePalette().primary,
-        onClickItem: () => this.showThemeModeDialog()
-      });
+        SettingSelectItem({
+          title: '主题模式',
+          desc: '支持浅色、深色与跟随系统。',
+          valueText: this.getThemeModeText(),
+          textPrimary: this.getThemePalette().textPrimary,
+          textSecondary: this.getThemePalette().textSecondary,
+          cardBg: this.getThemePalette().cardBg,
+          actionColor: this.getThemePalette().primary,
+          onClickItem: () => this.showThemeModeDialog()
+        });
 
-      SettingSwitchItem({
-        title: '启用天气功能',
-        desc: '关闭后隐藏天气展示、刷新与提醒能力。',
-        loading: this.loading,
-        checked: this.weatherFeatureEnabled,
-        textPrimary: this.getThemePalette().textPrimary,
-        textSecondary: this.getThemePalette().textSecondary,
-        cardBg: this.getThemePalette().cardBg,
-        onToggle: async (value: boolean) => {
-          await this.onWeatherFeatureChanged(value);
-        }
-      });
+        SettingSwitchItem({
+          title: '启用天气功能',
+          desc: '关闭后隐藏天气展示、刷新与提醒能力。',
+          loading: this.loading,
+          checked: this.weatherFeatureEnabled,
+          textPrimary: this.getThemePalette().textPrimary,
+          textSecondary: this.getThemePalette().textSecondary,
+          cardBg: this.getThemePalette().cardBg,
+          onToggle: async (value: boolean) => {
+            await this.onWeatherFeatureChanged(value);
+          }
+        });
 
-      SettingSwitchItem({
-        title: '启用空闲时间检测',
-        desc: '关闭后不再触发空闲时间优化提示。',
-        loading: this.loading,
-        checked: this.enableIdleGapDetection,
-        textPrimary: this.getThemePalette().textPrimary,
-        textSecondary: this.getThemePalette().textSecondary,
-        cardBg: this.getThemePalette().cardBg,
-        onToggle: async (value: boolean) => {
-          await this.onIdleGapDetectionChanged(value);
-        }
-      });
+        SettingSwitchItem({
+          title: '启用空闲时间检测',
+          desc: '关闭后不再触发空闲时间优化提示。',
+          loading: this.loading,
+          checked: this.enableIdleGapDetection,
+          textPrimary: this.getThemePalette().textPrimary,
+          textSecondary: this.getThemePalette().textSecondary,
+          cardBg: this.getThemePalette().cardBg,
+          onToggle: async (value: boolean) => {
+            await this.onIdleGapDetectionChanged(value);
+          }
+        });
 
       Row() {
         TextInput({ text: this.idleGapTriggerInput, placeholder: '空闲阈值(分钟)' })
@@ -438,24 +439,25 @@ struct SettingsGeneralPage {
       .backgroundColor(this.getThemePalette().cardBg)
       .borderRadius(12);
 
-      Column() {
-        Text('这里是通用设置页，适合放应用级开关与外观配置。')
-          .fontSize(13)
-          .fontColor(this.getThemePalette().textSecondary)
-          .width('100%');
+        Column() {
+          Text('这里是通用设置页，适合放应用级开关与外观配置。')
+            .fontSize(13)
+            .fontColor(this.getThemePalette().textSecondary)
+            .width('100%');
+        }
+        .width('100%')
+        .padding(16)
+        .backgroundColor(this.getThemePalette().cardBg)
+        .borderRadius(12);
       }
       .width('100%')
-      .padding(16)
-      .backgroundColor(this.getThemePalette().cardBg)
-      .borderRadius(12);
-
-      Blank().layoutWeight(1);
+      .justifyContent(FlexAlign.Start)
+      .alignItems(HorizontalAlign.Start)
+      .padding({ left: 16, right: 16, top: 10, bottom: 24 });
     }
+    .scrollBar(BarState.Off)
     .width('100%')
     .height('100%')
-    .justifyContent(FlexAlign.Start)
-    .alignItems(HorizontalAlign.Start)
-    .padding({ left: 16, right: 16, bottom: 20 })
     .backgroundColor(this.getThemePalette().pageBg);
   }
 }

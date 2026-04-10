@@ -45,7 +45,7 @@ export struct IndexTimelineView {
   onOpenGapOptimize: () => void = () => {};
 
   @Builder
-  private buildDateHeader(text: string, dayOffset: number) {
+  private buildDateHeader(text: string, dayOffset: number, placeCount: number) {
     Row() {
       Text(this.onIsDayCollapsed(dayOffset) ? '▶' : '▼')
         .fontSize(12)
@@ -59,7 +59,7 @@ export struct IndexTimelineView {
         .margin({ right: 8 })
         .borderRadius(2);
 
-      Text(text)
+      Text(`${text} 共${Math.max(0, placeCount)}个地点`)
         .fontSize(16)
         .fontColor(this.theme.textPrimary)
         .fontWeight(FontWeight.Bold);
@@ -104,7 +104,7 @@ export struct IndexTimelineView {
     Refresh({ refreshing: this.isPageRefreshing }) {
       List({ space: 0 }) {
         ForEach(this.groupedEvents, (group: DateGroup) => {
-          ListItemGroup({ header: this.buildDateHeader(group.dateHeader, group.dayOffset) }) {
+          ListItemGroup({ header: this.buildDateHeader(group.dateHeader, group.dayOffset, group.events.length) }) {
             if (!this.onIsDayCollapsed(group.dayOffset)) {
               ForEach(group.events, (item: EventEntity, dayIndex: number) => {
                 ListItem() {
