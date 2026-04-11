@@ -1,7 +1,13 @@
 ﻿import { describe, expect, it } from '@ohos/hypium';
 import { TimelineStrategyManager, ITimelineStrategyHost } from '../main/ets/viewmodel/managers/TimelineStrategyManager';
 import { ComposableStrategy } from '../main/ets/domain/strategy/TravelStrategyDimensions';
-import { ITimelineAiService, ExecutionSuggestionApplyResult } from '../main/ets/domain/timeline/services/TimelineAiService';
+import {
+  ITimelineAiService,
+  ExecutionSuggestionApplyResult,
+  AiReplanApplyDecision,
+  AiReplanPreviewResult,
+  AiReplanUndoToken
+} from '../main/ets/domain/timeline/services/TimelineAiService';
 import { PlanPersistenceFacade, PlanEventsSnapshot } from '../main/ets/viewmodel/internal/PlanPersistenceFacade';
 import { SoftReplanApplyResult } from '../main/ets/domain/services/WeatherModels';
 
@@ -66,6 +72,39 @@ class AiServiceSpy implements ITimelineAiService {
   async regenerateByCurrentStrategy(): Promise<void> {}
   async changeStrategyAndRegenerate(_mode: number): Promise<void> {}
   async triggerStrategyAdaptation(): Promise<void> {}
+  async buildReplanPreview(
+    strategyMode: number,
+    customStrategy?: ComposableStrategy,
+    _keepCurrentMode?: boolean
+  ): Promise<AiReplanPreviewResult> {
+    return {
+      prompt: 'preview',
+      strategyMode: strategyMode,
+      customStrategy: customStrategy,
+      generatedAt: Date.now(),
+      itemCount: 0,
+      items: []
+    };
+  }
+
+  async applyReplanPreview(
+    _preview: AiReplanPreviewResult,
+    _decision: AiReplanApplyDecision
+  ): Promise<AiReplanUndoToken> {
+    return {
+      createdAt: Date.now(),
+      events: [],
+      strategyMode: this.mode,
+      strategyDensity: 1,
+      strategyPace: 1,
+      strategyPreference: 0,
+      strategyEnergy: 1,
+      lastAiPrompt: '',
+      lastStrategyExplanation: ''
+    };
+  }
+
+  async restoreFromUndoToken(_token: AiReplanUndoToken): Promise<void> {}
 }
 
 class FakePersistence extends PlanPersistenceFacade {

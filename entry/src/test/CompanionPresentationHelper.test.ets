@@ -99,5 +99,116 @@ export default function companionPresentationHelperTest() {
       expect(plannedRange).assertEqual('14:20-15:00');
       expect(mainCardTime).assertEqual(plannedRange);
     });
+
+    it('normal: state_labels_should_cover_pending_active_completed_and_skipped', 0, () => {
+      // Arrange
+      const pending = buildEvent(6);
+      const active = buildEvent(7);
+      active.actual_start_time = new Date(2026, 2, 8, 10, 5, 0, 0).getTime();
+      const completed = buildEvent(8);
+      completed.completion_status = EventEntity.STATE_COMPLETED;
+      const skipped = buildEvent(9);
+      skipped.completion_status = EventEntity.STATE_SKIPPED;
+
+      // Act
+      const pendingLabel = CompanionPresentationHelper.getEventStateLabel(pending);
+      const activeLabel = CompanionPresentationHelper.getEventStateLabel(active);
+      const completedLabel = CompanionPresentationHelper.getEventStateLabel(completed);
+      const skippedLabel = CompanionPresentationHelper.getEventStateLabel(skipped);
+
+      // Assert
+      expect(pendingLabel.length > 0).assertTrue();
+      expect(activeLabel.length > 0).assertTrue();
+      expect(completedLabel.length > 0).assertTrue();
+      expect(skippedLabel.length > 0).assertTrue();
+      expect(pendingLabel === activeLabel).assertFalse();
+      expect(completedLabel === skippedLabel).assertFalse();
+    });
+
+    it('boundary: active_timeline_supplement_should_report_minimum_one_minute_when_just_started', 0, () => {
+      // Arrange
+      const event = buildEvent(10);
+      const nowTs = new Date(2026, 2, 8, 10, 5, 0, 0).getTime();
+      event.actual_start_time = nowTs;
+
+      // Act
+      const supplement = CompanionPresentationHelper.getTimelineSupplement(event, nowTs);
+
+      // Assert
+      expect(supplement.includes('1')).assertTrue();
+      expect(supplement.includes('|')).assertTrue();
+    });
+
+    it('invalid: completed_main_card_and_timeline_should_keep_placeholders_when_actual_times_missing', 0, () => {
+      // Arrange
+      const event = buildEvent(11);
+      event.completion_status = EventEntity.STATE_COMPLETED;
+      event.actual_start_time = 0;
+      event.actual_end_time = 0;
+
+      // Act
+      const mainCardTime = CompanionPresentationHelper.getMainCardTimeText(event);
+      const supplement = CompanionPresentationHelper.getTimelineSupplement(event);
+
+      // Assert
+      expect(mainCardTime.includes('--:--')).assertTrue();
+      expect(supplement.includes('--:--')).assertTrue();
+    });
+
+    it('conflict: skipped_state_texts_should_not_fall_back_to_pending_planned_range', 0, () => {
+      // Arrange
+      const event = buildEvent(12);
+      event.computed_time = '09:30';
+      event.duration = 20;
+      event.completion_status = EventEntity.STATE_SKIPPED;
+      const plannedRange = CompanionPresentationHelper.getPlannedRange(event);
+
+      // Act
+      const label = CompanionPresentationHelper.getEventStateLabel(event);
+      const mainCardTime = CompanionPresentationHelper.getMainCardTimeText(event);
+      const supplement = CompanionPresentationHelper.getTimelineSupplement(event);
+
+      // Assert
+      expect(label.length > 0).assertTrue();
+      expect(mainCardTime.length > 0).assertTrue();
+      expect(supplement.length > 0).assertTrue();
+      expect(mainCardTime === plannedRange).assertFalse();
+      expect(supplement.includes('09:30')).assertFalse();
+    });
+
+    it('regression: active_main_card_time_should_prefer_actual_start_over_planned_range', 0, () => {
+      // Arrange
+      const event = buildEvent(13);
+      event.computed_time = '08:10';
+      event.duration = 40;
+      event.actual_start_time = new Date(2026, 2, 8, 10, 5, 0, 0).getTime();
+
+      // Act
+      const mainCardTime = CompanionPresentationHelper.getMainCardTimeText(event);
+      const plannedRange = CompanionPresentationHelper.getPlannedRange(event);
+
+      // Assert
+      expect(mainCardTime.includes('10:05')).assertTrue();
+      expect(mainCardTime === plannedRange).assertFalse();
+    });
+
+    it('combined: completed_state_label_main_card_and_timeline_should_align_on_actual_end', 0, () => {
+      // Arrange
+      const event = buildEvent(14);
+      event.completion_status = EventEntity.STATE_COMPLETED;
+      event.actual_start_time = new Date(2026, 2, 8, 9, 10, 0, 0).getTime();
+      event.actual_end_time = new Date(2026, 2, 8, 9, 50, 0, 0).getTime();
+
+      // Act
+      const label = CompanionPresentationHelper.getEventStateLabel(event);
+      const mainCardTime = CompanionPresentationHelper.getMainCardTimeText(event);
+      const supplement = CompanionPresentationHelper.getTimelineSupplement(event);
+
+      // Assert
+      expect(label.length > 0).assertTrue();
+      expect(mainCardTime.includes('09:10')).assertTrue();
+      expect(mainCardTime.includes('09:50')).assertTrue();
+      expect(supplement.includes('09:50')).assertTrue();
+    });
   });
 }
