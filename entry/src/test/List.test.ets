@@ -33,6 +33,15 @@ import avatarUploadApiTest from './AvatarUploadApi.test';
 import profileCacheManagerTest from './ProfileCacheManager.test';
 import profileViewModelTest from './ProfileViewModel.test';
 import userProfileRepositoryImplTest from './UserProfileRepositoryImpl.test';
+import timelineExecutionCoordinatorTest from './TimelineExecutionCoordinator.test';
+import timelineHistoryManagerTest from './TimelineHistoryManager.test';
+import executionContextStoreTest from './ExecutionContextStore.test';
+import authSessionStoreTest from './AuthSessionStore.test';
+import timelineCompressionCoordinatorTest from './TimelineCompressionCoordinator.test';
+import timelineDistributionCoordinatorTest from './TimelineDistributionCoordinator.test';
+import timelineStrategyManagerTest from './TimelineStrategyManager.test';
+import timelineCompanionManagerTest from './TimelineCompanionManager.test';
+import appStartupCoordinatorTest from './AppStartupCoordinator.test';
 
 const registeredSuiteNames: string[] = [
   'LocalUnit',
@@ -68,7 +77,16 @@ const registeredSuiteNames: string[] = [
   'AvatarUploadApi',
   'ProfileCacheManager',
   'ProfileViewModel',
-  'UserProfileRepositoryImpl'
+  'UserProfileRepositoryImpl',
+  'TimelineExecutionCoordinator',
+  'TimelineHistoryManager',
+  'ExecutionContextStore',
+  'AuthSessionStore',
+  'TimelineCompressionCoordinator',
+  'TimelineDistributionCoordinator',
+  'TimelineStrategyManager',
+  'TimelineCompanionManager',
+  'AppStartupCoordinator'
 ];
 
 function containsSuite(name: string): boolean {
@@ -127,6 +145,15 @@ export default function testsuite() {
   profileCacheManagerTest();
   profileViewModelTest();
   userProfileRepositoryImplTest();
+  timelineExecutionCoordinatorTest();
+  timelineHistoryManagerTest();
+  executionContextStoreTest();
+  authSessionStoreTest();
+  timelineCompressionCoordinatorTest();
+  timelineDistributionCoordinatorTest();
+  timelineStrategyManagerTest();
+  timelineCompanionManagerTest();
+  appStartupCoordinatorTest();
 
   describe('listTest', () => {
     it('normal: list_should_keep_core_test_modules_registered', 0, () => {

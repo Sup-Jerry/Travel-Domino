@@ -129,6 +129,8 @@ Agent 调用 `scripts/smart_stitch.py`，将 `evolution.json` 的内容转化为
 - 复盘输出保持中文、简洁，先给闭环状态再给经验沉淀证据。
 - 用户要求‘回顾+瘦身+上传’时，严格按顺序执行并在每个阶段给可验证证据。
 - 复盘结论默认中文、紧凑，先回答任务是否完成，再给经验沉淀结果。
+- 当用户要求‘复盘+瘦身+发布’时，严格按顺序执行并在每阶段提供可验证证据。
+- 复盘沉淀后必须回读last_updated与SKILL.md自动区块，确认持久化。
 
 ### Known Fixes & Workarounds
 - Before any edit, restate user intent and explicitly state whether code will be changed.
@@ -198,7 +200,9 @@ Agent 调用 `scripts/smart_stitch.py`，将 `evolution.json` 的内容转化为
 - 技能沉淀后必须回读evolution.json的last_updated与SKILL.md缝合区，作为落地证据。
 - 多轮继续执行场景下，先确认当前阶段（如C3）闭环状态，再进入skill沉淀与发布步骤。
 - 执行沉淀后必须回传 merge_evolution 与 smart_stitch 的执行证据（命令和结果）。
+- PowerShell下merge_evolution传JSON参数不稳定时，改用Python文件读取并直接调用merge函数。
+- 在同轮复盘中可同时沉淀多个技能（领域skill+流程skill+工具skill），再统一回报证据。
 
 ### Custom Instruction Injection
 
-复盘场景默认输出结构：闭环状态 -> 本轮沉淀目标skill -> 执行证据 -> 下一步动作。
+复盘执行模板：目标skill列表 -> merge_evolution -> smart_stitch -> 回读last_updated与自动区块证据。
