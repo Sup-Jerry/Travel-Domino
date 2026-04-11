@@ -43,16 +43,22 @@ import timelineStrategyManagerTest from './TimelineStrategyManager.test';
 import timelineCompanionManagerTest from './TimelineCompanionManager.test';
 import appStartupCoordinatorTest from './AppStartupCoordinator.test';
 import companionSwipeHelperTest from './CompanionSwipeHelper.test';
+import companionSwipeHelperVelocityTest from './CompanionSwipeHelperVelocity.test';
 import companionWeatherActionHelperTest from './CompanionWeatherActionHelper.test';
+import companionWeatherActionHelperConfirmTest from './CompanionWeatherActionHelperConfirm.test';
 import companionAnimationHelperTest from './CompanionAnimationHelper.test';
+import companionAnimationHelperProgressTest from './CompanionAnimationHelperProgress.test';
 import companionDisplayHelperTest from './CompanionDisplayHelper.test';
 import companionDisplayHelperActionsTest from './CompanionDisplayHelperActions.test';
+import companionDisplayHelperActionsPositiveTest from './CompanionDisplayHelperActionsPositive.test';
 import companionDisplayHelperMessagesTest from './CompanionDisplayHelperMessages.test';
 import companionDisplayHelperErrorCodesTest from './CompanionDisplayHelperErrorCodes.test';
 import companionDisplayHelperSuggestionExplanationTest from './CompanionDisplayHelperSuggestionExplanation.test';
+import companionDisplayHelperRuntimeDescriptionTest from './CompanionDisplayHelperRuntimeDescription.test';
 import companionFocusActionHelperTest from './CompanionFocusActionHelper.test';
 import companionWindowHelperTest from './CompanionWindowHelper.test';
 import companionWindowHelperInsetsTest from './CompanionWindowHelperInsets.test';
+import companionWindowHelperCutoutBottomRightTest from './CompanionWindowHelperCutoutBottomRight.test';
 import companionPresentationHelperTest from './CompanionPresentationHelper.test';
 
 const registeredSuiteNames: string[] = [
@@ -100,16 +106,22 @@ const registeredSuiteNames: string[] = [
   'TimelineCompanionManager',
   'AppStartupCoordinator',
   'CompanionSwipeHelper',
+  'CompanionSwipeHelperVelocity',
   'CompanionWeatherActionHelper',
+  'CompanionWeatherActionHelperConfirm',
   'CompanionAnimationHelper',
+  'CompanionAnimationHelperProgress',
   'CompanionDisplayHelper',
   'CompanionDisplayHelperActions',
+  'CompanionDisplayHelperActionsPositive',
   'CompanionDisplayHelperMessages',
   'CompanionDisplayHelperErrorCodes',
   'CompanionDisplayHelperSuggestionExplanation',
+  'CompanionDisplayHelperRuntimeDescription',
   'CompanionFocusActionHelper',
   'CompanionWindowHelper',
   'CompanionWindowHelperInsets',
+  'CompanionWindowHelperCutoutBottomRight',
   'CompanionPresentationHelper'
 ];
 
@@ -179,16 +191,22 @@ export default function testsuite() {
   timelineCompanionManagerTest();
   appStartupCoordinatorTest();
   companionSwipeHelperTest();
+  companionSwipeHelperVelocityTest();
   companionWeatherActionHelperTest();
+  companionWeatherActionHelperConfirmTest();
   companionAnimationHelperTest();
+  companionAnimationHelperProgressTest();
   companionDisplayHelperTest();
   companionDisplayHelperActionsTest();
+  companionDisplayHelperActionsPositiveTest();
   companionDisplayHelperMessagesTest();
   companionDisplayHelperErrorCodesTest();
   companionDisplayHelperSuggestionExplanationTest();
+  companionDisplayHelperRuntimeDescriptionTest();
   companionFocusActionHelperTest();
   companionWindowHelperTest();
   companionWindowHelperInsetsTest();
+  companionWindowHelperCutoutBottomRightTest();
   companionPresentationHelperTest();
 
   describe('listTest', () => {
