@@ -107,10 +107,18 @@ E:\Travel
 
 ### 2) 配置环境变量（必须）
 
-先复制模板：
+建议把真实密钥文件放到仓库外（仓库内仅保留 `.env.example`）：
 
 ```powershell
-Copy-Item .env.example .env
+New-Item -ItemType Directory -Force -Path "$HOME\.travel-domino\secrets" | Out-Null
+Copy-Item .env.example "$HOME\.travel-domino\secrets\travel.env"
+$env:TRAVEL_ENV_FILE = "$HOME\.travel-domino\secrets\travel.env"
+```
+
+如果你仓库里已经有 `.env`，可一键迁移到仓库外并自动写入用户级环境变量：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/ci/move-env-outside-repo.ps1
 ```
 
 生成客户端运行配置（会写入 `entry/src/main/ets/common/utils/AppConfig.ets`）：

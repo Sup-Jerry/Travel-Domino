@@ -41,7 +41,26 @@ function Import-EnvFile([string]$path) {
   }
 }
 
-Import-EnvFile $EnvFile
+function Resolve-EnvFilePath([string]$candidate) {
+  if ($candidate -and (Test-Path $candidate)) {
+    return $candidate
+  }
+
+  $fromEnv = [Environment]::GetEnvironmentVariable('TRAVEL_ENV_FILE')
+  if ($fromEnv -and (Test-Path $fromEnv)) {
+    return $fromEnv
+  }
+
+  $defaultExternal = Join-Path $HOME '.travel-domino\secrets\travel.env'
+  if (Test-Path $defaultExternal) {
+    return $defaultExternal
+  }
+
+  return $candidate
+}
+
+$resolvedEnvFile = Resolve-EnvFilePath $EnvFile
+Import-EnvFile $resolvedEnvFile
 
 $requiredEnvVars = @(
   'SIGN_STORE_FILE',

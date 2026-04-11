@@ -37,8 +37,9 @@ export interface SettingsCallbacks {
 
 export interface AiDialogCallbacks {
   hasAiHistory: boolean;
+  currentStrategyMode?: number;
   onConfirm: (text: string, strategy: number, customStrategy?: ComposableStrategy) => Promise<void>;
-  onRegenerate: () => Promise<void>;
+  onRegenerate: (strategy: number, customStrategy?: ComposableStrategy, keepCurrentMode?: boolean) => Promise<void>;
 }
 
 export interface SuggestionDialogCallbacks {
@@ -198,6 +199,7 @@ export class IndexDialogManager {
     return new CustomDialogController({
       builder: AiInputDialog({
         hasAiHistory: callbacks.hasAiHistory,
+        currentStrategyMode: callbacks.currentStrategyMode ?? 0,
         onConfirm: callbacks.onConfirm,
         onRegenerate: callbacks.onRegenerate
       }),

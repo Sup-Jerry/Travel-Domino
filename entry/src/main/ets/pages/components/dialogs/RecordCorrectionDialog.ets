@@ -10,6 +10,7 @@ export struct RecordCorrectionDialog {
   // 临时状态，用于 TimePicker 显示
   @State startTime: Date = new Date();
   @State endTime: Date = new Date();
+  @State hasEndTime: boolean = false;
 
   // 回调函数
   onConfirm: (startTs: number, endTs: number) => void = () => {};
@@ -17,17 +18,14 @@ export struct RecordCorrectionDialog {
 
   aboutToAppear() {
     if (!this.event) return;
-    this.startTime = this.event.actual_start_time > 0
-      ? new Date(this.event.actual_start_time)
-      : new Date();
-    // 初始化时间：如果有记录则用记录，否则用当前时间
-    this.startTime = this.event.actual_start_time > 0
-      ? new Date(this.event.actual_start_time)
-      : new Date();
-
-    this.endTime = this.event.actual_end_time > 0
+    const baseTime = this.event.actual_start_time > 0
+      ? this.event.actual_start_time
+      : (this.event.dynamic_start_time > 0 ? this.event.dynamic_start_time : Date.now());
+    this.startTime = new Date(baseTime);
+    this.hasEndTime = this.event.actual_end_time > 0;
+    this.endTime = this.hasEndTime
       ? new Date(this.event.actual_end_time)
-      : new Date();
+      : new Date(baseTime);
   }
 
   build() {
@@ -57,8 +55,7 @@ export struct RecordCorrectionDialog {
       Row() {
         Text('真实结束').fontSize(14).fontColor($r('app.color.text_secondary'))
         Blank()
-        Text((this.event?.actual_end_time ?? 0) > 0 || this.endTime.getTime() !== this.startTime.getTime() // 修改点：使用 ?. 和 ?? 0 确保安全访问
-          ? DateUtil.formatDate(this.endTime, 'HH:mm') : '--:--')
+        Text(this.hasEndTime ? DateUtil.formatDate(this.endTime, 'HH:mm') : '--:--')
           .fontSize(16).fontWeight(FontWeight.Medium).fontColor($r('app.color.text_secondary'))
 
           .padding(8).backgroundColor('#F0F8FF').borderRadius(8)
@@ -69,6 +66,7 @@ export struct RecordCorrectionDialog {
               onAccept: (val) => {
                 this.endTime.setHours(val.hour, val.minute);
                 this.endTime = new Date(this.endTime); // 触发刷新
+                this.hasEndTime = true;
               }
             })
           })
@@ -87,9 +85,9 @@ export struct RecordCorrectionDialog {
       Row({ space: 12 }) {
         Button('取消').layoutWeight(1).backgroundColor($r('app.color.card_bg')).fontColor($r('app.color.text_secondary'))
           .onClick(() => this.controller.close())
-        Button('确定修正').layoutWeight(1).backgroundColor($r('app.color.card_bg'))
+        Button('确定修正').layoutWeight(1).backgroundColor($r('app.color.accent_primary'))
           .onClick(() => {
-            this.onConfirm(this.startTime.getTime(), this.endTime.getTime());
+            this.onConfirm(this.startTime.getTime(), this.hasEndTime ? this.endTime.getTime() : 0);
             this.controller.close();
           })
       }.width('100%').margin({ top: 10 })
