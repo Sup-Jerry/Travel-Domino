@@ -42,6 +42,17 @@ import timelineDistributionCoordinatorTest from './TimelineDistributionCoordinat
 import timelineStrategyManagerTest from './TimelineStrategyManager.test';
 import timelineCompanionManagerTest from './TimelineCompanionManager.test';
 import appStartupCoordinatorTest from './AppStartupCoordinator.test';
+import companionSwipeHelperTest from './CompanionSwipeHelper.test';
+import companionWeatherActionHelperTest from './CompanionWeatherActionHelper.test';
+import companionAnimationHelperTest from './CompanionAnimationHelper.test';
+import companionDisplayHelperTest from './CompanionDisplayHelper.test';
+import companionDisplayHelperActionsTest from './CompanionDisplayHelperActions.test';
+import companionDisplayHelperMessagesTest from './CompanionDisplayHelperMessages.test';
+import companionDisplayHelperErrorCodesTest from './CompanionDisplayHelperErrorCodes.test';
+import companionFocusActionHelperTest from './CompanionFocusActionHelper.test';
+import companionWindowHelperTest from './CompanionWindowHelper.test';
+import companionWindowHelperInsetsTest from './CompanionWindowHelperInsets.test';
+import companionPresentationHelperTest from './CompanionPresentationHelper.test';
 
 const registeredSuiteNames: string[] = [
   'LocalUnit',
@@ -86,7 +97,18 @@ const registeredSuiteNames: string[] = [
   'TimelineDistributionCoordinator',
   'TimelineStrategyManager',
   'TimelineCompanionManager',
-  'AppStartupCoordinator'
+  'AppStartupCoordinator',
+  'CompanionSwipeHelper',
+  'CompanionWeatherActionHelper',
+  'CompanionAnimationHelper',
+  'CompanionDisplayHelper',
+  'CompanionDisplayHelperActions',
+  'CompanionDisplayHelperMessages',
+  'CompanionDisplayHelperErrorCodes',
+  'CompanionFocusActionHelper',
+  'CompanionWindowHelper',
+  'CompanionWindowHelperInsets',
+  'CompanionPresentationHelper'
 ];
 
 function containsSuite(name: string): boolean {
@@ -154,6 +176,17 @@ export default function testsuite() {
   timelineStrategyManagerTest();
   timelineCompanionManagerTest();
   appStartupCoordinatorTest();
+  companionSwipeHelperTest();
+  companionWeatherActionHelperTest();
+  companionAnimationHelperTest();
+  companionDisplayHelperTest();
+  companionDisplayHelperActionsTest();
+  companionDisplayHelperMessagesTest();
+  companionDisplayHelperErrorCodesTest();
+  companionFocusActionHelperTest();
+  companionWindowHelperTest();
+  companionWindowHelperInsetsTest();
+  companionPresentationHelperTest();
 
   describe('listTest', () => {
     it('normal: list_should_keep_core_test_modules_registered', 0, () => {
