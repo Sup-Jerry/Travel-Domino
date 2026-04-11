@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-11T09:15:33.964321",
+  "last_updated": "2026-04-11T09:39:46.846494",
   "preferences": [
     "If user says no code changes, stop code edits and switch to retrospective output.",
     "Default retrospective language is Chinese with fixed structure: issues-root causes-improvements-next steps.",
@@ -65,7 +65,9 @@
     "当用户要求按固定顺序执行多任务（复盘->瘦身->发布）时，严格按顺序并在每阶段给可验证结果。",
     "复盘输出保持中文、简洁，先给闭环状态再给经验沉淀证据。",
     "用户要求‘回顾+瘦身+上传’时，严格按顺序执行并在每个阶段给可验证证据。",
-    "复盘结论默认中文、紧凑，先回答任务是否完成，再给经验沉淀结果。"
+    "复盘结论默认中文、紧凑，先回答任务是否完成，再给经验沉淀结果。",
+    "当用户要求‘复盘+瘦身+发布’时，严格按顺序执行并在每阶段提供可验证证据。",
+    "复盘沉淀后必须回读last_updated与SKILL.md自动区块，确认持久化。"
   ],
   "fixes": [
     "Before any edit, restate user intent and explicitly state whether code will be changed.",
@@ -134,9 +136,11 @@
     "PowerShell下复杂正则和引号易失败，优先采用更稳的解析方案或脚本化处理。",
     "技能沉淀后必须回读evolution.json的last_updated与SKILL.md缝合区，作为落地证据。",
     "多轮继续执行场景下，先确认当前阶段（如C3）闭环状态，再进入skill沉淀与发布步骤。",
-    "执行沉淀后必须回传 merge_evolution 与 smart_stitch 的执行证据（命令和结果）。"
+    "执行沉淀后必须回传 merge_evolution 与 smart_stitch 的执行证据（命令和结果）。",
+    "PowerShell下merge_evolution传JSON参数不稳定时，改用Python文件读取并直接调用merge函数。",
+    "在同轮复盘中可同时沉淀多个技能（领域skill+流程skill+工具skill），再统一回报证据。"
   ],
-  "custom_prompts": "复盘场景默认输出结构：闭环状态 -> 本轮沉淀目标skill -> 执行证据 -> 下一步动作。",
+  "custom_prompts": "复盘执行模板：目标skill列表 -> merge_evolution -> smart_stitch -> 回读last_updated与自动区块证据。",
   "contexts": [
     "Case: Toolbox package missing in ohpm registry, switched to vendored local source and local exports.",
     "Case: Expansion/drag issues caused by oversized wrapper (200x200) and positioned container; fixed with 58x58 wrapper and origin position.",
