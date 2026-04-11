@@ -13,6 +13,43 @@ interface TimeRangeMeta {
   isEstimated: boolean;
 }
 
+export function getEventItemTravelModeIcon(mode: number): string {
+  switch (mode) {
+    case 0:
+    case 4:
+      return '🚶';
+    case 1:
+      return '🚴';
+    case 2:
+      return '🚗';
+    case 3:
+      return '🚇';
+    default:
+      return '🚗';
+  }
+}
+
+export function formatEventItemCommuteTime(minutes: number): string {
+  if (minutes < 60) {
+    return `${minutes}m`;
+  }
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
+export function resolveEventItemConflictGapMinutes(gapMinutes: number, conflictMsg: string): number {
+  if (gapMinutes > 0) {
+    return gapMinutes;
+  }
+  const match = (conflictMsg || '').match(/(\d+)/);
+  if (!match || match.length < 2) {
+    return 0;
+  }
+  const parsed = Number.parseInt(match[1], 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
 @Component
 export struct EventItemView {
   @ObjectLink event: EventEntity;
@@ -56,14 +93,7 @@ export struct EventItemView {
 
 
   private getTravelModeIcon(mode: number): string {
-    switch(mode) {
-      case 0:
-      case 4: return '🚶'; // 0 和 4 都是步行
-      case 1: return '🚴';
-      case 2: return '🚗';
-      case 3: return '🚇';
-      default: return '🚗';
-    }
+    return getEventItemTravelModeIcon(mode);
   }
 
   private getDisplayTime(isStart: boolean): string {
@@ -140,10 +170,7 @@ export struct EventItemView {
   }
 
   private formatCommuteTime(minutes: number): string {
-    if (minutes < 60) return `${minutes}m`;
-    const h = Math.floor(minutes / 60);
-    const m = minutes % 60;
-    return m === 0 ? `${h}h` : `${h}h ${m}m`;
+    return formatEventItemCommuteTime(minutes);
   }
   // 修改点：内部辅助方法，用于统一处理时间戳转 HH:mm
   private formatTs(ts: number): string {
@@ -259,17 +286,7 @@ export struct EventItemView {
     return this.getPalette().divider;
   }
   private getConflictGapMinutes(): number {
-    if (this.event.gap_minutes > 0) {
-      return this.event.gap_minutes;
-    }
-
-    const match = (this.event.conflict_msg || '').match(/(\d+)/);
-    if (!match || match.length < 2) {
-      return 0;
-    }
-
-    const parsed = Number.parseInt(match[1], 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+    return resolveEventItemConflictGapMinutes(this.event.gap_minutes, this.event.conflict_msg || '');
   }
 
   private openConflictSelectionDialog(): void {

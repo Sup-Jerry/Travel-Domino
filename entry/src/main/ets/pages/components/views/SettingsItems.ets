@@ -1,6 +1,19 @@
 ﻿import { ThemeCenter } from '../../../common/utils/ThemeCenter';
 import { NavigationHelper } from '../../../common/utils/NavigationHelper';
 
+
+export function shouldShowSettingSwitchLoading(loading: boolean): boolean {
+  return loading;
+}
+
+export function resolveSettingSelectValueText(valueText: string): string {
+  return valueText || '';
+}
+
+export function getSettingsSubPageBackLabel(): string {
+  return '\u8FD4\u56DE';
+}
+
 @Component
 export struct SettingSwitchItem {
   @Prop title: string = '';
@@ -29,7 +42,7 @@ export struct SettingSwitchItem {
       .alignItems(HorizontalAlign.Start)
       .layoutWeight(1);
 
-      if (this.loading) {
+      if (shouldShowSettingSwitchLoading(this.loading)) {
         Text('加载中...')
           .fontSize(12)
           .fontColor('#AAA');
@@ -76,7 +89,7 @@ export struct SettingSelectItem {
       .alignItems(HorizontalAlign.Start)
       .layoutWeight(1);
 
-      Text(this.valueText)
+      Text(resolveSettingSelectValueText(this.valueText))
         .fontSize(13)
         .fontColor(this.actionColor);
 
@@ -154,7 +167,7 @@ export struct SettingsSubPageHeader {
         .align(Alignment.Center);
 
       Row() {
-        Button('返回')
+        Button(getSettingsSubPageBackLabel())
           .type(ButtonType.Capsule)
           .fontSize(14)
           .height(32)

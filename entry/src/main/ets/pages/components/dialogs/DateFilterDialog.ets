@@ -1,5 +1,15 @@
 ﻿// 文件路径: ets/pages/components/DateFilterDialog.ets
 
+export type DateFilterDialogAction = 'show_all' | 'select_date' | 'select_range';
+
+export function getDateFilterDialogActions(): DateFilterDialogAction[] {
+  return ['show_all', 'select_date', 'select_range'];
+}
+
+export function isDateFilterDialogActionSupported(action: string): boolean {
+  return getDateFilterDialogActions().indexOf(action as DateFilterDialogAction) >= 0;
+}
+
 @CustomDialog
 export struct DateFilterDialog {
   controller: CustomDialogController;
@@ -100,6 +110,7 @@ export struct DateFilterDialog {
     .borderRadius({ topLeft: 24, topRight: 24 })
   }
 }
+
 
 
 

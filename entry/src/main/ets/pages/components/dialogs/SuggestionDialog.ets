@@ -4,6 +4,15 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 
 const TAG = 'SuggestionDialog';
 
+
+export function shouldShowSuggestionSummary(summaryText: string): boolean {
+  return (summaryText || '').trim().length > 0;
+}
+
+export function getSuggestionApplyButtonLabel(): string {
+  return '????';
+}
+
 @CustomDialog
 export struct SuggestionDialog {
   controller: CustomDialogController;
@@ -26,7 +35,7 @@ export struct SuggestionDialog {
       Text('⏳ 调整预览')
         .fontSize(20).fontWeight(FontWeight.Bold).margin({ bottom: 16 })
 
-      if ((this.summaryText || '').trim().length > 0) {
+      if (shouldShowSuggestionSummary(this.summaryText)) {
         Text(this.summaryText)
           .fontSize(16)
           .fontColor($r('app.color.text_secondary'))

@@ -53,6 +53,22 @@ import {
 type FocusSource = 'tap' | 'scroll' | 'init';
 type CompanionFilterState = CompanionDisplayFilterState;
 type HistoryViewMode = 'timeline' | 'detail';
+
+export function isCompanionOverlayVisible(showHistoryPage: boolean, showSearchPage: boolean, showFilterPage: boolean): boolean {
+  return showHistoryPage || showSearchPage || showFilterPage;
+}
+
+export function resolveCompanionBackLevel(
+  showHistoryPage: boolean,
+  showSearchPage: boolean,
+  showFilterPage: boolean,
+  companionSubMode: CompanionSubMode
+): string {
+  if (isCompanionOverlayVisible(showHistoryPage, showSearchPage, showFilterPage)) {
+    return 'overlay';
+  }
+  return companionSubMode === 'control' ? 'control' : 'immersive';
+}
 @Component
 export struct CompanionView {
   @Link vm: TimelineViewModel;
@@ -212,9 +228,12 @@ export struct CompanionView {
       this.realtimeWatchTimer = -1;
     }
     this.realtimeWatchTimer = setInterval(() => {
-      const backLevel = this.showHistoryPage || this.showSearchPage || this.showFilterPage
-        ? 'overlay'
-        : (this.companionSubMode === 'control' ? 'control' : 'immersive');
+      const backLevel = resolveCompanionBackLevel(
+        this.showHistoryPage,
+        this.showSearchPage,
+        this.showFilterPage,
+        this.companionSubMode
+      );
       AppStorage.setOrCreate('COMPANION_BACK_LEVEL', backLevel);
       const latestBackRequest = Number(AppStorage.get('COMPANION_BACK_REQUEST') as number) || 0;
       if (latestBackRequest !== this.observedBackRequest) {
@@ -881,7 +900,7 @@ export struct CompanionView {
   }
 
   private handleCompanionBackNavigation(): boolean {
-    if (this.showHistoryPage || this.showSearchPage || this.showFilterPage) {
+    if (isCompanionOverlayVisible(this.showHistoryPage, this.showSearchPage, this.showFilterPage)) {
       this.showHistoryPage = false;
       this.showSearchPage = false;
       this.showFilterPage = false;

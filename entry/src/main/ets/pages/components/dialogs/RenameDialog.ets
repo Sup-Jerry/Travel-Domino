@@ -1,5 +1,13 @@
 ﻿// 文件路径: ets/pages/components/RenameDialog.ets
 
+export function normalizeRenameDialogName(input: string): string {
+  return (input || '').trim();
+}
+
+export function canRenameDialogSubmit(input: string): boolean {
+  return normalizeRenameDialogName(input).length > 0;
+}
+
 @CustomDialog
 export struct RenameDialog {
   controller: CustomDialogController;
@@ -41,7 +49,7 @@ export struct RenameDialog {
         Button('确定')
           .width('40%')
           .onClick(() => {
-            if (this.name.trim().length > 0) {
+            if (canRenameDialogSubmit(this.name)) {
               this.onConfirm(this.name);
               this.controller.close();
             }

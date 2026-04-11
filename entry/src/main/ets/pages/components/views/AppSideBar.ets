@@ -4,6 +4,23 @@ import { ThemeCenter } from '../../../common/utils/ThemeCenter';
 
 export type AppNavKey = 'plans' | 'archive' | 'trash' | 'settings';
 
+export function getAppSideBarRouteByKey(key: AppNavKey): string {
+  if (key === 'plans') {
+    return 'pages/PlanListPage';
+  }
+  if (key === 'archive') {
+    return 'pages/ArchivePage';
+  }
+  if (key === 'trash') {
+    return 'pages/TrashPage';
+  }
+  return 'pages/SettingsPage';
+}
+
+export function shouldAppSideBarNavigate(current: AppNavKey, target: AppNavKey): boolean {
+  return current !== target;
+}
+
 class RouterUrlOptions {
   url: string = '';
 }
@@ -62,20 +79,20 @@ export struct AppSideBar {
         .margin({ top: 25, bottom: 40 });
 
       this.NavItem('All Plans', '[P]', this.current === 'plans', () => {
-        if (this.current !== 'plans') {
-          void this.safeReplaceUrl('pages/PlanListPage');
+        if (shouldAppSideBarNavigate(this.current, 'plans')) {
+          void this.safeReplaceUrl(getAppSideBarRouteByKey('plans'));
         }
       });
 
       this.NavItem('Archive', '[A]', this.current === 'archive', () => {
-        if (this.current !== 'archive') {
-          void this.safeReplaceUrl('pages/ArchivePage');
+        if (shouldAppSideBarNavigate(this.current, 'archive')) {
+          void this.safeReplaceUrl(getAppSideBarRouteByKey('archive'));
         }
       });
 
       this.NavItem('Trash', '[T]', this.current === 'trash', () => {
-        if (this.current !== 'trash') {
-          void this.safeReplaceUrl('pages/TrashPage');
+        if (shouldAppSideBarNavigate(this.current, 'trash')) {
+          void this.safeReplaceUrl(getAppSideBarRouteByKey('trash'));
         }
       });
 
@@ -84,8 +101,8 @@ export struct AppSideBar {
         .margin({ top: 12, bottom: 12, right: 20 });
 
       this.NavItem('Settings', '[S]', this.current === 'settings', () => {
-        if (this.current !== 'settings') {
-          void this.safeReplaceUrl('pages/SettingsPage');
+        if (shouldAppSideBarNavigate(this.current, 'settings')) {
+          void this.safeReplaceUrl(getAppSideBarRouteByKey('settings'));
         }
       });
 

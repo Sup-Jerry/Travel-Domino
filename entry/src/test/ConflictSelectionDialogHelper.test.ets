@@ -1,0 +1,70 @@
+﻿import { describe, it, expect } from '@ohos/hypium';
+import {
+  getConflictSelectionGapPrompt,
+  shouldUseConflictAdvanceAdjust
+} from '../main/ets/pages/components/dialogs/ConflictSelectionDialog';
+
+export default function conflictSelectionDialogHelperTest() {
+  describe('unit_test_case_generator_autofill_ConflictSelectionDialogHelper', () => {
+    it('normal: conflict_selection_gap_prompt_should_include_minutes', 0, () => {
+      // Arrange
+      const gapMinutes = 25;
+      // Act
+      const prompt = getConflictSelectionGapPrompt(gapMinutes);
+      // Assert
+      expect(prompt.indexOf('25') >= 0).assertTrue();
+    });
+
+    it('boundary: conflict_selection_gap_prompt_should_support_zero_gap', 0, () => {
+      // Arrange
+      const gapMinutes = 0;
+      // Act
+      const prompt = getConflictSelectionGapPrompt(gapMinutes);
+      // Assert
+      expect(prompt.indexOf('0') >= 0).assertTrue();
+    });
+
+    it('invalid: conflict_selection_should_not_use_advance_when_callback_missing', 0, () => {
+      // Arrange
+      const hasAdvanceAdjust = false;
+      // Act
+      const useAdvance = shouldUseConflictAdvanceAdjust(hasAdvanceAdjust);
+      // Assert
+      expect(useAdvance).assertFalse();
+    });
+
+    it('conflict: conflict_selection_should_use_advance_when_callback_present', 0, () => {
+      // Arrange
+      const hasAdvanceAdjust = true;
+      // Act
+      const useAdvance = shouldUseConflictAdvanceAdjust(hasAdvanceAdjust);
+      // Assert
+      expect(useAdvance).assertTrue();
+    });
+
+    it('regression: td-20260412-conflict-selection-prompt-should-change-with-gap', 0, () => {
+      // Arrange
+      const gapMinutesA = 10;
+      const gapMinutesB = 11;
+      // Act
+      const promptA = getConflictSelectionGapPrompt(gapMinutesA);
+      const promptB = getConflictSelectionGapPrompt(gapMinutesB);
+      // Assert
+      expect(promptA.indexOf('10') >= 0).assertTrue();
+      expect(promptB.indexOf('11') >= 0).assertTrue();
+      expect(promptA === promptB).assertFalse();
+    });
+
+    it('combined: conflict_selection_prompt_and_advance_flag_should_be_consistent', 0, () => {
+      // Arrange
+      const gapMinutes = 12;
+      const hasAdvanceAdjust = true;
+      // Act
+      const prompt = getConflictSelectionGapPrompt(gapMinutes);
+      const useAdvance = shouldUseConflictAdvanceAdjust(hasAdvanceAdjust);
+      // Assert
+      expect(prompt.indexOf('12') >= 0).assertTrue();
+      expect(useAdvance).assertTrue();
+    });
+  });
+}

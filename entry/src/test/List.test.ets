@@ -80,6 +80,18 @@ import companionWindowHelperInsetsTest from './CompanionWindowHelperInsets.test'
 import companionWindowHelperCutoutBottomRightTest from './CompanionWindowHelperCutoutBottomRight.test';
 import companionPresentationHelperTest from './CompanionPresentationHelper.test';
 import companionPresentationHelperEdgeFallbackTest from './CompanionPresentationHelperEdgeFallback.test';
+import bottomNavBarHelperTest from './BottomNavBarHelper.test';
+import appSideBarHelperTest from './AppSideBarHelper.test';
+import renameDialogHelperTest from './RenameDialogHelper.test';
+import dateFilterDialogHelperTest from './DateFilterDialogHelper.test';
+import tipDialogHelperTest from './TipDialogHelper.test';
+import planItemViewHelperTest from './PlanItemViewHelper.test';
+import backlogViewHelperTest from './BacklogViewHelper.test';
+import settingsItemsHelperTest from './SettingsItemsHelper.test';
+import eventItemViewHelperTest from './EventItemViewHelper.test';
+import companionViewHelperTest from './CompanionViewHelper.test';
+import conflictSelectionDialogHelperTest from './ConflictSelectionDialogHelper.test';
+import suggestionDialogHelperTest from './SuggestionDialogHelper.test';
 
 const registeredSuiteNames: string[] = [
   'LocalUnit',
@@ -162,7 +174,19 @@ const registeredSuiteNames: string[] = [
   'CompanionWindowHelperInsets',
   'CompanionWindowHelperCutoutBottomRight',
   'CompanionPresentationHelper',
-  'CompanionPresentationHelperEdgeFallback'
+  'CompanionPresentationHelperEdgeFallback',
+  'BottomNavBarHelper',
+  'AppSideBarHelper',
+  'RenameDialogHelper',
+  'DateFilterDialogHelper',
+  'TipDialogHelper',
+  'PlanItemViewHelper',
+  'BacklogViewHelper',
+  'SettingsItemsHelper',
+  'EventItemViewHelper',
+  'CompanionViewHelper',
+  'ConflictSelectionDialogHelper',
+  'SuggestionDialogHelper'
 ];
 
 function containsSuite(name: string): boolean {
@@ -268,6 +292,18 @@ export default function testsuite() {
   companionWindowHelperCutoutBottomRightTest();
   companionPresentationHelperTest();
   companionPresentationHelperEdgeFallbackTest();
+  bottomNavBarHelperTest();
+  appSideBarHelperTest();
+  renameDialogHelperTest();
+  dateFilterDialogHelperTest();
+  tipDialogHelperTest();
+  planItemViewHelperTest();
+  backlogViewHelperTest();
+  settingsItemsHelperTest();
+  eventItemViewHelperTest();
+  companionViewHelperTest();
+  conflictSelectionDialogHelperTest();
+  suggestionDialogHelperTest();
 
   describe('listTest', () => {
     it('normal: list_should_keep_core_test_modules_registered', 0, () => {
