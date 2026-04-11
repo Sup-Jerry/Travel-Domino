@@ -2,6 +2,31 @@
 
 export type CompanionFilterState = 'ALL' | 'PENDING' | 'ACTIVE' | 'COMPLETED' | 'SKIPPED';
 
+export function shouldShowCompanionFilterPage(showFilterPage: boolean): boolean {
+  return showFilterPage;
+}
+
+export function isCompanionFilterSelected(item: CompanionFilterState, current: CompanionFilterState): boolean {
+  return item === current;
+}
+
+export function getCompanionFilterBorderWidth(item: CompanionFilterState, current: CompanionFilterState): number {
+  return isCompanionFilterSelected(item, current) ? 1 : 0;
+}
+
+export function getCompanionFilterBorderType(item: CompanionFilterState): 'pending' | 'skipped' | 'completed' | 'default' {
+  if (item === 'PENDING') {
+    return 'pending';
+  }
+  if (item === 'SKIPPED') {
+    return 'skipped';
+  }
+  if (item === 'COMPLETED') {
+    return 'completed';
+  }
+  return 'default';
+}
+
 @Component
 export struct CompanionFilterPage {
   @Prop showFilterPage: boolean = false;
@@ -20,7 +45,7 @@ export struct CompanionFilterPage {
   }
 
   build() {
-    if (this.showFilterPage) {
+    if (shouldShowCompanionFilterPage(this.showFilterPage)) {
       Column({ space: 10 }) {
         Row() {
           Text('选择筛选')
@@ -43,12 +68,12 @@ export struct CompanionFilterPage {
             Row() {
               Text(this.getFilterLabel(item))
                 .fontSize(15)
-                .fontWeight(item === this.companionFilterState ? FontWeight.Bold : FontWeight.Medium)
-                .fontColor(item === this.companionFilterState
+                .fontWeight(isCompanionFilterSelected(item, this.companionFilterState) ? FontWeight.Bold : FontWeight.Medium)
+                .fontColor(isCompanionFilterSelected(item, this.companionFilterState)
                   ? this.getThemePalette().textPrimary
                   : this.getThemePalette().textSecondary);
               Blank();
-              if (item === this.companionFilterState) {
+              if (isCompanionFilterSelected(item, this.companionFilterState)) {
                 Text('已选')
                   .fontSize(12)
                   .fontColor(this.getThemePalette().primary);
@@ -57,16 +82,16 @@ export struct CompanionFilterPage {
             .width('100%')
             .height(48)
             .padding({ left: 12, right: 12 })
-            .backgroundColor(item === this.companionFilterState
+            .backgroundColor(isCompanionFilterSelected(item, this.companionFilterState)
               ? this.getThemePalette().cardBgSoft
               : this.getThemePalette().companionCardBg)
             .border({
-              width: item === this.companionFilterState ? 1 : 0,
-              color: item === 'PENDING'
+              width: getCompanionFilterBorderWidth(item, this.companionFilterState),
+              color: getCompanionFilterBorderType(item) === 'pending'
                 ? this.getThemePalette().statusPending
-                : (item === 'SKIPPED'
+                : (getCompanionFilterBorderType(item) === 'skipped'
                   ? this.getThemePalette().statusSkipped
-                  : (item === 'COMPLETED'
+                  : (getCompanionFilterBorderType(item) === 'completed'
                     ? this.getThemePalette().statusCompleted
                     : this.getThemePalette().border)),
               radius: 10

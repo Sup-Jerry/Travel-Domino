@@ -1,4 +1,4 @@
-import { describe, it, expect } from '@ohos/hypium';
+﻿import { describe, it, expect } from '@ohos/hypium';
 import localUnitTest from './LocalUnit.test';
 import automatedTest from './AutomatedTest.test';
 import conflictCompressionTest from './ConflictCompression.test';
@@ -62,11 +62,24 @@ import companionDisplayHelperRuntimeDescriptionTest from './CompanionDisplayHelp
 import companionDisplayHelperFallbackModesTest from './CompanionDisplayHelperFallbackModes.test';
 import companionDisplayHelperStateGuardsTest from './CompanionDisplayHelperStateGuards.test';
 import companionDisplayHelperPaletteMatrixTest from './CompanionDisplayHelperPaletteMatrix.test';
+import companionDisplayHelperEventStateTest from './CompanionDisplayHelperEventState.test';
+import companionWeatherPopupsHelperTest from './CompanionWeatherPopupsHelper.test';
+import companionExecutionWeatherCardHelperTest from './CompanionExecutionWeatherCardHelper.test';
+import companionFilterPageHelperTest from './CompanionFilterPageHelper.test';
+import companionImmersiveViewHelperTest from './CompanionImmersiveViewHelper.test';
+import companionTimelineSectionHelperTest from './CompanionTimelineSectionHelper.test';
+import companionControlTopBarHelperTest from './CompanionControlTopBarHelper.test';
+import companionSearchPageHelperTest from './CompanionSearchPageHelper.test';
+import companionOverlayPagesHelperTest from './CompanionOverlayPagesHelper.test';
+import companionFocusedCardHostHelperTest from './CompanionFocusedCardHostHelper.test';
+import companionControlPageHelperTest from './CompanionControlPageHelper.test';
+import companionHistoryPageHelperTest from './CompanionHistoryPageHelper.test';
 import companionFocusActionHelperTest from './CompanionFocusActionHelper.test';
 import companionWindowHelperTest from './CompanionWindowHelper.test';
 import companionWindowHelperInsetsTest from './CompanionWindowHelperInsets.test';
 import companionWindowHelperCutoutBottomRightTest from './CompanionWindowHelperCutoutBottomRight.test';
 import companionPresentationHelperTest from './CompanionPresentationHelper.test';
+import companionPresentationHelperEdgeFallbackTest from './CompanionPresentationHelperEdgeFallback.test';
 
 const registeredSuiteNames: string[] = [
   'LocalUnit',
@@ -132,11 +145,24 @@ const registeredSuiteNames: string[] = [
   'CompanionDisplayHelperFallbackModes',
   'CompanionDisplayHelperStateGuards',
   'CompanionDisplayHelperPaletteMatrix',
+  'CompanionDisplayHelperEventState',
+  'CompanionWeatherPopupsHelper',
+  'CompanionExecutionWeatherCardHelper',
+  'CompanionFilterPageHelper',
+  'CompanionImmersiveViewHelper',
+  'CompanionTimelineSectionHelper',
+  'CompanionControlTopBarHelper',
+  'CompanionSearchPageHelper',
+  'CompanionOverlayPagesHelper',
+  'CompanionFocusedCardHostHelper',
+  'CompanionControlPageHelper',
+  'CompanionHistoryPageHelper',
   'CompanionFocusActionHelper',
   'CompanionWindowHelper',
   'CompanionWindowHelperInsets',
   'CompanionWindowHelperCutoutBottomRight',
-  'CompanionPresentationHelper'
+  'CompanionPresentationHelper',
+  'CompanionPresentationHelperEdgeFallback'
 ];
 
 function containsSuite(name: string): boolean {
@@ -224,11 +250,24 @@ export default function testsuite() {
   companionDisplayHelperFallbackModesTest();
   companionDisplayHelperStateGuardsTest();
   companionDisplayHelperPaletteMatrixTest();
+  companionDisplayHelperEventStateTest();
+  companionWeatherPopupsHelperTest();
+  companionExecutionWeatherCardHelperTest();
+  companionFilterPageHelperTest();
+  companionImmersiveViewHelperTest();
+  companionTimelineSectionHelperTest();
+  companionControlTopBarHelperTest();
+  companionSearchPageHelperTest();
+  companionOverlayPagesHelperTest();
+  companionFocusedCardHostHelperTest();
+  companionControlPageHelperTest();
+  companionHistoryPageHelperTest();
   companionFocusActionHelperTest();
   companionWindowHelperTest();
   companionWindowHelperInsetsTest();
   companionWindowHelperCutoutBottomRightTest();
   companionPresentationHelperTest();
+  companionPresentationHelperEdgeFallbackTest();
 
   describe('listTest', () => {
     it('normal: list_should_keep_core_test_modules_registered', 0, () => {
@@ -292,4 +331,8 @@ export default function testsuite() {
     });
   });
 }
+
+
+
+
 

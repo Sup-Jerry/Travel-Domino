@@ -4,6 +4,30 @@ import { ThemeCenter } from '../../../../common/utils/ThemeCenter';
 
 export type ImmersiveSwipePhase = 'start' | 'update' | 'end';
 
+export function shouldShowImmersivePrimaryAction(
+  isPending: boolean,
+  isActive: boolean,
+  runtimeState: string
+): boolean {
+  return isPending || isActive || runtimeState === 'PAUSED';
+}
+
+export function getImmersivePrimaryActionLabel(isPending: boolean): string {
+  return isPending ? '开始' : '结束';
+}
+
+export function getImmersivePrimaryActionEnabled(
+  isPending: boolean,
+  canStartFocused: boolean,
+  canEndFocused: boolean
+): boolean {
+  return isPending ? canStartFocused : canEndFocused;
+}
+
+export function getImmersiveNextStationText(name: string, forecastStart: string): string {
+  return `下一站：${name}（${forecastStart}）`;
+}
+
 @Component
 export struct CompanionImmersiveView {
   @Prop context: CompanionContext;
@@ -52,14 +76,16 @@ export struct CompanionImmersiveView {
           .borderRadius(16);
 
         Row({ space: 10 }) {
-          if (this.isCurrentEventPending() || this.isCurrentEventActive() || this.context.runtimeState === 'PAUSED') {
-            Button(this.isCurrentEventPending() ? '开始' : '结束')
+          if (shouldShowImmersivePrimaryAction(this.isCurrentEventPending(), this.isCurrentEventActive(), this.context.runtimeState)) {
+            Button(getImmersivePrimaryActionLabel(this.isCurrentEventPending()))
               .layoutWeight(2)
               .height(50)
               .enabled(
-                this.isCurrentEventPending()
-                  ? this.canStartFocused(this.context.currentEvent)
-                  : this.canEndFocused(this.context.currentEvent)
+                getImmersivePrimaryActionEnabled(
+                  this.isCurrentEventPending(),
+                  this.canStartFocused(this.context.currentEvent),
+                  this.canEndFocused(this.context.currentEvent)
+                )
               )
               .backgroundColor(
                 this.isCurrentEventPending() ? this.getThemePalette().success : this.getThemePalette().warning
@@ -96,7 +122,7 @@ export struct CompanionImmersiveView {
           .textAlign(TextAlign.Center)
           .padding({ left: 28, right: 28 });
         if (this.context.nextEvent) {
-          Text(`下一站：${this.context.nextEvent.name}（${this.getForecastStartText(this.context.nextEvent)}）`)
+          Text(getImmersiveNextStationText(this.context.nextEvent.name, this.getForecastStartText(this.context.nextEvent)))
             .fontSize(14)
             .fontColor(this.getThemePalette().textSecondary)
             .textAlign(TextAlign.Center)

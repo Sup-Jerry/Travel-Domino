@@ -1,6 +1,22 @@
 ﻿import { EventEntity } from '../../../../model/entity/EventEntity';
 import { ThemeCenter } from '../../../../common/utils/ThemeCenter';
 
+export function isCompanionTimelineFocused(itemId: number, focusedEventId: number): boolean {
+  return itemId === focusedEventId;
+}
+
+export function getCompanionTimelineVisibleCount(timelineCount: number): number {
+  return Math.max(1, timelineCount);
+}
+
+export function getCompanionTimelineFilterSummary(filterLabel: string, focusPosition: number, timelineCount: number): string {
+  return `筛选 ${filterLabel}  ${focusPosition}/${getCompanionTimelineVisibleCount(timelineCount)}`;
+}
+
+export function shouldShowCompanionTimelineEmptyState(timelineCount: number): boolean {
+  return timelineCount === 0;
+}
+
 @Component
 export struct CompanionTimelineSection {
   @Prop focusedEventId: number = -1;
@@ -34,7 +50,7 @@ export struct CompanionTimelineSection {
           .width(10)
           .height(10)
           .borderRadius(5)
-          .backgroundColor(item.id === this.focusedEventId ? this.getStateDotColor(item) : this.getThemePalette().textTertiary);
+          .backgroundColor(isCompanionTimelineFocused(item.id, this.focusedEventId) ? this.getStateDotColor(item) : this.getThemePalette().textTertiary);
       }
       .width(16)
       .alignItems(HorizontalAlign.Center)
@@ -42,9 +58,9 @@ export struct CompanionTimelineSection {
 
       Column({ space: 4 }) {
         Text(item.name)
-          .fontSize(item.id === this.focusedEventId ? 16 : 14)
-          .fontWeight(item.id === this.focusedEventId ? FontWeight.Bold : FontWeight.Medium)
-          .fontColor(item.id === this.focusedEventId ? this.getThemePalette().textPrimary : this.getThemePalette().textSecondary)
+          .fontSize(isCompanionTimelineFocused(item.id, this.focusedEventId) ? 16 : 14)
+          .fontWeight(isCompanionTimelineFocused(item.id, this.focusedEventId) ? FontWeight.Bold : FontWeight.Medium)
+          .fontColor(isCompanionTimelineFocused(item.id, this.focusedEventId) ? this.getThemePalette().textPrimary : this.getThemePalette().textSecondary)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis });
 
@@ -56,7 +72,7 @@ export struct CompanionTimelineSection {
             .backgroundColor(this.getStateTagBackgroundColor(item))
             .border({ width: 1, color: this.getStateBorderColor(item), radius: 8 })
             .borderRadius(8);
-          if (item.id === this.focusedEventId) {
+          if (isCompanionTimelineFocused(item.id, this.focusedEventId)) {
             Text(this.getTimelineSupplement(item))
               .fontSize(11)
               .fontColor(this.getThemePalette().textTertiary)
@@ -74,18 +90,18 @@ export struct CompanionTimelineSection {
     .padding({
       left: 12,
       right: 12,
-      top: item.id === this.focusedEventId ? 12 : 10,
-      bottom: item.id === this.focusedEventId ? 12 : 10
+      top: isCompanionTimelineFocused(item.id, this.focusedEventId) ? 12 : 10,
+      bottom: isCompanionTimelineFocused(item.id, this.focusedEventId) ? 12 : 10
     })
-    .backgroundColor(item.id === this.focusedEventId ? this.getThemePalette().companionCardBg : this.getThemePalette().companionBg)
-    .border({ width: item.id === this.focusedEventId ? 1 : 0, color: this.getStateBorderColor(item), radius: 12 })
+    .backgroundColor(isCompanionTimelineFocused(item.id, this.focusedEventId) ? this.getThemePalette().companionCardBg : this.getThemePalette().companionBg)
+    .border({ width: isCompanionTimelineFocused(item.id, this.focusedEventId) ? 1 : 0, color: this.getStateBorderColor(item), radius: 12 })
     .borderRadius(12)
     .shadow({
-      radius: item.id === this.focusedEventId ? 10 : 0,
-      color: item.id === this.focusedEventId ? '#22000000' : '#00000000',
-      offsetY: item.id === this.focusedEventId ? 4 : 0
+      radius: isCompanionTimelineFocused(item.id, this.focusedEventId) ? 10 : 0,
+      color: isCompanionTimelineFocused(item.id, this.focusedEventId) ? '#22000000' : '#00000000',
+      offsetY: isCompanionTimelineFocused(item.id, this.focusedEventId) ? 4 : 0
     })
-    .scale({ x: item.id === this.focusedEventId ? 1 : 0.995, y: item.id === this.focusedEventId ? 1 : 0.995 })
+    .scale({ x: isCompanionTimelineFocused(item.id, this.focusedEventId) ? 1 : 0.995, y: isCompanionTimelineFocused(item.id, this.focusedEventId) ? 1 : 0.995 })
     .onClick(() => {
       this.onItemTap(item, index);
     });
@@ -98,13 +114,13 @@ export struct CompanionTimelineSection {
           .fontSize(13)
           .fontColor(this.getThemePalette().textSecondary);
         Blank();
-        Text(`筛选 ${this.filterLabel}  ${this.focusPosition}/${Math.max(1, this.timelineCount)}`)
+        Text(getCompanionTimelineFilterSummary(this.filterLabel, this.focusPosition, this.timelineCount))
           .fontSize(11)
           .fontColor(this.getThemePalette().textTertiary);
       }
       .width('100%');
 
-      if (this.timelineCount === 0) {
+      if (shouldShowCompanionTimelineEmptyState(this.timelineCount)) {
         Column({ space: 6 }) {
           Text('当前筛选下无可见日程')
             .fontSize(13)

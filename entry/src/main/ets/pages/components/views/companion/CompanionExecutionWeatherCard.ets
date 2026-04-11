@@ -6,6 +6,48 @@ import {
   CompanionWeatherSuggestionPopupBuilder
 } from './CompanionWeatherPopups';
 
+export function getExecutionWeatherRefreshText(isLoading: boolean): string {
+  return isLoading ? '刷新中...' : '刷新';
+}
+
+export function getExecutionWeatherExpandToggleText(expanded: boolean): string {
+  return expanded ? '收起' : '展开';
+}
+
+export function getExecutionWeatherCollapsedHintText(hint: string): string {
+  return hint.trim().length > 0 ? hint : '天气建议已收起，请用上方“展开”查看';
+}
+
+export function getExecutionWeatherCurrentNodeText(currentText: string): string {
+  const value = currentText.trim().length > 0 ? currentText : '天气未知';
+  return `当前位置：${value}`;
+}
+
+export function getExecutionWeatherNextNodeText(nextText: string): string {
+  const value = nextText.trim().length > 0 ? nextText : '天气未知';
+  return `下一节点：${value}`;
+}
+
+export function shouldShowExecutionWeatherScore(score: number): boolean {
+  return score >= 0;
+}
+
+export function shouldShowExecutionWeatherHint(hint: string): boolean {
+  return hint.trim().length > 0;
+}
+
+export function shouldShowExecutionWeatherCollabSummary(summary: string): boolean {
+  return summary.trim().length > 0;
+}
+
+export function shouldShowExecutionWeatherAppliedSummary(summary: string): boolean {
+  return summary.trim().length > 0;
+}
+
+export function splitExecutionWeatherSuggestionPopupText(text: string): string[] {
+  return text.split('\n');
+}
+
 @Component
 export struct CompanionExecutionWeatherCard {
   @Prop weatherExpanded: boolean = false;
@@ -64,13 +106,13 @@ export struct CompanionExecutionWeatherCard {
             .margin({ left: 6 });
         }
         Blank();
-        Text(this.executionWeatherLoading ? '刷新中...' : '刷新')
+        Text(getExecutionWeatherRefreshText(this.executionWeatherLoading))
           .fontSize(12)
           .fontColor(this.getThemePalette().primary)
           .onClick(() => {
             this.onRefreshWeather();
           });
-        Text(this.weatherExpanded ? '收起' : '展开')
+        Text(getExecutionWeatherExpandToggleText(this.weatherExpanded))
           .fontSize(12)
           .fontColor(this.getThemePalette().primary)
           .margin({ left: 10 })
@@ -86,7 +128,7 @@ export struct CompanionExecutionWeatherCard {
             .fontSize(12)
             .fontColor(this.getThemePalette().textSecondary)
             .layoutWeight(1);
-          Text(this.executionWeatherHint || '天气建议已收起，请用上方“展开”查看')
+          Text(getExecutionWeatherCollapsedHintText(this.executionWeatherHint))
             .fontSize(12)
             .fontColor(this.getThemePalette().textSecondary)
             .maxLines(1)
@@ -96,7 +138,7 @@ export struct CompanionExecutionWeatherCard {
         .width('100%');
       } else {
         Row() {
-          Text(`当前位置：${this.executionWeatherCurrentText || '天气未知'}`)
+          Text(getExecutionWeatherCurrentNodeText(this.executionWeatherCurrentText))
             .fontSize(13)
             .fontColor(this.getThemePalette().textPrimary)
             .maxLines(1)
@@ -106,13 +148,13 @@ export struct CompanionExecutionWeatherCard {
         .width('100%');
 
         Row() {
-          Text(`下一节点：${this.executionWeatherNextText || '天气未知'}`)
+          Text(getExecutionWeatherNextNodeText(this.executionWeatherNextText))
             .fontSize(13)
             .fontColor(this.getThemePalette().textPrimary)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
             .layoutWeight(1);
-          if (this.executionWeatherScore >= 0) {
+          if (shouldShowExecutionWeatherScore(this.executionWeatherScore)) {
             Text(`评分 ${this.executionWeatherScore} ⓘ`)
               .fontSize(12)
               .fontColor(this.getThemePalette().primary)
@@ -134,7 +176,7 @@ export struct CompanionExecutionWeatherCard {
         }
         .width('100%');
 
-        if (this.executionWeatherHint) {
+        if (shouldShowExecutionWeatherHint(this.executionWeatherHint)) {
           Text(`${this.executionWeatherHint}  ⓘ`)
             .fontSize(13)
             .fontColor(
@@ -163,7 +205,7 @@ export struct CompanionExecutionWeatherCard {
             });
         }
 
-        if (this.executionWeatherCollabSummary.trim().length > 0) {
+        if (shouldShowExecutionWeatherCollabSummary(this.executionWeatherCollabSummary)) {
           Text(`多日/多城：${this.executionWeatherCollabSummary}`)
             .fontSize(12)
             .fontColor(this.getThemePalette().textSecondary)
@@ -172,7 +214,7 @@ export struct CompanionExecutionWeatherCard {
             .width('100%');
         }
 
-        if (this.executionWeatherAppliedSummary && this.executionWeatherAppliedSummary.trim().length > 0) {
+        if (shouldShowExecutionWeatherAppliedSummary(this.executionWeatherAppliedSummary)) {
           Text(`调整结果：${this.executionWeatherAppliedSummary}`)
             .fontSize(12)
             .fontColor(this.getThemePalette().primary)
@@ -193,7 +235,7 @@ export struct CompanionExecutionWeatherCard {
               })
               .bindPopup(this.showWeatherSuggestionPopup, {
                 builder: () => {
-                  CompanionWeatherSuggestionPopupBuilder(this.weatherSuggestionPopupText.split('\n'));
+                  CompanionWeatherSuggestionPopupBuilder(splitExecutionWeatherSuggestionPopupText(this.weatherSuggestionPopupText));
                 },
                 placement: Placement.BottomLeft,
                 mask: false,

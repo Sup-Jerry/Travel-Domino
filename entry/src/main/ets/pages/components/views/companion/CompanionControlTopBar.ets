@@ -1,5 +1,9 @@
 ﻿import { ThemeCenter } from '../../../../common/utils/ThemeCenter';
 
+export function getCompanionControlTopBarPaddingTop(safeTopInset: number): number {
+  return safeTopInset + 10;
+}
+
 @Component
 export struct CompanionControlTopBar {
   @Prop safeTopInset: number = 0;
@@ -36,6 +40,7 @@ export struct CompanionControlTopBar {
         });
     }
     .width('100%')
-    .padding({ top: this.safeTopInset + 10, left: 16, right: 16, bottom: 8 });
+    .padding({ top: getCompanionControlTopBarPaddingTop(this.safeTopInset), left: 16, right: 16, bottom: 8 });
   }
 }
+
