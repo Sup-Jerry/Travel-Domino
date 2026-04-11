@@ -9,12 +9,15 @@ import { UserProfileService } from '../../../domain/strategy/UserProfileService'
 export struct AiInputDialog {
   controller: CustomDialogController
   onConfirm: (text: string, strategy: number, customStrategy?: ComposableStrategy) => void = (text: string, strategy: number, customStrategy?: ComposableStrategy) => {}
-  onRegenerate: () => void = () => {}
+  onRegenerate: (strategy: number, customStrategy?: ComposableStrategy, keepCurrentMode?: boolean) => void =
+    (_strategy: number, _customStrategy?: ComposableStrategy, _keepCurrentMode?: boolean) => {}
   hasAiHistory: boolean = false
+  currentStrategyMode: number = 0
   @State inputText: string = ''
   @State isLoading: boolean = false
   @State selectedStrategy: number = 0
   @State useCustomStrategy: boolean = false
+  @State strategyTouched: boolean = false
   @State customStrategy: ComposableStrategy = {
     density: DensityLevel.MEDIUM,
     pace: PaceLevel.BALANCED,
@@ -30,6 +33,11 @@ export struct AiInputDialog {
   }
 
   aboutToAppear() {
+    this.strategyTouched = false;
+    if (this.currentStrategyMode === 0 || this.currentStrategyMode === 1 || this.currentStrategyMode === 2) {
+      this.selectedStrategy = this.currentStrategyMode;
+      this.useCustomStrategy = false;
+    }
     void this.loadRecommendation();
   }
 
@@ -110,6 +118,7 @@ export struct AiInputDialog {
               }
               this.useCustomStrategy = true;
               this.selectedStrategy = -1;
+              this.strategyTouched = true;
               const r = this.recommendedStrategy;
               this.customStrategy = {
                 density: r.density,
@@ -143,7 +152,7 @@ export struct AiInputDialog {
             .backgroundColor(this.selectedStrategy === 0 ? this.getPalette().primary : this.getPalette().cardBgSoft)
             .fontColor(this.selectedStrategy === 0 ? Color.White : this.getPalette().textPrimary)
             .borderRadius(8)
-            .onClick(() => { this.selectedStrategy = 0; this.useCustomStrategy = false; })
+            .onClick(() => { this.selectedStrategy = 0; this.useCustomStrategy = false; this.strategyTouched = true; })
 
             Button() {
               Row() {
@@ -155,7 +164,7 @@ export struct AiInputDialog {
             .fontColor(this.selectedStrategy === 1 ? Color.White : this.getPalette().textPrimary)
             .borderRadius(8)
             .margin({ left: 8 })
-            .onClick(() => { this.selectedStrategy = 1; this.useCustomStrategy = false; })
+            .onClick(() => { this.selectedStrategy = 1; this.useCustomStrategy = false; this.strategyTouched = true; })
 
             Button() {
               Row() {
@@ -167,7 +176,7 @@ export struct AiInputDialog {
             .fontColor(this.selectedStrategy === 2 ? Color.White : this.getPalette().textPrimary)
             .borderRadius(8)
             .margin({ left: 8 })
-            .onClick(() => { this.selectedStrategy = 2; this.useCustomStrategy = false; })
+            .onClick(() => { this.selectedStrategy = 2; this.useCustomStrategy = false; this.strategyTouched = true; })
 
             Button() {
               Row() {
@@ -179,7 +188,7 @@ export struct AiInputDialog {
             .fontColor(this.useCustomStrategy ? Color.White : this.getPalette().textPrimary)
             .borderRadius(8)
             .margin({ left: 8 })
-            .onClick(() => { this.useCustomStrategy = true; this.selectedStrategy = -1; })
+            .onClick(() => { this.useCustomStrategy = true; this.selectedStrategy = -1; this.strategyTouched = true; })
           }
         }
         .scrollable(ScrollDirection.Horizontal)
@@ -350,7 +359,10 @@ export struct AiInputDialog {
               .layoutWeight(1)
               .onClick(() => {
                 promptAction.openToast({ message: '正在重新规划行程...' });
-                this.onRegenerate();
+                const strategy = this.useCustomStrategy ? -1 : this.selectedStrategy;
+                const custom = this.useCustomStrategy ? this.customStrategy : undefined;
+                const keepCurrentMode = this.currentStrategyMode === -1 && !this.strategyTouched && !this.useCustomStrategy;
+                this.onRegenerate(strategy, custom, keepCurrentMode);
                 this.controller.close();
               });
           }

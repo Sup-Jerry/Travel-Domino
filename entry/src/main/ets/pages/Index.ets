@@ -548,6 +548,7 @@ struct Index {
   aiDialogController: CustomDialogController = new CustomDialogController({
     builder: AiInputDialog({
       hasAiHistory: this.vm.hasAiHistory(),
+      currentStrategyMode: this.strategyMode,
       onConfirm: async (text: string, strategy: number, customStrategy?: ComposableStrategy) => {
         try {
           await this.vm.generateByAi(text, strategy, customStrategy);
@@ -565,15 +566,24 @@ struct Index {
           this.aiDialogController.close();
         }
       },
-      onRegenerate: async () => {
+      onRegenerate: async (strategy: number, customStrategy?: ComposableStrategy, keepCurrentMode?: boolean) => {
         try {
-          await this.vm.regenerateByCurrentStrategy();
+          const currentMode = this.vm.getStrategyMode();
+          if (keepCurrentMode === true) {
+            await this.vm.regenerateByCurrentStrategy();
+          } else if (strategy === -1 && customStrategy) {
+            await this.vm.regenerateWithCustomStrategy(customStrategy);
+          } else if (strategy === currentMode || strategy === -1) {
+            await this.vm.regenerateByCurrentStrategy();
+          } else {
+            await this.vm.changeStrategyAndRegenerate(strategy);
+          }
           this.vm.refreshTimelineView();
           this.safeShowToast('重新生成成功');
           this.aiDialogController.close();
         } catch (error) {
           const msg = error instanceof Error ? error.message : '重新生成失败';
-          console.error('[Index] AI重新规划失败:', JSON.stringify(error));
+          console.error('[Index] AI重新规划失败:', JSON.stringify(error), `strategy=${strategy}`);
           this.safeShowToast(msg);
           this.aiDialogController.close();
         }

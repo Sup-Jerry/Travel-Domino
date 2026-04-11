@@ -19,6 +19,8 @@ npm run start:dev
 
 > 建议从仓库根目录的 `.env.example` 复制变量模板，真实值通过本地环境变量或 CI Secrets 注入。
 
+建议做法：将真实 `.env` 存放在仓库外（例如 `"$HOME\.travel-domino\secrets\travel.env"`），并设置 `TRAVEL_ENV_FILE` 指向该路径，避免密钥文件出现在仓库目录。
+
 ## 主要接口
 - `POST /auth/phone/send-code`
 - `POST /auth/phone/login`

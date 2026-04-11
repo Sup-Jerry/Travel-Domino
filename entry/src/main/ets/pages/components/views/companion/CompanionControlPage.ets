@@ -107,6 +107,7 @@ export struct CompanionControlPage {
   onSkipFocused: () => Promise<void> | void = () => {};
   onEndFocused: (event: EventEntity) => Promise<void> | void = (_event: EventEntity) => {};
   onReopenFocused: () => Promise<void> | void = () => {};
+  onAdjustFocused: (event: EventEntity) => Promise<void> | void = (_event: EventEntity) => {};
   onSkipDisabledTap: () => void = () => {};
   onEnterImmersive: () => void = () => {};
 
@@ -241,6 +242,9 @@ export struct CompanionControlPage {
           },
           onReopen: async (_event: EventEntity) => {
             await this.onReopenFocused();
+          },
+          onAdjust: async (event: EventEntity) => {
+            await this.onAdjustFocused(event);
           },
           onSkipDisabledTap: () => {
             this.onSkipDisabledTap();

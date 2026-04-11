@@ -31,6 +31,7 @@ export struct CompanionFocusedCardHost {
   onSkip: (event: EventEntity) => Promise<void> | void = (_event: EventEntity) => {};
   onEnd: (event: EventEntity) => Promise<void> | void = (_event: EventEntity) => {};
   onReopen: (event: EventEntity) => Promise<void> | void = (_event: EventEntity) => {};
+  onAdjust: (event: EventEntity) => Promise<void> | void = (_event: EventEntity) => {};
   onSkipDisabledTap: () => void = () => {};
   onEnterImmersive: () => void = () => {};
 
@@ -149,6 +150,15 @@ export struct CompanionFocusedCardHost {
         }
       }
       .width('100%');
+
+      Button('补打卡')
+        .type(ButtonType.Capsule)
+        .fontSize(12)
+        .fontColor(this.getThemePalette().textSecondary)
+        .backgroundColor(this.getThemePalette().cardBgSoft)
+        .onClick(async () => {
+          await this.onAdjust(event);
+        });
 
       Text('点击此卡片进入沉浸模式')
         .fontSize(11)

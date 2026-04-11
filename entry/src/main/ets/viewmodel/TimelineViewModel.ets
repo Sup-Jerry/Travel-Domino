@@ -2,6 +2,7 @@
 import { TravelPlanItem } from '../model/interface/IStandardEvent';
 import { ActiveEventSnapshot } from '../infrastructure/persistence/EventRepositoryImpl';
 import { EventRepositoryImpl } from '../infrastructure/persistence/EventRepositoryImpl';
+import type { EventFieldUpdate } from '../domain/ports/IEventRepository';
 import { EventEntity } from '../model/entity/EventEntity'; // 引入 Entity
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { TimelineDatePolicy } from '../domain/policy/TimelineDatePolicy';
@@ -416,6 +417,7 @@ export class TimelineViewModel implements
   public async loadData(planId: number): Promise<void> {
     this.planId = planId;
     this.planName = `计划 #${planId}`;
+    this.currentStrategyMode = 0;
     this.filterStart = 0;
     this.filterEnd = 0;
     try {
@@ -427,6 +429,12 @@ export class TimelineViewModel implements
         this.planName = (plan.title || '').trim().length > 0 ? (plan.title || '').trim() : `计划 #${planId}`;
         if (plan.startDate) {
           this.planStartDate = plan.startDate;
+        }
+        const loadedStrategyMode = Number(plan.strategyMode);
+        if (loadedStrategyMode === -1 || loadedStrategyMode === 0 || loadedStrategyMode === 1 || loadedStrategyMode === 2) {
+          this.currentStrategyMode = loadedStrategyMode;
+        } else {
+          this.currentStrategyMode = 0;
         }
 
         this.isArchived = (plan.status === 2);
@@ -971,6 +979,48 @@ export class TimelineViewModel implements
   public async updateActualTime(id: number, field: 'actual_start_time' | 'actual_end_time', timestamp: number): Promise<boolean> {
     hilog.info(0x0000, TAG, `[ACPT][EXEC][updateActualTime] id=${id}, field=${field}, timestamp=${timestamp}`);
     return this.executionService.updateActualTime(id, field, timestamp);
+  }
+
+  public async backfillCheckinTime(id: number, startTs: number, endTs: number): Promise<boolean> {
+    if (this.isArchived) {
+      return false;
+    }
+    const target = this.events.find((event: EventEntity) => event.id === id);
+    if (!target) {
+      return false;
+    }
+
+    const safeStart = Number.isFinite(startTs) ? Math.max(0, Math.floor(startTs)) : 0;
+    const safeEnd = Number.isFinite(endTs) ? Math.max(0, Math.floor(endTs)) : 0;
+    if (safeStart <= 0 && safeEnd > 0) {
+      return false;
+    }
+    if (safeStart > 0 && safeEnd > 0 && safeEnd < safeStart) {
+      return false;
+    }
+
+    let completionStatus = EventEntity.STATE_PENDING;
+    if (safeStart > 0 && safeEnd > safeStart) {
+      completionStatus = EventEntity.STATE_COMPLETED;
+    }
+
+    const updates: EventFieldUpdate[] = [
+      { column: EventEntity.ACTUAL_START_TIME, value: safeStart },
+      { column: EventEntity.ACTUAL_END_TIME, value: safeEnd },
+      { column: EventEntity.COMPLETION_STATUS, value: completionStatus }
+    ];
+    try {
+      await EventRepositoryImpl.updateFields(id, updates, this.planId);
+      target.actual_start_time = safeStart;
+      target.actual_end_time = safeEnd;
+      target.completion_status = completionStatus;
+      this.recalculateFromEventId(id);
+      this.evaluatePlanStatusByRuntime();
+      return true;
+    } catch (error) {
+      hilog.error(0x0000, TAG, `[ACPT][EXEC][backfillCheckinTime][failed] id=${id}, reason=${JSON.stringify(error)}`);
+      return false;
+    }
   }
 
   public async getStartConflictInfo(excludeEventId: number): Promise<StartConflictInfo | null> {

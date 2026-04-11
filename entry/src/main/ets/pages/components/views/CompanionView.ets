@@ -16,6 +16,7 @@ import { WeatherSuggestion } from '../../../domain/services/WeatherModels';
 import { CompanionImmersiveView } from './companion/CompanionImmersiveView';
 import { CompanionControlPage } from './companion/CompanionControlPage';
 import { CompanionOverlayPages } from './companion/CompanionOverlayPages';
+import { RecordCorrectionDialog } from '../dialogs/RecordCorrectionDialog';
 import {
   CompanionDisplayFilterState,
   canCompanionEndFocused,
@@ -136,6 +137,7 @@ export struct CompanionView {
   private observedScheduleVersion: number = -1;
   private observedRuntimeState: string = '';
   private observedBackRequest: number = 0;
+  private correctionDialogController: CustomDialogController | null = null;
   private onWindowAvoidAreaChange: (avoidOptions: window.AvoidAreaOptions) => void = (_avoidOptions) => {
     this.updateSafeAreaInsets();
   };
@@ -770,8 +772,55 @@ export struct CompanionView {
     this.showHistoryPage = true;
   }
 
-  private handleFocusedAdjust(): void {
-    this.safeShowToast('该地点暂不支持修正入口');
+  private handleFocusedAdjust(event?: EventEntity): void {
+    const target = event || this.getFocusedEvent();
+    if (!target) {
+      this.safeShowToast('暂无可补打卡的地点');
+      return;
+    }
+    this.openRecordCorrectionDialog(target);
+  }
+
+  private openRecordCorrectionDialog(event: EventEntity): void {
+    const target = this.getEventById(event.id);
+    if (!target) {
+      this.safeShowToast('地点不存在或已删除');
+      return;
+    }
+    this.correctionDialogController = new CustomDialogController({
+      builder: RecordCorrectionDialog({
+        event: target,
+        onConfirm: (startTs: number, endTs: number) => {
+          void this.applyCompanionCheckinBackfill(target.id, startTs, endTs);
+        },
+        onClear: () => {
+          void this.applyCompanionCheckinBackfill(target.id, 0, 0);
+        }
+      }),
+      alignment: DialogAlignment.Center,
+      autoCancel: true
+    });
+    this.correctionDialogController.open();
+  }
+
+  private async applyCompanionCheckinBackfill(eventId: number, startTs: number, endTs: number): Promise<void> {
+    const safeStart = Number.isFinite(startTs) ? Math.max(0, Math.floor(startTs)) : 0;
+    const safeEnd = Number.isFinite(endTs) ? Math.max(0, Math.floor(endTs)) : 0;
+    if (safeStart <= 0 && safeEnd > 0) {
+      this.safeShowToast('请先设置开始时间');
+      return;
+    }
+    if (safeStart > 0 && safeEnd > 0 && safeEnd < safeStart) {
+      this.safeShowToast('结束时间不能早于开始时间');
+      return;
+    }
+    const ok = await this.vm.backfillCheckinTime(eventId, safeStart, safeEnd);
+    if (!ok) {
+      this.safeShowToast('补打卡失败，请稍后重试');
+      return;
+    }
+    this.safeShowToast(safeStart > 0 ? '补打卡已保存' : '打卡记录已清除');
+    this.refreshContext();
   }
 
   private async handleFocusedReopen(): Promise<void> {
@@ -1092,6 +1141,9 @@ export struct CompanionView {
         },
         onReopenFocused: async () => {
           await this.handleFocusedReopen();
+        },
+        onAdjustFocused: async (event: EventEntity) => {
+          this.handleFocusedAdjust(event);
         },
         onSkipDisabledTap: () => {
           this.safeShowToast('已跳过任务不可再次跳过');
