@@ -131,6 +131,11 @@ Agent 调用 `scripts/smart_stitch.py`，将 `evolution.json` 的内容转化为
 - 复盘结论默认中文、紧凑，先回答任务是否完成，再给经验沉淀结果。
 - 当用户要求‘复盘+瘦身+发布’时，严格按顺序执行并在每阶段提供可验证证据。
 - 复盘沉淀后必须回读last_updated与SKILL.md自动区块，确认持久化。
+- 当用户明确要求按顺序执行复盘+瘦身+发布时，固定顺序为：经验沉淀 -> 瘦身执行 -> GitHub 发布。
+- 执行复盘迭代时，默认同时沉淀流程技能（skill-evolution-manager）与本轮执行技能（如 app-size-pruner）。
+- 复盘回报保持中文、精简，并附脚本执行证据与落盘文件。
+- 当用户明确指定顺序为复盘->瘦身->发布时，严格按该顺序执行并分阶段回报。
+- 多轮 N4 补测场景中，继续迭代默认先落地当前批次并保持 unit-all 绿色，再进入复盘沉淀。
 
 ### Known Fixes & Workarounds
 - Before any edit, restate user intent and explicitly state whether code will be changed.
@@ -202,7 +207,11 @@ Agent 调用 `scripts/smart_stitch.py`，将 `evolution.json` 的内容转化为
 - 执行沉淀后必须回传 merge_evolution 与 smart_stitch 的执行证据（命令和结果）。
 - PowerShell下merge_evolution传JSON参数不稳定时，改用Python文件读取并直接调用merge函数。
 - 在同轮复盘中可同时沉淀多个技能（领域skill+流程skill+工具skill），再统一回报证据。
+- 在 PowerShell 传递 JSON 给 merge_evolution 时，优先走文件读取方式，避免命令行引号转义导致解析失败。
+- 发布到 GitHub 在本仓库必须优先使用 scripts/git-auto-publish.ps1，不使用裸 git push 作为默认流程。
+- CompanionDisplayHelper 的分值分档断言需避免字符串全等误判，优先按分档边界语义断言。
+- 执行发布脚本时，-Files 参数在 PowerShell 中应通过数组变量传递，避免被拼成单字符串。
 
 ### Custom Instruction Injection
 
-复盘执行模板：目标skill列表 -> merge_evolution -> smart_stitch -> 回读last_updated与自动区块证据。
+固定流程：先执行 skill-evolution-manager 沉淀，再执行 app-size-pruner（preview->apply），最后使用 scripts/git-auto-publish.ps1 发布并回传证据。

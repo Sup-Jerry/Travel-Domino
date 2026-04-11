@@ -43,15 +43,29 @@ import timelineStrategyManagerTest from './TimelineStrategyManager.test';
 import timelineCompanionManagerTest from './TimelineCompanionManager.test';
 import appStartupCoordinatorTest from './AppStartupCoordinator.test';
 import companionSwipeHelperTest from './CompanionSwipeHelper.test';
+import companionSwipeHelperVelocityTest from './CompanionSwipeHelperVelocity.test';
+import companionSwipeHelperThresholdsTest from './CompanionSwipeHelperThresholds.test';
 import companionWeatherActionHelperTest from './CompanionWeatherActionHelper.test';
+import companionWeatherActionHelperConfirmTest from './CompanionWeatherActionHelperConfirm.test';
+import companionWeatherActionHelperGuardsTest from './CompanionWeatherActionHelperGuards.test';
 import companionAnimationHelperTest from './CompanionAnimationHelper.test';
+import companionAnimationHelperProgressTest from './CompanionAnimationHelperProgress.test';
 import companionDisplayHelperTest from './CompanionDisplayHelper.test';
 import companionDisplayHelperActionsTest from './CompanionDisplayHelperActions.test';
+import companionDisplayHelperActionsPositiveTest from './CompanionDisplayHelperActionsPositive.test';
 import companionDisplayHelperMessagesTest from './CompanionDisplayHelperMessages.test';
 import companionDisplayHelperErrorCodesTest from './CompanionDisplayHelperErrorCodes.test';
+import companionDisplayHelperToastFallbackTest from './CompanionDisplayHelperToastFallback.test';
+import companionDisplayHelperSuggestionExplanationTest from './CompanionDisplayHelperSuggestionExplanation.test';
+import companionDisplayHelperSuggestionActionsTest from './CompanionDisplayHelperSuggestionActions.test';
+import companionDisplayHelperRuntimeDescriptionTest from './CompanionDisplayHelperRuntimeDescription.test';
+import companionDisplayHelperFallbackModesTest from './CompanionDisplayHelperFallbackModes.test';
+import companionDisplayHelperStateGuardsTest from './CompanionDisplayHelperStateGuards.test';
+import companionDisplayHelperPaletteMatrixTest from './CompanionDisplayHelperPaletteMatrix.test';
 import companionFocusActionHelperTest from './CompanionFocusActionHelper.test';
 import companionWindowHelperTest from './CompanionWindowHelper.test';
 import companionWindowHelperInsetsTest from './CompanionWindowHelperInsets.test';
+import companionWindowHelperCutoutBottomRightTest from './CompanionWindowHelperCutoutBottomRight.test';
 import companionPresentationHelperTest from './CompanionPresentationHelper.test';
 
 const registeredSuiteNames: string[] = [
@@ -99,15 +113,29 @@ const registeredSuiteNames: string[] = [
   'TimelineCompanionManager',
   'AppStartupCoordinator',
   'CompanionSwipeHelper',
+  'CompanionSwipeHelperVelocity',
+  'CompanionSwipeHelperThresholds',
   'CompanionWeatherActionHelper',
+  'CompanionWeatherActionHelperConfirm',
+  'CompanionWeatherActionHelperGuards',
   'CompanionAnimationHelper',
+  'CompanionAnimationHelperProgress',
   'CompanionDisplayHelper',
   'CompanionDisplayHelperActions',
+  'CompanionDisplayHelperActionsPositive',
   'CompanionDisplayHelperMessages',
   'CompanionDisplayHelperErrorCodes',
+  'CompanionDisplayHelperToastFallback',
+  'CompanionDisplayHelperSuggestionExplanation',
+  'CompanionDisplayHelperSuggestionActions',
+  'CompanionDisplayHelperRuntimeDescription',
+  'CompanionDisplayHelperFallbackModes',
+  'CompanionDisplayHelperStateGuards',
+  'CompanionDisplayHelperPaletteMatrix',
   'CompanionFocusActionHelper',
   'CompanionWindowHelper',
   'CompanionWindowHelperInsets',
+  'CompanionWindowHelperCutoutBottomRight',
   'CompanionPresentationHelper'
 ];
 
@@ -177,15 +205,29 @@ export default function testsuite() {
   timelineCompanionManagerTest();
   appStartupCoordinatorTest();
   companionSwipeHelperTest();
+  companionSwipeHelperVelocityTest();
+  companionSwipeHelperThresholdsTest();
   companionWeatherActionHelperTest();
+  companionWeatherActionHelperConfirmTest();
+  companionWeatherActionHelperGuardsTest();
   companionAnimationHelperTest();
+  companionAnimationHelperProgressTest();
   companionDisplayHelperTest();
   companionDisplayHelperActionsTest();
+  companionDisplayHelperActionsPositiveTest();
   companionDisplayHelperMessagesTest();
   companionDisplayHelperErrorCodesTest();
+  companionDisplayHelperToastFallbackTest();
+  companionDisplayHelperSuggestionExplanationTest();
+  companionDisplayHelperSuggestionActionsTest();
+  companionDisplayHelperRuntimeDescriptionTest();
+  companionDisplayHelperFallbackModesTest();
+  companionDisplayHelperStateGuardsTest();
+  companionDisplayHelperPaletteMatrixTest();
   companionFocusActionHelperTest();
   companionWindowHelperTest();
   companionWindowHelperInsetsTest();
+  companionWindowHelperCutoutBottomRightTest();
   companionPresentationHelperTest();
 
   describe('listTest', () => {
