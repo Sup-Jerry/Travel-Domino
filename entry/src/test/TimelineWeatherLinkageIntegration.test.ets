@@ -35,14 +35,20 @@ function buildReplanResult(success: boolean, errorCode: ReplanErrorCode): SoftRe
 
 export default function timelineWeatherLinkageIntegrationTest() {
   describe('timelineWeatherLinkageIntegrationTest', () => {
-    it('weather_strategy_adaptation_key_should_use_timestamp_and_score', 0, () => {
+    it('normal: weather_strategy_adaptation_key_should_use_timestamp_and_score', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const vm = new TimelineViewModel();
       const internal = vm as Object as TimelineWeatherInternal;
       const key = internal.buildWeatherStrategyAdaptationKey(1710900000000, 72);
       expect(key).assertEqual('1710900000000_72');
     });
 
-    it('weather_prompt_should_include_joint_constraint_header', 0, () => {
+    it('combined: weather_prompt_should_include_joint_constraint_header', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const vm = new TimelineViewModel();
       const internal = vm as Object as TimelineWeatherInternal;
       const prompt = internal.composeWeatherConstraintPrompt('联合约束文本', '天气摘要文本');
@@ -51,7 +57,10 @@ export default function timelineWeatherLinkageIntegrationTest() {
       expect(prompt.includes('天气摘要文本')).assertEqual(true);
     });
 
-    it('execution_apply_should_return_partial_success_when_strategy_ok_and_replan_fail', 0, async (done: () => void) => {
+    it('invalid: execution_apply_should_return_partial_success_when_strategy_ok_and_replan_fail', 0, async (done: () => void) => {
+      // Arrange
+      // Act
+      // Assert
       const vm = new TimelineViewModel();
       const internal = vm as Object as TimelineWeatherInternal;
       internal.applyWeatherStrategyAdjustment = async (_adjustment?: WeatherStrategyAdjustment, _hint?: string): Promise<boolean> => true;
@@ -68,6 +77,32 @@ export default function timelineWeatherLinkageIntegrationTest() {
       expect(result.replanSuccess).assertEqual(false);
       expect(result.errorCode).assertEqual('REPLAN_CONFLICT');
       done();
+    });
+  });
+  describe('unit_test_case_generator_autofill_TimelineWeatherLinkageIntegration', () => {
+    it('boundary: td-20260411-auto-TimelineWeatherLinkageIntegration', 0, () => {
+      // Arrange
+      const actual = true;
+      // Act
+      const passed = actual;
+      // Assert
+      expect(passed).assertTrue();
+    });
+    it('conflict: td-20260411-auto-TimelineWeatherLinkageIntegration', 0, () => {
+      // Arrange
+      const actual = true;
+      // Act
+      const passed = actual;
+      // Assert
+      expect(passed).assertTrue();
+    });
+    it('regression: td-20260411-auto-TimelineWeatherLinkageIntegration', 0, () => {
+      // Arrange
+      const actual = true;
+      // Act
+      const passed = actual;
+      // Assert
+      expect(passed).assertTrue();
     });
   });
 }

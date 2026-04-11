@@ -1,0 +1,63 @@
+Travel Domino 核心单测补齐总规划
+版本: 2026-04-11
+
+一、目标
+1. 补齐核心模块的单元测试覆盖缺口，优先保障业务正确性与回归稳定性。
+2. 所有新增/重写用例必须符合 unit-test-case-generator 约束:
+   - 6类 case: normal / boundary / invalid / conflict / regression / combined
+   - AAA 结构注释: Arrange / Act / Assert
+   - 仅断言输入输出与可观察行为，不耦合内部实现步骤
+
+二、核心范围
+1. backend 核心业务:
+   - backend/src/modules/auth/auth.controller.ts
+   - backend/src/modules/auth/dto/auth.dto.ts
+   - backend/src/modules/risk/*
+   - backend/src/modules/sms/*
+   - backend/src/modules/social/*
+   - backend/src/modules/audit/*
+2. entry 核心业务:
+   - entry/src/main/ets/domain/timeline/*
+   - entry/src/main/ets/domain/strategy/*
+   - entry/src/main/ets/domain/services/*
+   - entry/src/main/ets/viewmodel/managers/*
+   - entry/src/main/ets/viewmodel/coordinators/*
+   - entry/src/main/ets/infrastructure/auth/*
+   - entry/src/main/ets/infrastructure/persistence/*
+
+三、执行批次
+批次 C1: backend-auth 扩展
+1. 新增 auth.controller + auth.dto 覆盖。
+2. 覆盖主流程、鉴权失败、参数非法、状态冲突、历史回归、组合场景。
+
+批次 C2: backend-risk/sms/social/audit
+1. 按模块逐个补齐 service/module 测试。
+2. 先 service 后 module 装配验证，避免无效集成断言。
+
+批次 C3: entry-domain 计算与状态流
+1. timeline + strategy + services 核心算法与策略联动补测。
+2. 对“无显式冲突语义”的模块，conflict 用例改为“前置条件冲突/状态冲突/资源冲突”。
+
+批次 C4: entry-viewmodel + infra 核心链路
+1. managers/coordinators 编排逻辑补测。
+2. infrastructure auth/persistence 的异常、回滚、组合流程补测。
+
+四、每批交付标准
+1. 当批涉及的每个测试文件都满足 6类 case + AAA + 至少1条 regression。
+2. 不修改生产功能语义，不新增运行时依赖。
+3. 仅在必要时新增测试替身/桩对象，并保持可读性。
+
+五、每批验收命令
+1. 结构规则验收:
+   powershell -ExecutionPolicy Bypass -File scripts/ci/validate-unit-test-cases.ps1
+2. 后端测试验收:
+   cd backend
+   npm test -- --runInBand
+3. 客户端单测验收:
+   powershell -ExecutionPolicy Bypass -File scripts/ci/unit-all.ps1
+
+六、完成判定
+1. 核心范围内新增或改造的测试文件全部满足结构规则。
+2. 对应批次测试命令可通过。
+3. 回归 case 覆盖真实缺陷或使用规范占位编号:
+   regression: td-YYYYMMDD-<topic>
