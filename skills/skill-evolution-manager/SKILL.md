@@ -134,6 +134,8 @@ Agent 调用 `scripts/smart_stitch.py`，将 `evolution.json` 的内容转化为
 - 当用户明确要求按顺序执行复盘+瘦身+发布时，固定顺序为：经验沉淀 -> 瘦身执行 -> GitHub 发布。
 - 执行复盘迭代时，默认同时沉淀流程技能（skill-evolution-manager）与本轮执行技能（如 app-size-pruner）。
 - 复盘回报保持中文、精简，并附脚本执行证据与落盘文件。
+- 当用户明确指定顺序为复盘->瘦身->发布时，严格按该顺序执行并分阶段回报。
+- 多轮 N4 补测场景中，继续迭代默认先落地当前批次并保持 unit-all 绿色，再进入复盘沉淀。
 
 ### Known Fixes & Workarounds
 - Before any edit, restate user intent and explicitly state whether code will be changed.
@@ -207,7 +209,9 @@ Agent 调用 `scripts/smart_stitch.py`，将 `evolution.json` 的内容转化为
 - 在同轮复盘中可同时沉淀多个技能（领域skill+流程skill+工具skill），再统一回报证据。
 - 在 PowerShell 传递 JSON 给 merge_evolution 时，优先走文件读取方式，避免命令行引号转义导致解析失败。
 - 发布到 GitHub 在本仓库必须优先使用 scripts/git-auto-publish.ps1，不使用裸 git push 作为默认流程。
+- CompanionDisplayHelper 的分值分档断言需避免字符串全等误判，优先按分档边界语义断言。
+- 执行发布脚本时，-Files 参数在 PowerShell 中应通过数组变量传递，避免被拼成单字符串。
 
 ### Custom Instruction Injection
 
-复盘执行模板：先沉淀 skill-evolution-manager 与本轮执行技能，再执行目标任务，最后用仓库标准发布脚本同步并回传证据。
+固定流程：先执行 skill-evolution-manager 沉淀，再执行 app-size-pruner（preview->apply），最后使用 scripts/git-auto-publish.ps1 发布并回传证据。

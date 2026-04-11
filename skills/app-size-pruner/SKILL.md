@@ -51,6 +51,8 @@ description: Clean oversized application workspaces by scanning removable large 
 - 用户要求代码瘦身时，默认执行 preview -> apply，并在同轮回报删除数、释放空间与 JSON 报告路径。
 - 瘦身前先确认 git 状态，避免误删本轮新增未跟踪文件。
 - 当瘦身紧跟复盘任务时，严格在复盘沉淀完成后再执行清理。
+- 用户要求瘦身时默认执行两阶段：先 MinSizeMB=20 预览，若无候选再降到 1 做安全二次扫描。
+- 瘦身阶段需与上传阶段解耦，清理报告用于回执，不默认纳入提交文件。
 
 ### Known Fixes & Workarounds
 - Default MinSizeMB 20 can miss many 1-20MB build artifacts; run a second scan with MinSizeMB 1 for safe whitelist cleanup when user still needs more space.
@@ -60,7 +62,9 @@ description: Clean oversized application workspaces by scanning removable large 
 - 瘦身结果需要同时回报删除数量、释放空间和JSON报告文件。
 - 若首轮清理释放不足，可在安全规则不变前提下再降 MinSizeMB 做第二轮扫描。
 - 清理结果必须保留 .app-size-prune-report-*.json 作为可审计证据。
+- 在单测高频执行后，优先清理 .tmp 和 build-logs 中 safe-extension 日志文件以快速回收空间。
+- 执行 apply 后必须回传删除数量、释放空间与 .app-size-prune-report 路径。
 
 ### Custom Instruction Injection
 
-瘦身固定流程：先 preview 解释阈值影响，再 apply 清理，最后输出删除统计和报告路径。
+瘦身执行模板：preview(20MB) -> preview/apply(1MB, 如需要) -> 汇总释放空间与报告路径。
