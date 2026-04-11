@@ -17,6 +17,12 @@ if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE
 }
 
+Write-Host '[quality-gate] validating unit test case contract...'
+powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'validate-unit-test-cases.ps1')
+if ($LASTEXITCODE -ne 0) {
+  exit $LASTEXITCODE
+}
+
 Write-Host '[quality-gate] building entry module...'
 New-Item -ItemType Directory -Path '.tmp' -ErrorAction SilentlyContinue | Out-Null
 $buildLog = Join-Path $repoRoot '.tmp\quality-gate-build.log'

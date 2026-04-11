@@ -28,7 +28,10 @@ function sumReduced(plan: import('../main/ets/viewmodel/TimelineViewModel').Comp
 
 export default function conflictCompressionTest() {
   describe('conflictCompressionTest', () => {
-    it('ratio_mode_should_solve_when_min_limit_allows', 0, () => {
+    it('boundary: ratio_mode_should_solve_when_min_limit_allows', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const vm = new TimelineViewModel();
       vm.globalStartTime = '09:00';
       vm.events = [
@@ -43,7 +46,10 @@ export default function conflictCompressionTest() {
       expect(sumReduced(plan)).assertEqual(120);
     });
 
-    it('equal_mode_should_distribute_close_reduction', 0, () => {
+    it('normal: equal_mode_should_distribute_close_reduction', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const vm = new TimelineViewModel();
       vm.globalStartTime = '09:00';
       vm.events = [
@@ -68,7 +74,10 @@ export default function conflictCompressionTest() {
       expect(Math.abs(firstReduced - secondReduced) <= 1).assertEqual(true);
     });
 
-    it('context_should_mark_rigid_candidate_unselectable', 0, () => {
+    it('normal: context_should_mark_rigid_candidate_unselectable', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const vm = new TimelineViewModel();
       vm.globalStartTime = '09:00';
       vm.events = [
@@ -93,7 +102,10 @@ export default function conflictCompressionTest() {
       expect(rigid?.selectable ?? true).assertEqual(false);
     });
 
-    it('should_block_with_remaining_gap_when_selected_capacity_not_enough', 0, () => {
+    it('conflict: should_block_with_remaining_gap_when_selected_capacity_not_enough', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const vm = new TimelineViewModel();
       vm.globalStartTime = '09:00';
       vm.events = [
@@ -108,7 +120,10 @@ export default function conflictCompressionTest() {
       expect(plan.suggestedTime !== undefined).assertEqual(true);
     });
 
-    it('should_compute_min_required_gap_for_rigid_target_conflict', 0, () => {
+    it('conflict: should_compute_min_required_gap_for_rigid_target_conflict', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const vm = new TimelineViewModel();
       vm.globalStartTime = '09:00';
       vm.events = [
@@ -126,7 +141,10 @@ export default function conflictCompressionTest() {
       expect(sumReduced(plan)).assertEqual(30);
     });
 
-    it('advance_preview_should_compare_shift_with_min_required_gap', 0, () => {
+    it('boundary: advance_preview_should_compare_shift_with_min_required_gap', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const vm = new TimelineViewModel();
       vm.globalStartTime = '09:00';
       vm.events = [
@@ -144,6 +162,70 @@ export default function conflictCompressionTest() {
       expect(enough.valid).assertEqual(true);
       expect(enough.requiredGapMinutes).assertEqual(30);
       expect(enough.remainingGapMinutes).assertEqual(0);
+    });
+  });
+  describe('unit_test_case_generator_backfill_ConflictCompression', () => {
+    it('invalid: selection_context_should_return_null_for_invalid_target_time', 0, () => {
+      // Arrange
+      const vm = new TimelineViewModel();
+      vm.globalStartTime = '09:00';
+      vm.events = [
+        buildEvent(1, 'A', 60),
+        buildEvent(2, 'B', 60),
+        buildEvent(3, 'Target', 60, 1, '10:30')
+      ];
+      // Act
+      const context = vm.compressionCoordinator.buildCompressionSelectionContext(2, 'invalid_time');
+      // Assert
+      expect(context === null).assertEqual(true);
+    });
+
+    it('regression: td-20260411-forced-gap-should-drive-compression-need', 0, () => {
+      // Arrange
+      const vm = new TimelineViewModel();
+      vm.globalStartTime = '09:00';
+      vm.events = [
+        buildEvent(1, 'A', 120),
+        buildEvent(2, 'B', 120),
+        buildEvent(3, 'Target', 60, 1, '13:30')
+      ];
+      // Act
+      const context = vm.compressionCoordinator.buildCompressionSelectionContext(2, '13:30', 25);
+      const plan = vm.compressionCoordinator.calculateCompressionPlanBySelection(
+        2,
+        '13:30',
+        new Set<number>([1, 2]),
+        'RATIO',
+        25
+      );
+      // Assert
+      expect(context !== null).assertEqual(true);
+      expect(context?.neededGapMinutes ?? -1).assertEqual(25);
+      expect(plan.status).assertEqual('COMPRESS_CONFIRM');
+      expect(sumReduced(plan)).assertEqual(25);
+    });
+
+    it('combined: preview_should_reject_non_continuous_selection_with_forced_gap', 0, () => {
+      // Arrange
+      const vm = new TimelineViewModel();
+      vm.globalStartTime = '09:00';
+      vm.events = [
+        buildEvent(1, 'A', 90),
+        buildEvent(2, 'B', 90),
+        buildEvent(3, 'C', 90),
+        buildEvent(4, 'Target', 60, 1, '11:00')
+      ];
+      // Act
+      const preview = vm.compressionCoordinator.previewAdvanceAdjust(
+        3,
+        new Set<number>([1, 3]),
+        '08:30',
+        30
+      );
+      // Assert
+      expect(preview.valid).assertEqual(false);
+      expect(preview.message).assertContain('连续');
+      expect(preview.requiredGapMinutes > 0).assertEqual(true);
     });
   });
 }

@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-11T08:03:48.469787",
+  "last_updated": "2026-04-11T09:15:33.964321",
   "preferences": [
     "If user says no code changes, stop code edits and switch to retrospective output.",
     "Default retrospective language is Chinese with fixed structure: issues-root causes-improvements-next steps.",
@@ -61,7 +61,11 @@
     "???????????????skill-evolution????app-size-pruner?????GitHub???",
     "??????????????????????????",
     "当用户反馈设置页统计不准时，先核对数据链路是否覆盖重规划/二次入口，而不只检查首次生成入口",
-    "用户要求\"复盘迭代 + 瘦身 + 上传GitHub\"时，执行顺序固定为：经验沉淀 -> 瘦身 -> 发布"
+    "用户要求\"复盘迭代 + 瘦身 + 上传GitHub\"时，执行顺序固定为：经验沉淀 -> 瘦身 -> 发布",
+    "当用户要求按固定顺序执行多任务（复盘->瘦身->发布）时，严格按顺序并在每阶段给可验证结果。",
+    "复盘输出保持中文、简洁，先给闭环状态再给经验沉淀证据。",
+    "用户要求‘回顾+瘦身+上传’时，严格按顺序执行并在每个阶段给可验证证据。",
+    "复盘结论默认中文、紧凑，先回答任务是否完成，再给经验沉淀结果。"
   ],
   "fixes": [
     "Before any edit, restate user intent and explicitly state whether code will be changed.",
@@ -126,9 +130,13 @@
     "???????????? -Files ???????????????????",
     "AI策略统计异常优先检查 AiInputDialog -> Index -> ViewModel 的 onRegenerate 参数透传，避免 strategy/customStrategy 在重规划链路丢失",
     "TimelineViewModel.loadData 需先重置再回填 currentStrategyMode（来自 plan.strategyMode），避免跨计划沿用旧模式导致统计偏差",
-    "当当前策略为自定义(-1)且用户未在弹窗触碰策略控件时，重规划应保持当前模式，不应回退到默认模式"
+    "当当前策略为自定义(-1)且用户未在弹窗触碰策略控件时，重规划应保持当前模式，不应回退到默认模式",
+    "PowerShell下复杂正则和引号易失败，优先采用更稳的解析方案或脚本化处理。",
+    "技能沉淀后必须回读evolution.json的last_updated与SKILL.md缝合区，作为落地证据。",
+    "多轮继续执行场景下，先确认当前阶段（如C3）闭环状态，再进入skill沉淀与发布步骤。",
+    "执行沉淀后必须回传 merge_evolution 与 smart_stitch 的执行证据（命令和结果）。"
   ],
-  "custom_prompts": "策略统计类问题默认排查顺序：UI选择态 -> 回调参数透传 -> 服务写入 -> 偏好页读取映射；先修链路一致性，再做表现层调整。",
+  "custom_prompts": "复盘场景默认输出结构：闭环状态 -> 本轮沉淀目标skill -> 执行证据 -> 下一步动作。",
   "contexts": [
     "Case: Toolbox package missing in ohpm registry, switched to vendored local source and local exports.",
     "Case: Expansion/drag issues caused by oversized wrapper (200x200) and positioned container; fixed with 58x58 wrapper and origin position.",
@@ -145,6 +153,7 @@
     "Case: Commute time recalculation policy stabilized by persisting first fetched route minutes and refreshing only on place/mode mutation.",
     "多轮线上修复后进行技能经验沉淀与工程收尾",
     "In cleanup sessions, user expects concise Chinese output with clear numbers and follow-up options.",
-    "Case: user explicitly required skill-evolution-manager and app-size-pruner; execution needed explicit workflow evidence."
+    "Case: user explicitly required skill-evolution-manager and app-size-pruner; execution needed explicit workflow evidence.",
+    "Case: 用户要求用skill-evolution-manager复盘后继续app-size-pruner和GitHub发布，需同轮完成经验沉淀与证据回传。"
   ]
 }

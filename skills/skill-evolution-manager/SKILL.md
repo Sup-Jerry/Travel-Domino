@@ -125,6 +125,10 @@ Agent 调用 `scripts/smart_stitch.py`，将 `evolution.json` 的内容转化为
 - ??????????????????????????
 - 当用户反馈设置页统计不准时，先核对数据链路是否覆盖重规划/二次入口，而不只检查首次生成入口
 - 用户要求"复盘迭代 + 瘦身 + 上传GitHub"时，执行顺序固定为：经验沉淀 -> 瘦身 -> 发布
+- 当用户要求按固定顺序执行多任务（复盘->瘦身->发布）时，严格按顺序并在每阶段给可验证结果。
+- 复盘输出保持中文、简洁，先给闭环状态再给经验沉淀证据。
+- 用户要求‘回顾+瘦身+上传’时，严格按顺序执行并在每个阶段给可验证证据。
+- 复盘结论默认中文、紧凑，先回答任务是否完成，再给经验沉淀结果。
 
 ### Known Fixes & Workarounds
 - Before any edit, restate user intent and explicitly state whether code will be changed.
@@ -190,7 +194,11 @@ Agent 调用 `scripts/smart_stitch.py`，将 `evolution.json` 的内容转化为
 - AI策略统计异常优先检查 AiInputDialog -> Index -> ViewModel 的 onRegenerate 参数透传，避免 strategy/customStrategy 在重规划链路丢失
 - TimelineViewModel.loadData 需先重置再回填 currentStrategyMode（来自 plan.strategyMode），避免跨计划沿用旧模式导致统计偏差
 - 当当前策略为自定义(-1)且用户未在弹窗触碰策略控件时，重规划应保持当前模式，不应回退到默认模式
+- PowerShell下复杂正则和引号易失败，优先采用更稳的解析方案或脚本化处理。
+- 技能沉淀后必须回读evolution.json的last_updated与SKILL.md缝合区，作为落地证据。
+- 多轮继续执行场景下，先确认当前阶段（如C3）闭环状态，再进入skill沉淀与发布步骤。
+- 执行沉淀后必须回传 merge_evolution 与 smart_stitch 的执行证据（命令和结果）。
 
 ### Custom Instruction Injection
 
-策略统计类问题默认排查顺序：UI选择态 -> 回调参数透传 -> 服务写入 -> 偏好页读取映射；先修链路一致性，再做表现层调整。
+复盘场景默认输出结构：闭环状态 -> 本轮沉淀目标skill -> 执行证据 -> 下一步动作。

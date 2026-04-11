@@ -17,6 +17,13 @@ if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE
 }
 
+Write-Host '[full-gate] validating unit test case contract (redundant guard)...'
+powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'validate-unit-test-cases.ps1')
+if ($LASTEXITCODE -ne 0) {
+  Write-Host "[full-gate] failed at unit test contract, exit=$LASTEXITCODE"
+  exit $LASTEXITCODE
+}
+
 Write-Host '[full-gate] step 2/2 unit test...'
 & cmd /c "entry\hvigorw.bat --no-daemon --mode module -p module=entry -p product=default -p buildMode=debug test 2>&1" | Out-Host
 if ($LASTEXITCODE -ne 0) {

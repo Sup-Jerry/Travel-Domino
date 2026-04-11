@@ -3,7 +3,10 @@ import { AiService, AiRawItem } from '../main/ets/infrastructure/services/AiServ
 
 export default function aiServiceTest() {
   describe('aiServiceTest', () => {
-    it('parse_should_accept_markdown_wrapped_json', 0, () => {
+    it('normal: parse_should_accept_markdown_wrapped_json', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const content = '```json\n[{"name":"景点A","duration":90,"ai_reasoning":"推荐","type":0}]\n```';
       const items: AiRawItem[] = AiService.parseItemsForTest(content);
       expect(items.length).assertEqual(1);
@@ -11,7 +14,10 @@ export default function aiServiceTest() {
       expect(items[0].duration).assertEqual(90);
     });
 
-    it('parse_should_fail_on_truncated_json', 0, () => {
+    it('invalid: parse_should_fail_on_truncated_json', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       let message = '';
       try {
         AiService.parseItemsForTest('[{"name":"A","duration":30');
@@ -21,7 +27,10 @@ export default function aiServiceTest() {
       expect(message).assertEqual('AI 返回内容不是合法 JSON');
     });
 
-    it('parse_model_response_should_fail_when_choices_empty', 0, () => {
+    it('invalid: parse_model_response_should_fail_when_choices_empty', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       let message = '';
       try {
         AiService.parseModelResponseForTest('{"choices":[]}');
@@ -31,7 +40,10 @@ export default function aiServiceTest() {
       expect(message).assertEqual('AI 响应格式为空');
     });
 
-    it('parse_should_normalize_duration_and_type', 0, () => {
+    it('normal: parse_should_normalize_duration_and_type', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const content = '[{"name":"王府井","duration":500,"ai_reasoning":"","type":0},{"name":"未知类型","duration":40,"ai_reasoning":"x","type":9}]';
       const items: AiRawItem[] = AiService.parseItemsForTest(content);
       expect(items.length).assertEqual(2);
@@ -40,14 +52,20 @@ export default function aiServiceTest() {
       expect(items[1].type).assertEqual(0);
     });
 
-    it('resolve_requested_days_should_support_arabic_and_chinese', 0, () => {
+    it('normal: resolve_requested_days_should_support_arabic_and_chinese', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       expect(AiService.resolveRequestedDaysFromPrompt('帮我规划三日游')).assertEqual(3);
       expect(AiService.resolveRequestedDaysFromPrompt('想要2天旅行')).assertEqual(2);
       expect(AiService.resolveRequestedDaysFromPrompt('安排五日游')).assertEqual(5);
       expect(AiService.resolveRequestedDaysFromPrompt('随便逛逛')).assertEqual(1);
     });
 
-    it('resolve_strategy_max_items_should_scale_by_requested_days', 0, () => {
+    it('boundary: resolve_strategy_max_items_should_scale_by_requested_days', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const oneDay = AiService.resolveStrategyMaxItemsForTest({
         userPrompt: '北京一日游',
         strategyMode: 0
@@ -60,7 +78,10 @@ export default function aiServiceTest() {
       expect(threeDays).assertEqual(18);
     });
 
-    it('resolve_strategy_min_items_should_scale_by_requested_days', 0, () => {
+    it('boundary: resolve_strategy_min_items_should_scale_by_requested_days', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const oneDay = AiService.resolveStrategyMinItemsForTest({
         userPrompt: '北京一日游',
         strategyMode: 0
@@ -73,7 +94,10 @@ export default function aiServiceTest() {
       expect(threeDays).assertEqual(12);
     });
 
-    it('resolve_strategy_range_should_apply_soldier_mode', 0, () => {
+    it('normal: resolve_strategy_range_should_apply_soldier_mode', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const oneDayMin = AiService.resolveStrategyMinItemsForTest({
         userPrompt: '1天',
         strategyMode: 1
@@ -91,7 +115,10 @@ export default function aiServiceTest() {
       expect(threeDaysMin).assertEqual(15);
     });
 
-    it('generate_with_strategy_should_throw_on_empty_items', 0, async () => {
+    it('invalid: generate_with_strategy_should_throw_on_empty_items', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
       AiService.setRequesterForTest(async () => {
         return {
           responseCode: 200,
@@ -119,7 +146,10 @@ export default function aiServiceTest() {
       expect(message).assertEqual('AI 未返回可用地点，请调整描述后重试');
     });
 
-    it('generate_with_strategy_should_retry_when_multi_day_items_not_enough', 0, async () => {
+    it('combined: generate_with_strategy_should_retry_when_multi_day_items_not_enough', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
       let callCount = 0;
       AiService.setRequesterForTest(async () => {
         callCount += 1;
@@ -147,7 +177,10 @@ export default function aiServiceTest() {
       }
     });
 
-    it('generate_with_strategy_should_retry_after_timeout_error_and_succeed', 0, async () => {
+    it('invalid: generate_with_strategy_should_retry_after_timeout_error_and_succeed', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
       let callCount = 0;
       const successResult = '{"choices":[{"message":{"content":"[{\\\"name\\\":\\\"A1\\\",\\\"duration\\\":90,\\\"ai_reasoning\\\":\\\"r1\\\",\\\"type\\\":0},{\\\"name\\\":\\\"A2\\\",\\\"duration\\\":60,\\\"ai_reasoning\\\":\\\"r2\\\",\\\"type\\\":1},{\\\"name\\\":\\\"A3\\\",\\\"duration\\\":120,\\\"ai_reasoning\\\":\\\"r3\\\",\\\"type\\\":0},{\\\"name\\\":\\\"A4\\\",\\\"duration\\\":80,\\\"ai_reasoning\\\":\\\"r4\\\",\\\"type\\\":1},{\\\"name\\\":\\\"A5\\\",\\\"duration\\\":100,\\\"ai_reasoning\\\":\\\"r5\\\",\\\"type\\\":0},{\\\"name\\\":\\\"A6\\\",\\\"duration\\\":70,\\\"ai_reasoning\\\":\\\"r6\\\",\\\"type\\\":1},{\\\"name\\\":\\\"A7\\\",\\\"duration\\\":110,\\\"ai_reasoning\\\":\\\"r7\\\",\\\"type\\\":0},{\\\"name\\\":\\\"A8\\\",\\\"duration\\\":75,\\\"ai_reasoning\\\":\\\"r8\\\",\\\"type\\\":1},{\\\"name\\\":\\\"A9\\\",\\\"duration\\\":95,\\\"ai_reasoning\\\":\\\"r9\\\",\\\"type\\\":0},{\\\"name\\\":\\\"A10\\\",\\\"duration\\\":65,\\\"ai_reasoning\\\":\\\"r10\\\",\\\"type\\\":1},{\\\"name\\\":\\\"A11\\\",\\\"duration\\\":105,\\\"ai_reasoning\\\":\\\"r11\\\",\\\"type\\\":0},{\\\"name\\\":\\\"A12\\\",\\\"duration\\\":85,\\\"ai_reasoning\\\":\\\"r12\\\",\\\"type\\\":1}]"}}]}';
       AiService.setRequesterForTest(async () => {
@@ -173,7 +206,10 @@ export default function aiServiceTest() {
       }
     });
 
-    it('generate_with_soldier_mode_should_use_first_result_when_retry_timeout', 0, async () => {
+    it('normal: generate_with_soldier_mode_should_use_first_result_when_retry_timeout', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
       let callCount = 0;
       const firstResult = '{"choices":[{"message":{"content":"[{\\\"name\\\":\\\"A1\\\",\\\"duration\\\":90,\\\"ai_reasoning\\\":\\\"r1\\\",\\\"type\\\":0},{\\\"name\\\":\\\"A2\\\",\\\"duration\\\":60,\\\"ai_reasoning\\\":\\\"r2\\\",\\\"type\\\":1},{\\\"name\\\":\\\"A3\\\",\\\"duration\\\":120,\\\"ai_reasoning\\\":\\\"r3\\\",\\\"type\\\":0},{\\\"name\\\":\\\"A4\\\",\\\"duration\\\":80,\\\"ai_reasoning\\\":\\\"r4\\\",\\\"type\\\":1},{\\\"name\\\":\\\"A5\\\",\\\"duration\\\":100,\\\"ai_reasoning\\\":\\\"r5\\\",\\\"type\\\":0},{\\\"name\\\":\\\"A6\\\",\\\"duration\\\":70,\\\"ai_reasoning\\\":\\\"r6\\\",\\\"type\\\":1},{\\\"name\\\":\\\"A7\\\",\\\"duration\\\":110,\\\"ai_reasoning\\\":\\\"r7\\\",\\\"type\\\":0},{\\\"name\\\":\\\"A8\\\",\\\"duration\\\":75,\\\"ai_reasoning\\\":\\\"r8\\\",\\\"type\\\":1},{\\\"name\\\":\\\"A9\\\",\\\"duration\\\":95,\\\"ai_reasoning\\\":\\\"r9\\\",\\\"type\\\":0},{\\\"name\\\":\\\"A10\\\",\\\"duration\\\":65,\\\"ai_reasoning\\\":\\\"r10\\\",\\\"type\\\":1},{\\\"name\\\":\\\"A11\\\",\\\"duration\\\":105,\\\"ai_reasoning\\\":\\\"r11\\\",\\\"type\\\":0},{\\\"name\\\":\\\"A12\\\",\\\"duration\\\":85,\\\"ai_reasoning\\\":\\\"r12\\\",\\\"type\\\":1}]"}}]}';
       AiService.setRequesterForTest(async () => {
@@ -199,7 +235,10 @@ export default function aiServiceTest() {
       }
     });
 
-    it('generate_with_soldier_mode_should_fail_when_count_below_min', 0, async () => {
+    it('invalid: generate_with_soldier_mode_should_fail_when_count_below_min', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
       let callCount = 0;
       AiService.setRequesterForTest(async () => {
         callCount += 1;
@@ -223,6 +262,43 @@ export default function aiServiceTest() {
 
       expect(callCount).assertEqual(2);
       expect(message).assertEqual('AI 返回地点数量不足，无法满足3天行程，请补充更多偏好后重试');
+    });
+  });
+  describe('unit_test_case_generator_backfill_AiService', () => {
+    it('conflict: multi_day_without_accommodation_should_reject_hotel_only_result', 0, async () => {
+      // Arrange
+      let callCount = 0;
+      AiService.setRequesterForTest(async () => {
+        callCount += 1;
+        return {
+          responseCode: 200,
+          result: '{"choices":[{"message":{"content":"[{\\\"name\\\":\\\"hotel_a\\\",\\\"duration\\\":600,\\\"ai_reasoning\\\":\\\"r\\\",\\\"type\\\":2},{\\\"name\\\":\\\"hotel_b\\\",\\\"duration\\\":600,\\\"ai_reasoning\\\":\\\"r\\\",\\\"type\\\":2}]"}}]}'
+        };
+      });
+      // Act
+      let message = '';
+      try {
+        await AiService.generateItineraryWithStrategy({
+          userPrompt: '帮我规划两天景点，不需要住宿',
+          strategyMode: 0
+        });
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
+      } finally {
+        AiService.setRequesterForTest(null);
+      }
+      // Assert
+      expect(callCount).assertEqual(2);
+      expect(message.includes('无法满足')).assertEqual(true);
+    });
+
+    it('regression: td-20260411-resolve_requested_days_should_clamp_to_30', 0, () => {
+      // Arrange
+      const prompt = '请帮我规划120天行程';
+      // Act
+      const days = AiService.resolveRequestedDaysFromPrompt(prompt);
+      // Assert
+      expect(days).assertEqual(30);
     });
   });
 }

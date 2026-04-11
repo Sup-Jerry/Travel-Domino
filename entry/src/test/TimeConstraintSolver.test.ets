@@ -75,7 +75,10 @@ function buildBacklogItem(id: number, name: string): TravelPlanItem {
 
 export default function timeConstraintSolverTest() {
   describe('timeConstraintSolverTest', () => {
-    it('solver_should_cross_day_on_23xx_to_00xx_boundary', 0, () => {
+    it('boundary: solver_should_cross_day_on_23xx_to_00xx_boundary', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const planStart = new Date('2026-01-01T00:00:00').getTime();
       const input = [
         buildScheduleItem(1, 'A', 20, 0),
@@ -94,7 +97,10 @@ export default function timeConstraintSolverTest() {
       expect(delta).assertEqual(20);
     });
 
-    it('solver_should_keep_rigid_anchor_time_and_mark_conflict', 0, () => {
+    it('conflict: solver_should_keep_rigid_anchor_time_and_mark_conflict', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const planStart = new Date('2026-01-01T00:00:00').getTime();
       const input = [
         buildScheduleItem(1, 'A', 90, 0),
@@ -110,7 +116,10 @@ export default function timeConstraintSolverTest() {
       expect(anchor.isConflict ?? false).assertEqual(true);
     });
 
-    it('solver_should_keep_original_array_order_stable', 0, () => {
+    it('normal: solver_should_keep_original_array_order_stable', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const planStart = new Date('2026-01-01T00:00:00').getTime();
       const input = [
         buildScheduleItem(11, 'S1', 30, 0),
@@ -127,7 +136,10 @@ export default function timeConstraintSolverTest() {
       expect(result[2].id ?? 0).assertEqual(12);
     });
 
-    it('solver_should_move_ai_scenic_out_of_night_window', 0, () => {
+    it('normal: solver_should_move_ai_scenic_out_of_night_window', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const planStart = new Date('2026-01-01T00:00:00').getTime();
       const input = [
         buildScheduleItem(1, '王府井', 60, 0, '', 0, 1, 0),
@@ -145,7 +157,10 @@ export default function timeConstraintSolverTest() {
       expect(second.computedStartTime ?? '').assertEqual('09:00');
     });
 
-    it('solver_should_shift_following_item_to_next_day_when_travel_is_super_long', 0, () => {
+    it('normal: solver_should_shift_following_item_to_next_day_when_travel_is_super_long', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const planStart = new Date('2026-01-01T00:00:00').getTime();
       const first = buildScheduleItem(1, 'A', 60, 0, '', 0, 0, 0);
       const second = buildScheduleItem(2, 'B', 60, 0, '', 0, 0, 0);
@@ -162,6 +177,61 @@ export default function timeConstraintSolverTest() {
 
       const eventThird = result[2];
       expect((eventThird.dynamicDayOffset ?? -1) > 0).assertTrue();
+    });
+  });
+  describe('unit_test_case_generator_backfill_TimeConstraintSolver', () => {
+    it('invalid: solver_should_fallback_to_default_start_when_global_time_invalid', 0, () => {
+      // Arrange
+      const planStart = new Date('2026-01-01T00:00:00').getTime();
+      const input = [buildScheduleItem(1, 'A', 30, 0)];
+      // Act
+      const result = TimeConstraintSolver.calculateTimeline(input, 'not-a-time', planStart, {
+        autoRouteEnabled: false,
+        slackRatio: 0
+      });
+      // Assert
+      expect(result[0].computedStartTime ?? '').assertEqual('01-01 08:00');
+      const expectedTs = new Date('2026-01-01T08:00:00').getTime();
+      expect(result[0].dynamicStartTime ?? 0).assertEqual(expectedTs);
+    });
+
+    it('regression: td-20260411-start-from-event-should-use-previous-dynamic-cursor', 0, () => {
+      // Arrange
+      const planStart = new Date('2026-01-01T00:00:00').getTime();
+      const first = buildScheduleItem(1, 'A', 60, 0);
+      first.dynamicStartTime = new Date('2026-01-01T09:00:00').getTime();
+      first.dynamicDayOffset = 0;
+      const second = buildScheduleItem(2, 'B', 30, 0);
+      // Act
+      const result = TimeConstraintSolver.calculateTimeline([first, second], '06:00', planStart, {
+        autoRouteEnabled: false,
+        startFromEventId: 2,
+        slackRatio: 0
+      });
+      // Assert
+      expect(result[1].computedStartTime ?? '').assertEqual('10:00');
+      expect(result[1].dynamicDayOffset ?? -1).assertEqual(0);
+    });
+
+    it('combined: solver_should_mark_idle_gap_for_rigid_anchor_when_gap_detection_enabled', 0, () => {
+      // Arrange
+      const planStart = new Date('2026-01-01T00:00:00').getTime();
+      const input = [
+        buildScheduleItem(1, 'A', 30, 0),
+        buildScheduleItem(2, 'Anchor', 30, 0, '12:00', 1)
+      ];
+      // Act
+      const result = TimeConstraintSolver.calculateTimeline(input, '09:00', planStart, {
+        autoRouteEnabled: false,
+        idleGapDetectionEnabled: true,
+        idleGapTriggerMinutes: 45,
+        slackRatio: 0
+      });
+      // Assert
+      const anchor = result[1];
+      expect(anchor.hasGap ?? false).assertEqual(true);
+      expect((anchor.gapMinutes ?? 0) >= 120).assertEqual(true);
+      expect(anchor.naturalStartTime ?? '').assertEqual('09:30');
     });
   });
 }

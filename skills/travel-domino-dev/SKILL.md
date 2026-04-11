@@ -244,6 +244,9 @@ description: 用于 Travel Domino（HarmonyOS 行程规划项目）的定向开�
 - ?????????????????????? toast ?????????????
 - 当用户反馈设置页统计不准时，先核对数据链路是否覆盖重规划/二次入口，而不只检查首次生成入口
 - 用户要求"复盘迭代 + 瘦身 + 上传GitHub"时，执行顺序固定为：经验沉淀 -> 瘦身 -> 发布
+- 当用户要求先给规划文档再继续实施时，先产出可验收的txt规划，再进入实现。
+- 执行C1/C2分批补测时，优先服务层单测再做module元数据装配测试，减少无效断言。
+- 在Windows环境出现并发命令失败(CreateProcessWithLogonW 1056)时，切换串行读取与单进程命令。
 
 ### Known Fixes & Workarounds
 - For cross-day domino shifts, user-facing date and writeback inputs must prefer dynamic_day_offset; do not mix with day_offset in one flow.
@@ -345,7 +348,10 @@ description: 用于 Travel Domino（HarmonyOS 行程规划项目）的定向开�
 - AI策略统计异常优先检查 AiInputDialog -> Index -> ViewModel 的 onRegenerate 参数透传，避免 strategy/customStrategy 在重规划链路丢失
 - TimelineViewModel.loadData 需先重置再回填 currentStrategyMode（来自 plan.strategyMode），避免跨计划沿用旧模式导致统计偏差
 - 当当前策略为自定义(-1)且用户未在弹窗触碰策略控件时，重规划应保持当前模式，不应回退到默认模式
+- unit-test-case门禁脚本的AAA检测不应仅看前8行，需覆盖完整测试块或足够窗口。
+- 当apply_patch出现系统级写入异常时，改用稳定文件写入方式继续交付，之后再回归验证。
+- 为避免污染提交范围，发布到GitHub时优先通过git-auto-publish的-Files显式控制提交文件。
 
 ### Custom Instruction Injection
 
-策略统计类问题默认排查顺序：UI选择态 -> 回调参数透传 -> 服务写入 -> 偏好页读取映射；先修链路一致性，再做表现层调整。
+单测补齐任务默认流程：先范围盘点与批次划分，再按6类case+AAA落地，最后跑结构门禁与模块测试双验收。

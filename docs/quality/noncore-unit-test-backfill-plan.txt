@@ -1,0 +1,60 @@
+Travel Domino 非核心单测补齐总规划
+版本: 2026-04-11
+
+一、目标
+1. 在核心补测完成后，系统化补齐非核心模块测试，提升可维护性与发布稳定性。
+2. 保持与核心一致的测试规范:
+   - 6类 case: normal / boundary / invalid / conflict / regression / combined
+   - AAA 结构注释: Arrange / Act / Assert
+
+二、非核心范围
+1. entry 页面与组件:
+   - entry/src/main/ets/pages/*
+   - entry/src/main/ets/pages/index/*
+   - entry/src/main/ets/pages/components/*
+2. entry 应用入口与常量:
+   - entry/src/main/ets/entryability/*
+   - entry/src/main/ets/entrybackupability/*
+   - entry/src/main/ets/common/constants/*
+3. backend 非核心基础设施:
+   - backend/src/common/*
+   - backend/src/config/*
+   - backend/src/modules/health/*
+   - backend/src/app.module.ts
+   - backend/src/main.ts
+
+三、执行批次
+批次 N1: 聚合与基础工具测试
+1. 维护 List.test.ets / WeatherP0Suite.test.ets / AutomatedTest.test.ets 的可验收状态。
+2. 补齐低风险工具类测试缺口，优先边界与非法输入。
+
+批次 N2: 后端非核心基础设施
+1. config/common/health 等模块补测。
+2. 重点校验配置加载、异常过滤、响应封装等可观察行为。
+
+批次 N3: 页面状态编排层
+1. pages/index 子模块补测。
+2. 重点覆盖状态切换、参数校验、事件冲突、组合触发路径。
+
+批次 N4: UI 组件层
+1. dialogs/views/companion 等组件补测。
+2. 避免内部渲染细节断言，聚焦输入状态与输出事件。
+
+四、每批交付标准
+1. 本批触达的测试文件全部满足 6类 case + AAA + regression。
+2. 测试命名统一前缀，失败信息可定位。
+3. 不新增生产代码依赖，不引入与现有框架冲突的测试库。
+
+五、每批验收命令
+1. 结构规则验收:
+   powershell -ExecutionPolicy Bypass -File scripts/ci/validate-unit-test-cases.ps1
+2. 后端测试验收:
+   cd backend
+   npm test -- --runInBand
+3. 客户端单测验收:
+   powershell -ExecutionPolicy Bypass -File scripts/ci/unit-all.ps1
+
+六、完成判定
+1. 非核心范围新增/改造测试文件全部满足结构规则。
+2. 非核心测试失败不影响核心业务契约判定，分层验收并独立回归。
+3. 最终回归报告按批次输出: 覆盖范围、失败项、修复建议、剩余风险。
