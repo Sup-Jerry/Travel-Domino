@@ -199,38 +199,82 @@ export default function planStateMachineLinkTest() {
       expect(called).assertEqual(false);
     });
   });
-  describe('unit_test_case_generator_autofill_PlanStateMachineLink', () => {
-    it('boundary: td-20260411-auto-PlanStateMachineLink', 0, () => {
+  describe('unit_test_case_generator_backfill_PlanStateMachineLink', () => {
+    it('boundary: weather_scheduler_should_disable_refresh_for_terminal_status', 0, () => {
       // Arrange
-      const actual = true;
+      const scheduler = new PlanWeatherRefreshPlanner();
+      const now = Date.now();
       // Act
-      const passed = actual;
+      const entered = scheduler.onStatusEntered('terminal_plan', PlanStatus.COMPLETED, now);
+      const evaluated = scheduler.evaluate('terminal_plan', PlanStatus.COMPLETED, now + 60 * 1000);
       // Assert
-      expect(passed).assertTrue();
+      expect(entered.shouldRefresh).assertEqual(false);
+      expect(evaluated.shouldRefresh).assertEqual(false);
+      expect((evaluated.nextRefreshAt === undefined)).assertEqual(true);
     });
-    it('conflict: td-20260411-auto-PlanStateMachineLink', 0, () => {
+
+    it('conflict: transition_should_fail_when_expected_status_does_not_match_context', 0, () => {
       // Arrange
-      const actual = true;
+      const machine = PlanStateMachine.getInstance();
+      const planId = `status_conflict_${Date.now()}`;
+      machine.confirmPlan(planId);
       // Act
-      const passed = actual;
+      const result = machine.transitionPlanStatus({
+        planId: planId,
+        expectedFromStatus: PlanStatus.DRAFT,
+        targetStatus: PlanStatus.READY,
+        triggerSource: TransitionTriggerSource.USER_ACTION,
+        triggerReason: 'force_ready_with_wrong_expected_status'
+      });
       // Assert
-      expect(passed).assertTrue();
+      expect(result.success).assertEqual(false);
+      expect(result.errorCode).assertEqual('STATUS_CONFLICT');
     });
-    it('regression: td-20260411-auto-PlanStateMachineLink', 0, () => {
+
+    it('regression: td-20260411-location_change_should_not_emit_below_motion_threshold', 0, () => {
       // Arrange
-      const actual = true;
+      const machine = PlanStateMachine.getInstance();
+      const planId = `location_threshold_${Date.now()}`;
+      machine.confirmPlan(planId);
+      machine.prepareExecution(planId, TransitionTriggerSource.TIME_WINDOW);
+      let called = false;
+      const dispose = machine.subscribeLocationChange(planId, (_event: LocationChangeEvent) => {
+        called = true;
+      });
       // Act
-      const passed = actual;
+      machine.updateExecutionContext({
+        planId: planId,
+        lastKnownLatitude: 31.2304,
+        lastKnownLongitude: 121.4737,
+        distanceToFirstNodeMeters: 119,
+        updatedAt: Date.now()
+      });
+      dispose();
       // Assert
-      expect(passed).assertTrue();
+      expect(called).assertEqual(false);
     });
-    it('combined: td-20260411-auto-PlanStateMachineLink', 0, () => {
+
+    it('combined: paused_plan_should_support_soft_replan_with_start_node_and_constraints', 0, () => {
       // Arrange
-      const actual = true;
+      const machine = PlanStateMachine.getInstance();
+      const planId = `combined_replan_${Date.now()}`;
+      machine.confirmPlan(planId);
+      machine.startExecution(planId, TransitionTriggerSource.USER_ACTION);
+      machine.pauseExecution(planId);
       // Act
-      const passed = actual;
+      const result = machine.requestSoftReplan({
+        planId: planId,
+        reason: 'rain_and_delay',
+        currentNodeId: '2001',
+        preserveCompletedNodes: true,
+        preserveStartedWindow: true,
+        useWeatherConstraint: true
+      });
       // Assert
-      expect(passed).assertTrue();
+      expect(result.success).assertEqual(true);
+      expect(result.reasonCode).assertEqual('weather_soft_replan');
+      expect(result.startFromEventId ?? 0).assertEqual(2001);
+      expect(result.preserveCompletedNodes ?? false).assertEqual(true);
     });
   });
 }

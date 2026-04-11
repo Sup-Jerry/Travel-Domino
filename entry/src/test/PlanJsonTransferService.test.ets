@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@ohos/hypium';
-import { PlanImportExportService } from '../main/ets/infrastructure/services/PlanImportExportService';
+import { PlanImportExportService, PlanJsonImportCancelToken } from '../main/ets/infrastructure/services/PlanImportExportService';
 import { TravelPlanItem } from '../main/ets/model/interface/IStandardEvent';
 
 interface MockStoreStats {
@@ -174,46 +174,180 @@ export default function planJsonTransferServiceTest() {
       done();
     });
   });
-  describe('unit_test_case_generator_autofill_PlanJsonTransferService', () => {
-    it('normal: td-20260411-auto-PlanJsonTransferService', 0, () => {
+  describe('unit_test_case_generator_backfill_PlanJsonTransferService', () => {
+    it('normal: import_should_commit_and_return_new_plan_id_on_valid_payload', 0, async (done: () => void) => {
       // Arrange
-      const actual = true;
+      const store = new MockStore();
+      const createdPlanIds: number[] = [];
+      const createdPlanStartDates: number[] = [];
+      let inserted = 0;
+      PlanImportExportService.setDepsForTest({
+        getStore: (): MockStore => store,
+        createPlan: async (_title: string, startDate: number): Promise<number> => {
+          createdPlanIds.push(2001);
+          createdPlanStartDates.push(startDate);
+          return 2001;
+        },
+        updateAutoAmapRoute: async (_id: number, _enabled: boolean): Promise<void> => {
+        },
+        updatePlanStatus: async (_id: number, _status: number): Promise<void> => {
+        },
+        insertEvent: async (_planId: number, _item: TravelPlanItem): Promise<number> => {
+          inserted += 1;
+          return inserted;
+        },
+        hardDeletePlan: async (_id: number): Promise<void> => {
+        }
+      });
       // Act
-      const passed = actual;
+      const importedId = await PlanImportExportService.importPlanFromJson(buildValidPayloadJson());
       // Assert
-      expect(passed).assertTrue();
+      expect(importedId).assertEqual(2001);
+      expect(store.stats.beginCount).assertEqual(1);
+      expect(store.stats.commitCount).assertEqual(1);
+      expect(store.stats.rollbackCount).assertEqual(0);
+      expect(createdPlanIds.length).assertEqual(1);
+      expect(createdPlanStartDates[0]).assertEqual(1733000000000);
+      expect(inserted).assertEqual(2);
+      PlanImportExportService.setDepsForTest(null);
+      done();
     });
-    it('boundary: td-20260411-auto-PlanJsonTransferService', 0, () => {
+
+    it('boundary: import_should_allow_empty_events_payload', 0, async (done: () => void) => {
       // Arrange
-      const actual = true;
+      const store = new MockStore();
+      const parsed = JSON.parse(buildValidPayloadJson()) as TestImportPayload;
+      parsed.events = [];
+      let inserted = 0;
+      PlanImportExportService.setDepsForTest({
+        getStore: (): MockStore => store,
+        createPlan: async (_title: string, _startDate: number): Promise<number> => 2101,
+        updateAutoAmapRoute: async (_id: number, _enabled: boolean): Promise<void> => {
+        },
+        updatePlanStatus: async (_id: number, _status: number): Promise<void> => {
+        },
+        insertEvent: async (_planId: number, _item: TravelPlanItem): Promise<number> => {
+          inserted += 1;
+          return inserted;
+        },
+        hardDeletePlan: async (_id: number): Promise<void> => {
+        }
+      });
       // Act
-      const passed = actual;
+      const importedId = await PlanImportExportService.importPlanFromJson(JSON.stringify(parsed));
       // Assert
-      expect(passed).assertTrue();
+      expect(importedId).assertEqual(2101);
+      expect(inserted).assertEqual(0);
+      expect(store.stats.commitCount).assertEqual(1);
+      expect(store.stats.rollbackCount).assertEqual(0);
+      PlanImportExportService.setDepsForTest(null);
+      done();
     });
-    it('conflict: td-20260411-auto-PlanJsonTransferService', 0, () => {
+
+    it('conflict: import_should_rollback_when_cancelled_during_event_loop', 0, async (done: () => void) => {
       // Arrange
-      const actual = true;
+      const store = new MockStore();
+      const cancelToken = new PlanJsonImportCancelToken();
+      const deletedPlanIds: number[] = [];
+      let inserted = 0;
+      PlanImportExportService.setDepsForTest({
+        getStore: (): MockStore => store,
+        createPlan: async (_title: string, _startDate: number): Promise<number> => 2201,
+        updateAutoAmapRoute: async (_id: number, _enabled: boolean): Promise<void> => {
+        },
+        updatePlanStatus: async (_id: number, _status: number): Promise<void> => {
+        },
+        insertEvent: async (_planId: number, _item: TravelPlanItem): Promise<number> => {
+          inserted += 1;
+          if (inserted === 1) {
+            cancelToken.cancel();
+          }
+          return inserted;
+        },
+        hardDeletePlan: async (id: number): Promise<void> => {
+          deletedPlanIds.push(id);
+        }
+      });
       // Act
-      const passed = actual;
+      let thrown = '';
+      try {
+        await PlanImportExportService.importPlanFromJson(buildValidPayloadJson(), cancelToken);
+      } catch (error) {
+        thrown = error instanceof Error ? error.message : '';
+      } finally {
+        PlanImportExportService.setDepsForTest(null);
+      }
       // Assert
-      expect(passed).assertTrue();
+      expect(thrown).assertContain('import_cancelled:insert_event_1');
+      expect(store.stats.commitCount).assertEqual(0);
+      expect(store.stats.rollbackCount).assertEqual(1);
+      expect(deletedPlanIds.length).assertEqual(1);
+      expect(deletedPlanIds[0]).assertEqual(2201);
+      done();
     });
-    it('regression: td-20260411-auto-PlanJsonTransferService', 0, () => {
+
+    it('regression: td-20260411-import_should_floor_status_before_persist', 0, async (done: () => void) => {
       // Arrange
-      const actual = true;
+      const store = new MockStore();
+      const parsed = JSON.parse(buildValidPayloadJson()) as TestImportPayload;
+      parsed.plan.status = 1.8;
+      let persistedStatus = -1;
+      PlanImportExportService.setDepsForTest({
+        getStore: (): MockStore => store,
+        createPlan: async (_title: string, _startDate: number): Promise<number> => 2301,
+        updateAutoAmapRoute: async (_id: number, _enabled: boolean): Promise<void> => {
+        },
+        updatePlanStatus: async (_id: number, status: number): Promise<void> => {
+          persistedStatus = status;
+        },
+        insertEvent: async (_planId: number, _item: TravelPlanItem): Promise<number> => 1,
+        hardDeletePlan: async (_id: number): Promise<void> => {
+        }
+      });
       // Act
-      const passed = actual;
+      await PlanImportExportService.importPlanFromJson(JSON.stringify(parsed));
       // Assert
-      expect(passed).assertTrue();
+      expect(persistedStatus).assertEqual(1);
+      expect(store.stats.commitCount).assertEqual(1);
+      PlanImportExportService.setDepsForTest(null);
+      done();
     });
-    it('combined: td-20260411-auto-PlanJsonTransferService', 0, () => {
+
+    it('combined: import_should_apply_status_and_auto_route_with_event_normalization', 0, async (done: () => void) => {
       // Arrange
-      const actual = true;
+      const store = new MockStore();
+      const parsed = JSON.parse(buildValidPayloadJson()) as TestImportPayload;
+      parsed.plan.status = 2;
+      parsed.plan.enableAutoAmapRoute = 0;
+      parsed.events[0].preTravelMinutes = -1;
+      let persistedStatus = -1;
+      let persistedAutoRoute = true;
+      let persistedPreTravel = 0;
+      PlanImportExportService.setDepsForTest({
+        getStore: (): MockStore => store,
+        createPlan: async (_title: string, _startDate: number): Promise<number> => 2401,
+        updateAutoAmapRoute: async (_id: number, enabled: boolean): Promise<void> => {
+          persistedAutoRoute = enabled;
+        },
+        updatePlanStatus: async (_id: number, status: number): Promise<void> => {
+          persistedStatus = status;
+        },
+        insertEvent: async (_planId: number, item: TravelPlanItem): Promise<number> => {
+          persistedPreTravel = item.preTravelMinutes ?? 0;
+          return 1;
+        },
+        hardDeletePlan: async (_id: number): Promise<void> => {
+        }
+      });
       // Act
-      const passed = actual;
+      await PlanImportExportService.importPlanFromJson(JSON.stringify(parsed));
       // Assert
-      expect(passed).assertTrue();
+      expect(persistedStatus).assertEqual(2);
+      expect(persistedAutoRoute).assertEqual(false);
+      expect(persistedPreTravel).assertEqual(-1);
+      expect(store.stats.commitCount).assertEqual(1);
+      PlanImportExportService.setDepsForTest(null);
+      done();
     });
   });
 }

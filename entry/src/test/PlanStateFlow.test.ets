@@ -208,46 +208,99 @@ export default function planStateFlowTest() {
       done();
     });
   });
-  describe('unit_test_case_generator_autofill_PlanStateFlow', () => {
-    it('boundary: td-20260411-auto-PlanStateFlow', 0, () => {
+  describe('unit_test_case_generator_backfill_PlanStateFlow', () => {
+    it('boundary: visible_list_should_filter_out_archived_plans', 0, async (done: () => void) => {
       // Arrange
-      const actual = true;
+      const repo = new InMemoryPlanRepo();
+      repo.seedPlan(buildPlan(10, 'ActivePlan', 0), 1);
+      repo.seedPlan(buildPlan(11, 'ArchivedPlan', 2), 1);
+      PlanAppService.setPlanRepositoryForTest(repo);
+      const service = PlanAppService.getInstance();
       // Act
-      const passed = actual;
+      const visible = await service.loadVisiblePlans();
       // Assert
-      expect(passed).assertTrue();
+      expect(visible.length).assertEqual(1);
+      expect(visible[0].id).assertEqual(10);
+      PlanAppService.setPlanRepositoryForTest(null);
+      done();
     });
-    it('invalid: td-20260411-auto-PlanStateFlow', 0, () => {
+
+    it('invalid: operations_on_unknown_plan_should_not_break_current_lists', 0, async (done: () => void) => {
       // Arrange
-      const actual = true;
+      const repo = new InMemoryPlanRepo();
+      repo.seedPlan(buildPlan(20, 'OnlyOne', 0), 1);
+      PlanAppService.setPlanRepositoryForTest(repo);
+      const service = PlanAppService.getInstance();
       // Act
-      const passed = actual;
+      await service.archivePlan(999);
+      await service.restorePlan(999);
+      await service.hardDeletePlan(999);
+      const visible = await service.loadVisiblePlans();
       // Assert
-      expect(passed).assertTrue();
+      expect(visible.length).assertEqual(1);
+      expect(visible[0].id).assertEqual(20);
+      PlanAppService.setPlanRepositoryForTest(null);
+      done();
     });
-    it('conflict: td-20260411-auto-PlanStateFlow', 0, () => {
+
+    it('conflict: activate_after_soft_delete_should_stay_in_trash_until_restore', 0, async (done: () => void) => {
       // Arrange
-      const actual = true;
+      const repo = new InMemoryPlanRepo();
+      repo.seedPlan(buildPlan(30, 'ConflictPlan', 0), 2);
+      PlanAppService.setPlanRepositoryForTest(repo);
+      const service = PlanAppService.getInstance();
       // Act
-      const passed = actual;
+      await service.softDeletePlan(30);
+      await service.activatePlan(30);
+      const visible = await service.loadVisiblePlans();
+      const trash = await service.loadTrashPlans();
       // Assert
-      expect(passed).assertTrue();
+      expect(visible.findIndex((item: PlanItem) => item.id === 30)).assertEqual(-1);
+      expect(trash.findIndex((item: PlanItem) => item.id === 30) >= 0).assertEqual(true);
+      PlanAppService.setPlanRepositoryForTest(null);
+      done();
     });
-    it('regression: td-20260411-auto-PlanStateFlow', 0, () => {
+
+    it('regression: td-20260411-restore-active-plan-should-return-to-visible-list', 0, async (done: () => void) => {
       // Arrange
-      const actual = true;
+      const repo = new InMemoryPlanRepo();
+      repo.seedPlan(buildPlan(40, 'RestoreMe', 0), 1);
+      PlanAppService.setPlanRepositoryForTest(repo);
+      const service = PlanAppService.getInstance();
       // Act
-      const passed = actual;
+      await service.softDeletePlan(40);
+      await service.restorePlan(40);
+      const visible = await service.loadVisiblePlans();
       // Assert
-      expect(passed).assertTrue();
+      const restored = visible.find((item: PlanItem) => item.id === 40);
+      expect(restored !== undefined).assertEqual(true);
+      expect(restored?.status ?? -1).assertEqual(0);
+      PlanAppService.setPlanRepositoryForTest(null);
+      done();
     });
-    it('combined: td-20260411-auto-PlanStateFlow', 0, () => {
+
+    it('combined: create_archive_trash_restore_activate_should_end_as_visible_active', 0, async (done: () => void) => {
       // Arrange
-      const actual = true;
+      const repo = new InMemoryPlanRepo();
+      PlanAppService.setPlanRepositoryForTest(repo);
+      const service = PlanAppService.getInstance();
       // Act
-      const passed = actual;
+      const planId = await service.createPlan('CombinedFlow', 1733000000000);
+      await service.archivePlan(planId);
+      await service.softDeletePlan(planId);
+      await service.restorePlan(planId);
+      await service.activatePlan(planId);
+      const visible = await service.loadVisiblePlans();
+      const archived = await service.loadArchivedPlans();
+      const trash = await service.loadTrashPlans();
       // Assert
-      expect(passed).assertTrue();
+      const active = visible.find((item: PlanItem) => item.id === planId);
+      expect(active !== undefined).assertEqual(true);
+      expect(active?.status ?? -1).assertEqual(0);
+      expect(archived.findIndex((item: PlanItem) => item.id === planId)).assertEqual(-1);
+      expect(trash.findIndex((item: PlanItem) => item.id === planId)).assertEqual(-1);
+      PlanAppService.setPlanRepositoryForTest(null);
+      done();
     });
   });
 }

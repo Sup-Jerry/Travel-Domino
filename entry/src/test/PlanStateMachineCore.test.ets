@@ -2,6 +2,7 @@
 import { PlanStatus, TransitionTriggerSource } from '../main/ets/domain/statemachine/PlanStatus';
 import { StateEvaluator } from '../main/ets/domain/statemachine/StateEvaluator';
 import { TransitionEngine } from '../main/ets/domain/statemachine/TransitionEngine';
+import { StateEvaluationInput } from '../main/ets/domain/statemachine/ExecutionContext';
 
 export default function planStateMachineCoreTest() {
   describe('planStateMachineCoreTest', () => {
@@ -137,30 +138,89 @@ export default function planStateMachineCoreTest() {
       expect(result.toStatus).assertEqual(PlanStatus.READY);
     });
   });
-  describe('unit_test_case_generator_autofill_PlanStateMachineCore', () => {
-    it('boundary: td-20260411-auto-PlanStateMachineCore', 0, () => {
+  describe('unit_test_case_generator_backfill_PlanStateMachineCore', () => {
+    it('boundary: should_enter_ready_at_window_start_but_not_before', 0, () => {
       // Arrange
-      const actual = true;
+      const evaluator = new StateEvaluator();
+      const firstNodeStart = Date.now() + 60 * 60 * 1000;
+      const atWindowInput: StateEvaluationInput = {
+        planId: 'p-boundary',
+        currentStatus: PlanStatus.CONFIRMED,
+        now: firstNodeStart - 30 * 60 * 1000,
+        firstNodeStartTime: firstNodeStart,
+        locationPermissionGranted: false,
+        userClickedStart: false,
+        userClickedPause: false,
+        userClickedResume: false,
+        userClickedCancel: false,
+        hasReachedFirstNode: false,
+        motionDetected: false,
+        allNodesCompleted: false,
+        isPlanExpired: false
+      };
+      const beforeWindowInput: StateEvaluationInput = {
+        planId: 'p-boundary',
+        currentStatus: PlanStatus.CONFIRMED,
+        now: firstNodeStart - 30 * 60 * 1000 - 1,
+        firstNodeStartTime: firstNodeStart,
+        locationPermissionGranted: false,
+        userClickedStart: false,
+        userClickedPause: false,
+        userClickedResume: false,
+        userClickedCancel: false,
+        hasReachedFirstNode: false,
+        motionDetected: false,
+        allNodesCompleted: false,
+        isPlanExpired: false
+      };
       // Act
-      const passed = actual;
+      const atWindowStart = evaluator.shouldEnterReady(atWindowInput);
+      const beforeWindow = evaluator.shouldEnterReady(beforeWindowInput);
       // Assert
-      expect(passed).assertTrue();
+      expect(atWindowStart).assertEqual(true);
+      expect(beforeWindow).assertEqual(false);
     });
-    it('regression: td-20260411-auto-PlanStateMachineCore', 0, () => {
+
+    it('regression: td-20260411-transition_engine_should_report_status_conflict_before_transition_table', 0, () => {
       // Arrange
-      const actual = true;
+      const engine = new TransitionEngine();
       // Act
-      const passed = actual;
+      const result = engine.transitionPlanStatus(PlanStatus.READY, {
+        planId: 'p-regression',
+        expectedFromStatus: PlanStatus.CONFIRMED,
+        targetStatus: PlanStatus.IN_PROGRESS,
+        triggerSource: TransitionTriggerSource.USER_ACTION,
+        triggerReason: 'force_start'
+      });
       // Assert
-      expect(passed).assertTrue();
+      expect(result.success).assertEqual(false);
+      expect(result.errorCode).assertEqual('STATUS_CONFLICT');
     });
-    it('combined: td-20260411-auto-PlanStateMachineCore', 0, () => {
+
+    it('combined: cancel_should_take_precedence_when_cancel_and_complete_happen_together', 0, () => {
       // Arrange
-      const actual = true;
+      const evaluator = new StateEvaluator();
+      const now = Date.now();
       // Act
-      const passed = actual;
+      const result = evaluator.evaluateNextStatus({
+        planId: 'p-combined',
+        currentStatus: PlanStatus.IN_PROGRESS,
+        now: now,
+        firstNodeStartTime: now - 60 * 1000,
+        locationPermissionGranted: true,
+        userClickedStart: false,
+        userClickedPause: false,
+        userClickedResume: false,
+        userClickedCancel: true,
+        hasReachedFirstNode: true,
+        motionDetected: true,
+        allNodesCompleted: true,
+        isPlanExpired: false
+      });
       // Assert
-      expect(passed).assertTrue();
+      expect(result.shouldTransition).assertEqual(true);
+      expect(result.suggestedStatus).assertEqual(PlanStatus.CANCELLED);
+      expect(result.triggerSource).assertEqual(TransitionTriggerSource.USER_ACTION);
     });
   });
 }

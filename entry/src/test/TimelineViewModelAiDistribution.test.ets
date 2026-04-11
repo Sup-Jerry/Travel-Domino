@@ -28,38 +28,46 @@ export default function timelineViewModelAiDistributionTest() {
       expect(TimelineDistributionService.clampDistributionAdd(100, 20)).assertEqual(20);
     });
   });
-  describe('unit_test_case_generator_autofill_TimelineViewModelAiDistribution', () => {
-    it('invalid: td-20260411-auto-TimelineViewModelAiDistribution', 0, () => {
+  describe('unit_test_case_generator_backfill_TimelineViewModelAiDistribution', () => {
+    it('invalid: build_ai_day_offsets_should_return_empty_when_total_items_non_positive', 0, () => {
       // Arrange
-      const actual = true;
       // Act
-      const passed = actual;
+      const offsets = TimelineAiService.buildAiDayOffsets(0, 3, 1);
       // Assert
-      expect(passed).assertTrue();
+      expect(offsets.length).assertEqual(0);
     });
-    it('conflict: td-20260411-auto-TimelineViewModelAiDistribution', 0, () => {
+
+    it('conflict: clamp_distribution_add_should_resolve_capacity_conflict_to_zero', 0, () => {
       // Arrange
-      const actual = true;
+      const currentDuration = 300;
       // Act
-      const passed = actual;
+      const add = TimelineDistributionService.clampDistributionAdd(currentDuration, 40);
       // Assert
-      expect(passed).assertTrue();
+      expect(add).assertEqual(0);
     });
-    it('regression: td-20260411-auto-TimelineViewModelAiDistribution', 0, () => {
+
+    it('regression: td-20260411-build_ai_day_offsets_should_keep_base_offset_even_when_days_invalid', 0, () => {
       // Arrange
-      const actual = true;
       // Act
-      const passed = actual;
+      const offsets = TimelineAiService.buildAiDayOffsets(3, 0, 5);
       // Assert
-      expect(passed).assertTrue();
+      expect(offsets.length).assertEqual(3);
+      expect(offsets[0]).assertEqual(5);
+      expect(offsets[1]).assertEqual(5);
+      expect(offsets[2]).assertEqual(5);
     });
-    it('combined: td-20260411-auto-TimelineViewModelAiDistribution', 0, () => {
+
+    it('combined: build_offsets_and_clamp_should_keep_day_split_and_single_item_cap_together', 0, () => {
       // Arrange
-      const actual = true;
+      const offsets = TimelineAiService.buildAiDayOffsets(4, 2, 2);
       // Act
-      const passed = actual;
+      const cappedAdd = TimelineDistributionService.clampDistributionAdd(235, 20);
       // Assert
-      expect(passed).assertTrue();
+      expect(offsets[0]).assertEqual(2);
+      expect(offsets[1]).assertEqual(2);
+      expect(offsets[2]).assertEqual(3);
+      expect(offsets[3]).assertEqual(3);
+      expect(cappedAdd).assertEqual(5);
     });
   });
 }

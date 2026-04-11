@@ -69,38 +69,46 @@ export default function timelineDatePolicyTest() {
       expect(vm.events[2].id).assertEqual(2);
     });
   });
-  describe('unit_test_case_generator_autofill_TimelineDatePolicy', () => {
-    it('invalid: td-20260411-auto-TimelineDatePolicy', 0, () => {
+  describe('unit_test_case_generator_backfill_TimelineDatePolicy', () => {
+    it('invalid: build_planned_timestamp_should_fallback_to_0000_for_invalid_time_text', 0, () => {
       // Arrange
-      const actual = true;
+      const planStart = new Date('2026-01-01T09:00:00').getTime();
+      const expected = new Date('2026-01-02T00:00:00').getTime();
       // Act
-      const passed = actual;
+      const actual = TimelineDatePolicy.buildPlannedTimestamp(planStart, 1, 'bad-time');
       // Assert
-      expect(passed).assertTrue();
+      expect(actual).assertEqual(expected);
     });
-    it('conflict: td-20260411-auto-TimelineDatePolicy', 0, () => {
+
+    it('conflict: resolve_event_day_offset_should_prioritize_dynamic_over_base_day_offset', 0, () => {
       // Arrange
-      const actual = true;
+      const event = buildEvent(9, 0, 3, '09:00');
       // Act
-      const passed = actual;
+      const resolved = TimelineDatePolicy.resolveEventDayOffset(event);
       // Assert
-      expect(passed).assertTrue();
+      expect(resolved).assertEqual(3);
     });
-    it('regression: td-20260411-auto-TimelineDatePolicy', 0, () => {
+
+    it('regression: td-20260411-timestamp_to_day_offset_should_handle_cross_month_boundary', 0, () => {
       // Arrange
-      const actual = true;
+      const planStart = new Date('2026-01-31T08:00:00').getTime();
+      const nextMonthTs = new Date('2026-02-01T09:00:00').getTime();
       // Act
-      const passed = actual;
+      const offset = TimelineDatePolicy.timestampToDayOffset(planStart, nextMonthTs);
       // Assert
-      expect(passed).assertTrue();
+      expect(offset).assertEqual(1);
     });
-    it('combined: td-20260411-auto-TimelineDatePolicy', 0, () => {
+
+    it('combined: build_planned_timestamp_should_apply_day_offset_and_next_day_shift_together', 0, () => {
       // Arrange
-      const actual = true;
+      const planStart = new Date('2026-01-01T09:00:00').getTime();
+      const expected = new Date('2026-01-03T01:30:00').getTime();
       // Act
-      const passed = actual;
+      const timestamp = TimelineDatePolicy.buildPlannedTimestamp(planStart, 1, '次日 01:30');
+      const dayDate = TimelineDatePolicy.dayOffsetToDate(planStart, 2);
       // Assert
-      expect(passed).assertTrue();
+      expect(timestamp).assertEqual(expected);
+      expect(dayDate.getDate()).assertEqual(3);
     });
   });
 }

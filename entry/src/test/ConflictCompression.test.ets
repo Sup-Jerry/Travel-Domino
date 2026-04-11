@@ -164,30 +164,68 @@ export default function conflictCompressionTest() {
       expect(enough.remainingGapMinutes).assertEqual(0);
     });
   });
-  describe('unit_test_case_generator_autofill_ConflictCompression', () => {
-    it('invalid: td-20260411-auto-ConflictCompression', 0, () => {
+  describe('unit_test_case_generator_backfill_ConflictCompression', () => {
+    it('invalid: selection_context_should_return_null_for_invalid_target_time', 0, () => {
       // Arrange
-      const actual = true;
+      const vm = new TimelineViewModel();
+      vm.globalStartTime = '09:00';
+      vm.events = [
+        buildEvent(1, 'A', 60),
+        buildEvent(2, 'B', 60),
+        buildEvent(3, 'Target', 60, 1, '10:30')
+      ];
       // Act
-      const passed = actual;
+      const context = vm.compressionCoordinator.buildCompressionSelectionContext(2, 'invalid_time');
       // Assert
-      expect(passed).assertTrue();
+      expect(context === null).assertEqual(true);
     });
-    it('regression: td-20260411-auto-ConflictCompression', 0, () => {
+
+    it('regression: td-20260411-forced-gap-should-drive-compression-need', 0, () => {
       // Arrange
-      const actual = true;
+      const vm = new TimelineViewModel();
+      vm.globalStartTime = '09:00';
+      vm.events = [
+        buildEvent(1, 'A', 120),
+        buildEvent(2, 'B', 120),
+        buildEvent(3, 'Target', 60, 1, '13:30')
+      ];
       // Act
-      const passed = actual;
+      const context = vm.compressionCoordinator.buildCompressionSelectionContext(2, '13:30', 25);
+      const plan = vm.compressionCoordinator.calculateCompressionPlanBySelection(
+        2,
+        '13:30',
+        new Set<number>([1, 2]),
+        'RATIO',
+        25
+      );
       // Assert
-      expect(passed).assertTrue();
+      expect(context !== null).assertEqual(true);
+      expect(context?.neededGapMinutes ?? -1).assertEqual(25);
+      expect(plan.status).assertEqual('COMPRESS_CONFIRM');
+      expect(sumReduced(plan)).assertEqual(25);
     });
-    it('combined: td-20260411-auto-ConflictCompression', 0, () => {
+
+    it('combined: preview_should_reject_non_continuous_selection_with_forced_gap', 0, () => {
       // Arrange
-      const actual = true;
+      const vm = new TimelineViewModel();
+      vm.globalStartTime = '09:00';
+      vm.events = [
+        buildEvent(1, 'A', 90),
+        buildEvent(2, 'B', 90),
+        buildEvent(3, 'C', 90),
+        buildEvent(4, 'Target', 60, 1, '11:00')
+      ];
       // Act
-      const passed = actual;
+      const preview = vm.compressionCoordinator.previewAdvanceAdjust(
+        3,
+        new Set<number>([1, 3]),
+        '08:30',
+        30
+      );
       // Assert
-      expect(passed).assertTrue();
+      expect(preview.valid).assertEqual(false);
+      expect(preview.message).assertContain('连续');
+      expect(preview.requiredGapMinutes > 0).assertEqual(true);
     });
   });
 }

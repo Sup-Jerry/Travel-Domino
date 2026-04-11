@@ -127,6 +127,8 @@ Agent 调用 `scripts/smart_stitch.py`，将 `evolution.json` 的内容转化为
 - 用户要求"复盘迭代 + 瘦身 + 上传GitHub"时，执行顺序固定为：经验沉淀 -> 瘦身 -> 发布
 - 当用户要求按固定顺序执行多任务（复盘->瘦身->发布）时，严格按顺序并在每阶段给可验证结果。
 - 复盘输出保持中文、简洁，先给闭环状态再给经验沉淀证据。
+- 用户要求‘回顾+瘦身+上传’时，严格按顺序执行并在每个阶段给可验证证据。
+- 复盘结论默认中文、紧凑，先回答任务是否完成，再给经验沉淀结果。
 
 ### Known Fixes & Workarounds
 - Before any edit, restate user intent and explicitly state whether code will be changed.
@@ -194,7 +196,9 @@ Agent 调用 `scripts/smart_stitch.py`，将 `evolution.json` 的内容转化为
 - 当当前策略为自定义(-1)且用户未在弹窗触碰策略控件时，重规划应保持当前模式，不应回退到默认模式
 - PowerShell下复杂正则和引号易失败，优先采用更稳的解析方案或脚本化处理。
 - 技能沉淀后必须回读evolution.json的last_updated与SKILL.md缝合区，作为落地证据。
+- 多轮继续执行场景下，先确认当前阶段（如C3）闭环状态，再进入skill沉淀与发布步骤。
+- 执行沉淀后必须回传 merge_evolution 与 smart_stitch 的执行证据（命令和结果）。
 
 ### Custom Instruction Injection
 
-复盘任务默认证据链：merge_evolution执行结果 + smart_stitch执行结果 + last_updated时间戳 + SKILL.md缝合段存在。
+复盘场景默认输出结构：闭环状态 -> 本轮沉淀目标skill -> 执行证据 -> 下一步动作。

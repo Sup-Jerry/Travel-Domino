@@ -264,22 +264,41 @@ export default function aiServiceTest() {
       expect(message).assertEqual('AI 返回地点数量不足，无法满足3天行程，请补充更多偏好后重试');
     });
   });
-  describe('unit_test_case_generator_autofill_AiService', () => {
-    it('conflict: td-20260411-auto-AiService', 0, () => {
+  describe('unit_test_case_generator_backfill_AiService', () => {
+    it('conflict: multi_day_without_accommodation_should_reject_hotel_only_result', 0, async () => {
       // Arrange
-      const actual = true;
+      let callCount = 0;
+      AiService.setRequesterForTest(async () => {
+        callCount += 1;
+        return {
+          responseCode: 200,
+          result: '{"choices":[{"message":{"content":"[{\\\"name\\\":\\\"hotel_a\\\",\\\"duration\\\":600,\\\"ai_reasoning\\\":\\\"r\\\",\\\"type\\\":2},{\\\"name\\\":\\\"hotel_b\\\",\\\"duration\\\":600,\\\"ai_reasoning\\\":\\\"r\\\",\\\"type\\\":2}]"}}]}'
+        };
+      });
       // Act
-      const passed = actual;
+      let message = '';
+      try {
+        await AiService.generateItineraryWithStrategy({
+          userPrompt: '帮我规划两天景点，不需要住宿',
+          strategyMode: 0
+        });
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
+      } finally {
+        AiService.setRequesterForTest(null);
+      }
       // Assert
-      expect(passed).assertTrue();
+      expect(callCount).assertEqual(2);
+      expect(message.includes('无法满足')).assertEqual(true);
     });
-    it('regression: td-20260411-auto-AiService', 0, () => {
+
+    it('regression: td-20260411-resolve_requested_days_should_clamp_to_30', 0, () => {
       // Arrange
-      const actual = true;
+      const prompt = '请帮我规划120天行程';
       // Act
-      const passed = actual;
+      const days = AiService.resolveRequestedDaysFromPrompt(prompt);
       // Assert
-      expect(passed).assertTrue();
+      expect(days).assertEqual(30);
     });
   });
 }

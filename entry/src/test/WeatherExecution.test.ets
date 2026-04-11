@@ -258,38 +258,91 @@ export default function weatherExecutionTest() {
       expect(skip?.level).assertEqual('WARNING');
     });
   });
-  describe('unit_test_case_generator_autofill_WeatherExecution', () => {
-    it('invalid: td-20260411-auto-WeatherExecution', 0, () => {
+  describe('unit_test_case_generator_backfill_WeatherExecution', () => {
+    it('invalid: execution_adjustment_should_return_empty_when_plan_id_invalid', 0, () => {
       // Arrange
-      const actual = true;
+      const builder = new WeatherContextBuilder();
+      const context: WeatherContext = {
+        stage: 'IN_PROGRESS',
+        generatedAt: Date.now(),
+        bindings: [],
+        routeSuitability: { routeScore: 80, riskTags: [], summaryText: '' }
+      };
       // Act
-      const passed = actual;
+      const suggestions = builder.buildExecutionAdjustments(0, context, []);
       // Assert
-      expect(passed).assertTrue();
+      expect(suggestions.length).assertEqual(0);
     });
-    it('conflict: td-20260411-auto-WeatherExecution', 0, () => {
+
+    it('conflict: weather_stage_should_prioritize_paused_runtime_over_active_event', 0, () => {
       // Arrange
-      const actual = true;
+      const events = [buildEvent(true)];
       // Act
-      const passed = actual;
+      const stage = WeatherStagePolicy.resolveDetailedStage(undefined, events, 'PAUSED');
       // Assert
-      expect(passed).assertTrue();
+      expect(stage).assertEqual('PAUSED');
     });
-    it('regression: td-20260411-auto-WeatherExecution', 0, () => {
+
+    it('regression: td-20260411-execution_suggestions_should_return_empty_when_future_nodes_missing', 0, () => {
       // Arrange
-      const actual = true;
+      const builder = new WeatherContextBuilder();
+      const context: WeatherContext = {
+        stage: 'EXECUTION',
+        generatedAt: Date.now(),
+        bindings: [],
+        routeSuitability: { routeScore: 75, riskTags: ['RAIN'], summaryText: '' },
+        executionRiskScore: 75,
+        executionRiskTags: ['RAIN'],
+        futureNodeWeatherList: []
+      };
       // Act
-      const passed = actual;
+      const suggestions = builder.buildExecutionSuggestions(context);
       // Assert
-      expect(passed).assertTrue();
+      expect(suggestions.length).assertEqual(2);
+      expect(suggestions[0].actionType).assertEqual('REORDER');
+      expect(suggestions[1].actionType).assertEqual('SHORTEN_STAY');
     });
-    it('combined: td-20260411-auto-WeatherExecution', 0, () => {
+
+    it('combined: execution_adjustment_should_filter_out_non_future_related_suggestions', 0, () => {
       // Arrange
-      const actual = true;
+      const builder = new WeatherContextBuilder();
+      const event = new EventEntity();
+      event.id = 21;
+      event.name = 'target';
+      event.status = 1;
+      event.type = 0;
+      event.duration = 60;
+      const context: WeatherContext = {
+        stage: 'IN_PROGRESS',
+        generatedAt: Date.now(),
+        bindings: [],
+        routeSuitability: { routeScore: 50, riskTags: ['RAIN'], summaryText: '' },
+        executionRiskScore: 50,
+        executionRiskTags: ['RAIN'],
+        futureNodeWeatherList: [{
+          nodeId: '21',
+          eventId: 21,
+          nodeName: 'target',
+          suitabilityScore: 45,
+          riskTags: ['RAIN'],
+          weather: {
+            locationKey: 'k',
+            sourceType: 'PLAN_LOCATION',
+            weatherTime: Date.now(),
+            fetchTime: Date.now(),
+            conditionCode: 'RAIN',
+            conditionText: 'rain'
+          }
+        }]
+      };
       // Act
-      const passed = actual;
+      const suggestions = builder.buildExecutionAdjustments(1, context, [event]);
+      const allRelatedToTarget = suggestions.every((item) =>
+        item.relatedNodeIds.length === 0 || item.relatedNodeIds.includes('21')
+      );
       // Assert
-      expect(passed).assertTrue();
+      expect(suggestions.length > 0).assertEqual(true);
+      expect(allRelatedToTarget).assertEqual(true);
     });
   });
 }

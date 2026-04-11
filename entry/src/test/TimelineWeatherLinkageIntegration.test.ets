@@ -79,30 +79,51 @@ export default function timelineWeatherLinkageIntegrationTest() {
       done();
     });
   });
-  describe('unit_test_case_generator_autofill_TimelineWeatherLinkageIntegration', () => {
-    it('boundary: td-20260411-auto-TimelineWeatherLinkageIntegration', 0, () => {
+  describe('unit_test_case_generator_backfill_TimelineWeatherLinkageIntegration', () => {
+    it('boundary: execution_apply_should_return_replan_conflict_when_error_code_empty', 0, async (done: () => void) => {
       // Arrange
-      const actual = true;
+      const vm = new TimelineViewModel();
+      const internal = vm as Object as TimelineWeatherInternal;
+      internal.applyWeatherStrategyAdjustment = async (_adjustment?: WeatherStrategyAdjustment, _hint?: string): Promise<boolean> => false;
+      internal.requestSoftReplan = async (_planId: number, _suggestionId: string, _mode: 'PREVIEW' | 'APPLY'): Promise<SoftReplanApplyResult> => {
+        return buildReplanResult(false, '');
+      };
       // Act
-      const passed = actual;
+      const result = await vm.applyExecutionSuggestionWithStrategy(1, 's1');
       // Assert
-      expect(passed).assertTrue();
+      expect(result.strategyApplied).assertEqual(false);
+      expect(result.replanSuccess).assertEqual(false);
+      expect(result.errorCode).assertEqual('REPLAN_CONFLICT');
+      done();
     });
-    it('conflict: td-20260411-auto-TimelineWeatherLinkageIntegration', 0, () => {
+
+    it('conflict: execution_apply_should_keep_replan_success_false_when_strategy_apply_throws', 0, async (done: () => void) => {
       // Arrange
-      const actual = true;
+      const vm = new TimelineViewModel();
+      const internal = vm as Object as TimelineWeatherInternal;
+      internal.requestSoftReplan = async (_planId: number, _suggestionId: string, _mode: 'PREVIEW' | 'APPLY'): Promise<SoftReplanApplyResult> => {
+        return buildReplanResult(false, 'REPLAN_BUSY');
+      };
       // Act
-      const passed = actual;
+      const result = await vm.applyExecutionSuggestionWithStrategy(1, 's1');
       // Assert
-      expect(passed).assertTrue();
+      expect(result.strategyApplied).assertEqual(false);
+      expect(result.replanSuccess).assertEqual(false);
+      expect(result.errorCode).assertEqual('REPLAN_BUSY');
+      done();
     });
-    it('regression: td-20260411-auto-TimelineWeatherLinkageIntegration', 0, () => {
+
+    it('regression: td-20260411-weather_adaptation_key_should_reflect_score_changes', 0, () => {
       // Arrange
-      const actual = true;
+      const vm = new TimelineViewModel();
+      const internal = vm as Object as TimelineWeatherInternal;
       // Act
-      const passed = actual;
+      const keyLow = internal.buildWeatherStrategyAdaptationKey(1710900000000, 60);
+      const keyHigh = internal.buildWeatherStrategyAdaptationKey(1710900000000, 90);
       // Assert
-      expect(passed).assertTrue();
+      expect(keyLow).assertEqual('1710900000000_60');
+      expect(keyHigh).assertEqual('1710900000000_90');
+      expect(keyLow === keyHigh).assertEqual(false);
     });
   });
 }

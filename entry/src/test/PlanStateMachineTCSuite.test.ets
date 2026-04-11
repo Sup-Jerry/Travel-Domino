@@ -233,46 +233,90 @@ export default function planStateMachineTCSuiteTest() {
       expect(completed.toStatus).assertEqual(PlanStatus.COMPLETED);
     });
   });
-  describe('unit_test_case_generator_autofill_PlanStateMachineTCSuite', () => {
-    it('normal: td-20260411-auto-PlanStateMachineTCSuite', 0, () => {
+  describe('unit_test_case_generator_backfill_PlanStateMachineTCSuite', () => {
+    it('normal: weather_policy_for_ready_should_include_three_targets_and_interval', 0, () => {
       // Arrange
-      const actual = true;
+      const resolver = new WeatherPolicyResolver();
       // Act
-      const passed = actual;
+      const policy = resolver.resolveWeatherFetchPolicy(PlanStatus.READY);
       // Assert
-      expect(passed).assertTrue();
+      expect(policy.targets.includes(WeatherTargetType.CURRENT_LOCATION)).assertEqual(true);
+      expect(policy.targets.includes(WeatherTargetType.FIRST_NODE)).assertEqual(true);
+      expect(policy.targets.includes(WeatherTargetType.UPCOMING_NODES)).assertEqual(true);
+      expect(policy.refreshIntervalMinutes ?? 0).assertEqual(15);
     });
-    it('boundary: td-20260411-auto-PlanStateMachineTCSuite', 0, () => {
+
+    it('boundary: pause_leave_block_should_toggle_at_exact_minimum_stay', 0, () => {
       // Arrange
-      const actual = true;
+      const evaluator = new StateEvaluator();
+      const now = nowMs();
       // Act
-      const passed = actual;
+      const blockedBeforeThreshold = evaluator.shouldBlockPauseLeave(now, now - 19999);
+      const blockedAtThreshold = evaluator.shouldBlockPauseLeave(now, now - 20000);
       // Assert
-      expect(passed).assertTrue();
+      expect(blockedBeforeThreshold).assertEqual(true);
+      expect(blockedAtThreshold).assertEqual(false);
     });
-    it('invalid: td-20260411-auto-PlanStateMachineTCSuite', 0, () => {
+
+    it('invalid: transition_engine_should_reject_ready_transition_from_expired_state', 0, () => {
       // Arrange
-      const actual = true;
+      const engine = new TransitionEngine();
       // Act
-      const passed = actual;
+      const result = engine.transitionPlanStatus(PlanStatus.EXPIRED, {
+        planId: `tc_invalid_${nowMs()}`,
+        targetStatus: PlanStatus.READY,
+        triggerSource: TransitionTriggerSource.MANUAL_OVERRIDE,
+        triggerReason: 'invalid_restore'
+      });
       // Assert
-      expect(passed).assertTrue();
+      expect(result.success).assertEqual(false);
+      expect(result.errorCode).assertEqual('INVALID_TRANSITION');
     });
-    it('conflict: td-20260411-auto-PlanStateMachineTCSuite', 0, () => {
+
+    it('conflict: expected_status_mismatch_should_fail_before_allowed_transition_check', 0, () => {
       // Arrange
-      const actual = true;
+      const engine = new TransitionEngine();
       // Act
-      const passed = actual;
+      const result = engine.transitionPlanStatus(PlanStatus.CONFIRMED, {
+        planId: `tc_conflict_${nowMs()}`,
+        expectedFromStatus: PlanStatus.READY,
+        targetStatus: PlanStatus.READY,
+        triggerSource: TransitionTriggerSource.TIME_WINDOW,
+        triggerReason: 'force_ready'
+      });
       // Assert
-      expect(passed).assertTrue();
+      expect(result.success).assertEqual(false);
+      expect(result.errorCode).assertEqual('STATUS_CONFLICT');
     });
-    it('combined: td-20260411-auto-PlanStateMachineTCSuite', 0, () => {
+
+    it('combined: evaluate_and_apply_should_block_jitter_transition_and_keep_ready', 0, () => {
       // Arrange
-      const actual = true;
+      const machine = PlanStateMachine.getInstance();
+      const planId = `tc_combined_${nowMs()}`;
+      machine.confirmPlan(planId);
+      machine.prepareExecution(planId, TransitionTriggerSource.TIME_WINDOW);
+      const now = nowMs();
       // Act
-      const passed = actual;
+      const result = machine.evaluateAndApply({
+        planId: planId,
+        currentStatus: PlanStatus.READY,
+        now: now,
+        firstNodeStartTime: now + 5 * 60 * 1000,
+        locationPermissionGranted: true,
+        userClickedStart: false,
+        userClickedPause: false,
+        userClickedResume: false,
+        userClickedCancel: false,
+        hasReachedFirstNode: false,
+        motionDetected: true,
+        allNodesCompleted: false,
+        isPlanExpired: false,
+        lastTransitionAt: now - 1000
+      });
+      const status = machine.getPlanStatus(planId).status;
       // Assert
-      expect(passed).assertTrue();
+      expect(result === null).assertEqual(true);
+      expect(status).assertEqual(PlanStatus.READY);
     });
   });
 }

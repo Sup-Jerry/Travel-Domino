@@ -44,46 +44,58 @@ export default function weatherStageCoordinatorTest() {
       expect(paused.allowLocationTrigger).assertEqual(true);
     });
   });
-  describe('unit_test_case_generator_autofill_WeatherStageCoordinator', () => {
-    it('boundary: td-20260411-auto-WeatherStageCoordinator', 0, () => {
+  describe('unit_test_case_generator_backfill_WeatherStageCoordinator', () => {
+    it('boundary: planning_stage_policy_should_disable_polling_and_location_trigger', 0, () => {
       // Arrange
-      const actual = true;
+      const coordinator = new WeatherStageCoordinator();
       // Act
-      const passed = actual;
+      const policy = coordinator.resolveSchedulePolicy('PLANNING');
       // Assert
-      expect(passed).assertTrue();
+      expect(policy.pollIntervalMs).assertEqual(0);
+      expect(policy.allowLocationTrigger).assertEqual(false);
+      expect(policy.forceRefreshOnEnter).assertEqual(false);
     });
-    it('invalid: td-20260411-auto-WeatherStageCoordinator', 0, () => {
+
+    it('invalid: stage_should_fallback_to_planning_when_status_not_in_execution_flow_and_no_schedule', 0, () => {
       // Arrange
-      const actual = true;
+      const coordinator = new WeatherStageCoordinator();
       // Act
-      const passed = actual;
+      const stage = coordinator.resolveStage(PlanStatus.DRAFT, []);
       // Assert
-      expect(passed).assertTrue();
+      expect(stage).assertEqual('PLANNING');
     });
-    it('conflict: td-20260411-auto-WeatherStageCoordinator', 0, () => {
+
+    it('conflict: paused_runtime_should_override_in_progress_event_detection', 0, () => {
       // Arrange
-      const actual = true;
+      const coordinator = new WeatherStageCoordinator();
+      const events = [buildPendingEvent(true)];
       // Act
-      const passed = actual;
+      const stage = coordinator.resolveStage(PlanStatus.DRAFT, events, 'PAUSED');
       // Assert
-      expect(passed).assertTrue();
+      expect(stage).assertEqual('PAUSED');
     });
-    it('regression: td-20260411-auto-WeatherStageCoordinator', 0, () => {
+
+    it('regression: td-20260411-confirmed_policy_should_force_refresh_on_enter', 0, () => {
       // Arrange
-      const actual = true;
+      const coordinator = new WeatherStageCoordinator();
       // Act
-      const passed = actual;
+      const policy = coordinator.resolveSchedulePolicy('CONFIRMED');
       // Assert
-      expect(passed).assertTrue();
+      expect(policy.forceRefreshOnEnter).assertEqual(true);
+      expect(policy.allowManualBypass).assertEqual(true);
     });
-    it('combined: td-20260411-auto-WeatherStageCoordinator', 0, () => {
+
+    it('combined: ready_stage_should_keep_short_interval_with_location_trigger', 0, () => {
       // Arrange
-      const actual = true;
+      const coordinator = new WeatherStageCoordinator();
       // Act
-      const passed = actual;
+      const stage = coordinator.resolveStage(PlanStatus.READY, [buildPendingEvent(false)], 'READY');
+      const policy = coordinator.resolveSchedulePolicy(stage);
       // Assert
-      expect(passed).assertTrue();
+      expect(stage).assertEqual('READY');
+      expect(policy.pollIntervalMs).assertEqual(15 * 60 * 1000);
+      expect(policy.allowLocationTrigger).assertEqual(true);
+      expect(policy.forceRefreshOnEnter).assertEqual(true);
     });
   });
 }

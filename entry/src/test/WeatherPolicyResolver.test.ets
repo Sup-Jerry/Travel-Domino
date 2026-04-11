@@ -79,38 +79,89 @@ export default function weatherPolicyResolverTest() {
       expect(hasUpcoming).assertEqual(true);
     });
   });
-  describe('unit_test_case_generator_autofill_WeatherPolicyResolver', () => {
-    it('invalid: td-20260411-auto-WeatherPolicyResolver', 0, () => {
+  describe('unit_test_case_generator_backfill_WeatherPolicyResolver', () => {
+    it('invalid: build_weather_targets_should_filter_out_invalid_geo_events', 0, () => {
       // Arrange
-      const actual = true;
+      const resolver = new WeatherPolicyResolver();
+      const now = Date.now();
+      const events: EventEntity[] = [
+        buildEvent(1, 0, 0, now + 1000),
+        buildEvent(2, 91, 121.5, now + 2000),
+        buildEvent(3, 31.2, 121.5, now + 3000)
+      ];
       // Act
-      const passed = actual;
+      const targets = resolver.buildWeatherTargets('p-invalid', PlanStatus.DRAFT, events);
       // Assert
-      expect(passed).assertTrue();
+      expect(targets.length).assertEqual(2);
+      const nodeIds = targets.map((item) => item.nodeId ?? '');
+      expect(nodeIds.includes('1')).assertEqual(false);
+      expect(nodeIds.includes('2')).assertEqual(true);
+      expect(nodeIds.includes('3')).assertEqual(true);
     });
-    it('conflict: td-20260411-auto-WeatherPolicyResolver', 0, () => {
+
+    it('conflict: in_progress_policy_should_exclude_first_node_target_type', 0, () => {
       // Arrange
-      const actual = true;
+      const resolver = new WeatherPolicyResolver();
       // Act
-      const passed = actual;
+      const policy = resolver.resolveWeatherFetchPolicy(PlanStatus.IN_PROGRESS);
       // Assert
-      expect(passed).assertTrue();
+      expect(policy.targets.includes(WeatherTargetType.CURRENT_LOCATION)).assertEqual(true);
+      expect(policy.targets.includes(WeatherTargetType.UPCOMING_NODES)).assertEqual(true);
+      expect(policy.targets.includes(WeatherTargetType.FIRST_NODE)).assertEqual(false);
     });
-    it('regression: td-20260411-auto-WeatherPolicyResolver', 0, () => {
+
+    it('regression: td-20260411-current_location_should_not_emit_without_valid_runtime_geo', 0, () => {
       // Arrange
-      const actual = true;
+      const resolver = new WeatherPolicyResolver();
+      const now = Date.now();
+      const events: EventEntity[] = [buildEvent(1, 31.2, 121.5, now + 1000)];
       // Act
-      const passed = actual;
+      const targets = resolver.buildWeatherTargets('p-regression', PlanStatus.READY, events, {
+        planId: 'p-regression',
+        status: PlanStatus.READY,
+        plannedStartTime: now,
+        plannedEndTime: now + 60000,
+        completedNodeIds: [],
+        skippedNodeIds: [],
+        isAutoStarted: false,
+        isPaused: false,
+        updatedAt: now,
+        lastKnownLatitude: 0,
+        lastKnownLongitude: 0
+      });
       // Assert
-      expect(passed).assertTrue();
+      const hasCurrent = targets.some((item) => item.type === WeatherTargetType.CURRENT_LOCATION);
+      expect(hasCurrent).assertEqual(false);
     });
-    it('combined: td-20260411-auto-WeatherPolicyResolver', 0, () => {
+
+    it('combined: ready_targets_should_include_current_and_upcoming_with_deduped_nodes', 0, () => {
       // Arrange
-      const actual = true;
+      const resolver = new WeatherPolicyResolver();
+      const now = Date.now();
+      const events: EventEntity[] = [
+        buildEvent(1, 31.2, 121.5, now + 1000),
+        buildEvent(2, 31.2, 121.5, now + 2000),
+        buildEvent(3, 31.3, 121.6, now + 3000)
+      ];
       // Act
-      const passed = actual;
+      const targets = resolver.buildWeatherTargets('p-combined', PlanStatus.READY, events, {
+        planId: 'p-combined',
+        status: PlanStatus.READY,
+        plannedStartTime: now,
+        plannedEndTime: now + 60000,
+        completedNodeIds: [],
+        skippedNodeIds: [],
+        isAutoStarted: false,
+        isPaused: false,
+        updatedAt: now,
+        lastKnownLatitude: 31.1,
+        lastKnownLongitude: 121.4
+      });
       // Assert
-      expect(passed).assertTrue();
+      const currentCount = targets.filter((item) => item.type === WeatherTargetType.CURRENT_LOCATION).length;
+      const upcomingCount = targets.filter((item) => item.type === WeatherTargetType.UPCOMING_NODES).length;
+      expect(currentCount).assertEqual(1);
+      expect(upcomingCount >= 1).assertEqual(true);
     });
   });
 }

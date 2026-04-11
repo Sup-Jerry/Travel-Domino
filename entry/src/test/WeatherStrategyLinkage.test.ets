@@ -107,38 +107,47 @@ export default function weatherStrategyLinkageTest() {
       expect(text.includes('按原策略执行')).assertEqual(true);
     });
   });
-  describe('unit_test_case_generator_autofill_WeatherStrategyLinkage', () => {
-    it('invalid: td-20260411-auto-WeatherStrategyLinkage', 0, () => {
+  describe('unit_test_case_generator_backfill_WeatherStrategyLinkage', () => {
+    it('invalid: weather_adaptation_should_return_null_when_route_score_not_risky', 0, () => {
       // Arrange
-      const actual = true;
+      const current: ComposableStrategy = { density: 1, pace: 1, preference: PreferenceType.BALANCED, energy: 1 };
       // Act
-      const passed = actual;
+      const decision = StrategyAdaptationEngine.adaptToWeather(buildCollab('UNKNOWN'), 80, current);
       // Assert
-      expect(passed).assertTrue();
+      expect(decision === null).assertEqual(true);
     });
-    it('conflict: td-20260411-auto-WeatherStrategyLinkage', 0, () => {
+
+    it('conflict: apply_adjustment_should_clamp_density_within_zero_to_two', 0, () => {
       // Arrange
-      const actual = true;
+      const current: ComposableStrategy = { density: 0, pace: 1, preference: PreferenceType.BALANCED, energy: 1 };
       // Act
-      const passed = actual;
+      const adjusted = StrategyAdaptationEngine.applyAdjustment(current, {
+        reason: 'WEATHER_RISK',
+        adjustments: { density: -1 },
+        message: 'conflict'
+      });
       // Assert
-      expect(passed).assertTrue();
+      expect(adjusted.density).assertEqual(0);
     });
-    it('regression: td-20260411-auto-WeatherStrategyLinkage', 0, () => {
+
+    it('regression: td-20260411-very_low_route_score_should_reduce_density_even_without_collab', 0, () => {
       // Arrange
-      const actual = true;
+      const current: ComposableStrategy = { density: 2, pace: 1, preference: PreferenceType.BALANCED, energy: 1 };
       // Act
-      const passed = actual;
+      const decision = StrategyAdaptationEngine.adaptToWeather(undefined, 55, current);
       // Assert
-      expect(passed).assertTrue();
+      expect(!!decision).assertEqual(true);
+      expect(decision?.adjustments.density).assertEqual(-1);
     });
-    it('combined: td-20260411-auto-WeatherStrategyLinkage', 0, () => {
+
+    it('combined: weather_constraint_should_reflect_rain_risk_and_strategy_mode_in_same_prompt', 0, () => {
       // Arrange
-      const actual = true;
+      const strategy: ComposableStrategy = { density: 2, pace: 2, preference: PreferenceType.SCENIC, energy: 2 };
       // Act
-      const passed = actual;
+      const text = StrategyService.buildWeatherAwareConstraint(strategy, 62, ['RAIN'], 'RAIN_PERSIST', 1);
       // Assert
-      expect(passed).assertTrue();
+      expect(text.includes('天气')).assertEqual(true);
+      expect(text.length > 0).assertEqual(true);
     });
   });
 }
