@@ -13,6 +13,10 @@ export struct AiInputDialog {
     (_strategy: number, _customStrategy?: ComposableStrategy, _keepCurrentMode?: boolean) => {}
   hasAiHistory: boolean = false
   currentStrategyMode: number = 0
+  initialPrompt: string = ''
+  initialSelectedStrategyMode: number = 0
+  initialCustomStrategy?: ComposableStrategy
+  forceUseInitialSelection: boolean = false
   @State inputText: string = ''
   @State isLoading: boolean = false
   @State selectedStrategy: number = 0
@@ -34,9 +38,32 @@ export struct AiInputDialog {
 
   aboutToAppear() {
     this.strategyTouched = false;
-    if (this.currentStrategyMode === 0 || this.currentStrategyMode === 1 || this.currentStrategyMode === 2) {
+    if (this.forceUseInitialSelection) {
+      if (this.initialSelectedStrategyMode === -1) {
+        this.selectedStrategy = -1;
+        this.useCustomStrategy = true;
+        if (this.initialCustomStrategy) {
+          this.customStrategy = {
+            density: this.initialCustomStrategy.density,
+            pace: this.initialCustomStrategy.pace,
+            preference: this.initialCustomStrategy.preference,
+            energy: this.initialCustomStrategy.energy
+          };
+        }
+      } else if (this.initialSelectedStrategyMode === 0 || this.initialSelectedStrategyMode === 1 ||
+        this.initialSelectedStrategyMode === 2) {
+        this.selectedStrategy = this.initialSelectedStrategyMode;
+        this.useCustomStrategy = false;
+      }
+    } else if (this.currentStrategyMode === 0 || this.currentStrategyMode === 1 || this.currentStrategyMode === 2) {
       this.selectedStrategy = this.currentStrategyMode;
       this.useCustomStrategy = false;
+    } else if (this.currentStrategyMode === -1) {
+      this.selectedStrategy = -1;
+      this.useCustomStrategy = true;
+    }
+    if (this.initialPrompt.trim().length > 0) {
+      this.inputText = this.initialPrompt.trim();
     }
     void this.loadRecommendation();
   }

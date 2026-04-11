@@ -58,6 +58,9 @@ import {
   TimelineCompressionService
 } from '../domain/timeline/services/TimelineCompressionService';
 import {
+  AiReplanApplyDecision,
+  AiReplanPreviewResult,
+  AiReplanUndoToken,
   ITimelineAiHost,
   ITimelineAiService,
   TimelineAiService
@@ -242,6 +245,7 @@ export class TimelineViewModel implements
   private readonly strategyManager: TimelineStrategyManager;
   private readonly eventMutationManager: TimelineEventMutationManager;
   private readonly recalculationManager: TimelineRecalculationManager;
+  private aiReplanUndoToken: AiReplanUndoToken | null = null;
 
   public constructor() {
     this.weatherService = new TimelineWeatherService(
@@ -418,6 +422,8 @@ export class TimelineViewModel implements
     this.planId = planId;
     this.planName = `计划 #${planId}`;
     this.currentStrategyMode = 0;
+    this.aiReplanUndoToken = null;
+    AppStorage.setOrCreate(AppStorageKeys.HAS_AI_REPLAN_UNDO, false);
     this.filterStart = 0;
     this.filterEnd = 0;
     try {
@@ -930,6 +936,43 @@ export class TimelineViewModel implements
     this.refreshTimelineView();
   }
 
+  public async buildAiReplanPreview(
+    strategyMode: number,
+    customStrategy?: ComposableStrategy,
+    keepCurrentMode?: boolean
+  ): Promise<AiReplanPreviewResult> {
+    return this.strategyManager.buildReplanPreview(strategyMode, customStrategy, keepCurrentMode);
+  }
+
+  public async applyAiReplanPreview(
+    preview: AiReplanPreviewResult,
+    decision: AiReplanApplyDecision
+  ): Promise<void> {
+    const undoToken = await this.strategyManager.applyReplanPreview(preview, decision);
+    this.aiReplanUndoToken = undoToken;
+    AppStorage.setOrCreate(AppStorageKeys.HAS_AI_REPLAN_UNDO, true);
+    this.refreshTimelineView();
+  }
+
+  public hasAiReplanUndo(): boolean {
+    return AppStorage.get<boolean>(AppStorageKeys.HAS_AI_REPLAN_UNDO) ?? false;
+  }
+
+  public clearAiReplanUndoToken(): void {
+    this.aiReplanUndoToken = null;
+    AppStorage.setOrCreate(AppStorageKeys.HAS_AI_REPLAN_UNDO, false);
+  }
+
+  public async undoLastAiReplanApply(): Promise<void> {
+    if (!this.aiReplanUndoToken) {
+      throw new Error('没有可撤回的重规划记录');
+    }
+    const token = this.aiReplanUndoToken;
+    await this.strategyManager.restoreFromUndoToken(token);
+    this.clearAiReplanUndoToken();
+    this.refreshTimelineView();
+  }
+
 
 
   // 修改点：完全重构 findCurrentActiveEvent，改用绝对时间戳判定
@@ -1225,3 +1268,4 @@ export class TimelineViewModel implements
     this.eventMutationManager.insertSmartForCompat(newEntity);
   }
 }
+

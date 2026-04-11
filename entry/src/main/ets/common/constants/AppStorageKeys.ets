@@ -21,6 +21,7 @@
   static readonly TEMP_DIALOG_STATE = 'tempDialogState';
   static readonly PICKED_LOCATION_STR = 'pickedLocationStr';
   static readonly HAS_UNSAVED_POSTPONE = 'hasUnsavedPostpone';
+  static readonly HAS_AI_REPLAN_UNDO = 'hasAiReplanUndo';
   static readonly MIN_EVENT_DURATION = 'MinEventDuration';
   static readonly AUTH_SESSION_JSON = 'AuthSessionJson';
   static readonly AUTH_GUEST_CHOSEN = 'AuthGuestChosen';

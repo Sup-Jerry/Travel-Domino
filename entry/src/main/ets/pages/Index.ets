@@ -17,6 +17,8 @@ import { promptAction } from '@kit.ArkUI';
 import { AiInputDialog } from './components/dialogs/AiInputDialog';
 import { ComposableStrategy } from '../domain/strategy/TravelStrategyDimensions';
 import { StrategyService } from '../domain/strategy/StrategyService';
+import { AiReplanPreviewDialog } from './components/dialogs/AiReplanPreviewDialog';
+import { AiReplanPreviewResult } from '../domain/timeline/services/TimelineAiService';
 
 import { SuggestionDialog } from './components/dialogs/SuggestionDialog';
 import { ConflictSelectionDialog } from './components/dialogs/ConflictSelectionDialog';
@@ -88,6 +90,16 @@ struct Index {
   @State hasUnsavedChanges: boolean = false;
   @State strategyMode: number = 0;
   @State currentStrategyExplanation: string = '';
+  @State aiDialogInitialPrompt: string = '';
+  @State aiDialogInitialStrategyMode: number = 0;
+  @State aiDialogInitialCustomStrategy: ComposableStrategy = {
+    density: 1,
+    pace: 1,
+    preference: 0,
+    energy: 1
+  };
+  @State aiDialogForceInitialSelection: boolean = false;
+  @State aiReplanPreviewResult: AiReplanPreviewResult | null = null;
   @State showPlanningWeatherHintPopup: boolean = false;
   @State showPlanningWeatherScorePopup: boolean = false;
   @State hasManualPlanningWeatherRefresh: boolean = false;
@@ -162,6 +174,33 @@ struct Index {
     } catch (error) {
       hilog.warn(0x0000, 'Index', `[TOAST_FAIL] ${this.sanitizeError(error as Object)}`);
     }
+  }
+
+  private resetAiDialogPrefill(): void {
+    this.aiDialogInitialPrompt = '';
+    this.aiDialogInitialStrategyMode = this.strategyMode;
+    this.aiDialogInitialCustomStrategy = {
+      density: 1,
+      pace: 1,
+      preference: 0,
+      energy: 1
+    };
+    this.aiDialogForceInitialSelection = false;
+  }
+
+  private openAiDialogForRegenerate(prompt: string, strategyMode: number, customStrategy?: ComposableStrategy): void {
+    this.aiDialogInitialPrompt = prompt;
+    this.aiDialogInitialStrategyMode = strategyMode;
+    if (customStrategy) {
+      this.aiDialogInitialCustomStrategy = {
+        density: customStrategy.density,
+        pace: customStrategy.pace,
+        preference: customStrategy.preference,
+        energy: customStrategy.energy
+      };
+    }
+    this.aiDialogForceInitialSelection = true;
+    this.aiDialogController.open();
   }
 
   private async resolveConflictPlanName(planId: number): Promise<string> {
@@ -392,6 +431,54 @@ struct Index {
     customStyle: true
   });
 
+  aiReplanPreviewController: CustomDialogController = new CustomDialogController({
+    builder: AiReplanPreviewDialog({
+      preview: this.aiReplanPreviewResult ?? {
+        prompt: '',
+        strategyMode: 0,
+        generatedAt: 0,
+        itemCount: 0,
+        items: []
+      },
+      effectiveTheme: this.effectiveTheme,
+      onRegenerateAgain: (prompt: string, strategyMode: number, customStrategy?: ComposableStrategy) => {
+        this.openAiDialogForRegenerate(prompt, strategyMode, customStrategy);
+      },
+      onApplyKeep: () => {
+        if (!this.aiReplanPreviewResult) {
+          this.safeShowToast('预览已失效，请重新生成');
+          return;
+        }
+        void this.vm.applyAiReplanPreview(this.aiReplanPreviewResult, 'KEEP').then(() => {
+          this.safeShowToast('已保留原有地点，新地点已加入暂存池');
+          this.aiReplanPreviewResult = null;
+        }).catch((error: Object) => {
+          const msg = this.sanitizeError(error);
+          this.safeShowToast(msg.length > 0 ? msg : '应用失败');
+        });
+      },
+      onApplyOverwrite: () => {
+        if (!this.aiReplanPreviewResult) {
+          this.safeShowToast('预览已失效，请重新生成');
+          return;
+        }
+        void this.vm.applyAiReplanPreview(this.aiReplanPreviewResult, 'OVERWRITE').then(() => {
+          this.safeShowToast('已覆盖旧AI地点并应用新计划');
+          this.aiReplanPreviewResult = null;
+        }).catch((error: Object) => {
+          const msg = this.sanitizeError(error);
+          this.safeShowToast(msg.length > 0 ? msg : '应用失败');
+        });
+      },
+      onCancel: () => {
+        this.aiReplanPreviewResult = null;
+      }
+    }),
+    alignment: DialogAlignment.Center,
+    autoCancel: false,
+    customStyle: true
+  });
+
 
   // Index.ets 约 118 行开始替换
   conflictDialogController: CustomDialogController = new CustomDialogController({
@@ -549,11 +636,16 @@ struct Index {
     builder: AiInputDialog({
       hasAiHistory: this.vm.hasAiHistory(),
       currentStrategyMode: this.strategyMode,
+      initialPrompt: this.aiDialogInitialPrompt,
+      initialSelectedStrategyMode: this.aiDialogInitialStrategyMode,
+      initialCustomStrategy: this.aiDialogInitialCustomStrategy,
+      forceUseInitialSelection: this.aiDialogForceInitialSelection,
       onConfirm: async (text: string, strategy: number, customStrategy?: ComposableStrategy) => {
         try {
           await this.vm.generateByAi(text, strategy, customStrategy);
           this.vm.refreshTimelineView();
           this.safeShowToast('AI 生成成功，已加入暂存池！');
+          this.resetAiDialogPrefill();
           this.aiDialogController.close();
         } catch (error) {
           const msg = error instanceof Error ? error.message : '生成失败';
@@ -563,28 +655,21 @@ struct Index {
             `[AI_DEBUG][index_generate_fail] strategy=${strategy}, custom=${customStrategy ? 1 : 0}, reason=${msg}`
           );
           this.safeShowToast(msg);
+          this.resetAiDialogPrefill();
           this.aiDialogController.close();
         }
       },
       onRegenerate: async (strategy: number, customStrategy?: ComposableStrategy, keepCurrentMode?: boolean) => {
         try {
-          const currentMode = this.vm.getStrategyMode();
-          if (keepCurrentMode === true) {
-            await this.vm.regenerateByCurrentStrategy();
-          } else if (strategy === -1 && customStrategy) {
-            await this.vm.regenerateWithCustomStrategy(customStrategy);
-          } else if (strategy === currentMode || strategy === -1) {
-            await this.vm.regenerateByCurrentStrategy();
-          } else {
-            await this.vm.changeStrategyAndRegenerate(strategy);
-          }
-          this.vm.refreshTimelineView();
-          this.safeShowToast('重新生成成功');
-          this.aiDialogController.close();
+          const preview = await this.vm.buildAiReplanPreview(strategy, customStrategy, keepCurrentMode);
+          this.aiReplanPreviewResult = preview;
+          this.resetAiDialogPrefill();
+          this.aiReplanPreviewController.open();
         } catch (error) {
           const msg = error instanceof Error ? error.message : '重新生成失败';
           console.error('[Index] AI重新规划失败:', JSON.stringify(error), `strategy=${strategy}`);
           this.safeShowToast(msg);
+          this.resetAiDialogPrefill();
           this.aiDialogController.close();
         }
       }
@@ -2273,6 +2358,7 @@ struct Index {
               this.safeShowToast('归档计划不可操作');
               return;
             }
+            this.resetAiDialogPrefill();
             this.aiDialogController.open();
           },
           onAdd: () => {
@@ -2289,11 +2375,11 @@ struct Index {
           .zIndex(8);
       }
 
-      if (this.hasScopedUnsavedChanges()) {
+      if (this.vm.hasAiReplanUndo() || this.hasScopedUnsavedChanges()) {
         Row() {
           Row() {
             Text("✨").fontSize(16).margin({ right: 6 })
-            Text("已自动优化行程时间")
+            Text(this.vm.hasAiReplanUndo() ? "已应用AI重规划" : "已自动优化行程时间")
               .fontSize(14)
               .fontColor(this.getThemePalette().textPrimary)
               .fontWeight(FontWeight.Medium)
@@ -2306,7 +2392,16 @@ struct Index {
               .fontColor(this.getThemePalette().textSecondary)
               .padding({ left: 12, right: 12, top: 8, bottom: 8 })
               .onClick(() => {
-                this.vm.loadData(this.vm.planId);
+                if (this.vm.hasAiReplanUndo()) {
+                  void this.vm.undoLastAiReplanApply().then(() => {
+                    this.safeShowToast('已撤回最近一次AI重规划');
+                  }).catch((error: Object) => {
+                    const msg = this.sanitizeError(error);
+                    this.safeShowToast(msg.length > 0 ? msg : '撤回失败');
+                  });
+                  return;
+                }
+                void this.vm.loadData(this.vm.planId);
                 this.setUnsavedFlag(false);
               })
 
@@ -2318,7 +2413,12 @@ struct Index {
               .fontWeight(FontWeight.Bold)
               .padding({ left: 12, right: 12, top: 8, bottom: 8 })
               .onClick(() => {
-                this.vm.save();
+                if (this.vm.hasAiReplanUndo()) {
+                  this.vm.clearAiReplanUndoToken();
+                  this.safeShowToast('已确认本次AI重规划结果');
+                  return;
+                }
+                void this.vm.save();
                 this.setUnsavedFlag(false);
               })
           }

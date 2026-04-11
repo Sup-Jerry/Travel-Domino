@@ -1,5 +1,8 @@
 import { ComposableStrategy } from '../../domain/strategy/TravelStrategyDimensions';
 import {
+  AiReplanApplyDecision,
+  AiReplanPreviewResult,
+  AiReplanUndoToken,
   ExecutionSuggestionApplyResult,
   ITimelineAiService
 } from '../../domain/timeline/services/TimelineAiService';
@@ -70,6 +73,25 @@ export class TimelineStrategyManager {
 
   public async changeStrategyAndRegenerate(mode: number): Promise<void> {
     await this.aiService.changeStrategyAndRegenerate(mode);
+  }
+
+  public async buildReplanPreview(
+    strategyMode: number,
+    customStrategy?: ComposableStrategy,
+    keepCurrentMode?: boolean
+  ): Promise<AiReplanPreviewResult> {
+    return this.aiService.buildReplanPreview(strategyMode, customStrategy, keepCurrentMode);
+  }
+
+  public async applyReplanPreview(
+    preview: AiReplanPreviewResult,
+    decision: AiReplanApplyDecision
+  ): Promise<AiReplanUndoToken> {
+    return this.aiService.applyReplanPreview(preview, decision);
+  }
+
+  public async restoreFromUndoToken(token: AiReplanUndoToken): Promise<void> {
+    await this.aiService.restoreFromUndoToken(token);
   }
 
   public async getCurrentStrategy(): Promise<ComposableStrategy> {
