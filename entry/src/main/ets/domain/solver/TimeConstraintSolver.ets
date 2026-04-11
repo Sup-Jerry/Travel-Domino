@@ -392,6 +392,51 @@ export class TimeConstraintSolver {
       previousFinalDayOffset = finalDayOffset;
     }
 
+    let conflictCount = 0;
+    let conflictMinutes = 0;
+    let gapCount = 0;
+    let gapMinutes = 0;
+    let overflowCount = 0;
+    let durationMinutes = 0;
+    let travelMinutes = 0;
+    let spanStart = Number.MAX_SAFE_INTEGER;
+    let spanEnd = 0;
+    for (let i = 0; i < scheduleList.length; i++) {
+      const item = scheduleList[i];
+      durationMinutes += Math.max(0, item.duration ?? 0);
+      travelMinutes += Math.max(0, item.preTravelMinutes ?? 0);
+      if (item.isConflict) {
+        conflictCount += 1;
+        conflictMinutes += Math.max(0, item.gapMinutes ?? 0);
+      }
+      if (item.hasGap) {
+        gapCount += 1;
+        gapMinutes += Math.max(0, item.gapMinutes ?? 0);
+      }
+      if ((item.dynamicDayOffset ?? item.dayOffset ?? 0) > (item.dayOffset ?? 0)) {
+        overflowCount += 1;
+      }
+      const currentStart = item.dynamicStartTime ?? 0;
+      const currentEnd = item.dynamicEndTime ?? 0;
+      if (currentStart > 0 && currentStart < spanStart) {
+        spanStart = currentStart;
+      }
+      if (currentEnd > spanEnd) {
+        spanEnd = currentEnd;
+      }
+    }
+    const spanMinutes = (spanStart !== Number.MAX_SAFE_INTEGER && spanEnd > spanStart)
+      ? Math.floor((spanEnd - spanStart) / TimeConstraintSolver.MINUTE_MS)
+      : 0;
+    const utilizationPermille = spanMinutes > 0
+      ? Math.floor((durationMinutes * 1000) / spanMinutes)
+      : -1;
+    hilog.info(
+      0x0000,
+      'TimeConstraintSolver',
+      `[PAPER_EXP][solver_summary] total=${scheduleList.length},conflict=${conflictCount},conflictMin=${conflictMinutes},gap=${gapCount},gapMin=${gapMinutes},overflow=${overflowCount},durationMin=${durationMinutes},travelMin=${travelMinutes},spanMin=${spanMinutes},utilPermille=${utilizationPermille},autoRoute=${autoRouteEnabled},idleGapEnabled=${idleGapDetectionEnabled},idleGapMin=${idleGapTriggerMinutes},slackRatio=${slackRatio},startFromEventId=${startFromEventId}`
+    );
+
     // 返回原顺序，保证 ViewModel 用 index 回填时不乱位
     return processList;
   }
