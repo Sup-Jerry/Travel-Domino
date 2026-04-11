@@ -3,7 +3,7 @@ import { EventEntity } from '../../../model/entity/EventEntity';
 import { TravelPlanItem } from '../../../model/interface/IStandardEvent';
 import { EventRepositoryImpl } from '../../../infrastructure/persistence/EventRepositoryImpl';
 import { PlanRepositoryImpl } from '../../../infrastructure/persistence/PlanRepositoryImpl';
-import { AiService } from '../../../infrastructure/services/AiService';
+import { AiGenerateRequest, AiRawItem, AiService } from '../../../infrastructure/services/AiService';
 import { ComposableStrategy } from '../../strategy/TravelStrategyDimensions';
 import { StrategyService } from '../../strategy/StrategyService';
 import { UserProfileService } from '../../strategy/UserProfileService';
@@ -31,6 +31,41 @@ export interface ExecutionSuggestionApplyResult {
   errorCode: string;
 }
 
+export type AiReplanApplyDecision = 'KEEP' | 'OVERWRITE';
+
+export interface AiReplanPreviewItem {
+  name: string;
+  duration: number;
+  itemType: number;
+  aiReasoning: string;
+}
+
+export interface AiReplanPreviewResult {
+  prompt: string;
+  strategyMode: number;
+  customStrategy?: ComposableStrategy;
+  generatedAt: number;
+  itemCount: number;
+  items: AiReplanPreviewItem[];
+}
+
+export interface AiReplanUndoToken {
+  createdAt: number;
+  events: TravelPlanItem[];
+  strategyMode: number;
+  strategyDensity: number;
+  strategyPace: number;
+  strategyPreference: number;
+  strategyEnergy: number;
+  lastAiPrompt: string;
+  lastStrategyExplanation: string;
+}
+
+interface EffectiveStrategyChoice {
+  mode: number;
+  customStrategy?: ComposableStrategy;
+}
+
 export interface ITimelineAiHost {
   events: EventEntity[];
   planId: number;
@@ -52,6 +87,7 @@ export interface ITimelineAiHost {
   clampStrategyLevel(value: number): 0 | 1 | 2;
   requestSoftReplan(planId: number, suggestionId: string, mode: SoftReplanMode): Promise<SoftReplanApplyResult>;
   markScheduleChanged(): void;
+  recalculateFromIndex(startIndex: number): void;
 }
 
 export interface ITimelineAiService {
@@ -72,6 +108,16 @@ export interface ITimelineAiService {
   regenerateByCurrentStrategy(): Promise<void>;
   changeStrategyAndRegenerate(mode: number): Promise<void>;
   triggerStrategyAdaptation(): Promise<void>;
+  buildReplanPreview(
+    strategyMode: number,
+    customStrategy?: ComposableStrategy,
+    keepCurrentMode?: boolean
+  ): Promise<AiReplanPreviewResult>;
+  applyReplanPreview(
+    preview: AiReplanPreviewResult,
+    decision: AiReplanApplyDecision
+  ): Promise<AiReplanUndoToken>;
+  restoreFromUndoToken(token: AiReplanUndoToken): Promise<void>;
 }
 
 export class TimelineAiService implements ITimelineAiService {
@@ -110,6 +156,180 @@ export class TimelineAiService implements ITimelineAiService {
       offsets.push(safeBase + targetDay);
     }
     return offsets;
+  }
+
+  private static normalizeStrategyMode(mode: number): number {
+    if (mode === -1 || mode === 0 || mode === 1 || mode === 2) {
+      return mode;
+    }
+    return 0;
+  }
+
+  private static cloneCustomStrategy(strategy?: ComposableStrategy): ComposableStrategy | undefined {
+    if (!strategy) {
+      return undefined;
+    }
+    return {
+      density: strategy.density,
+      pace: strategy.pace,
+      preference: strategy.preference,
+      energy: strategy.energy
+    };
+  }
+
+  private async resolveHistoryPrompt(): Promise<string> {
+    const snapshot = await this.host.persistence.getPlanAndEvents(this.host.planId);
+    const prompt = (snapshot.plan?.lastAiPrompt || '').trim();
+    if (prompt.length === 0) {
+      throw new Error('未找到上次生成记录');
+    }
+    return prompt;
+  }
+
+  private async resolveEffectiveStrategy(
+    requestedMode: number,
+    requestedCustomStrategy?: ComposableStrategy,
+    keepCurrentMode?: boolean
+  ): Promise<EffectiveStrategyChoice> {
+    if (keepCurrentMode === true) {
+      const currentMode = TimelineAiService.normalizeStrategyMode(this.host.currentStrategyMode);
+      if (currentMode === -1) {
+        const currentCustom = await this.host.getCurrentStrategy();
+        const currentChoice: EffectiveStrategyChoice = {
+          mode: -1,
+          customStrategy: TimelineAiService.cloneCustomStrategy(currentCustom)
+        };
+        return currentChoice;
+      }
+      const currentModeChoice: EffectiveStrategyChoice = {
+        mode: currentMode
+      };
+      return currentModeChoice;
+    }
+
+    const normalized = TimelineAiService.normalizeStrategyMode(requestedMode);
+    if (normalized === -1) {
+      if (requestedCustomStrategy) {
+        const requestChoice: EffectiveStrategyChoice = {
+          mode: -1,
+          customStrategy: TimelineAiService.cloneCustomStrategy(requestedCustomStrategy)
+        };
+        return requestChoice;
+      }
+      const currentCustom = await this.host.getCurrentStrategy();
+      const fallbackChoice: EffectiveStrategyChoice = {
+        mode: -1,
+        customStrategy: TimelineAiService.cloneCustomStrategy(currentCustom)
+      };
+      return fallbackChoice;
+    }
+
+    const normalizedChoice: EffectiveStrategyChoice = {
+      mode: normalized
+    };
+    return normalizedChoice;
+  }
+
+  private buildAiReplanExplanation(mode: number): string {
+    if (mode === -1) {
+      return '已采用自定义策略';
+    }
+    return StrategyService.buildStrategyExplanation(mode);
+  }
+
+  private async buildAiCandidates(
+    sourcePrompt: string,
+    strategyMode: number,
+    customStrategy?: ComposableStrategy
+  ): Promise<AiReplanPreviewItem[]> {
+    const existingPlaces = this.host.events
+      .filter((event: EventEntity) => event.source === 1)
+      .map((event: EventEntity) => event.name)
+      .filter((name: string) => name.length > 0);
+
+    const scheduleEvents = this.host.events.filter((event: EventEntity) => event.status === 1);
+    let startTimeHint = '建议从上午9:00开始';
+    if (scheduleEvents.length > 0) {
+      const lastEvent = scheduleEvents[scheduleEvents.length - 1];
+      const lastEndTime = lastEvent.dynamic_end_time;
+      if (lastEndTime > 0) {
+        const lastDate = new Date(lastEndTime);
+        const nextDay = new Date(lastDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+        nextDay.setHours(9, 0, 0, 0);
+        startTimeHint = `建议从${nextDay.getMonth() + 1}月${nextDay.getDate()}日上午9:00开始`;
+      }
+    }
+
+    let enhancedPrompt = sourcePrompt;
+    if (existingPlaces.length > 0) {
+      enhancedPrompt += `\n【已有地点】请避免重复：${existingPlaces.join('、')}`;
+    }
+    enhancedPrompt += `\n【起始时间】${startTimeHint}`;
+
+    if (this.host.weatherFeatureEnabled) {
+      try {
+        const weatherStage = this.host.resolveCurrentWeatherStage();
+        const weatherResult = await this.host.weatherFacade.buildPlanningContext(
+          this.host.events,
+          this.host.weatherUserPreference,
+          this.host.weatherCollabOptions,
+          weatherStage
+        );
+        const effectiveStrategy = customStrategy ?? await this.host.getCurrentStrategy();
+        const weatherAwareConstraint = StrategyService.buildWeatherAwareConstraint(
+          effectiveStrategy,
+          weatherResult.context.routeSuitability.routeScore,
+          weatherResult.context.routeSuitability.riskTags,
+          weatherResult.context.collabContext?.trendTag,
+          strategyMode
+        );
+        const weatherSummary = this.host.weatherFacade.buildPromptSummary(weatherResult.context, this.host.weatherUserPreference);
+        enhancedPrompt += this.host.composeWeatherConstraintPrompt(weatherAwareConstraint, weatherSummary);
+      } catch (_weatherError) {
+        enhancedPrompt += '\n【天气约束】天气数据暂不可用，请优先保证路线可执行性。';
+      }
+    } else {
+      enhancedPrompt += '\n【天气约束】用户已关闭天气功能，请忽略天气因素。';
+    }
+
+    const request: AiGenerateRequest = {
+      userPrompt: enhancedPrompt,
+      strategyMode: customStrategy ? -1 : strategyMode,
+      customStrategy: customStrategy
+    };
+    const aiItems = await AiService.generateItineraryWithStrategy(request);
+
+    if (!aiItems || aiItems.length === 0) {
+      throw new Error('AI 未返回可用地点，请调整描述后重试');
+    }
+
+    const rawItems: AiRawItem[] = aiItems as AiRawItem[];
+    return rawItems.map((item: AiRawItem): AiReplanPreviewItem => {
+      const mapped: AiReplanPreviewItem = {
+        name: item.name,
+        duration: item.duration,
+        itemType: item.type,
+        aiReasoning: item.ai_reasoning || 'AI 智能推荐'
+      };
+      return mapped;
+    });
+  }
+
+  private async captureUndoToken(): Promise<AiReplanUndoToken> {
+    const snapshot = await this.host.persistence.getPlanAndEvents(this.host.planId);
+    const plan = snapshot.plan;
+    return {
+      createdAt: Date.now(),
+      events: this.host.events.map((event: EventEntity) => event.toInterface()),
+      strategyMode: Number(plan?.strategyMode ?? this.host.currentStrategyMode),
+      strategyDensity: Number(plan?.strategyDensity ?? 1),
+      strategyPace: Number(plan?.strategyPace ?? 1),
+      strategyPreference: Number(plan?.strategyPreference ?? 0),
+      strategyEnergy: Number(plan?.strategyEnergy ?? 1),
+      lastAiPrompt: plan?.lastAiPrompt || '',
+      lastStrategyExplanation: plan?.lastStrategyExplanation || ''
+    };
   }
 
   public async generateByAi(userPrompt: string, strategyMode: number = 0, customStrategy?: ComposableStrategy): Promise<void> {
@@ -272,6 +492,185 @@ export class TimelineAiService implements ITimelineAiService {
     }
   }
 
+  public async buildReplanPreview(
+    strategyMode: number,
+    customStrategy?: ComposableStrategy,
+    keepCurrentMode?: boolean
+  ): Promise<AiReplanPreviewResult> {
+    if (this.host.isRegenerating) {
+      throw new Error('正在生成中，请稍后重试');
+    }
+
+    this.host.isRegenerating = true;
+    try {
+      const prompt = await this.resolveHistoryPrompt();
+      const effective = await this.resolveEffectiveStrategy(strategyMode, customStrategy, keepCurrentMode);
+      const items = await this.buildAiCandidates(prompt, effective.mode, effective.customStrategy);
+      hilog.info(
+        0x0000,
+        TAG,
+        `[AI_REPLAN][preview] mode=${effective.mode}, custom=${effective.customStrategy ? 1 : 0}, count=${items.length}`
+      );
+      return {
+        prompt: prompt,
+        strategyMode: effective.mode,
+        customStrategy: TimelineAiService.cloneCustomStrategy(effective.customStrategy),
+        generatedAt: Date.now(),
+        itemCount: items.length,
+        items: items
+      };
+    } finally {
+      this.host.isRegenerating = false;
+    }
+  }
+
+  public async applyReplanPreview(
+    preview: AiReplanPreviewResult,
+    decision: AiReplanApplyDecision
+  ): Promise<AiReplanUndoToken> {
+    if (this.host.isRegenerating) {
+      throw new Error('正在生成中，请稍后重试');
+    }
+    if (!preview || !preview.items || preview.items.length === 0) {
+      throw new Error('预览结果为空，无法应用');
+    }
+    this.host.isRegenerating = true;
+    try {
+      const undoToken = await this.captureUndoToken();
+      const mode = TimelineAiService.normalizeStrategyMode(preview.strategyMode);
+      const customStrategy = TimelineAiService.cloneCustomStrategy(preview.customStrategy);
+      if (decision === 'OVERWRITE') {
+        await EventRepositoryImpl.deleteEventsBySource(this.host.planId, 1);
+        this.host.events = this.host.events.filter((event: EventEntity) => event.source !== 1);
+      }
+
+      const requestedDays = AiService.resolveRequestedDaysFromPrompt(preview.prompt);
+      const scheduleEvents = this.host.events.filter((event: EventEntity) => event.status === 1);
+      const baseDayOffset = scheduleEvents.length > 0
+        ? Math.max(...scheduleEvents.map((event: EventEntity) => event.day_offset || 0)) + 1
+        : 0;
+      const allocatedDayOffsets = TimelineAiService.buildAiDayOffsets(preview.items.length, requestedDays, baseDayOffset);
+      const insertedIds: number[] = [];
+
+      for (let i = 0; i < preview.items.length; i++) {
+        const item = preview.items[i];
+        const newItem: TravelPlanItem = {
+          name: item.name,
+          duration: item.duration,
+          type: 'FLOW',
+          preTravelMinutes: -1,
+          sortOrder: 0,
+          status: 0,
+          lockStatus: 0,
+          fixedStartTime: undefined,
+          dayOffset: allocatedDayOffsets[i] ?? baseDayOffset,
+          itemType: item.itemType,
+          priority: item.itemType === 1 ? 0 : 1,
+          isTravelManual: 0,
+          source: 1,
+          aiReasoning: item.aiReasoning || 'AI 智能推荐',
+          delFlag: 0,
+          groupId: 0,
+          address: '',
+          travelMode: 2
+        };
+        const newId = await EventRepositoryImpl.insertEvent(this.host.planId, newItem);
+        newItem.id = newId;
+        insertedIds.push(newId);
+        this.host.events.push(EventEntity.fromInterface(newItem, this.host.planId));
+      }
+
+      if (decision === 'OVERWRITE') {
+        const scheduleCount = this.host.events.filter((event: EventEntity) => event.status === 1).length;
+        let nextSort = scheduleCount > 0
+          ? Math.max(...this.host.events.filter((event: EventEntity) => event.status === 1).map((event: EventEntity) => event.sort_order))
+          : 0;
+        for (let i = 0; i < insertedIds.length; i++) {
+          const target = this.host.events.find((event: EventEntity) => event.id === insertedIds[i]);
+          if (!target) {
+            continue;
+          }
+          nextSort += 100;
+          target.status = 1;
+          target.sort_order = nextSort;
+          target.fixed_start_time = '';
+          target.lock_status = 0;
+          await EventRepositoryImpl.updateFields(target.id, [
+            { column: EventEntity.STATUS, value: 1 },
+            { column: EventEntity.SORT_ORDER, value: nextSort },
+            { column: EventEntity.FIXED_START_TIME, value: '' },
+            { column: EventEntity.LOCK_STATUS, value: 0 }
+          ], this.host.planId);
+        }
+      }
+
+      const explanation = this.buildAiReplanExplanation(mode);
+      await this.host.persistence.saveAiContext(this.host.planId, preview.prompt, explanation);
+      if (mode === -1 && customStrategy) {
+        await PlanRepositoryImpl.updateStrategyDimensions(
+          this.host.planId,
+          customStrategy.density,
+          customStrategy.pace,
+          customStrategy.preference,
+          customStrategy.energy
+        );
+      } else {
+        await this.host.persistence.updateStrategyMode(this.host.planId, mode);
+      }
+      this.host.currentStrategyMode = mode;
+
+      this.host.markScheduleChanged();
+      if (decision === 'OVERWRITE') {
+        this.host.recalculateFromIndex(0);
+      }
+      this.host.events = [...this.host.events];
+      hilog.info(
+        0x0000,
+        TAG,
+        `[AI_REPLAN][apply] decision=${decision}, mode=${mode}, count=${insertedIds.length}`
+      );
+      return undoToken;
+    } finally {
+      this.host.isRegenerating = false;
+    }
+  }
+
+  public async restoreFromUndoToken(token: AiReplanUndoToken): Promise<void> {
+    if (!token) {
+      throw new Error('没有可撤回的重规划记录');
+    }
+    if (this.host.isRegenerating) {
+      throw new Error('正在生成中，请稍后重试');
+    }
+    this.host.isRegenerating = true;
+    try {
+      await this.host.persistence.saveAllEvents(this.host.planId, token.events);
+      this.host.events = token.events.map((item: TravelPlanItem) => EventEntity.fromInterface(item, this.host.planId));
+
+      const restoredMode = TimelineAiService.normalizeStrategyMode(token.strategyMode);
+      if (restoredMode === -1) {
+        await PlanRepositoryImpl.updateStrategyDimensions(
+          this.host.planId,
+          token.strategyDensity,
+          token.strategyPace,
+          token.strategyPreference,
+          token.strategyEnergy
+        );
+      } else {
+        await this.host.persistence.updateStrategyMode(this.host.planId, restoredMode);
+      }
+      this.host.currentStrategyMode = restoredMode;
+      await this.host.persistence.saveAiContext(this.host.planId, token.lastAiPrompt, token.lastStrategyExplanation);
+
+      this.host.markScheduleChanged();
+      this.host.recalculateFromIndex(0);
+      this.host.events = [...this.host.events];
+      hilog.info(0x0000, TAG, `[AI_REPLAN][undo] restoredCount=${this.host.events.length}, mode=${restoredMode}`);
+    } finally {
+      this.host.isRegenerating = false;
+    }
+  }
+
   public getStrategyMode(): number {
     return this.host.currentStrategyMode;
   }
@@ -397,80 +796,18 @@ export class TimelineAiService implements ITimelineAiService {
   }
 
   public async regenerateWithCustomStrategy(strategy: ComposableStrategy): Promise<void> {
-    await this.switchToCustomStrategy(strategy);
-    await this.regenerateByCurrentStrategy();
+    const preview = await this.buildReplanPreview(-1, strategy, false);
+    await this.applyReplanPreview(preview, 'OVERWRITE');
   }
 
   public async regenerateByCurrentStrategy(): Promise<void> {
-    if (this.host.isRegenerating) {
-      hilog.warn(0x0000, TAG, '[AI重新生成] 正在生成中，忽略重复请求');
-      return;
-    }
-
-    const snapshot = await this.host.persistence.getPlanAndEvents(this.host.planId);
-    if (!snapshot.plan || !snapshot.plan.lastAiPrompt) {
-      throw new Error('未找到上次生成记录');
-    }
-
-    this.host.isRegenerating = true;
-    const oldAiEvents = this.host.events.filter((event: EventEntity) => event.source === 1);
-    hilog.info(0x0000, TAG, `[AI重新生成] 开始，旧事件数: ${oldAiEvents.length}`);
-
-    try {
-      await this.generateByAi(snapshot.plan.lastAiPrompt, this.host.currentStrategyMode);
-
-      await EventRepositoryImpl.deleteEventsBySource(this.host.planId, 1);
-
-      const newAiEvents = this.host.events.filter((event: EventEntity) =>
-        event.source === 1 && !oldAiEvents.some((old: EventEntity) => old.id === event.id)
-      );
-      this.host.events = this.host.events.filter((event: EventEntity) =>
-        event.source !== 1 || newAiEvents.some((next: EventEntity) => next.id === event.id)
-      );
-      hilog.info(0x0000, TAG, `[AI重新生成] 成功，新事件数: ${newAiEvents.length}`);
-    } catch (error) {
-      hilog.error(0x0000, TAG, '[AI重新生成] 失败，保留旧数据');
-      throw error instanceof Error ? error : new Error('生成失败');
-    } finally {
-      this.host.isRegenerating = false;
-    }
+    const preview = await this.buildReplanPreview(this.host.currentStrategyMode, undefined, true);
+    await this.applyReplanPreview(preview, 'OVERWRITE');
   }
 
   public async changeStrategyAndRegenerate(mode: number): Promise<void> {
-    if (this.host.isRegenerating) {
-      hilog.warn(0x0000, TAG, '[切换策略] 正在生成中，忽略重复请求');
-      return;
-    }
-
-    const snapshot = await this.host.persistence.getPlanAndEvents(this.host.planId);
-    if (!snapshot.plan || !snapshot.plan.lastAiPrompt) {
-      throw new Error('未找到上次生成记录');
-    }
-
-    this.host.isRegenerating = true;
-    const oldAiEvents = this.host.events.filter((event: EventEntity) => event.source === 1);
-    hilog.info(0x0000, TAG, `[切换策略] 模式${mode}，旧事件数: ${oldAiEvents.length}`);
-
-    try {
-      this.host.currentStrategyMode = mode;
-      await this.host.persistence.updateStrategyMode(this.host.planId, mode);
-      await this.generateByAi(snapshot.plan.lastAiPrompt, mode);
-
-      await EventRepositoryImpl.deleteEventsBySource(this.host.planId, 1);
-
-      const newAiEvents = this.host.events.filter((event: EventEntity) =>
-        event.source === 1 && !oldAiEvents.some((old: EventEntity) => old.id === event.id)
-      );
-      this.host.events = this.host.events.filter((event: EventEntity) =>
-        event.source !== 1 || newAiEvents.some((next: EventEntity) => next.id === event.id)
-      );
-      hilog.info(0x0000, TAG, `[切换策略] 成功，新事件数: ${newAiEvents.length}`);
-    } catch (error) {
-      hilog.error(0x0000, TAG, '[切换策略] 失败，保留旧数据');
-      throw error instanceof Error ? error : new Error('生成失败');
-    } finally {
-      this.host.isRegenerating = false;
-    }
+    const preview = await this.buildReplanPreview(mode, undefined, false);
+    await this.applyReplanPreview(preview, 'OVERWRITE');
   }
 }
 
