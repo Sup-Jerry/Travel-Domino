@@ -49,6 +49,7 @@ import companionDisplayHelperTest from './CompanionDisplayHelper.test';
 import companionDisplayHelperActionsTest from './CompanionDisplayHelperActions.test';
 import companionDisplayHelperMessagesTest from './CompanionDisplayHelperMessages.test';
 import companionDisplayHelperErrorCodesTest from './CompanionDisplayHelperErrorCodes.test';
+import companionDisplayHelperSuggestionExplanationTest from './CompanionDisplayHelperSuggestionExplanation.test';
 import companionFocusActionHelperTest from './CompanionFocusActionHelper.test';
 import companionWindowHelperTest from './CompanionWindowHelper.test';
 import companionWindowHelperInsetsTest from './CompanionWindowHelperInsets.test';
@@ -105,6 +106,7 @@ const registeredSuiteNames: string[] = [
   'CompanionDisplayHelperActions',
   'CompanionDisplayHelperMessages',
   'CompanionDisplayHelperErrorCodes',
+  'CompanionDisplayHelperSuggestionExplanation',
   'CompanionFocusActionHelper',
   'CompanionWindowHelper',
   'CompanionWindowHelperInsets',
@@ -183,6 +185,7 @@ export default function testsuite() {
   companionDisplayHelperActionsTest();
   companionDisplayHelperMessagesTest();
   companionDisplayHelperErrorCodesTest();
+  companionDisplayHelperSuggestionExplanationTest();
   companionFocusActionHelperTest();
   companionWindowHelperTest();
   companionWindowHelperInsetsTest();
