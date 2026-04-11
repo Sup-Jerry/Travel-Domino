@@ -1,4 +1,4 @@
-import { EventEntity } from '../../../../model/entity/EventEntity';
+﻿import { EventEntity } from '../../../../model/entity/EventEntity';
 import { WeatherSuggestion } from '../../../../domain/services/WeatherModels';
 import { CompanionContext } from '../../../../viewmodel/TimelineViewModel';
 import { ThemeCenter } from '../../../../common/utils/ThemeCenter';
@@ -28,6 +28,14 @@ import {
   getCompanionCardScale,
   getCompanionCardTranslateX
 } from './CompanionAnimationHelper';
+
+export function shouldShowCompanionWeatherCard(isWeatherFeatureEnabled: boolean): boolean {
+  return isWeatherFeatureEnabled;
+}
+
+export function getCompanionControlCurrentEventId(currentEvent: EventEntity | null): number {
+  return currentEvent ? currentEvent.id : -1;
+}
 
 @Component
 export struct CompanionControlPage {
@@ -147,7 +155,7 @@ export struct CompanionControlPage {
           }
         });
 
-        if (this.isWeatherFeatureEnabled) {
+        if (shouldShowCompanionWeatherCard(this.isWeatherFeatureEnabled)) {
           CompanionExecutionWeatherCard({
             weatherExpanded: this.weatherExpanded,
             showWeatherScorePopup: this.showWeatherScorePopup,
@@ -215,7 +223,7 @@ export struct CompanionControlPage {
           incomingEvent: this.incomingEvent,
           stableEvent: this.stableEvent,
           runtimeState: this.context.runtimeState,
-          currentEventId: this.context.currentEvent ? this.context.currentEvent.id : -1,
+          currentEventId: getCompanionControlCurrentEventId(this.context.currentEvent),
           getEventStateLabel: (event: EventEntity) => getCompanionEventStateLabel(event),
           getStateTagTextColor: (event: EventEntity) => getCompanionStateCoreColor(event, this.getThemePalette()),
           getStateTagBackgroundColor: (event: EventEntity) => getCompanionStateTagBackgroundColor(event),
@@ -304,3 +312,4 @@ export struct CompanionControlPage {
     .backgroundColor(this.getThemePalette().pageBg);
   }
 }
+

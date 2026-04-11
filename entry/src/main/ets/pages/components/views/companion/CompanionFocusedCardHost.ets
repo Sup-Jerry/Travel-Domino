@@ -3,6 +3,39 @@ import { ThemeCenter } from '../../../../common/utils/ThemeCenter';
 
 type CardPhase = 'stable' | 'outgoing' | 'incoming';
 
+export function shouldShowFocusedPlannedRange(state: string): boolean {
+  return state !== 'PENDING';
+}
+
+export function resolveCompanionFocusedActionMode(
+  state: string,
+  runtimeState: string,
+  currentEventId: number,
+  eventId: number
+): 'PENDING' | 'ACTIVE' | 'PAUSED_ACTIVE' | 'SKIPPED' | 'DISABLED' {
+  if (state === 'PENDING') {
+    return 'PENDING';
+  }
+  if (state === 'ACTIVE') {
+    return 'ACTIVE';
+  }
+  if (runtimeState === 'PAUSED' && currentEventId === eventId) {
+    return 'PAUSED_ACTIVE';
+  }
+  if (state === 'SKIPPED') {
+    return 'SKIPPED';
+  }
+  return 'DISABLED';
+}
+
+export function shouldRenderFocusedSwitchCards(
+  canRenderSwitchCards: boolean,
+  outgoingEvent: EventEntity | null,
+  incomingEvent: EventEntity | null
+): boolean {
+  return canRenderSwitchCards && !!outgoingEvent && !!incomingEvent;
+}
+
 @Component
 export struct CompanionFocusedCardHost {
   @Prop canRenderSwitchCards: boolean = false;
@@ -63,7 +96,7 @@ export struct CompanionFocusedCardHost {
           .maxLines(1);
       }
 
-      if (this.getEventState(event) !== 'PENDING') {
+      if (shouldShowFocusedPlannedRange(this.getEventState(event))) {
         Text(`计划 ${this.getPlannedRange(event)}`)
           .fontSize(12)
           .fontColor(this.getThemePalette().textTertiary)
@@ -78,7 +111,7 @@ export struct CompanionFocusedCardHost {
           .fontColor(Color.White)
           .onClick(() => this.onNavigate(event));
 
-        if (this.getEventState(event) === 'PENDING') {
+        if (resolveCompanionFocusedActionMode(this.getEventState(event), this.runtimeState, this.currentEventId, event.id) === 'PENDING') {
           Button('开始')
             .layoutWeight(1)
             .height(42)
@@ -96,7 +129,7 @@ export struct CompanionFocusedCardHost {
             .onClick(async () => {
               await this.onSkip(event);
             });
-        } else if (this.getEventState(event) === 'ACTIVE') {
+        } else if (resolveCompanionFocusedActionMode(this.getEventState(event), this.runtimeState, this.currentEventId, event.id) === 'ACTIVE') {
           Button('结束')
             .layoutWeight(1)
             .height(42)
@@ -106,7 +139,7 @@ export struct CompanionFocusedCardHost {
             .onClick(async () => {
               await this.onEnd(event);
             });
-        } else if (this.runtimeState === 'PAUSED' && this.currentEventId === event.id) {
+        } else if (resolveCompanionFocusedActionMode(this.getEventState(event), this.runtimeState, this.currentEventId, event.id) === 'PAUSED_ACTIVE') {
           Button('结束')
             .layoutWeight(1)
             .height(42)
@@ -116,7 +149,7 @@ export struct CompanionFocusedCardHost {
             .onClick(async () => {
               await this.onEnd(event);
             });
-        } else if (this.getEventState(event) === 'SKIPPED') {
+        } else if (resolveCompanionFocusedActionMode(this.getEventState(event), this.runtimeState, this.currentEventId, event.id) === 'SKIPPED') {
           Button('重新开始')
             .layoutWeight(1)
             .height(42)
@@ -185,9 +218,9 @@ export struct CompanionFocusedCardHost {
 
   build() {
     Stack() {
-      if (this.canRenderSwitchCards && this.outgoingEvent && this.incomingEvent) {
-        this.FocusedCardBody(this.outgoingEvent, 'outgoing');
-        this.FocusedCardBody(this.incomingEvent, 'incoming');
+      if (shouldRenderFocusedSwitchCards(this.canRenderSwitchCards, this.outgoingEvent, this.incomingEvent)) {
+        this.FocusedCardBody(this.outgoingEvent as EventEntity, 'outgoing');
+        this.FocusedCardBody(this.incomingEvent as EventEntity, 'incoming');
       } else if (this.stableEvent) {
         this.FocusedCardBody(this.stableEvent, 'stable');
       } else {
@@ -209,3 +242,4 @@ export struct CompanionFocusedCardHost {
     .width('100%');
   }
 }
+

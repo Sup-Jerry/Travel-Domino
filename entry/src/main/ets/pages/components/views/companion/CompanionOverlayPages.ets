@@ -1,4 +1,4 @@
-import { EventEntity } from '../../../../model/entity/EventEntity';
+﻿import { EventEntity } from '../../../../model/entity/EventEntity';
 import {
   HistoryTimelineFilter,
   HistoryTimelineItem,
@@ -16,6 +16,18 @@ import {
   getCompanionFilterOptions,
   getCompanionPlannedRange
 } from './CompanionDisplayHelper';
+
+export function shouldShowCompanionHistoryOverlay(showHistoryPage: boolean): boolean {
+  return showHistoryPage;
+}
+
+export function shouldShowCompanionSearchOverlay(showSearchPage: boolean): boolean {
+  return showSearchPage;
+}
+
+export function shouldShowCompanionFilterOverlay(showFilterPage: boolean): boolean {
+  return showFilterPage;
+}
 
 @Component
 export struct CompanionOverlayPages {
@@ -53,7 +65,7 @@ export struct CompanionOverlayPages {
   build() {
     Column() {
       CompanionHistoryPage({
-        showHistoryPage: this.showHistoryPage,
+        showHistoryPage: shouldShowCompanionHistoryOverlay(this.showHistoryPage),
         historyTimelineSummary: this.historyTimelineSummary,
         historyTimelineItems: this.historyTimelineItems,
         historyTimelineFilter: this.historyTimelineFilter,
@@ -78,7 +90,7 @@ export struct CompanionOverlayPages {
       });
 
       CompanionSearchPage({
-        showSearchPage: this.showSearchPage,
+        showSearchPage: shouldShowCompanionSearchOverlay(this.showSearchPage),
         searchKeyword: this.searchKeyword,
         searchResults: this.searchResults,
         safeTopInset: this.safeTopInset,
@@ -97,7 +109,7 @@ export struct CompanionOverlayPages {
       });
 
       CompanionFilterPage({
-        showFilterPage: this.showFilterPage,
+        showFilterPage: shouldShowCompanionFilterOverlay(this.showFilterPage),
         companionFilterState: this.companionFilterState,
         safeTopInset: this.safeTopInset,
         safeBottomInset: this.safeBottomInset,
@@ -115,3 +127,4 @@ export struct CompanionOverlayPages {
     .height('100%');
   }
 }
+

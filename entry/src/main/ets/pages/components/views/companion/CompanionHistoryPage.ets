@@ -17,6 +17,57 @@ interface HistoryTimelineGroup {
   items: HistoryTimelineItem[];
 }
 
+export function getNextHistoryTimelineFilterValue(filter: HistoryTimelineFilter): HistoryTimelineFilter {
+  if (filter === 'all') {
+    return 'completed';
+  }
+  if (filter === 'completed') {
+    return 'skipped';
+  }
+  if (filter === 'skipped') {
+    return 'abnormal';
+  }
+  return 'all';
+}
+
+export function getHistoryTimelineFilterLabelValue(filter: HistoryTimelineFilter): string {
+  if (filter === 'completed') {
+    return '只看完成';
+  }
+  if (filter === 'skipped') {
+    return '只看跳过';
+  }
+  if (filter === 'abnormal') {
+    return '只看异常';
+  }
+  return '全部';
+}
+
+export function isHistoryTimelineItemVisibleByFilter(
+  filter: HistoryTimelineFilter,
+  actionType: string,
+  isAbnormal: boolean
+): boolean {
+  if (filter === 'all') {
+    return true;
+  }
+  if (filter === 'completed') {
+    return actionType === 'ARRIVE' || actionType === 'LEAVE';
+  }
+  if (filter === 'skipped') {
+    return actionType === 'SKIP';
+  }
+  return isAbnormal || actionType === 'SKIP';
+}
+
+export function getHistoryTimelineSkipReasonByNote(note: string): string {
+  const normalized = note.trim();
+  if (normalized.includes('时间不足')) {
+    return '时间不足';
+  }
+  return '手动跳过';
+}
+
 @Component
 export struct CompanionHistoryPage {
   @Prop showHistoryPage: boolean = false;
@@ -57,42 +108,15 @@ export struct CompanionHistoryPage {
   }
 
   private getNextHistoryTimelineFilter(): HistoryTimelineFilter {
-    if (this.historyTimelineFilter === 'all') {
-      return 'completed';
-    }
-    if (this.historyTimelineFilter === 'completed') {
-      return 'skipped';
-    }
-    if (this.historyTimelineFilter === 'skipped') {
-      return 'abnormal';
-    }
-    return 'all';
+    return getNextHistoryTimelineFilterValue(this.historyTimelineFilter);
   }
 
   private getHistoryTimelineFilterLabel(): string {
-    if (this.historyTimelineFilter === 'completed') {
-      return '只看完成';
-    }
-    if (this.historyTimelineFilter === 'skipped') {
-      return '只看跳过';
-    }
-    if (this.historyTimelineFilter === 'abnormal') {
-      return '只看异常';
-    }
-    return '全部';
+    return getHistoryTimelineFilterLabelValue(this.historyTimelineFilter);
   }
 
   private isTimelineItemVisible(item: HistoryTimelineItem): boolean {
-    if (this.historyTimelineFilter === 'all') {
-      return true;
-    }
-    if (this.historyTimelineFilter === 'completed') {
-      return item.actionType === 'ARRIVE' || item.actionType === 'LEAVE';
-    }
-    if (this.historyTimelineFilter === 'skipped') {
-      return item.actionType === 'SKIP';
-    }
-    return item.isAbnormal || item.actionType === 'SKIP';
+    return isHistoryTimelineItemVisibleByFilter(this.historyTimelineFilter, item.actionType, item.isAbnormal);
   }
 
   private getFilteredHistoryTimelineItems(): HistoryTimelineItem[] {
@@ -140,11 +164,7 @@ export struct CompanionHistoryPage {
   }
 
   private getTimelineSkipReason(item: HistoryTimelineItem): string {
-    const note = (item.note || '').trim();
-    if (note.includes('时间不足')) {
-      return '时间不足';
-    }
-    return '手动跳过';
+    return getHistoryTimelineSkipReasonByNote(item.note || '');
   }
 
   private getTimelineSubText(item: HistoryTimelineItem): string {
@@ -596,4 +616,5 @@ export struct CompanionHistoryPage {
     }
   }
 }
+
 

@@ -1,6 +1,18 @@
 ﻿import { EventEntity } from '../../../../model/entity/EventEntity';
 import { ThemeCenter } from '../../../../common/utils/ThemeCenter';
 
+export function shouldShowCompanionSearchPage(showSearchPage: boolean): boolean {
+  return showSearchPage;
+}
+
+export function shouldShowCompanionSearchEmptyState(resultCount: number): boolean {
+  return resultCount === 0;
+}
+
+export function getCompanionSearchResultMetaText(stateLabel: string, plannedRange: string): string {
+  return `${stateLabel} | ${plannedRange}`;
+}
+
 @Component
 export struct CompanionSearchPage {
   @Prop showSearchPage: boolean = false;
@@ -21,7 +33,7 @@ export struct CompanionSearchPage {
   }
 
   build() {
-    if (this.showSearchPage) {
+    if (shouldShowCompanionSearchPage(this.showSearchPage)) {
       Column({ space: 10 }) {
         Row() {
           Text('搜索日程')
@@ -51,7 +63,7 @@ export struct CompanionSearchPage {
             this.onSearch(value);
           });
 
-        if (this.searchResults.length === 0) {
+        if (shouldShowCompanionSearchEmptyState(this.searchResults.length)) {
           Column({ space: 8 }) {
             Text('没有匹配结果')
               .fontSize(15)
@@ -76,7 +88,7 @@ export struct CompanionSearchPage {
                       .fontColor(this.getThemePalette().textPrimary)
                       .maxLines(1)
                       .textOverflow({ overflow: TextOverflow.Ellipsis });
-                    Text(`${this.getEventStateLabel(item)} | ${this.getPlannedRange(item)}`)
+                    Text(getCompanionSearchResultMetaText(this.getEventStateLabel(item), this.getPlannedRange(item)))
                       .fontSize(12)
                       .fontColor(this.getThemePalette().textSecondary)
                       .maxLines(1)
@@ -117,3 +129,4 @@ export struct CompanionSearchPage {
     }
   }
 }
+
