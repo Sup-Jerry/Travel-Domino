@@ -91,6 +91,12 @@ export class TimelineRecalculationManager {
     this.normalizeAutoRouteCandidates();
     const safeStartIndex = startIndex < 0 ? 0 : startIndex;
     const startFromEventId = this.resolveScheduleAnchorEventId(safeStartIndex);
+    const profile = StrategyPresets.getProfile(this.host.currentStrategyMode as TravelStrategyMode);
+    hilog.info(
+      0x0000,
+      TAG,
+      `[PAPER_EXP][recalc_trigger] scene=recalculate_from_index,mode=${this.host.currentStrategyMode},autoRoute=${this.isAutoRouteEnabled()},idleGap=${this.host.idleGapDetectionEnabled},idleGapMin=${this.host.idleGapTriggerMinutes},strategySlack=${profile.slackRatio},solverSlack=default,startIndex=${safeStartIndex},startFromEventId=${startFromEventId}`
+    );
 
     TimelineCalculationService.recalculateFromIndex(
       this.host.events,
@@ -112,6 +118,7 @@ export class TimelineRecalculationManager {
     this.host.regenerateGroups();
     this.host.markScheduleChanged();
     this.host.refreshTimelineView();
+    this.emitPaperExperimentSummary('recalculate_from_index');
   }
 
   public recalculate(): void {
@@ -122,10 +129,16 @@ export class TimelineRecalculationManager {
     }
     const globalStartCandidate = DateUtil.extractPureTime(this.host.globalStartTime) || this.host.globalStartTime;
     const effectiveGlobalStart = DateUtil.isValidTimeString(globalStartCandidate) ? globalStartCandidate : '08:00';
+    const strategyProfile = StrategyPresets.getProfile(this.host.currentStrategyMode as TravelStrategyMode);
     hilog.info(
       0x0000,
       TAG,
       `[SHIFT_VM][recalculate_input] globalStart=${this.host.globalStartTime}, effectiveStart=${effectiveGlobalStart}, planStartDate=${this.host.planStartDate}, total=${this.host.events.length}`
+    );
+    hilog.info(
+      0x0000,
+      TAG,
+      `[PAPER_EXP][recalc_trigger] scene=recalculate,mode=${this.host.currentStrategyMode},autoRoute=${this.isAutoRouteEnabled()},idleGap=${this.host.idleGapDetectionEnabled},idleGapMin=${this.host.idleGapTriggerMinutes},strategySlack=${strategyProfile.slackRatio},solverSlack=${strategyProfile.slackRatio}`
     );
 
     const result = TimelineCalculationService.recalculate(
@@ -150,11 +163,18 @@ export class TimelineRecalculationManager {
     if (result.hasFieldChanged || result.hasDayOffsetChanged) {
       this.host.refreshTimelineView();
     }
+    this.emitPaperExperimentSummary('recalculate');
     this.logTimelineSnapshot('recalculate');
   }
 
   public recalculateTrafficOnly(): void {
     this.normalizeAutoRouteCandidates();
+    const profile = StrategyPresets.getProfile(this.host.currentStrategyMode as TravelStrategyMode);
+    hilog.info(
+      0x0000,
+      TAG,
+      `[PAPER_EXP][recalc_trigger] scene=traffic_only,mode=${this.host.currentStrategyMode},autoRoute=${this.isAutoRouteEnabled()},idleGap=${this.host.idleGapDetectionEnabled},idleGapMin=${this.host.idleGapTriggerMinutes},strategySlack=${profile.slackRatio},solverSlack=default`
+    );
     const result = TimelineCalculationService.recalculateTrafficOnly(
       this.host.events,
       this.host.globalStartTime,
@@ -179,6 +199,7 @@ export class TimelineRecalculationManager {
     }
     this.logScheduleShiftSnapshot('traffic_only');
     this.host.refreshTimelineView();
+    this.emitPaperExperimentSummary('traffic_only');
   }
 
   private completionStatusLabel(status: number): string {
@@ -429,5 +450,55 @@ export class TimelineRecalculationManager {
       );
     }
     hilog.info(0x0000, TAG, `[SHIFT_VM][snapshot][${scene}] ${parts.join(' ; ')}`);
+  }
+
+  private emitPaperExperimentSummary(scene: string): void {
+    const schedule = this.host.events.filter((event: EventEntity) => event.status === 1);
+    const total = schedule.length;
+    let conflict = 0;
+    let conflictMin = 0;
+    let gap = 0;
+    let gapMin = 0;
+    let overflow = 0;
+    let durationMin = 0;
+    let travelMin = 0;
+    let spanStart = Number.MAX_SAFE_INTEGER;
+    let spanEnd = 0;
+
+    for (let i = 0; i < schedule.length; i++) {
+      const item = schedule[i];
+      durationMin += Math.max(0, item.duration ?? 0);
+      travelMin += Math.max(0, item.pre_travel_min ?? 0);
+      if (item.is_conflict) {
+        conflict += 1;
+        conflictMin += Math.max(0, item.gap_minutes ?? 0);
+      }
+      if (item.has_gap) {
+        gap += 1;
+        gapMin += Math.max(0, item.gap_minutes ?? 0);
+      }
+      if ((item.dynamic_day_offset ?? item.day_offset ?? 0) > (item.day_offset ?? 0)) {
+        overflow += 1;
+      }
+      const dynamicStart = item.dynamic_start_time ?? 0;
+      const dynamicEnd = item.dynamic_end_time ?? 0;
+      if (dynamicStart > 0 && dynamicStart < spanStart) {
+        spanStart = dynamicStart;
+      }
+      if (dynamicEnd > spanEnd) {
+        spanEnd = dynamicEnd;
+      }
+    }
+
+    const spanMin = (spanStart !== Number.MAX_SAFE_INTEGER && spanEnd > spanStart)
+      ? Math.floor((spanEnd - spanStart) / (60 * 1000))
+      : 0;
+    const utilPermille = spanMin > 0 ? Math.floor((durationMin * 1000) / spanMin) : -1;
+
+    hilog.info(
+      0x0000,
+      TAG,
+      `[PAPER_EXP][vm_summary] scene=${scene},mode=${this.host.currentStrategyMode},total=${total},conflict=${conflict},conflictMin=${conflictMin},gap=${gap},gapMin=${gapMin},overflow=${overflow},durationMin=${durationMin},travelMin=${travelMin},spanMin=${spanMin},utilPermille=${utilPermille}`
+    );
   }
 }

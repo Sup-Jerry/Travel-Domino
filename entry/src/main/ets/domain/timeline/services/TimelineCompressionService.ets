@@ -598,11 +598,17 @@ export class TimelineCompressionService implements ITimelineCompressionService {
     const preview = this.previewAdvanceAdjust(targetIndex, selectedIds, targetStartTime, forcedGapMinutes);
     if (!preview.valid || preview.items.length === 0) {
       const currentGap = this.host.events[targetIndex]?.gap_minutes ?? 0;
+      const failRemain = Math.max(currentGap, preview.remainingGapMinutes);
+      hilog.info(
+        0x0000,
+        TAG,
+        `[PAPER_EXP][advance_apply] success=false,targetIndex=${targetIndex},selected=${selectedIds.size},required=${preview.requiredGapMinutes},shift=0,remaining=${failRemain},forcedGap=${forcedGapMinutes ?? -1}`
+      );
       return {
         success: false,
         appliedCount: 0,
         appliedShiftMinutes: 0,
-        remainingGapMinutes: Math.max(currentGap, preview.remainingGapMinutes),
+        remainingGapMinutes: failRemain,
         message: preview.message
       };
     }
@@ -634,6 +640,11 @@ export class TimelineCompressionService implements ITimelineCompressionService {
       liveRemaining = this.host.events[targetIndex]?.gap_minutes ?? 0;
     }
     const remaining = Math.max(0, liveRemaining);
+    hilog.info(
+      0x0000,
+      TAG,
+      `[PAPER_EXP][advance_apply] success=true,targetIndex=${targetIndex},selected=${selectedIds.size},required=${preview.requiredGapMinutes},shift=${preview.shiftMinutes},remaining=${remaining},forcedGap=${forcedGapMinutes ?? -1}`
+    );
     hilog.info(
       0x0000,
       TAG,
@@ -799,6 +810,11 @@ export class TimelineCompressionService implements ITimelineCompressionService {
       hilog.info(
         0x0000,
         TAG,
+        `[PAPER_EXP][compression_plan] status=OVERLOAD,mode=${mode},targetIndex=${targetIndex},needed=${context.neededGapMinutes},reduced=${reducedTotal},remaining=${remainingNeed},selected=${selected.length},capacity=${capacityMinutes},forcedGap=${forcedGapMinutes ?? -1}`
+      );
+      hilog.info(
+        0x0000,
+        TAG,
         `[CONFLICT_DEBUG][compress_calc] status=OVERLOAD, targetIndex=${targetIndex}, targetTime=${targetTime}, needed=${context.neededGapMinutes}, reduced=${reducedTotal}, remain=${remainingNeed}, forcedGap=${forcedGapMinutes ?? -1}, selected=${selected.length}, affected=${affectedDigest}`
       );
       return {
@@ -812,6 +828,11 @@ export class TimelineCompressionService implements ITimelineCompressionService {
       };
     }
 
+    hilog.info(
+      0x0000,
+      TAG,
+      `[PAPER_EXP][compression_plan] status=COMPRESS_CONFIRM,mode=${mode},targetIndex=${targetIndex},needed=${context.neededGapMinutes},reduced=${reducedTotal},remaining=0,selected=${selected.length},capacity=${capacityMinutes},forcedGap=${forcedGapMinutes ?? -1}`
+    );
     hilog.info(
       0x0000,
       TAG,
@@ -840,9 +861,11 @@ export class TimelineCompressionService implements ITimelineCompressionService {
     }
 
     let minChangedIndex = Number.MAX_SAFE_INTEGER;
+    let totalReduced = 0;
     plan.affectedItems.forEach((change: CompressionAffectedItem) => {
       const item = this.host.events[change.index];
       item.duration = change.newVal;
+      totalReduced += Math.max(0, change.oldVal - change.newVal);
       if (change.index < minChangedIndex) {
         minChangedIndex = change.index;
       }
@@ -853,6 +876,11 @@ export class TimelineCompressionService implements ITimelineCompressionService {
     });
 
     const startIndex = minChangedIndex > 0 ? minChangedIndex - 1 : 0;
+    hilog.info(
+      0x0000,
+      TAG,
+      `[PAPER_EXP][compression_apply] affected=${plan.affectedItems.length},totalReducedMin=${totalReduced},startIndex=${startIndex},status=${plan.status},mode=${plan.mode ?? 'UNKNOWN'}`
+    );
     this.host.recalculateFromIndex(startIndex);
   }
 

@@ -1,6 +1,9 @@
 ﻿import { EventEntity } from '../../../model/entity/EventEntity';
 import { DateUtil } from '../../../common/utils/DateUtil';
 import { EventRepositoryImpl } from '../../../infrastructure/persistence/EventRepositoryImpl';
+import { hilog } from '@kit.PerformanceAnalysisKit';
+
+const TAG = 'TimelineViewModel';
 
 export interface ITimelineDistributionHost {
   events: EventEntity[];
@@ -89,6 +92,7 @@ export class TimelineDistributionService implements ITimelineDistributionService
     const count = candidates.length;
     const baseAdd = Math.floor(gap / count);
     const remainder = gap % count;
+    let totalAppliedAdd = 0;
 
     candidates.forEach((item: EventEntity, idx: number) => {
       let add = baseAdd;
@@ -102,6 +106,7 @@ export class TimelineDistributionService implements ITimelineDistributionService
         return;
       }
       item.duration += cappedAdd;
+      totalAppliedAdd += cappedAdd;
 
       if (item.id) {
         void EventRepositoryImpl.updateSingleField(item.id, 'duration', item.duration, this.host.planId);
@@ -109,6 +114,11 @@ export class TimelineDistributionService implements ITimelineDistributionService
     });
 
     const recalculateStartIndex = this.host.events.indexOf(candidates[candidates.length - 1]);
+    hilog.info(
+      0x0000,
+      TAG,
+      `[PAPER_EXP][distribution_auto] targetId=${targetItem.id},gap=${gap},candidateCount=${count},totalAdd=${totalAppliedAdd},startIndex=${recalculateStartIndex}`
+    );
     this.host.recalculateFromIndex(recalculateStartIndex > 0 ? recalculateStartIndex - 1 : 0);
   }
 
@@ -233,6 +243,16 @@ export class TimelineDistributionService implements ITimelineDistributionService
       activeIds = nextActiveIds;
     }
 
+    let totalAllocated = 0;
+    result.forEach((value: number) => {
+      totalAllocated += Math.max(0, value);
+    });
+    hilog.info(
+      0x0000,
+      TAG,
+      `[PAPER_EXP][distribution_preview] gapId=${gapItem.id},strategy=${strategy},selected=${selectedItems.length},allocated=${totalAllocated},remain=${Math.max(0, gapItem.gap_minutes - totalAllocated)}`
+    );
+
     return result;
   }
 
@@ -281,6 +301,8 @@ export class TimelineDistributionService implements ITimelineDistributionService
   public async applyDistribution(distributionMap: Map<number, number>): Promise<void> {
     const entries = Array.from(distributionMap.entries());
     let startIndex = this.host.events.length;
+    let affectedCount = 0;
+    let totalAppliedAdd = 0;
     for (let i = 0; i < entries.length; i++) {
       const id = entries[i][0];
       const addMin = entries[i][1];
@@ -295,9 +317,16 @@ export class TimelineDistributionService implements ITimelineDistributionService
           startIndex = idx;
         }
         item.duration += cappedAdd;
+        totalAppliedAdd += cappedAdd;
+        affectedCount += 1;
         await EventRepositoryImpl.updateSingleField(item.id, 'duration', item.duration, this.host.planId);
       }
     }
+    hilog.info(
+      0x0000,
+      TAG,
+      `[PAPER_EXP][distribution_apply] affected=${affectedCount},totalAdd=${totalAppliedAdd},startIndex=${startIndex < this.host.events.length ? (startIndex > 0 ? startIndex - 1 : 0) : -1}`
+    );
     if (startIndex < this.host.events.length) {
       this.host.recalculateFromIndex(startIndex > 0 ? startIndex - 1 : 0);
     }
