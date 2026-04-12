@@ -11,6 +11,7 @@ import planStateMachineTCSuiteTest from './PlanStateMachineTCSuite.test';
 import aiServiceTest from './AiService.test';
 import preferenceManagerTest from './PreferenceManager.test';
 import mapServiceImplTest from './MapServiceImpl.test';
+import dateUtilTest from './DateUtil.test';
 import arrivalReminderEngineTest from './ArrivalReminderEngine.test';
 import scheduleOrchestratorTest from './ScheduleOrchestrator.test';
 import reminderFacadeTest from './ReminderFacade.test';
@@ -124,7 +125,15 @@ import indexTopAreaHelperTest from './IndexTopAreaHelper.test';
 import indexCompanionOverlayHelperTest from './IndexCompanionOverlayHelper.test';
 import indexScheduleAreaHelperTest from './IndexScheduleAreaHelper.test';
 import indexPageLayoutHelperTest from './IndexPageLayoutHelper.test';
+import indexAddDialogHelperTest from './IndexAddDialogHelper.test';
+import indexConflictHelperTest from './IndexConflictHelper.test';
+import indexLifecycleHelperTest from './IndexLifecycleHelper.test';
+import indexPageShowHelperTest from './IndexPageShowHelper.test';
+import indexSettingsFlowHelperTest from './IndexSettingsFlowHelper.test';
+import indexStateManagerTest from './IndexStateManager.test';
 import indexStateManagerHelperTest from './IndexStateManagerHelper.test';
+import indexTimelineActionHelperTest from './IndexTimelineActionHelper.test';
+import indexTypesTest from './IndexTypes.test';
 import appTextsConstantsTest from './AppTextsConstants.test';
 import domainConstantsTest from './DomainConstants.test';
 import storageKeysTest from './StorageKeys.test';
@@ -158,6 +167,7 @@ const registeredSuiteNames: string[] = [
   'AiService',
   'PreferenceManager',
   'MapServiceImpl',
+  'DateUtil',
   'ArrivalReminderEngine',
   'ScheduleOrchestrator',
   'ReminderFacade',
@@ -271,7 +281,15 @@ const registeredSuiteNames: string[] = [
   'IndexCompanionOverlayHelper',
   'IndexScheduleAreaHelper',
   'IndexPageLayoutHelper',
+  'IndexAddDialogHelper',
+  'IndexConflictHelper',
+  'IndexLifecycleHelper',
+  'IndexPageShowHelper',
+  'IndexSettingsFlowHelper',
+  'IndexStateManager',
   'IndexStateManagerHelper',
+  'IndexTimelineActionHelper',
+  'IndexTypes',
   'AppTextsConstants',
   'DomainConstants',
   'StorageKeys',
@@ -327,6 +345,7 @@ export default function testsuite() {
   aiServiceTest();
   preferenceManagerTest();
   mapServiceImplTest();
+  dateUtilTest();
   arrivalReminderEngineTest();
   scheduleOrchestratorTest();
   reminderFacadeTest();
@@ -440,7 +459,15 @@ export default function testsuite() {
   indexCompanionOverlayHelperTest();
   indexScheduleAreaHelperTest();
   indexPageLayoutHelperTest();
+  indexAddDialogHelperTest();
+  indexConflictHelperTest();
+  indexLifecycleHelperTest();
+  indexPageShowHelperTest();
+  indexSettingsFlowHelperTest();
+  indexStateManagerTest();
   indexStateManagerHelperTest();
+  indexTimelineActionHelperTest();
+  indexTypesTest();
   appTextsConstantsTest();
   domainConstantsTest();
   storageKeysTest();
