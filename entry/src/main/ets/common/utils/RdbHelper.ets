@@ -32,7 +32,6 @@ export class RdbHelper {
   }
 
   /**
-   * 鍒濆鍖栨暟鎹簱 (鍦?UIAbility onCreate 涓皟鐢?
    */
   public init(context: common.Context): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -54,7 +53,6 @@ export class RdbHelper {
             if (this.rdbStore.version < 2) {
               hilog.info(0x0000, TAG, 'Start upgrading database to version 2...');
 
-              // 閫愪釜妫€鏌ュ苟娣诲姞鍒?(浣跨敤 try-catch 闃叉鍒楀凡瀛樺湪鐨勯敊璇?
               const addColumns = [
                 `ALTER TABLE ${EventEntity.TABLE_NAME} ADD COLUMN ${EventEntity.ACTUAL_START_TIME} INTEGER DEFAULT 0`,
                 `ALTER TABLE ${EventEntity.TABLE_NAME} ADD COLUMN ${EventEntity.ACTUAL_END_TIME} INTEGER DEFAULT 0`,
@@ -65,16 +63,14 @@ export class RdbHelper {
                 try {
                   await this.rdbStore.executeSql(sql);
                 } catch (e) {
-                  // 蹇界暐"鍒楀凡瀛樺湪"鐨勯敊璇紝淇濊瘉骞傜瓑鎬?
                   hilog.warn(0x0000, TAG, `Column might already exist: ${JSON.stringify(e)}`);
                 }
               }
 
-              // 鏍囪鐗堟湰鍙蜂负 2
               this.rdbStore.version = 2;
               hilog.info(0x0000, TAG, 'Database upgraded to version 2 successfully.');
             }
-            if (this.rdbStore.version < 3) { // 淇敼鐐癸細鏂板 V3 鍗囩骇鍒嗘敮锛岀敤浜庡垱寤虹储寮?
+            if (this.rdbStore.version < 3) {
               const createIndexSql = [
                 `CREATE INDEX IF NOT EXISTS idx_event_query ON ${EventEntity.TABLE_NAME} (${EventEntity.PLAN_ID}, ${EventEntity.DEL_FLAG}, ${EventEntity.STATUS}, ${EventEntity.DAY_OFFSET}, ${EventEntity.SORT_ORDER})`,
                 `CREATE INDEX IF NOT EXISTS idx_plan_query ON ${PlanEntity.TABLE_NAME} (${PlanEntity.DEL_FLAG}, ${PlanEntity.CREATED_AT})`
@@ -82,7 +78,7 @@ export class RdbHelper {
               for (const sql of createIndexSql) {
                 await this.rdbStore.executeSql(sql);
               }
-              this.rdbStore.version = 3; // 淇敼鐐癸細鏄惧紡鏇存柊鏁版嵁搴撶増鏈彿
+              this.rdbStore.version = 3;
               hilog.info(0x0000, TAG, 'Database upgraded to version 3 with indexes.');
             } // 淇敼鐐?
 

@@ -1,5 +1,6 @@
 ﻿// 文件路径: ets/pages/components/AiInputDialog.ets
 import { promptAction } from '@kit.ArkUI';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import { ThemeCenter } from '../../../common/utils/ThemeCenter';
 import { ComposableStrategy, DensityLevel, PaceLevel, PreferenceType, EnergyLevel } from '../../../domain/strategy/TravelStrategyDimensions';
 import { StrategyService } from '../../../domain/strategy/StrategyService';
@@ -60,6 +61,7 @@ export struct AiInputDialog {
   @State recommendHint: string = ''
   @State recommendedStrategy: ComposableStrategy | null = null
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light'
+  private static readonly TAG: string = 'AiInputDialog'
 
   private getPalette() {
     return ThemeCenter.getPalette(this.effectiveTheme);
@@ -418,6 +420,11 @@ export struct AiInputDialog {
                   this.strategyTouched,
                   this.useCustomStrategy
                 );
+                hilog.info(
+                  0x0000,
+                  AiInputDialog.TAG,
+                  `[airest]AI_REPLAN_TRACE[dialog_regenerate_click] currentMode=${this.currentStrategyMode}, selected=${this.selectedStrategy}, useCustom=${this.useCustomStrategy ? 1 : 0}, touched=${this.strategyTouched ? 1 : 0}, outStrategy=${strategy}, keepCurrent=${keepCurrentMode ? 1 : 0}`
+                );
                 this.onRegenerate(strategy, custom, keepCurrentMode);
                 this.controller.close();
               });
@@ -459,6 +466,7 @@ export struct AiInputDialog {
   .constraintSize({ maxWidth: '90%' })
   }
 }
+
 
 
 

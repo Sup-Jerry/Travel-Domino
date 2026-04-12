@@ -1,4 +1,4 @@
-// Repository实现：事件数据持久化
+﻿// Repository实现：事件数据持久化
 
 import { relationalStore, ValuesBucket } from '@kit.ArkData';
 import { RdbHelper } from '../../common/utils/RdbHelper';
@@ -94,7 +94,6 @@ export class EventRepositoryImpl {
   }
 
   /**
-   * [Day 3 鍗囩骇] 鍗曟潯鎻掑叆锛岃繑鍥?ID
    * 鍖呭惈 V2.0 鎵€鏈夋柊瀛楁
    */
   public static async insertEvent(planId: number, item: TravelPlanItem): Promise<number> {
@@ -128,7 +127,7 @@ export class EventRepositoryImpl {
     valueBucket[EventEntity.AI_REASONING] = item.aiReasoning || '';
     valueBucket[EventEntity.GROUP_ID] = item.groupId || 0;
     valueBucket[EventEntity.DEL_FLAG] = item.delFlag || 0;
-    valueBucket[EventEntity.DELETE_TIME] = 0; // 榛樿涓?
+    valueBucket[EventEntity.DELETE_TIME] = 0;
     valueBucket[EventEntity.ACTUAL_START_TIME] = item.actualStartTime || 0;
     valueBucket[EventEntity.ACTUAL_END_TIME] = item.actualEndTime || 0;
     valueBucket[EventEntity.COMPLETION_STATUS] = item.completionStatus || 0;
@@ -279,7 +278,6 @@ export class EventRepositoryImpl {
   }
 
   /**
-   * [Day 3 鍗囩骇] 璇诲彇鎵€鏈変簨浠?
    */
   public static async getAllEvents(planId: number): Promise<TravelPlanItem[]> {
     const rdbStore = RdbHelper.getInstance().getRdbStore();
@@ -288,7 +286,7 @@ export class EventRepositoryImpl {
     try {
       let predicates = new relationalStore.RdbPredicates(EventEntity.TABLE_NAME);
       predicates.equalTo(EventEntity.PLAN_ID, planId);
-      predicates.equalTo(EventEntity.DEL_FLAG, 0); // [鏂板] 鍙煡鏈垹闄ょ殑
+      predicates.equalTo(EventEntity.DEL_FLAG, 0);
       predicates.orderByAsc(EventEntity.DAY_OFFSET);
       predicates.orderByAsc(EventEntity.SORT_ORDER);
       let resultSet = await rdbStore.query(predicates);
@@ -360,8 +358,6 @@ export class EventRepositoryImpl {
   }
 
   /**
-   * [Day 3.5 琛ユ紡] 鎵归噺鏇存柊鏃堕棿杞翠竴鑷存€?(鎷嗛櫎鐐稿脊涓€)
-   * 淇鍙橀噺鍚嶆姤閿欙細bucket -> valueBucket
    */
   public static async updateTimelineConsistency(events: TravelPlanItem[], planIdHint: number = -1): Promise<void> {
     const rdbStore = RdbHelper.getInstance().getRdbStore();
@@ -371,12 +367,9 @@ export class EventRepositoryImpl {
       rdbStore.beginTransaction();
 
       for (let item of events) {
-        // 鍙湁褰?item 鏈?ID 鏃舵墠鏇存柊
         if (item.id) {
-          // 淇鐐癸細鍙橀噺鍚嶅畾涔変负 valueBucket
           const valueBucket: ValuesBucket = {};
 
-          // 鍙洿鏂板彈澶氱背璇烘晥搴斿奖鍝嶇殑瀛楁锛氳矾绋嬪拰鎺掑簭
           valueBucket[EventEntity.STATUS] = item.status ?? 0;
           valueBucket[EventEntity.DAY_OFFSET] = item.dayOffset ?? 0;
           valueBucket[EventEntity.LOCK_STATUS] = item.lockStatus ?? 0;
@@ -388,7 +381,6 @@ export class EventRepositoryImpl {
           let predicates = new relationalStore.RdbPredicates(EventEntity.TABLE_NAME);
           predicates.equalTo(EventEntity.ID, item.id);
 
-          // 淇鐐癸細杩欓噷浣跨敤 valueBucket 灏变笉浼氭姤閿欎簡
           await rdbStore.update(valueBucket, predicates);
         }
       }
@@ -407,7 +399,6 @@ export class EventRepositoryImpl {
   }
 
   /**
-   * 鍗曞瓧娈垫洿鏂?(淇濇寔涓嶅彉锛岄潪甯搁噸瑕?
    */
   public static async updateSingleField(id: number, column: string, value: Object, planIdHint: number = -1): Promise<void> {
     const rdbStore = RdbHelper.getInstance().getRdbStore();
@@ -648,15 +639,12 @@ export class EventRepositoryImpl {
     }
   }
   /**
-   * [浜や簰鍗囩骇] 杞垹闄?(UI涓婄殑鈥滃乏婊戠Щ闄?鏆傚瓨鈥?
-   * 灏?del_flag 缃负 1锛屼笉鐗╃悊鍒犻櫎锛屾柟渚挎仮澶?
    */
   public static async softDeleteEvent(id: number): Promise<void> {
     await EventRepositoryImpl.updateSingleField(id, EventEntity.DEL_FLAG, 1);
   }
 
   /**
-   * [浜や簰鍗囩骇] 鐗╃悊鍒犻櫎 (UI涓婄殑鈥滃彸婊戝垹闄も€?
    * 褰诲簳浠庢暟鎹簱绉婚櫎
    */
   public static async hardDeleteEvent(id: number): Promise<void> {

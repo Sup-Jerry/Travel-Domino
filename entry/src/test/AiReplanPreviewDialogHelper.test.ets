@@ -1,4 +1,4 @@
-import { describe, it, expect } from '@ohos/hypium';
+﻿import { describe, it, expect } from '@ohos/hypium';
 import {
   getAiReplanItemTypeLabel,
   getAiReplanStrategyLabel
@@ -12,7 +12,7 @@ export default function aiReplanPreviewDialogHelperTest() {
       // Act
       const label = getAiReplanItemTypeLabel(itemType);
       // Assert
-      expect(label).assertEqual('缇庨');
+      expect(label).assertEqual('美食');
     });
 
     it('boundary: ai_replan_should_map_default_strategy_mode_to_default_label', 0, () => {
@@ -21,7 +21,7 @@ export default function aiReplanPreviewDialogHelperTest() {
       // Act
       const label = getAiReplanStrategyLabel(mode);
       // Assert
-      expect(label).assertEqual('榛樿');
+      expect(label).assertEqual('默认');
     });
 
     it('invalid: ai_replan_should_fallback_to_scenery_label_for_unknown_item_type', 0, () => {
@@ -30,7 +30,7 @@ export default function aiReplanPreviewDialogHelperTest() {
       // Act
       const label = getAiReplanItemTypeLabel(itemType);
       // Assert
-      expect(label).assertEqual('鏅偣');
+      expect(label).assertEqual('景点');
     });
 
     it('conflict: ai_replan_should_distinguish_special_and_leisure_modes', 0, () => {
@@ -41,8 +41,8 @@ export default function aiReplanPreviewDialogHelperTest() {
       const specialLabel = getAiReplanStrategyLabel(specialMode);
       const leisureLabel = getAiReplanStrategyLabel(leisureMode);
       // Assert
-      expect(specialLabel).assertEqual('鐗圭鍏?');
-      expect(leisureLabel).assertEqual('浼戦棽');
+      expect(specialLabel).assertEqual('特种兵');
+      expect(leisureLabel).assertEqual('休闲');
     });
 
     it('regression: td-20260412-ai-replan-custom-mode-should-stay-custom-label', 0, () => {
@@ -51,7 +51,7 @@ export default function aiReplanPreviewDialogHelperTest() {
       // Act
       const label = getAiReplanStrategyLabel(mode);
       // Assert
-      expect(label).assertEqual('鑷畾涔?');
+      expect(label).assertEqual('自定义');
     });
 
     it('combined: ai_replan_strategy_and_item_labels_should_be_non_empty', 0, () => {

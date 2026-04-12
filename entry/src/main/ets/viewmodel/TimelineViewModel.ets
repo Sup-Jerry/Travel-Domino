@@ -941,16 +941,37 @@ export class TimelineViewModel implements
     customStrategy?: ComposableStrategy,
     keepCurrentMode?: boolean
   ): Promise<AiReplanPreviewResult> {
-    return this.strategyManager.buildReplanPreview(strategyMode, customStrategy, keepCurrentMode);
+    hilog.info(
+      0x0000,
+      TAG,
+      `[airest]AI_REPLAN_TRACE[vm_preview_in] planId=${this.planId}, strategy=${strategyMode}, custom=${customStrategy ? 1 : 0}, keepCurrent=${keepCurrentMode === true ? 1 : 0}`
+    );
+    const preview = await this.strategyManager.buildReplanPreview(strategyMode, customStrategy, keepCurrentMode);
+    hilog.info(
+      0x0000,
+      TAG,
+      `[airest]AI_REPLAN_TRACE[vm_preview_out] planId=${this.planId}, mode=${preview.strategyMode}, count=${preview.items.length}, generatedAt=${preview.generatedAt}`
+    );
+    return preview;
   }
 
   public async applyAiReplanPreview(
     preview: AiReplanPreviewResult,
     decision: AiReplanApplyDecision
   ): Promise<void> {
+    hilog.info(
+      0x0000,
+      TAG,
+      `[airest]AI_REPLAN_TRACE[vm_apply_in] planId=${this.planId}, decision=${decision}, mode=${preview.strategyMode}, count=${preview.items.length}`
+    );
     const undoToken = await this.strategyManager.applyReplanPreview(preview, decision);
     this.aiReplanUndoToken = undoToken;
     AppStorage.setOrCreate(AppStorageKeys.HAS_AI_REPLAN_UNDO, true);
+    hilog.info(
+      0x0000,
+      TAG,
+      `[airest]AI_REPLAN_TRACE[vm_apply_out] planId=${this.planId}, tokenCreatedAt=${undoToken.createdAt}, tokenEvents=${undoToken.events.length}`
+    );
     this.refreshTimelineView();
   }
 
@@ -968,8 +989,14 @@ export class TimelineViewModel implements
       throw new Error('没有可撤回的重规划记录');
     }
     const token = this.aiReplanUndoToken;
+    hilog.info(
+      0x0000,
+      TAG,
+      `[airest]AI_REPLAN_TRACE[vm_undo_in] planId=${this.planId}, tokenCreatedAt=${token.createdAt}, tokenEvents=${token.events.length}`
+    );
     await this.strategyManager.restoreFromUndoToken(token);
     this.clearAiReplanUndoToken();
+    hilog.info(0x0000, TAG, `[airest]AI_REPLAN_TRACE[vm_undo_out] planId=${this.planId}, restored=1`);
     this.refreshTimelineView();
   }
 
@@ -1268,4 +1295,5 @@ export class TimelineViewModel implements
     this.eventMutationManager.insertSmartForCompat(newEntity);
   }
 }
+
 

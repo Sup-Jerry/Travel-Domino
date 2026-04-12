@@ -442,6 +442,11 @@ struct Index {
       },
       effectiveTheme: this.effectiveTheme,
       onRegenerateAgain: (prompt: string, strategyMode: number, customStrategy?: ComposableStrategy) => {
+        hilog.info(
+          0x0000,
+          'Index',
+          `[airest]AI_REPLAN_TRACE[index_preview_regenerate_again] promptLen=${prompt.length}, mode=${strategyMode}, custom=${customStrategy ? 1 : 0}`
+        );
         this.openAiDialogForRegenerate(prompt, strategyMode, customStrategy);
       },
       onApplyKeep: () => {
@@ -449,11 +454,18 @@ struct Index {
           this.safeShowToast('预览已失效，请重新生成');
           return;
         }
+        hilog.info(
+          0x0000,
+          'Index',
+          `[airest]AI_REPLAN_TRACE[index_apply_keep_click] mode=${this.aiReplanPreviewResult.strategyMode}, count=${this.aiReplanPreviewResult.items.length}`
+        );
         void this.vm.applyAiReplanPreview(this.aiReplanPreviewResult, 'KEEP').then(() => {
+          hilog.info(0x0000, 'Index', '[airest]AI_REPLAN_TRACE[index_apply_keep_success] applied=1');
           this.safeShowToast('已保留原有地点，新地点已加入暂存池');
           this.aiReplanPreviewResult = null;
         }).catch((error: Object) => {
           const msg = this.sanitizeError(error);
+          hilog.error(0x0000, 'Index', `[airest]AI_REPLAN_TRACE[index_apply_keep_fail] reason=${msg}`);
           this.safeShowToast(msg.length > 0 ? msg : '应用失败');
         });
       },
@@ -462,11 +474,18 @@ struct Index {
           this.safeShowToast('预览已失效，请重新生成');
           return;
         }
+        hilog.info(
+          0x0000,
+          'Index',
+          `[airest]AI_REPLAN_TRACE[index_apply_overwrite_click] mode=${this.aiReplanPreviewResult.strategyMode}, count=${this.aiReplanPreviewResult.items.length}`
+        );
         void this.vm.applyAiReplanPreview(this.aiReplanPreviewResult, 'OVERWRITE').then(() => {
+          hilog.info(0x0000, 'Index', '[airest]AI_REPLAN_TRACE[index_apply_overwrite_success] applied=1');
           this.safeShowToast('已覆盖旧AI地点并应用新计划');
           this.aiReplanPreviewResult = null;
         }).catch((error: Object) => {
           const msg = this.sanitizeError(error);
+          hilog.error(0x0000, 'Index', `[airest]AI_REPLAN_TRACE[index_apply_overwrite_fail] reason=${msg}`);
           this.safeShowToast(msg.length > 0 ? msg : '应用失败');
         });
       },
@@ -661,13 +680,27 @@ struct Index {
       },
       onRegenerate: async (strategy: number, customStrategy?: ComposableStrategy, keepCurrentMode?: boolean) => {
         try {
+          hilog.info(
+            0x0000,
+            'Index',
+            `[airest]AI_REPLAN_TRACE[index_regenerate_click] strategy=${strategy}, custom=${customStrategy ? 1 : 0}, keepCurrent=${keepCurrentMode === true ? 1 : 0}`
+          );
           const preview = await this.vm.buildAiReplanPreview(strategy, customStrategy, keepCurrentMode);
+          hilog.info(
+            0x0000,
+            'Index',
+            `[airest]AI_REPLAN_TRACE[index_regenerate_preview_ready] mode=${preview.strategyMode}, count=${preview.items.length}, generatedAt=${preview.generatedAt}`
+          );
           this.aiReplanPreviewResult = preview;
           this.resetAiDialogPrefill();
           this.aiReplanPreviewController.open();
         } catch (error) {
           const msg = error instanceof Error ? error.message : '重新生成失败';
-          console.error('[Index] AI重新规划失败:', JSON.stringify(error), `strategy=${strategy}`);
+          hilog.error(
+            0x0000,
+            'Index',
+            `[airest]AI_REPLAN_TRACE[index_regenerate_fail] strategy=${strategy}, custom=${customStrategy ? 1 : 0}, keepCurrent=${keepCurrentMode === true ? 1 : 0}, reason=${msg}`
+          );
           this.safeShowToast(msg);
           this.resetAiDialogPrefill();
           this.aiDialogController.close();
@@ -2393,10 +2426,13 @@ struct Index {
               .padding({ left: 12, right: 12, top: 8, bottom: 8 })
               .onClick(() => {
                 if (this.vm.hasAiReplanUndo()) {
+                  hilog.info(0x0000, 'Index', '[airest]AI_REPLAN_TRACE[index_undo_click] source=ai_replan');
                   void this.vm.undoLastAiReplanApply().then(() => {
+                    hilog.info(0x0000, 'Index', '[airest]AI_REPLAN_TRACE[index_undo_success] restored=1');
                     this.safeShowToast('已撤回最近一次AI重规划');
                   }).catch((error: Object) => {
                     const msg = this.sanitizeError(error);
+                    hilog.error(0x0000, 'Index', `[airest]AI_REPLAN_TRACE[index_undo_fail] reason=${msg}`);
                     this.safeShowToast(msg.length > 0 ? msg : '撤回失败');
                   });
                   return;
@@ -2452,6 +2488,7 @@ struct Index {
     }
 
 }
+
 
 
 
