@@ -77,5 +77,49 @@ export default function companionHistoryPageHelperTest() {
       // Assert
       expect(ok).assertTrue();
     });
+
+    it('boundary: next_filter_should_cycle_back_to_all_after_abnormal', 0, () => {
+      // Arrange
+      const filter: HistoryTimelineFilter = 'abnormal';
+
+      // Act
+      const next = getNextHistoryTimelineFilterValue(filter);
+
+      // Assert
+      expect(next).assertEqual('all');
+    });
+
+    it('normal: completed_filter_should_show_leave_action', 0, () => {
+      // Arrange
+      const filter: HistoryTimelineFilter = 'completed';
+
+      // Act
+      const visible = isHistoryTimelineItemVisibleByFilter(filter, 'LEAVE', false);
+
+      // Assert
+      expect(visible).assertTrue();
+    });
+
+    it('conflict: abnormal_filter_should_show_skip_action_even_without_abnormal_flag', 0, () => {
+      // Arrange
+      const filter: HistoryTimelineFilter = 'abnormal';
+
+      // Act
+      const visible = isHistoryTimelineItemVisibleByFilter(filter, 'SKIP', false);
+
+      // Assert
+      expect(visible).assertTrue();
+    });
+
+    it('invalid: skip_reason_should_fallback_to_manual_when_note_is_blank', 0, () => {
+      // Arrange
+      const note = '   ';
+
+      // Act
+      const reason = getHistoryTimelineSkipReasonByNote(note);
+
+      // Assert
+      expect(reason).assertEqual('手动跳过');
+    });
   });
 }

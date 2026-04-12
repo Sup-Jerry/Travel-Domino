@@ -2,6 +2,8 @@ import { describe, it, expect } from '@ohos/hypium';
 import {
   AppNavTab,
   getBottomNavTargetRoute,
+  isBottomNavTabPressed,
+  isBottomNavVisualActive,
   resolveBottomNavVisualTab,
   shouldBottomNavTapNavigate
 } from '../main/ets/pages/components/views/BottomNavBar';
@@ -67,6 +69,35 @@ export default function bottomNavBarHelperTest() {
       // Assert
       expect(sameTab).assertFalse();
       expect(differentTabUnlocked).assertTrue();
+    });
+
+    it('normal: bottom_nav_visual_active_should_follow_transition_tab', 0, () => {
+      // Arrange
+      const tab: AppNavTab = 'archive';
+      // Act
+      const active = isBottomNavVisualActive(tab, 'home', 'archive');
+      // Assert
+      expect(active).assertTrue();
+    });
+
+    it('boundary: bottom_nav_visual_active_should_fallback_to_current_when_transition_empty', 0, () => {
+      // Arrange
+      const tab: AppNavTab = 'home';
+      // Act
+      const active = isBottomNavVisualActive(tab, 'home', '');
+      // Assert
+      expect(active).assertTrue();
+    });
+
+    it('regression: td-20260412-bottom-nav-pressed-check-should-stay-equality-only', 0, () => {
+      // Arrange
+      const tab: AppNavTab = 'trash';
+      // Act
+      const pressed = isBottomNavTabPressed(tab, 'trash');
+      const notPressed = isBottomNavTabPressed(tab, 'search');
+      // Assert
+      expect(pressed).assertTrue();
+      expect(notPressed).assertFalse();
     });
   });
 }

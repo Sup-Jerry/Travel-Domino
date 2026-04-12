@@ -1,6 +1,8 @@
 import { describe, it, expect } from '@ohos/hypium';
 import {
+  isAddItemMapPickerEnabled,
   isAddItemCoordinateValid,
+  resolveAddItemScopedStorageKey,
   resolveAddItemDuration,
   resolveAddItemMode
 } from '../main/ets/pages/components/dialogs/AddItemDialog';
@@ -65,6 +67,36 @@ export default function addItemDialogHelperTest() {
       // Assert
       expect(duration).assertEqual(60);
       expect(coordinateValid).assertTrue();
+    });
+
+    it('normal: add_item_scoped_storage_key_should_append_plan_id_for_positive_scope', 0, () => {
+      // Arrange
+      const base = 'tempDialogState';
+      // Act
+      const key = resolveAddItemScopedStorageKey(base, 12);
+      // Assert
+      expect(key).assertEqual('tempDialogState_12');
+    });
+
+    it('boundary: add_item_scoped_storage_key_should_keep_base_for_zero_scope', 0, () => {
+      // Arrange
+      const base = 'tempDialogState';
+      // Act
+      const key = resolveAddItemScopedStorageKey(base, 0);
+      // Assert
+      expect(key).assertEqual('tempDialogState');
+    });
+
+    it('regression: td-20260412-add-item-map-picker-enabled-should-trim-api-key', 0, () => {
+      // Arrange
+      const keyWithSpaces = '   amap_key   ';
+      const emptyKey = '   ';
+      // Act
+      const enabled = isAddItemMapPickerEnabled(keyWithSpaces);
+      const disabled = isAddItemMapPickerEnabled(emptyKey);
+      // Assert
+      expect(enabled).assertTrue();
+      expect(disabled).assertFalse();
     });
   });
 }

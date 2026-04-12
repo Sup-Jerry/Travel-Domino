@@ -69,6 +69,17 @@ export function isAddItemCoordinateValid(lat: number, lng: number): boolean {
     !(lat === 0 && lng === 0);
 }
 
+export function resolveAddItemScopedStorageKey(base: string, storageScopePlanId: number): string {
+  if (storageScopePlanId > 0) {
+    return `${base}_${storageScopePlanId}`;
+  }
+  return base;
+}
+
+export function isAddItemMapPickerEnabled(apiKey: string): boolean {
+  return apiKey.trim().length > 0;
+}
+
 @CustomDialog
 export struct AddItemDialog {
   controller: CustomDialogController;
@@ -204,15 +215,12 @@ export struct AddItemDialog {
   }
 
   private scopedStorageKey(base: string): string {
-    if (this.storageScopePlanId > 0) {
-      return `${base}_${this.storageScopePlanId}`;
-    }
-    return base;
+    return resolveAddItemScopedStorageKey(base, this.storageScopePlanId);
   }
 
   private canUseMapPicker(): boolean {
     const keyLength = AppConfig.AMAP_SDK_API_KEY.trim().length;
-    const enabled = keyLength > 0;
+    const enabled = isAddItemMapPickerEnabled(AppConfig.AMAP_SDK_API_KEY);
     hilog.info(0x0000, 'AddItemDialog', `[MAP_ENTRY][config] sdkKeyConfigured=${enabled}, sdkKeyLen=${keyLength}`);
     return enabled;
   }

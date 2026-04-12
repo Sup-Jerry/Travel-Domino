@@ -15,6 +15,28 @@ export function shouldShowConflictCompressOverload(status: string, remainingGapM
   return status === 'OVERLOAD' && remainingGapMinutes > 0;
 }
 
+export interface ConflictCompressAffectedItem {
+  index: number;
+  newVal: number;
+}
+
+export function resolveConflictCompressPreviewNewDuration(
+  affectedItems: ConflictCompressAffectedItem[],
+  candidateIndex: number,
+  candidateOldVal: number
+): number {
+  const match = affectedItems.find((item) => item.index === candidateIndex);
+  return match ? match.newVal : candidateOldVal;
+}
+
+export function resolveConflictCompressPreviewReduced(oldVal: number, newVal: number): number {
+  return oldVal - newVal;
+}
+
+export function resolveConflictCompressRemainingGap(remainingGapMinutes: number | undefined): number {
+  return remainingGapMinutes ?? 0;
+}
+
 @CustomDialog
 export struct ConflictCompressDialog {
   controller: CustomDialogController;
@@ -130,16 +152,15 @@ export struct ConflictCompressDialog {
     if (!this.previewPlan) {
       return candidate.oldVal;
     }
-    const match = this.previewPlan.affectedItems.find((item) => item.index === candidate.index);
-    return match ? match.newVal : candidate.oldVal;
+    return resolveConflictCompressPreviewNewDuration(this.previewPlan.affectedItems, candidate.index, candidate.oldVal);
   }
 
   private getPreviewReduced(candidate: CompressionSelectionCandidate): number {
-    return candidate.oldVal - this.getPreviewNewDuration(candidate);
+    return resolveConflictCompressPreviewReduced(candidate.oldVal, this.getPreviewNewDuration(candidate));
   }
 
   private getRemainingGap(): number {
-    return this.previewPlan?.remainingGapMinutes ?? 0;
+    return resolveConflictCompressRemainingGap(this.previewPlan?.remainingGapMinutes);
   }
 
   build() {

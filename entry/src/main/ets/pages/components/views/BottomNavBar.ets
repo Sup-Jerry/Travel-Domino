@@ -31,6 +31,19 @@ export function resolveBottomNavVisualTab(currentTab: AppNavTab, transitionTab: 
   return transitionTab || currentTab;
 }
 
+export function isBottomNavVisualActive(
+  tab: AppNavTab,
+  currentTab: AppNavTab,
+  transitionTab: AppNavTab | ''
+): boolean {
+  const visualTab = resolveBottomNavVisualTab(currentTab, transitionTab);
+  return visualTab === tab;
+}
+
+export function isBottomNavTabPressed(tab: AppNavTab, pressedTab: AppNavTab | ''): boolean {
+  return pressedTab === tab;
+}
+
 interface TabMeta {
   key: AppNavTab;
   label: string;
@@ -137,12 +150,11 @@ export struct GlobalBottomNavBar {
   }
 
   private isVisualActive(tab: AppNavTab): boolean {
-    const visualTab = resolveBottomNavVisualTab(this.currentTab, this.transitionTab);
-    return visualTab === tab;
+    return isBottomNavVisualActive(tab, this.currentTab, this.transitionTab);
   }
 
   private isTabPressed(tab: AppNavTab): boolean {
-    return this.pressedTab === tab;
+    return isBottomNavTabPressed(tab, this.pressedTab);
   }
 
   private setTabPressed(tab: AppNavTab, pressed: boolean): void {

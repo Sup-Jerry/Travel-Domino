@@ -95,5 +95,56 @@ export default function companionExecutionWeatherCardHelperTest() {
       expect(collabVisible).assertTrue();
       expect(appliedVisible).assertFalse();
     });
+
+    it('boundary: weather_score_negative_should_not_be_visible', 0, () => {
+      // Arrange
+      const score = -1;
+
+      // Act
+      const visible = shouldShowExecutionWeatherScore(score);
+
+      // Assert
+      expect(visible).assertFalse();
+    });
+
+    it('normal: node_text_should_include_expected_prefix_and_trimmed_value', 0, () => {
+      // Arrange
+      const currentText = ' 晴 ';
+      const nextText = ' 阵雨 ';
+
+      // Act
+      const currentNodeText = getExecutionWeatherCurrentNodeText(currentText);
+      const nextNodeText = getExecutionWeatherNextNodeText(nextText);
+
+      // Assert
+      expect(currentNodeText).assertEqual('当前位置： 晴 ');
+      expect(nextNodeText).assertEqual('下一节点： 阵雨 ');
+    });
+
+    it('invalid: suggestion_popup_split_should_keep_empty_lines_for_popup_alignment', 0, () => {
+      // Arrange
+      const text = 'A\n\nC';
+
+      // Act
+      const lines = splitExecutionWeatherSuggestionPopupText(text);
+
+      // Assert
+      expect(lines.length).assertEqual(3);
+      expect(lines[1]).assertEqual('');
+    });
+
+    it('combined: summary_visibility_should_be_true_for_non_blank_values', 0, () => {
+      // Arrange
+      const collabSummary = '  多日协同  ';
+      const appliedSummary = '  已顺延30分钟  ';
+
+      // Act
+      const collabVisible = shouldShowExecutionWeatherCollabSummary(collabSummary);
+      const appliedVisible = shouldShowExecutionWeatherAppliedSummary(appliedSummary);
+
+      // Assert
+      expect(collabVisible).assertTrue();
+      expect(appliedVisible).assertTrue();
+    });
   });
 }

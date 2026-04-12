@@ -79,5 +79,52 @@ export default function companionImmersiveViewHelperTest() {
       // Assert
       expect(matrixPass).assertTrue();
     });
+
+    it('boundary: primary_action_should_hide_when_not_pending_not-active_and_not-paused', 0, () => {
+      // Arrange
+      const runtimeState = 'READY';
+
+      // Act
+      const visible = shouldShowImmersivePrimaryAction(false, false, runtimeState);
+
+      // Assert
+      expect(visible).assertFalse();
+    });
+
+    it('conflict: pending_enabled_should_ignore_end_guard_when_start_guard_is_false', 0, () => {
+      // Arrange
+      const isPending = true;
+
+      // Act
+      const enabled = getImmersivePrimaryActionEnabled(isPending, false, true);
+
+      // Assert
+      expect(enabled).assertFalse();
+    });
+
+    it('normal: end_enabled_should_follow_end_guard_when_not_pending', 0, () => {
+      // Arrange
+      const isPending = false;
+
+      // Act
+      const enabled = getImmersivePrimaryActionEnabled(isPending, false, true);
+      const label = getImmersivePrimaryActionLabel(isPending);
+
+      // Assert
+      expect(enabled).assertTrue();
+      expect(label).assertEqual('结束');
+    });
+
+    it('regression: next_station_text_should_keep_stable_prefix_and_brackets', 0, () => {
+      // Arrange
+      const name = '机场';
+      const forecast = '09:30';
+
+      // Act
+      const text = getImmersiveNextStationText(name, forecast);
+
+      // Assert
+      expect(text).assertEqual('下一站：机场（09:30）');
+    });
   });
 }

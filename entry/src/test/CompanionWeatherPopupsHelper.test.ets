@@ -1,5 +1,8 @@
 ﻿import { describe, it, expect } from '@ohos/hypium';
 import {
+  CompanionWeatherHintPopupBuilder,
+  CompanionWeatherScorePopupBuilder,
+  CompanionWeatherSuggestionPopupBuilder,
   getCompanionPopupHeight,
   getCompanionPopupLine,
   getCompanionPopupWidth
@@ -90,6 +93,56 @@ export default function companionWeatherPopupsHelperTest() {
       expect(emptyLine).assertEqual('');
       expect(hintHeight).assertEqual(230);
       expect(scoreWidth).assertEqual(280);
+    });
+
+    it('normal: popup_builders_should_export_function_references', 0, () => {
+      // Arrange
+      const scoreBuilderRef = CompanionWeatherScorePopupBuilder;
+      const hintBuilderRef = CompanionWeatherHintPopupBuilder;
+      const suggestionBuilderRef = CompanionWeatherSuggestionPopupBuilder;
+
+      // Act
+      const allAreFunctions =
+        typeof scoreBuilderRef === 'function' &&
+        typeof hintBuilderRef === 'function' &&
+        typeof suggestionBuilderRef === 'function';
+
+      // Assert
+      expect(allAreFunctions).assertTrue();
+    });
+
+    it('boundary: popup_builders_should_keep_distinct_builder_references', 0, () => {
+      // Arrange
+      const scoreBuilderRef = CompanionWeatherScorePopupBuilder;
+      const hintBuilderRef = CompanionWeatherHintPopupBuilder;
+      const suggestionBuilderRef = CompanionWeatherSuggestionPopupBuilder;
+
+      // Act
+      const scoreEqualsHint = scoreBuilderRef === hintBuilderRef;
+      const hintEqualsSuggestion = hintBuilderRef === suggestionBuilderRef;
+      const scoreEqualsSuggestion = scoreBuilderRef === suggestionBuilderRef;
+
+      // Assert
+      expect(scoreEqualsHint).assertFalse();
+      expect(hintEqualsSuggestion).assertFalse();
+      expect(scoreEqualsSuggestion).assertFalse();
+    });
+
+    it('regression: td-20260412-popup_builder_exports_should_remain_addressable', 0, () => {
+      // Arrange
+      const refs: Object[] = [
+        CompanionWeatherScorePopupBuilder,
+        CompanionWeatherHintPopupBuilder,
+        CompanionWeatherSuggestionPopupBuilder
+      ];
+
+      // Act
+      const refCount = refs.length;
+      const hasUndefinedRef = refs.some((item: Object) => item === undefined);
+
+      // Assert
+      expect(refCount).assertEqual(3);
+      expect(hasUndefinedRef).assertFalse();
     });
   });
 }

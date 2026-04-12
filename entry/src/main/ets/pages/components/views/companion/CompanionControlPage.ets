@@ -37,6 +37,30 @@ export function getCompanionControlCurrentEventId(currentEvent: EventEntity | nu
   return currentEvent ? currentEvent.id : -1;
 }
 
+export function resolveCompanionControlCardTranslateX(
+  isCardSwitching: boolean,
+  cardSwitchProgress: number,
+  phase: CompanionCardPhase
+): number {
+  return getCompanionCardTranslateX(isCardSwitching, cardSwitchProgress, phase);
+}
+
+export function resolveCompanionControlCardOpacity(
+  isCardSwitching: boolean,
+  cardSwitchProgress: number,
+  phase: CompanionCardPhase
+): number {
+  return getCompanionCardOpacity(isCardSwitching, cardSwitchProgress, phase);
+}
+
+export function resolveCompanionControlCardScale(
+  isCardSwitching: boolean,
+  cardSwitchProgress: number,
+  phase: CompanionCardPhase
+): number {
+  return getCompanionCardScale(isCardSwitching, cardSwitchProgress, phase);
+}
+
 @Component
 export struct CompanionControlPage {
   @Prop context: CompanionContext = {
@@ -133,15 +157,15 @@ export struct CompanionControlPage {
   }
 
   private getCardTranslateX(phase: CompanionCardPhase): number {
-    return getCompanionCardTranslateX(this.isCardSwitching, this.cardSwitchProgress, phase);
+    return resolveCompanionControlCardTranslateX(this.isCardSwitching, this.cardSwitchProgress, phase);
   }
 
   private getCardOpacity(phase: CompanionCardPhase): number {
-    return getCompanionCardOpacity(this.isCardSwitching, this.cardSwitchProgress, phase);
+    return resolveCompanionControlCardOpacity(this.isCardSwitching, this.cardSwitchProgress, phase);
   }
 
   private getCardScale(phase: CompanionCardPhase): number {
-    return getCompanionCardScale(this.isCardSwitching, this.cardSwitchProgress, phase);
+    return resolveCompanionControlCardScale(this.isCardSwitching, this.cardSwitchProgress, phase);
   }
 
   build() {

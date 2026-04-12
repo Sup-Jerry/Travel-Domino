@@ -1,8 +1,24 @@
 import { describe, it, expect } from '@ohos/hypium';
 import {
   canConflictCompressConfirm,
+  ConflictCompressAffectedItem,
+  resolveConflictCompressPreviewNewDuration,
+  resolveConflictCompressPreviewReduced,
+  resolveConflictCompressRemainingGap,
   shouldShowConflictCompressOverload
 } from '../main/ets/pages/components/dialogs/ConflictCompressDialog';
+
+class MockAffectedItem implements ConflictCompressAffectedItem {
+  index: number = 0;
+  newVal: number = 0;
+}
+
+function buildAffectedItem(index: number, newVal: number): ConflictCompressAffectedItem {
+  const item = new MockAffectedItem();
+  item.index = index;
+  item.newVal = newVal;
+  return item;
+}
 
 export default function conflictCompressDialogHelperTest() {
   describe('unit_test_case_generator_autofill_ConflictCompressDialogHelper', () => {
@@ -63,6 +79,68 @@ export default function conflictCompressDialogHelperTest() {
       // Assert
       expect(canConfirm).assertTrue();
       expect(showOverload).assertTrue();
+    });
+
+    it('normal: conflict_compress_preview_new_duration_should_use_affected_match', 0, () => {
+      // Arrange
+      const affectedItems: ConflictCompressAffectedItem[] = [];
+      affectedItems.push(buildAffectedItem(3, 42));
+      // Act
+      const value = resolveConflictCompressPreviewNewDuration(affectedItems, 3, 60);
+      // Assert
+      expect(value).assertEqual(42);
+    });
+
+    it('boundary: conflict_compress_preview_new_duration_should_fallback_when_affected_empty', 0, () => {
+      // Arrange
+      const affectedItems: ConflictCompressAffectedItem[] = [];
+      // Act
+      const value = resolveConflictCompressPreviewNewDuration(affectedItems, 9, 35);
+      // Assert
+      expect(value).assertEqual(35);
+    });
+
+    it('invalid: conflict_compress_remaining_gap_should_fallback_to_zero_for_undefined', 0, () => {
+      // Arrange
+      const remainingGap = undefined;
+      // Act
+      const value = resolveConflictCompressRemainingGap(remainingGap);
+      // Assert
+      expect(value).assertEqual(0);
+    });
+
+    it('conflict: conflict_compress_reduced_should_support_negative_delta_when_new_duration_grows', 0, () => {
+      // Arrange
+      const oldVal = 20;
+      const newVal = 24;
+      // Act
+      const reduced = resolveConflictCompressPreviewReduced(oldVal, newVal);
+      // Assert
+      expect(reduced).assertEqual(-4);
+    });
+
+    it('regression: td-20260412-conflict-compress-reduced-should-stay-difference', 0, () => {
+      // Arrange
+      const oldVal = 55;
+      const newVal = 40;
+      // Act
+      const reduced = resolveConflictCompressPreviewReduced(oldVal, newVal);
+      // Assert
+      expect(reduced).assertEqual(15);
+    });
+
+    it('combined: conflict_compress_preview_helpers_should_link_new_duration_reduce_and_gap', 0, () => {
+      // Arrange
+      const affectedItems: ConflictCompressAffectedItem[] = [];
+      affectedItems.push(buildAffectedItem(1, 30));
+      // Act
+      const newVal = resolveConflictCompressPreviewNewDuration(affectedItems, 1, 50);
+      const reduced = resolveConflictCompressPreviewReduced(50, newVal);
+      const gap = resolveConflictCompressRemainingGap(12);
+      // Assert
+      expect(newVal).assertEqual(30);
+      expect(reduced).assertEqual(20);
+      expect(gap).assertEqual(12);
     });
   });
 }
