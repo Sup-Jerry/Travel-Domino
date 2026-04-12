@@ -5,6 +5,34 @@ import { AppStorageKeys } from '../common/constants/AppStorageKeys';
 import { ThemeCenter, ThemeMode } from '../common/utils/ThemeCenter';
 import { SettingSelectItem, SettingsSubPageHeader, SettingSwitchItem } from './components/views/SettingsItems';
 
+export function resolveSettingsGeneralThemeModeText(themeMode: ThemeMode): string {
+  if (themeMode === 'dark') {
+    return '深色';
+  }
+  if (themeMode === 'light') {
+    return '浅色';
+  }
+  return '跟随系统';
+}
+
+export function resolveSettingsGeneralIdleGapTriggerMinutes(input: string, currentValue: number): number {
+  const raw = parseInt(input, 10);
+  const next = isNaN(raw) ? currentValue : raw;
+  return PreferenceManager.normalizeIdleGapTriggerMinutes(next);
+}
+
+export function resolveSettingsGeneralMinEventDuration(input: string, currentValue: number): number {
+  const raw = parseInt(input, 10);
+  const next = isNaN(raw) ? currentValue : raw;
+  return PreferenceManager.normalizeMinEventDuration(next);
+}
+
+export function resolveSettingsGeneralAiPoiInput(rawInput: string, fallback: number): number {
+  const raw = parseInt(rawInput, 10);
+  const source = isNaN(raw) ? fallback : raw;
+  return PreferenceManager.normalizeAiPoiCount(source, fallback);
+}
+
 @Entry
 @Component
 struct SettingsGeneralPage {
@@ -40,9 +68,7 @@ struct SettingsGeneralPage {
   }
 
   private getThemeModeText(): string {
-    if (this.themeMode === 'dark') return '深色';
-    if (this.themeMode === 'light') return '浅色';
-    return '跟随系统';
+    return resolveSettingsGeneralThemeModeText(this.themeMode);
   }
 
   private showThemeModeDialog(): void {
@@ -126,8 +152,7 @@ struct SettingsGeneralPage {
 
   private async saveIdleGapTriggerMinutes(): Promise<void> {
     const oldValue = this.idleGapTriggerMinutes;
-    const raw = parseInt(this.idleGapTriggerInput, 10);
-    const nextValue = PreferenceManager.normalizeIdleGapTriggerMinutes(isNaN(raw) ? oldValue : raw);
+    const nextValue = resolveSettingsGeneralIdleGapTriggerMinutes(this.idleGapTriggerInput, oldValue);
 
     this.idleGapTriggerMinutes = nextValue;
     this.idleGapTriggerInput = `${nextValue}`;
@@ -148,8 +173,7 @@ struct SettingsGeneralPage {
 
   private async saveMinEventDuration(): Promise<void> {
     const oldValue = this.minEventDuration;
-    const raw = parseInt(this.minEventDurationInput, 10);
-    const nextValue = PreferenceManager.normalizeMinEventDuration(isNaN(raw) ? oldValue : raw);
+    const nextValue = resolveSettingsGeneralMinEventDuration(this.minEventDurationInput, oldValue);
 
     this.minEventDuration = nextValue;
     this.minEventDurationInput = `${nextValue}`;
@@ -170,9 +194,7 @@ struct SettingsGeneralPage {
   }
 
   private parseAiPoiInput(raw: string, fallback: number): number {
-    const parsed = parseInt(raw, 10);
-    const source = isNaN(parsed) ? fallback : parsed;
-    return PreferenceManager.normalizeAiPoiCount(source, fallback);
+    return resolveSettingsGeneralAiPoiInput(raw, fallback);
   }
 
   private async saveAiDailyPoiRanges(): Promise<void> {

@@ -3,6 +3,18 @@ import { LoginStatus } from '../domain/auth/AuthTypes';
 import { AppStartupCoordinator } from '../infrastructure/auth/AppStartupCoordinator';
 import { AuthFacade } from '../infrastructure/auth/AuthFacade';
 
+export function shouldAuthGateRouteToPlanList(success: boolean, status: LoginStatus): boolean {
+  return success && status === LoginStatus.AUTHENTICATED;
+}
+
+export function resolveAuthGateTargetUrl(success: boolean, status: LoginStatus): string {
+  return shouldAuthGateRouteToPlanList(success, status) ? 'pages/PlanListPage' : 'pages/LoginPage';
+}
+
+export function resolveAuthGateCheckingText(checking: boolean): string {
+  return checking ? '正在检查登录状态...' : '正在跳转...';
+}
+
 @Entry
 @Component
 struct AuthGatePage {
@@ -36,14 +48,14 @@ struct AuthGatePage {
   private async checkAndRoute(): Promise<void> {
     try {
       const startup = await this.startupCoordinator.checkStartupAuth();
-      if (startup.success && startup.status === LoginStatus.AUTHENTICATED) {
+      if (shouldAuthGateRouteToPlanList(startup.success, startup.status)) {
         const accountId = String(startup.data?.accountId || '').trim();
         hilog.info(
           AuthGatePage.LOG_DOMAIN,
           AuthGatePage.LOG_TAG,
           `[LOGIN_TRACE][gate] authenticated route accountId=${accountId}, source=${startup.source}, message=${startup.message}`
         );
-        await this.replaceUrl('pages/PlanListPage');
+        await this.replaceUrl(resolveAuthGateTargetUrl(startup.success, startup.status));
         return;
       }
       hilog.info(
@@ -51,7 +63,7 @@ struct AuthGatePage {
         AuthGatePage.LOG_TAG,
         `[LOGIN_TRACE][gate] unauthenticated route code=${startup.code}, source=${startup.source}, message=${startup.message}`
       );
-      await this.replaceUrl('pages/LoginPage');
+      await this.replaceUrl(resolveAuthGateTargetUrl(startup.success, startup.status));
     } catch (_error) {
       await this.authFacade.logout();
       await this.replaceUrl('pages/LoginPage');
@@ -61,7 +73,7 @@ struct AuthGatePage {
   build() {
     Column() {
       Blank().layoutWeight(1)
-      Text(this.checking ? '正在检查登录状态...' : '正在跳转...')
+      Text(resolveAuthGateCheckingText(this.checking))
         .fontSize(16)
       Blank().layoutWeight(1)
     }

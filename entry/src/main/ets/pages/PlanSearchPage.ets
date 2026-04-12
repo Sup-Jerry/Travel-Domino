@@ -14,6 +14,42 @@ interface PlanSearchCacheEntry {
   offset: number;
 }
 
+export function normalizePlanSearchKeyword(rawKeyword: string): string {
+  return String(rawKeyword || '').trim();
+}
+
+export function resolvePlanSearchCacheKey(rawKeyword: string): string {
+  const keywordLower = normalizePlanSearchKeyword(rawKeyword).toLowerCase();
+  return keywordLower.length > 0 ? keywordLower : '__empty__';
+}
+
+export function isPlanSearchTrashPlan(deleteTime: number): boolean {
+  return deleteTime > 0;
+}
+
+export function resolvePlanSearchStateLabel(status: number, deleteTime: number): string {
+  if (isPlanSearchTrashPlan(deleteTime)) {
+    return '回收站';
+  }
+  return status === 2 ? '归档' : '规划';
+}
+
+export function resolvePlanSearchStateColor(status: number, deleteTime: number): string {
+  if (isPlanSearchTrashPlan(deleteTime)) {
+    return '#D03D3D';
+  }
+  return status === 2 ? '#7A8699' : '#1F8FFF';
+}
+
+export function shouldPlanSearchLoadMore(
+  loaded: boolean,
+  searching: boolean,
+  loadingMore: boolean,
+  hasMore: boolean
+): boolean {
+  return loaded && !searching && !loadingMore && hasMore;
+}
+
 @Entry
 @Component
 struct PlanSearchPage {
@@ -48,22 +84,12 @@ struct PlanSearchPage {
     }
   }
 
-  private isTrashPlan(item: PlanItem): boolean {
-    return (item.deleteTime ?? 0) > 0;
-  }
-
   private getPlanStateLabel(item: PlanItem): string {
-    if (this.isTrashPlan(item)) {
-      return '回收站';
-    }
-    return item.status === 2 ? '归档' : '规划';
+    return resolvePlanSearchStateLabel(Number(item.status || 0), Number(item.deleteTime || 0));
   }
 
   private getPlanStateColor(item: PlanItem): ResourceColor {
-    if (this.isTrashPlan(item)) {
-      return '#D03D3D';
-    }
-    return item.status === 2 ? '#7A8699' : '#1F8FFF';
+    return resolvePlanSearchStateColor(Number(item.status || 0), Number(item.deleteTime || 0));
   }
 
   private scheduleSearch(value: string): void {
@@ -78,9 +104,8 @@ struct PlanSearchPage {
   }
 
   private async runSearch(rawKeyword: string): Promise<void> {
-    const keyword = rawKeyword.trim();
-    const keywordLower = keyword.toLowerCase();
-    const cacheKey = keywordLower.length > 0 ? keywordLower : '__empty__';
+    const keyword = normalizePlanSearchKeyword(rawKeyword);
+    const cacheKey = resolvePlanSearchCacheKey(keyword);
     const cached = this.searchCache.get(cacheKey);
     if (cached && Date.now() - cached.ts <= this.searchCacheTtlMs) {
       this.resultList = [...cached.list];
@@ -130,7 +155,7 @@ struct PlanSearchPage {
   }
 
   private async loadMoreIfNeeded(): Promise<void> {
-    if (!this.loaded || this.searching || this.loadingMore || !this.hasMore) {
+    if (!shouldPlanSearchLoadMore(this.loaded, this.searching, this.loadingMore, this.hasMore)) {
       return;
     }
     const token = this.queryToken;
@@ -148,7 +173,7 @@ struct PlanSearchPage {
       this.resultList = [...this.resultList, ...more];
       this.currentOffset += more.length;
       this.hasMore = more.length >= this.pageSize;
-      const cacheKey = keyword.length > 0 ? keyword.toLowerCase() : '__empty__';
+      const cacheKey = resolvePlanSearchCacheKey(keyword);
       this.searchCache.set(cacheKey, {
         ts: Date.now(),
         list: [...this.resultList],

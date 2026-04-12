@@ -126,6 +126,15 @@ import settingsAdvancedPageHelperTest from './SettingsAdvancedPageHelper.test';
 import settingsNotificationPageHelperTest from './SettingsNotificationPageHelper.test';
 import settingsPrivacyPageHelperTest from './SettingsPrivacyPageHelper.test';
 import settingsAccountSecurityPageHelperTest from './SettingsAccountSecurityPageHelper.test';
+import settingsGeneralPageHelperTest from './SettingsGeneralPageHelper.test';
+import mapPickerPageHelperTest from './MapPickerPageHelper.test';
+import planSearchPageHelperTest from './PlanSearchPageHelper.test';
+import loginPageHelperTest from './LoginPageHelper.test';
+import planListPageHelperTest from './PlanListPageHelper.test';
+import authGatePageHelperTest from './AuthGatePageHelper.test';
+import myPageHelperTest from './MyPageHelper.test';
+import settingsPageHelperTest from './SettingsPageHelper.test';
+import settingsPreferenceInsightsPageHelperTest from './SettingsPreferenceInsightsPageHelper.test';
 
 const registeredSuiteNames: string[] = [
   'LocalUnit',
@@ -254,7 +263,16 @@ const registeredSuiteNames: string[] = [
   'SettingsAdvancedPageHelper',
   'SettingsNotificationPageHelper',
   'SettingsPrivacyPageHelper',
-  'SettingsAccountSecurityPageHelper'
+  'SettingsAccountSecurityPageHelper',
+  'SettingsGeneralPageHelper',
+  'MapPickerPageHelper',
+  'PlanSearchPageHelper',
+  'LoginPageHelper',
+  'PlanListPageHelper',
+  'AuthGatePageHelper',
+  'MyPageHelper',
+  'SettingsPageHelper',
+  'SettingsPreferenceInsightsPageHelper'
 ];
 
 function containsSuite(name: string): boolean {
@@ -406,6 +424,15 @@ export default function testsuite() {
   settingsNotificationPageHelperTest();
   settingsPrivacyPageHelperTest();
   settingsAccountSecurityPageHelperTest();
+  settingsGeneralPageHelperTest();
+  mapPickerPageHelperTest();
+  planSearchPageHelperTest();
+  loginPageHelperTest();
+  planListPageHelperTest();
+  authGatePageHelperTest();
+  myPageHelperTest();
+  settingsPageHelperTest();
+  settingsPreferenceInsightsPageHelperTest();
 
   describe('listTest', () => {
     it('normal: list_should_keep_core_test_modules_registered', 0, () => {

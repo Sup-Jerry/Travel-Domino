@@ -6,6 +6,26 @@ import { AuthFacade } from '../infrastructure/auth/AuthFacade';
 import { HuaweiAccountLoginButton } from './components/auth/HuaweiAccountLoginButton';
 import { ProfileViewModel } from '../viewmodel/ProfileViewModel';
 
+const HUAWEI_API_FALLBACK_ERROR_CODE = 1001502003;
+
+export function resolveLoginAgreementRequiredToast(): string {
+  return '请先勾选《用户协议》和《隐私政策》';
+}
+
+export function parseHuaweiLoginErrorCodeFromMessage(message: string): number {
+  const codeText = (message || '').replace('huawei_login_error_', '').split('_')[0];
+  const code = Number(codeText);
+  return Number.isFinite(code) ? code : NaN;
+}
+
+export function shouldUseHuaweiApiFallbackByCode(code: number): boolean {
+  return code === HUAWEI_API_FALLBACK_ERROR_CODE;
+}
+
+export function resolveLoginFailureToast(prefix: string, message: string): string {
+  return `${prefix}${message}`;
+}
+
 @Entry
 @Component
 struct LoginPage {
@@ -22,7 +42,7 @@ struct LoginPage {
   private ensureAgreement(): boolean {
     hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] ensureAgreement accepted=${this.agreementAccepted ? 1 : 0}`);
     if (!this.agreementAccepted) {
-      this.toast('请先勾选《用户协议》和《隐私政策》');
+      this.toast(resolveLoginAgreementRequiredToast());
       return false;
     }
     return true;
@@ -99,7 +119,7 @@ struct LoginPage {
         LoginPage.LOG_TAG,
         `[LOGIN_TRACE][page] login fail code=${result.code}, message=${result.message}, source=${result.source}`
       );
-      this.toast(`登录失败：${result.message}`);
+      this.toast(resolveLoginFailureToast('登录失败：', result.message));
       return;
     }
     hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] login success source=${result.source}`);
@@ -136,7 +156,7 @@ struct LoginPage {
         LoginPage.LOG_TAG,
         `[LOGIN_TRACE][page] api_fallback fail code=${result.code}, message=${result.message}, source=${result.source}`
       );
-      this.toast(`登录失败：${result.message}`);
+      this.toast(resolveLoginFailureToast('登录失败：', result.message));
       return;
     }
     hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] api_fallback success source=${result.source}`);
@@ -173,7 +193,7 @@ struct LoginPage {
         LoginPage.LOG_TAG,
         `[LOGIN_TRACE][page] guest_login fail code=${result.code}, message=${result.message}, source=${result.source}`
       );
-      this.toast(`游客登录失败：${result.message}`);
+      this.toast(resolveLoginFailureToast('游客登录失败：', result.message));
       return;
     }
     hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] guest_login success source=${result.source}`);
@@ -230,14 +250,13 @@ struct LoginPage {
             void this.loginWithHuaweiButton(credential);
           },
           onError: (message: string) => {
-            const codeText = message.replace('huawei_login_error_', '').split('_')[0];
-            const code = Number(codeText);
+            const code = parseHuaweiLoginErrorCodeFromMessage(message);
             hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] button error message=${message}, code=${code}`);
             if (!this.ensureAgreement()) {
               hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, '[LOGIN_TRACE][page] block fallback by agreement');
               return;
             }
-            if (code === 1001502003) {
+            if (shouldUseHuaweiApiFallbackByCode(code)) {
               hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, '[LOGIN_TRACE][page] trigger api_fallback by code=1001502003');
               void this.loginWithHuaweiApiFallback();
               return;

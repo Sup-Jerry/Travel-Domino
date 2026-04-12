@@ -5,7 +5,7 @@ import { WeatherUserPreference } from '../domain/services/WeatherModels';
 import { DEFAULT_USER_PROFILE, UserStrategyProfile } from '../domain/strategy/UserStrategyProfile';
 import { SettingsSubPageHeader } from './components/views/SettingsItems';
 
-interface ModeFrequencyView {
+export interface ModeFrequencyView {
   modeCustom: number;
   modeDefault: number;
   modeSoldier: number;
@@ -19,6 +19,77 @@ interface ModeBarItem {
 }
 
 const RECOMMEND_SAMPLE_THRESHOLD = 3;
+
+export function clampSettingsPreferenceInt(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) {
+    return min;
+  }
+  const rounded = Math.round(value);
+  if (rounded < min) {
+    return min;
+  }
+  if (rounded > max) {
+    return max;
+  }
+  return rounded;
+}
+
+export function parseSettingsPreferenceModeCount(raw: string, key: string): number {
+  const pattern = new RegExp(`"${key}"\\s*:\\s*(\\d+)`);
+  const match = raw.match(pattern);
+  if (!match || match.length < 2) {
+    return 0;
+  }
+  const value = Number(match[1]);
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+  return Math.floor(value);
+}
+
+export function parseSettingsPreferenceModeFrequency(raw: string): ModeFrequencyView {
+  const safeRaw = raw || '';
+  return {
+    modeCustom: parseSettingsPreferenceModeCount(safeRaw, '-1'),
+    modeDefault: parseSettingsPreferenceModeCount(safeRaw, '0'),
+    modeSoldier: parseSettingsPreferenceModeCount(safeRaw, '1'),
+    modeLeisure: parseSettingsPreferenceModeCount(safeRaw, '2')
+  };
+}
+
+export function resolveSettingsPreferenceModeTotalCount(freq: ModeFrequencyView): number {
+  const total = freq.modeCustom + freq.modeDefault + freq.modeSoldier + freq.modeLeisure;
+  if (total <= 0) {
+    return 0;
+  }
+  return total;
+}
+
+export function resolveSettingsPreferencePercentText(count: number, total: number): string {
+  if (count <= 0 || total <= 0) {
+    return '0%';
+  }
+  const percent = Math.round((count * 1000) / total) / 10;
+  return `${percent}%`;
+}
+
+export function resolveSettingsPreferencePercentWidth(count: number, total: number): string {
+  if (count <= 0 || total <= 0) {
+    return '0%';
+  }
+  const percent = Math.round((count * 1000) / total) / 10;
+  const visiblePercent = percent < 6 ? 6 : percent;
+  return `${visiblePercent}%`;
+}
+
+export function resolveSettingsPreferenceConsistencyRateText(match: number, mismatch: number): string {
+  const total = match + mismatch;
+  if (total <= 0) {
+    return '暂无比对数据';
+  }
+  const percent = Math.round((match * 1000) / total) / 10;
+  return `${percent}%`;
+}
 
 @Entry
 @Component
@@ -82,17 +153,7 @@ struct SettingsPreferenceInsightsPage {
   }
 
   private clampInt(value: number, min: number, max: number): number {
-    if (!Number.isFinite(value)) {
-      return min;
-    }
-    const rounded = Math.round(value);
-    if (rounded < min) {
-      return min;
-    }
-    if (rounded > max) {
-      return max;
-    }
-    return rounded;
+    return clampSettingsPreferenceInt(value, min, max);
   }
 
   private syncEditableState(): void {
@@ -173,26 +234,11 @@ struct SettingsPreferenceInsightsPage {
   }
 
   private parseModeFrequency(raw: string): ModeFrequencyView {
-    const safeRaw = raw || '';
-    return {
-      modeCustom: this.parseModeCount(safeRaw, '-1'),
-      modeDefault: this.parseModeCount(safeRaw, '0'),
-      modeSoldier: this.parseModeCount(safeRaw, '1'),
-      modeLeisure: this.parseModeCount(safeRaw, '2')
-    };
+    return parseSettingsPreferenceModeFrequency(raw);
   }
 
   private parseModeCount(raw: string, key: string): number {
-    const pattern = new RegExp(`"${key}"\\s*:\\s*(\\d+)`);
-    const match = raw.match(pattern);
-    if (!match || match.length < 2) {
-      return 0;
-    }
-    const value = Number(match[1]);
-    if (!Number.isFinite(value) || value <= 0) {
-      return 0;
-    }
-    return Math.floor(value);
+    return parseSettingsPreferenceModeCount(raw, key);
   }
 
   private getWeatherLevelText(value: number): string {
@@ -294,31 +340,15 @@ struct SettingsPreferenceInsightsPage {
   }
 
   private getModeTotalCount(): number {
-    const total = this.modeFrequency.modeCustom +
-      this.modeFrequency.modeDefault +
-      this.modeFrequency.modeSoldier +
-      this.modeFrequency.modeLeisure;
-    if (total <= 0) {
-      return 0;
-    }
-    return total;
+    return resolveSettingsPreferenceModeTotalCount(this.modeFrequency);
   }
 
   private getPercentText(count: number, total: number): string {
-    if (count <= 0 || total <= 0) {
-      return '0%';
-    }
-    const percent = Math.round((count * 1000) / total) / 10;
-    return `${percent}%`;
+    return resolveSettingsPreferencePercentText(count, total);
   }
 
   private getPercentWidth(count: number, total: number): string {
-    if (count <= 0 || total <= 0) {
-      return '0%';
-    }
-    const percent = Math.round((count * 1000) / total) / 10;
-    const visiblePercent = percent < 6 ? 6 : percent;
-    return `${visiblePercent}%`;
+    return resolveSettingsPreferencePercentWidth(count, total);
   }
 
   private formatUpdatedAt(timestamp: number): string {
@@ -345,14 +375,7 @@ struct SettingsPreferenceInsightsPage {
   }
 
   private getConsistencyRateText(): string {
-    const match = this.getMatchCount();
-    const mismatch = this.getMismatchCount();
-    const total = match + mismatch;
-    if (total <= 0) {
-      return '暂无比对数据';
-    }
-    const percent = Math.round((match * 1000) / total) / 10;
-    return `${percent}%`;
+    return resolveSettingsPreferenceConsistencyRateText(this.getMatchCount(), this.getMismatchCount());
   }
 
   @Builder

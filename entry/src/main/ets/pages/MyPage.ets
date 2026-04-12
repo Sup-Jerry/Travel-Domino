@@ -11,14 +11,48 @@ import { AvatarService } from '../infrastructure/avatar/AvatarService';
 import { ProfileViewModel, ProfileViewState } from '../viewmodel/ProfileViewModel';
 
 const DEFAULT_USER_NAME = '游客用户';
+const MY_PAGE_USERNAME_PATTERN: RegExp = /^[\u4E00-\u9FFFa-zA-Z0-9_ ]+$/;
+const MY_PAGE_LIGHT_HINT_DEDUP_MS = 12000;
+
+export function resolveMyPageAgreementRequiredToast(): string {
+  return '请先勾选《用户协议》和《隐私政策》';
+}
+
+export function normalizeMyPageUsername(rawValue: string, maxLength: number = 32): string {
+  const normalized = rawValue.trim();
+  if (!normalized || normalized.length > maxLength) {
+    return '';
+  }
+  if (!MY_PAGE_USERNAME_PATTERN.test(normalized)) {
+    return '';
+  }
+  return normalized;
+}
+
+export function normalizeMyPageLightHintKey(key: string): string {
+  return String(key || '').trim();
+}
+
+export function shouldMyPageEmitLightHint(
+  lastLightHintKey: string,
+  lastLightHintAt: number,
+  nextKey: string,
+  now: number,
+  dedupMs: number = MY_PAGE_LIGHT_HINT_DEDUP_MS
+): boolean {
+  const safeKey = normalizeMyPageLightHintKey(nextKey);
+  if (!safeKey) {
+    return false;
+  }
+  return !(lastLightHintKey === safeKey && (now - lastLightHintAt) < dedupMs);
+}
 
 @Entry
 @Component
 struct MyPage {
   private static readonly LOG_DOMAIN: number = 0x0000;
   private static readonly LOG_TAG: string = 'MyPage';
-  private static readonly USERNAME_PATTERN: RegExp = /^[\u4E00-\u9FFFa-zA-Z0-9_ ]+$/;
-  private static readonly LIGHT_HINT_DEDUP_MS: number = 12000;
+  private static readonly LIGHT_HINT_DEDUP_MS: number = MY_PAGE_LIGHT_HINT_DEDUP_MS;
   @State userName: string = DEFAULT_USER_NAME;
   @State loadingProfile: boolean = false;
   @State actionLoading: boolean = false;
@@ -48,7 +82,7 @@ struct MyPage {
 
   private ensureAgreement(): boolean {
     if (!this.agreementAccepted) {
-      this.toast('请先勾选《用户协议》和《隐私政策》');
+      this.toast(resolveMyPageAgreementRequiredToast());
       return false;
     }
     return true;
@@ -181,12 +215,12 @@ struct MyPage {
   }
 
   private toastLightHintOnce(key: string, message: string): void {
-    const safeKey = String(key || '').trim();
+    const safeKey = normalizeMyPageLightHintKey(key);
     if (!safeKey || !message) {
       return;
     }
     const now = Date.now();
-    if (this.lastLightHintKey === safeKey && (now - this.lastLightHintAt) < MyPage.LIGHT_HINT_DEDUP_MS) {
+    if (!shouldMyPageEmitLightHint(this.lastLightHintKey, this.lastLightHintAt, safeKey, now, MyPage.LIGHT_HINT_DEDUP_MS)) {
       return;
     }
     this.lastLightHintKey = safeKey;
@@ -213,14 +247,7 @@ struct MyPage {
   }
 
   private normalizeAndValidateUsername(rawValue: string): string {
-    const normalized = rawValue.trim();
-    if (!normalized || normalized.length > 32) {
-      return '';
-    }
-    if (!MyPage.USERNAME_PATTERN.test(normalized)) {
-      return '';
-    }
-    return normalized;
+    return normalizeMyPageUsername(rawValue, 32);
   }
 
   private openUsernameEditor(): void {

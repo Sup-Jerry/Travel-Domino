@@ -2,6 +2,42 @@
 import { ThemeCenter } from '../common/utils/ThemeCenter';
 import { SettingCategoryItem } from './components/views/SettingsItems';
 
+export interface SettingsPageCategoryItem {
+  title: string;
+  desc: string;
+  url: string;
+}
+
+export function buildSettingsPageCategoryItems(): SettingsPageCategoryItem[] {
+  return [
+    {
+      title: '账号与安全',
+      desc: '账号状态、登录保护与安全信息。',
+      url: 'pages/SettingsAccountSecurityPage'
+    },
+    {
+      title: '通知与提醒',
+      desc: '管理归档/删除等提示弹窗。',
+      url: 'pages/SettingsNotificationPage'
+    },
+    {
+      title: '隐私与权限',
+      desc: '路线服务与权限相关控制。',
+      url: 'pages/SettingsPrivacyPage'
+    },
+    {
+      title: '偏好画像',
+      desc: '查看天气与 AI 学习到的个性化偏好。',
+      url: 'pages/SettingsPreferenceInsightsPage'
+    },
+    {
+      title: '通用与外观',
+      desc: '主题、天气、时间与行程基础配置。',
+      url: 'pages/SettingsGeneralPage'
+    }
+  ];
+}
+
 @Entry
 @Component
 struct SettingsPage {
@@ -31,35 +67,13 @@ struct SettingsPage {
 
         Scroll() {
           Column({ space: 10 }) {
-            SettingCategoryItem({
-              title: '账号与安全',
-              desc: '账号状态、登录保护与安全信息。',
-              onClickItem: () => this.openPage('pages/SettingsAccountSecurityPage')
-            });
-
-            SettingCategoryItem({
-              title: '通知与提醒',
-              desc: '管理归档/删除等提示弹窗。',
-              onClickItem: () => this.openPage('pages/SettingsNotificationPage')
-            });
-
-            SettingCategoryItem({
-              title: '隐私与权限',
-              desc: '路线服务与权限相关控制。',
-              onClickItem: () => this.openPage('pages/SettingsPrivacyPage')
-            });
-
-            SettingCategoryItem({
-              title: '偏好画像',
-              desc: '查看天气与 AI 学习到的个性化偏好。',
-              onClickItem: () => this.openPage('pages/SettingsPreferenceInsightsPage')
-            });
-
-            SettingCategoryItem({
-              title: '通用与外观',
-              desc: '主题、天气、时间与行程基础配置。',
-              onClickItem: () => this.openPage('pages/SettingsGeneralPage')
-            });
+            ForEach(buildSettingsPageCategoryItems(), (item: SettingsPageCategoryItem) => {
+              SettingCategoryItem({
+                title: item.title,
+                desc: item.desc,
+                onClickItem: () => this.openPage(item.url)
+              });
+            }, (item: SettingsPageCategoryItem) => item.url);
           }
           .width('100%')
           .justifyContent(FlexAlign.Start)

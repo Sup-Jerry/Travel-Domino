@@ -41,6 +41,35 @@ class MapPickerRouteParams {
   queryName: string = '';
 }
 
+export function isMapPickerCoordinateValid(lat: number, lng: number): boolean {
+  return Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    Math.abs(lat) <= 90 &&
+    Math.abs(lng) <= 180 &&
+    !(lat === 0 && lng === 0);
+}
+
+export function isMapPickerAddressResolving(address: string): boolean {
+  const text = (address || '').trim();
+  return text.length === 0 ||
+    text.indexOf('正在解析') >= 0 ||
+    text.indexOf('正在获取') >= 0;
+}
+
+export function buildMapPickerCoordinateFallbackAddress(lat: number, lng: number): string {
+  return `已选位置(${lat.toFixed(5)}, ${lng.toFixed(5)})`;
+}
+
+export function formatMapPickerDistance(distance?: number): string {
+  if (distance === undefined) {
+    return '';
+  }
+  if (distance >= 1000) {
+    return `${(distance / 1000).toFixed(1)}km`;
+  }
+  return `${Math.floor(distance)}m`;
+}
+
 @Entry
 @Component
 struct MapPickerPage {
@@ -82,22 +111,15 @@ struct MapPickerPage {
   }
 
   private isValidCoordinate(lat: number, lng: number): boolean {
-    return Number.isFinite(lat) &&
-      Number.isFinite(lng) &&
-      Math.abs(lat) <= 90 &&
-      Math.abs(lng) <= 180 &&
-      !(lat === 0 && lng === 0);
+    return isMapPickerCoordinateValid(lat, lng);
   }
 
   private isAddressResolving(address: string): boolean {
-    const text = (address || '').trim();
-    return text.length === 0 ||
-      text.indexOf('正在解析') >= 0 ||
-      text.indexOf('正在获取') >= 0;
+    return isMapPickerAddressResolving(address);
   }
 
   private buildCoordinateFallbackAddress(lat: number, lng: number): string {
-    return `已选位置(${lat.toFixed(5)}, ${lng.toFixed(5)})`;
+    return buildMapPickerCoordinateFallbackAddress(lat, lng);
   }
 
   // ✅ 修复 2：所有函数必须显式声明返回类型 (void)，解决 arkts-no-implicit-return-types
@@ -283,13 +305,7 @@ struct MapPickerPage {
   }
 
   private formatDistance(distance?: number): string {
-    if (distance === undefined) {
-      return '';
-    }
-    if (distance >= 1000) {
-      return `${(distance / 1000).toFixed(1)}km`;
-    }
-    return `${Math.floor(distance)}m`;
+    return formatMapPickerDistance(distance);
   }
 
   private focusPoi(item: PoiSearchItem): void {

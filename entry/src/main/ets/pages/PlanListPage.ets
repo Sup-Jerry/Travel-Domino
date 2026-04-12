@@ -42,6 +42,53 @@ interface ShareDialogPayload {
 
 const MAX_SHARE_EVENT_COUNT = 50;
 
+export function canPlanListRepromptPermission(
+  now: number,
+  lastPromptAt: number,
+  hasPromptedBefore: boolean,
+  cooldownMs: number
+): boolean {
+  if (!hasPromptedBefore) {
+    return true;
+  }
+  return now - lastPromptAt >= cooldownMs;
+}
+
+export function resolvePlanListShareStartTime(event: TravelPlanItem): string {
+  const pureTime = DateUtil.extractPureTime(event.fixedStartTime || event.computedStartTime || '');
+  if (DateUtil.isValidTimeString(pureTime)) {
+    return pureTime;
+  }
+  return '--:--';
+}
+
+export function resolvePlanListShareEndTime(event: TravelPlanItem, durationMinutes: number): string {
+  const startTime = resolvePlanListShareStartTime(event);
+  if (startTime === '--:--') {
+    return '--:--';
+  }
+  const calculated = DateUtil.calculateEndTime(startTime, durationMinutes);
+  const pure = DateUtil.extractPureTime(calculated);
+  return DateUtil.isValidTimeString(pure) ? pure : '--:--';
+}
+
+export function resolvePlanListShareIcon(event: TravelPlanItem): string {
+  if (event.priority === 1) {
+    return '⭐';
+  }
+  if (event.lockStatus === 1 || event.type === 'ANCHOR') {
+    return '⏰';
+  }
+  return '📍';
+}
+
+export function resolvePlanListShareCategory(event: TravelPlanItem): string {
+  if (event.lockStatus === 1 || event.type === 'ANCHOR') {
+    return '固定行程';
+  }
+  return '灵活行程';
+}
+
 @Entry
 @Component
 struct PlanListPage {
@@ -248,10 +295,7 @@ struct PlanListPage {
   }
 
   private canRepromptPermission(now: number, lastPromptAt: number, hasPromptedBefore: boolean): boolean {
-    if (!hasPromptedBefore) {
-      return true;
-    }
-    return now - lastPromptAt >= this.permissionRepromptCooldownMs;
+    return canPlanListRepromptPermission(now, lastPromptAt, hasPromptedBefore, this.permissionRepromptCooldownMs);
   }
 
   private async ensureNotificationPermissionPrompt(hostContext: common.UIAbilityContext): Promise<void> {
@@ -375,38 +419,19 @@ struct PlanListPage {
   }
 
   private resolveShareStartTime(event: TravelPlanItem): string {
-    const pureTime = DateUtil.extractPureTime(event.fixedStartTime || event.computedStartTime || '');
-    if (DateUtil.isValidTimeString(pureTime)) {
-      return pureTime;
-    }
-    return '--:--';
+    return resolvePlanListShareStartTime(event);
   }
 
   private resolveShareEndTime(event: TravelPlanItem, durationMinutes: number): string {
-    const startTime = this.resolveShareStartTime(event);
-    if (startTime === '--:--') {
-      return '--:--';
-    }
-    const calculated = DateUtil.calculateEndTime(startTime, durationMinutes);
-    const pure = DateUtil.extractPureTime(calculated);
-    return DateUtil.isValidTimeString(pure) ? pure : '--:--';
+    return resolvePlanListShareEndTime(event, durationMinutes);
   }
 
   private resolveShareIcon(event: TravelPlanItem): string {
-    if (event.priority === 1) {
-      return '⭐';
-    }
-    if (event.lockStatus === 1 || event.type === 'ANCHOR') {
-      return '⏰';
-    }
-    return '📍';
+    return resolvePlanListShareIcon(event);
   }
 
   private resolveShareCategory(event: TravelPlanItem): string {
-    if (event.lockStatus === 1 || event.type === 'ANCHOR') {
-      return '固定行程';
-    }
-    return '灵活行程';
+    return resolvePlanListShareCategory(event);
   }
 
   private openImportDialog(): void {
