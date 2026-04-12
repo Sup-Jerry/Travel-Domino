@@ -36,6 +36,8 @@ travel-domino-skill-evolution-all.txt
 
 /backend/node_modules
 /backend/dist
+/backend/coverage/
+/backend/.nyc_output/
 
 # Environment files (commit templates only)
 .env
