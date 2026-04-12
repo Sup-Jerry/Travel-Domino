@@ -29,6 +29,7 @@ import weatherStrategyLinkageTest from './WeatherStrategyLinkage.test';
 import timelineWeatherLinkageIntegrationTest from './TimelineWeatherLinkageIntegration.test';
 import authServiceTest from './AuthService.test';
 import authFacadeSessionManagerTest from './AuthFacadeSessionManager.test';
+import huaweiAccountProviderTest from './HuaweiAccountProvider.test';
 import avatarServiceTest from './AvatarService.test';
 import avatarUploadApiTest from './AvatarUploadApi.test';
 import profileCacheManagerTest from './ProfileCacheManager.test';
@@ -37,12 +38,17 @@ import userProfileRepositoryImplTest from './UserProfileRepositoryImpl.test';
 import timelineExecutionCoordinatorTest from './TimelineExecutionCoordinator.test';
 import timelineHistoryManagerTest from './TimelineHistoryManager.test';
 import executionContextStoreTest from './ExecutionContextStore.test';
+import eventRepositoryImplTest from './EventRepositoryImpl.test';
 import authSessionStoreTest from './AuthSessionStore.test';
+import timelinePlanStateManagerTest from './TimelinePlanStateManager.test';
+import timelineRecalculationManagerTest from './TimelineRecalculationManager.test';
+import timelineEventMutationManagerTest from './TimelineEventMutationManager.test';
 import timelineCompressionCoordinatorTest from './TimelineCompressionCoordinator.test';
 import timelineDistributionCoordinatorTest from './TimelineDistributionCoordinator.test';
 import timelineStrategyManagerTest from './TimelineStrategyManager.test';
 import timelineCompanionManagerTest from './TimelineCompanionManager.test';
 import appStartupCoordinatorTest from './AppStartupCoordinator.test';
+import timelineWeatherCoordinatorTest from './TimelineWeatherCoordinator.test';
 import companionSwipeHelperTest from './CompanionSwipeHelper.test';
 import companionSwipeHelperVelocityTest from './CompanionSwipeHelperVelocity.test';
 import companionSwipeHelperThresholdsTest from './CompanionSwipeHelperThresholds.test';
@@ -185,6 +191,7 @@ const registeredSuiteNames: string[] = [
   'TimelineWeatherLinkageIntegration',
   'AuthService',
   'AuthFacadeSessionManager',
+  'HuaweiAccountProvider',
   'AvatarService',
   'AvatarUploadApi',
   'ProfileCacheManager',
@@ -193,12 +200,17 @@ const registeredSuiteNames: string[] = [
   'TimelineExecutionCoordinator',
   'TimelineHistoryManager',
   'ExecutionContextStore',
+  'EventRepositoryImpl',
   'AuthSessionStore',
+  'TimelinePlanStateManager',
+  'TimelineRecalculationManager',
+  'TimelineEventMutationManager',
   'TimelineCompressionCoordinator',
   'TimelineDistributionCoordinator',
   'TimelineStrategyManager',
   'TimelineCompanionManager',
   'AppStartupCoordinator',
+  'TimelineWeatherCoordinator',
   'CompanionSwipeHelper',
   'CompanionSwipeHelperVelocity',
   'CompanionSwipeHelperThresholds',
@@ -363,6 +375,7 @@ export default function testsuite() {
   timelineWeatherLinkageIntegrationTest();
   authServiceTest();
   authFacadeSessionManagerTest();
+  huaweiAccountProviderTest();
   avatarServiceTest();
   avatarUploadApiTest();
   profileCacheManagerTest();
@@ -371,12 +384,17 @@ export default function testsuite() {
   timelineExecutionCoordinatorTest();
   timelineHistoryManagerTest();
   executionContextStoreTest();
+  eventRepositoryImplTest();
   authSessionStoreTest();
+  timelinePlanStateManagerTest();
+  timelineRecalculationManagerTest();
+  timelineEventMutationManagerTest();
   timelineCompressionCoordinatorTest();
   timelineDistributionCoordinatorTest();
   timelineStrategyManagerTest();
   timelineCompanionManagerTest();
   appStartupCoordinatorTest();
+  timelineWeatherCoordinatorTest();
   companionSwipeHelperTest();
   companionSwipeHelperVelocityTest();
   companionSwipeHelperThresholdsTest();

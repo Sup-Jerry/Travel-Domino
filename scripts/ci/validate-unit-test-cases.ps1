@@ -3,6 +3,16 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 Set-Location $repoRoot
 
+$listSuiteValidator = Join-Path $PSScriptRoot 'validate-list-suite-registration.ps1'
+if (-not (Test-Path $listSuiteValidator)) {
+  Write-Host "[validate-unit-test-cases] failed: missing script -> $listSuiteValidator"
+  exit 1
+}
+& $listSuiteValidator
+if ($LASTEXITCODE -ne 0) {
+  exit $LASTEXITCODE
+}
+
 $categories = @('normal', 'boundary', 'invalid', 'conflict', 'regression', 'combined')
 
 $testFiles = @(
