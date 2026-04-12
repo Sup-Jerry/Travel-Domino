@@ -100,6 +100,7 @@ struct Index {
   };
   @State aiDialogForceInitialSelection: boolean = false;
   @State aiReplanPreviewResult: AiReplanPreviewResult | null = null;
+  @State isAiReplanGenerating: boolean = false;
   @State showPlanningWeatherHintPopup: boolean = false;
   @State showPlanningWeatherScorePopup: boolean = false;
   @State hasManualPlanningWeatherRefresh: boolean = false;
@@ -174,6 +175,10 @@ struct Index {
     } catch (error) {
       hilog.warn(0x0000, 'Index', `[TOAST_FAIL] ${this.sanitizeError(error as Object)}`);
     }
+  }
+
+  private isAiReplanBusy(): boolean {
+    return this.isAiReplanGenerating || this.vm.isRegenerating;
   }
 
   private resetAiDialogPrefill(): void {
@@ -679,6 +684,8 @@ struct Index {
         }
       },
       onRegenerate: async (strategy: number, customStrategy?: ComposableStrategy, keepCurrentMode?: boolean) => {
+        this.isAiReplanGenerating = true;
+        this.aiDialogController.close();
         try {
           hilog.info(
             0x0000,
@@ -703,7 +710,8 @@ struct Index {
           );
           this.safeShowToast(msg);
           this.resetAiDialogPrefill();
-          this.aiDialogController.close();
+        } finally {
+          this.isAiReplanGenerating = false;
         }
       }
     }),
@@ -1710,6 +1718,11 @@ struct Index {
   }
 
   onBackPress(): boolean {
+    if (this.isAiReplanBusy()) {
+      hilog.warn(0x0000, 'Index', '[airest]AI_REPLAN_TRACE[index_back_blocked] reason=regen_in_progress');
+      this.safeShowToast('AI 重规划生成中，请等待完成');
+      return true;
+    }
     if (this.isCompanionMode) {
       const level = String(AppStorage.get('COMPANION_BACK_LEVEL') || 'immersive');
       if (level === 'overlay' || level === 'control') {
@@ -2001,6 +2014,11 @@ struct Index {
           .padding({ left: 10, right: 10, top: 6, bottom: 6 })
           .borderRadius(8)
           .onClick(() => {
+            if (this.isAiReplanBusy()) {
+              hilog.warn(0x0000, 'Index', '[airest]AI_REPLAN_TRACE[index_nav_back_blocked] reason=regen_in_progress');
+              this.safeShowToast('AI 重规划生成中，请等待完成');
+              return;
+            }
             void NavigationHelper.backOrFallbackToPlanList(this.getUIContext());
           })
 
@@ -2480,6 +2498,33 @@ struct Index {
             translate: { y: 12 },
             scale: { x: 0.985, y: 0.985 }
           })
+      }
+      if (this.isAiReplanBusy()) {
+        Stack({ alignContent: Alignment.Center }) {
+          Column() {
+            LoadingProgress()
+              .width(42)
+              .height(42)
+              .color(this.getThemePalette().primary)
+            Text('AI 重规划生成中')
+              .fontSize(16)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(this.getThemePalette().textPrimary)
+              .margin({ top: 14 })
+            Text('请留在当前页面等待完成，返回会中止本次生成')
+              .fontSize(12)
+              .fontColor(this.getThemePalette().textSecondary)
+              .textAlign(TextAlign.Center)
+              .margin({ top: 8 })
+          }
+          .padding({ left: 24, right: 24, top: 24, bottom: 24 })
+          .backgroundColor(this.getThemePalette().cardBg)
+          .borderRadius(14)
+        }
+        .width('100%')
+        .height('100%')
+        .backgroundColor('#80000000')
+        .zIndex(99)
       }
     }
     .width('100%')

@@ -173,7 +173,8 @@ export class TimelineViewModel implements
   @Track public idleGapDetectionEnabled: boolean = true;
   @Track public idleGapTriggerMinutes: number = 45;
   public currentStrategyMode: number = 0;
-  public isRegenerating: boolean = false;  // AI重新生成锁
+  @Track public isRegenerating: boolean = false;  // AI重新生成锁
+  @Track public aiReplanUndoAvailable: boolean = false;
   public behaviorTracker: UserBehaviorTracker = new UserBehaviorTracker();
   @Track public strategyAdaptationPrompt: AdaptationPrompt | null = null;
   @Track public weatherPlanningHint: string = '';
@@ -423,6 +424,7 @@ export class TimelineViewModel implements
     this.planName = `计划 #${planId}`;
     this.currentStrategyMode = 0;
     this.aiReplanUndoToken = null;
+    this.aiReplanUndoAvailable = false;
     AppStorage.setOrCreate(AppStorageKeys.HAS_AI_REPLAN_UNDO, false);
     this.filterStart = 0;
     this.filterEnd = 0;
@@ -966,6 +968,7 @@ export class TimelineViewModel implements
     );
     const undoToken = await this.strategyManager.applyReplanPreview(preview, decision);
     this.aiReplanUndoToken = undoToken;
+    this.aiReplanUndoAvailable = true;
     AppStorage.setOrCreate(AppStorageKeys.HAS_AI_REPLAN_UNDO, true);
     hilog.info(
       0x0000,
@@ -976,11 +979,12 @@ export class TimelineViewModel implements
   }
 
   public hasAiReplanUndo(): boolean {
-    return AppStorage.get<boolean>(AppStorageKeys.HAS_AI_REPLAN_UNDO) ?? false;
+    return this.aiReplanUndoAvailable;
   }
 
   public clearAiReplanUndoToken(): void {
     this.aiReplanUndoToken = null;
+    this.aiReplanUndoAvailable = false;
     AppStorage.setOrCreate(AppStorageKeys.HAS_AI_REPLAN_UNDO, false);
   }
 

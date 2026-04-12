@@ -247,6 +247,17 @@ export class TimelineAiService implements ITimelineAiService {
     return StrategyService.buildStrategyExplanation(mode);
   }
 
+  private resolveReplanMinItems(requestedDays: number): number {
+    if (!Number.isFinite(requestedDays) || requestedDays <= 1) {
+      return 1;
+    }
+    const safeDays = Math.max(1, Math.floor(requestedDays));
+    if (safeDays <= 5) {
+      return safeDays * 2;
+    }
+    return safeDays;
+  }
+
   private async buildAiCandidates(
     sourcePrompt: string,
     strategyMode: number,
@@ -307,7 +318,7 @@ export class TimelineAiService implements ITimelineAiService {
       userPrompt: enhancedPrompt,
       strategyMode: customStrategy ? -1 : strategyMode,
       customStrategy: customStrategy,
-      allowPartialResult: true
+      allowPartialResult: false
     };
     const aiItems = await AiService.generateItineraryWithStrategy(request);
 
@@ -523,12 +534,15 @@ export class TimelineAiService implements ITimelineAiService {
       const effective = await this.resolveEffectiveStrategy(strategyMode, customStrategy, keepCurrentMode);
       const items = await this.buildAiCandidates(prompt, effective.mode, effective.customStrategy);
       const requestedDays = AiService.resolveRequestedDaysFromPrompt(prompt);
-      if (requestedDays > 1 && items.length > 0 && items.length < requestedDays) {
-        hilog.warn(
+      const minRequired = this.resolveReplanMinItems(requestedDays);
+      if (items.length < minRequired) {
+        const reason = `AI 返回地点数量不足，当前仅${items.length}个，无法满足${requestedDays}天行程（至少需要${minRequired}个地点）`;
+        hilog.error(
           0x0000,
           TAG,
-          `[airest]AI_REPLAN_TRACE[service_preview_partial] mode=${effective.mode}, requestedDays=${requestedDays}, generated=${items.length}`
+          `[airest]AI_REPLAN_TRACE[service_preview_partial] mode=${effective.mode}, requestedDays=${requestedDays}, generated=${items.length}, minRequired=${minRequired}`
         );
+        throw new Error(reason);
       }
       hilog.info(
         0x0000,

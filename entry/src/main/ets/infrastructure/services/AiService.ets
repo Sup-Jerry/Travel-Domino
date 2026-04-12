@@ -74,7 +74,10 @@ export class AiService {
   private static readonly MAX_REQUESTED_DAYS = 30;
   private static readonly RETRY_TIMES = 1;
   private static readonly RETRY_READ_TIMEOUT_MS = 60000;
-  private static readonly RETRY_MAX_TOKENS = 1400;
+  private static readonly RETRY_MAX_TOKENS = 2200;
+  private static readonly MAX_TOKENS_CEILING = 3200;
+  private static readonly LONG_TRIP_TOKEN_PER_DAY = 80;
+  private static readonly RETRY_TOKEN_BONUS = 300;
   private static readonly MULTI_DAY_FALLBACK_DAILY_FLOOR = 2;
   private static readonly SCENIC_MIN_DURATION = 30;
   private static readonly SCENIC_MAX_DURATION = 180;
@@ -134,6 +137,29 @@ export class AiService {
     return (raw || '').replace(/,\s*([}\]])/g, '$1');
   }
 
+  private static toSafeString(value: Object): string {
+    try {
+      return JSON.stringify(value);
+    } catch (_error) {
+      return '';
+    }
+  }
+
+  private static normalizeJsonLikeText(raw: string): string {
+    let text = AiService.stripMarkdownFence(raw)
+      .replace(/[“”]/g, '"')
+      .replace(/[‘’]/g, '\'')
+      .replace(/：/g, ':')
+      .replace(/，/g, ',')
+      .replace(/\r/g, '');
+    text = text.replace(/([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*:)/g, '$1"$2"$3');
+    text = text.replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, (_m: string, group: string) => {
+      const escaped = (group || '').replace(/"/g, '\\"');
+      return `"${escaped}"`;
+    });
+    return AiService.removeJsonTrailingCommas(text).trim();
+  }
+
   private static tryParseJson(raw: string): Object | null {
     try {
       return JSON.parse(raw) as Object;
@@ -144,7 +170,7 @@ export class AiService {
 
   private static pickArrayFromObject(parsed: Object): AiRawItem[] | null {
     const record = parsed as Record<string, Object>;
-    const preferredKeys: string[] = ['items', 'data', 'list', 'itinerary', 'result'];
+    const preferredKeys: string[] = ['items', 'data', 'list', 'itinerary', 'result', '地点', '行程', '列表', '数据'];
     for (let i = 0; i < preferredKeys.length; i++) {
       const key = preferredKeys[i];
       const value = record[key];
@@ -162,15 +188,81 @@ export class AiService {
     return null;
   }
 
-  private static tryParseArrayCandidate(raw: string): AiRawItem[] | null {
-    const parsed = AiService.tryParseJson(raw);
-    if (!parsed) {
+  private static tryExtractItemsFromParsed(parsed: Object, depth: number = 0): AiRawItem[] | null {
+    if (depth > 4 || parsed === null || parsed === undefined) {
       return null;
     }
     if (Array.isArray(parsed)) {
       return parsed as AiRawItem[];
     }
-    return AiService.pickArrayFromObject(parsed);
+    if (typeof parsed === 'string') {
+      const text = (parsed as string).trim();
+      if (text.length === 0) {
+        return null;
+      }
+      const strictParsed = AiService.tryParseJson(text);
+      if (strictParsed) {
+        const nestedStrict = AiService.tryExtractItemsFromParsed(strictParsed, depth + 1);
+        if (nestedStrict) {
+          return nestedStrict;
+        }
+      }
+      const normalized = AiService.unwrapContent(text);
+      if (normalized.length > 0 && normalized !== text) {
+        const normalizedParsed = AiService.tryParseJson(normalized);
+        if (normalizedParsed) {
+          const nestedNormalized = AiService.tryExtractItemsFromParsed(normalizedParsed, depth + 1);
+          if (nestedNormalized) {
+            return nestedNormalized;
+          }
+        }
+      }
+      const lineParsed = AiService.tryParseItemsFromLineText(text);
+      if (lineParsed) {
+        return lineParsed;
+      }
+      return null;
+    }
+    if (typeof parsed !== 'object') {
+      return null;
+    }
+    const parsedObject = parsed as Object;
+    const fromObject = AiService.pickArrayFromObject(parsedObject);
+    if (fromObject) {
+      return fromObject;
+    }
+    const record = parsedObject as Record<string, Object>;
+    const preferredNestedKeys: string[] = ['content', 'text', 'message', 'result', 'output', 'data', 'itinerary', 'items', 'list'];
+    for (let i = 0; i < preferredNestedKeys.length; i++) {
+      const value = record[preferredNestedKeys[i]];
+      if (value === undefined || value === null) {
+        continue;
+      }
+      const nested = AiService.tryExtractItemsFromParsed(value, depth + 1);
+      if (nested) {
+        return nested;
+      }
+    }
+    const keys = Object.keys(record);
+    for (let i = 0; i < keys.length; i++) {
+      const value = record[keys[i]];
+      if (value === undefined || value === null) {
+        continue;
+      }
+      const nested = AiService.tryExtractItemsFromParsed(value, depth + 1);
+      if (nested) {
+        return nested;
+      }
+    }
+    return null;
+  }
+
+  private static tryParseArrayCandidate(raw: string): AiRawItem[] | null {
+    const parsed = AiService.tryParseJson(raw);
+    if (!parsed) {
+      return null;
+    }
+    return AiService.tryExtractItemsFromParsed(parsed, 0);
   }
 
   private static buildLooseParseCandidates(contentRaw: string, normalized: string): string[] {
@@ -186,10 +278,13 @@ export class AiService {
     };
 
     const rawNoFence = AiService.stripMarkdownFence(contentRaw);
+    const jsonLike = AiService.normalizeJsonLikeText(contentRaw);
     pushCandidate(normalized);
     pushCandidate(AiService.removeJsonTrailingCommas(normalized));
     pushCandidate(rawNoFence);
     pushCandidate(AiService.removeJsonTrailingCommas(rawNoFence));
+    pushCandidate(jsonLike);
+    pushCandidate(AiService.removeJsonTrailingCommas(jsonLike));
 
     const firstBracket = rawNoFence.indexOf('[');
     const lastBracket = rawNoFence.lastIndexOf(']');
@@ -198,8 +293,105 @@ export class AiService {
       pushCandidate(arraySlice);
       pushCandidate(AiService.removeJsonTrailingCommas(arraySlice));
     }
+    const firstBracketJsonLike = jsonLike.indexOf('[');
+    const lastBracketJsonLike = jsonLike.lastIndexOf(']');
+    if (firstBracketJsonLike >= 0 && lastBracketJsonLike > firstBracketJsonLike) {
+      const arraySliceJsonLike = jsonLike.slice(firstBracketJsonLike, lastBracketJsonLike + 1);
+      pushCandidate(arraySliceJsonLike);
+      pushCandidate(AiService.removeJsonTrailingCommas(arraySliceJsonLike));
+    }
 
     return candidates;
+  }
+
+  private static inferItemTypeFromText(raw: string): number {
+    const text = (raw || '').toLowerCase();
+    if (text.length === 0) {
+      return 0;
+    }
+    const foodKeywords: string[] = ['美食', '餐', '小吃', '吃', 'dining', 'food', 'restaurant', 'lunch', 'dinner', 'breakfast'];
+    for (let i = 0; i < AiService.ACCOMMODATION_KEYWORDS.length; i++) {
+      if (text.indexOf(AiService.ACCOMMODATION_KEYWORDS[i]) >= 0) {
+        return 2;
+      }
+    }
+    for (let i = 0; i < foodKeywords.length; i++) {
+      if (text.indexOf(foodKeywords[i]) >= 0) {
+        return 1;
+      }
+    }
+    return 0;
+  }
+
+  private static tryParseItemsFromLineText(contentRaw: string): AiRawItem[] | null {
+    const raw = AiService.stripMarkdownFence(contentRaw);
+    if (!raw) {
+      return null;
+    }
+    const lines = raw
+      .split(/\r?\n/)
+      .map((line: string) => line.trim())
+      .filter((line: string) => line.length > 0);
+    const items: AiRawItem[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      let line = lines[i].replace(/^[\-\*\d\.\)\(、\s]+/, '').trim();
+      if (line.length === 0) {
+        continue;
+      }
+      const durationMatch = line.match(/(?:duration|时长)\s*[:：=]?\s*(\d{1,4})\s*(?:分钟|min|mins|m)?/i)
+        || line.match(/(\d{1,4})\s*(?:分钟|min|mins|m)/i);
+      if (!durationMatch || !durationMatch[1]) {
+        continue;
+      }
+      const duration = Number(durationMatch[1]);
+      if (!Number.isFinite(duration) || duration <= 0) {
+        continue;
+      }
+
+      const typeMatch = line.match(/(?:type|类型)\s*[:：=]?\s*([012])/i);
+      let type = typeMatch && typeMatch[1] ? Number(typeMatch[1]) : -1;
+
+      const reasonMatch = line.match(/(?:ai_reasoning|reason|推荐理由|理由)\s*[:：]\s*(.+)$/i);
+      const reason = reasonMatch && reasonMatch[1] ? reasonMatch[1].trim() : 'AI 智能推荐';
+
+      const nameMatch = line.match(/(?:name|名称)\s*[:：]\s*["“]?([^"”,\|;；]+)["”]?/i);
+      let name = nameMatch && nameMatch[1] ? nameMatch[1].trim() : '';
+      if (!name) {
+        let candidate = line
+          .replace(/(?:name|名称)\s*[:：]\s*/ig, '')
+          .replace(/(?:duration|时长)\s*[:：=]?\s*\d{1,4}\s*(?:分钟|min|mins|m)?/ig, '')
+          .replace(/(?:type|类型)\s*[:：=]?\s*[012]/ig, '')
+          .replace(/(?:ai_reasoning|reason|推荐理由|理由)\s*[:：].*$/ig, '')
+          .replace(/[|,，;；]+/g, ' ')
+          .trim();
+        const splitByDash = candidate.split(/[-—–]/);
+        if (splitByDash.length > 0) {
+          candidate = splitByDash[0].trim();
+        }
+        name = candidate;
+      }
+      if (!name) {
+        continue;
+      }
+      if (type < 0 || type > 2) {
+        type = AiService.inferItemTypeFromText(`${name} ${line}`);
+      }
+      items.push({
+        name: name,
+        duration: duration,
+        ai_reasoning: reason,
+        type: type
+      });
+    }
+    return items.length > 0 ? items : null;
+  }
+
+  private static buildParsePreview(raw: string): string {
+    const compact = AiService.stripMarkdownFence(raw || '').replace(/\s+/g, ' ').trim();
+    if (compact.length <= 120) {
+      return compact;
+    }
+    return compact.slice(0, 120);
   }
 
   private static parseItemsFromContent(contentRaw: string): AiRawItem[] {
@@ -207,11 +399,7 @@ export class AiService {
     const strictParsed = AiService.tryParseJson(normalized);
     let items = null as AiRawItem[] | null;
     if (strictParsed) {
-      if (Array.isArray(strictParsed)) {
-        items = strictParsed as AiRawItem[];
-      } else {
-        items = AiService.pickArrayFromObject(strictParsed);
-      }
+      items = AiService.tryExtractItemsFromParsed(strictParsed, 0);
     }
 
     if (!items) {
@@ -223,7 +411,7 @@ export class AiService {
           hilog.warn(
             0x0000,
             AiService.TAG,
-            `[AI_DEBUG][parse_loose_json_success] candidate=${i}, len=${candidates[i].length}`
+            `[airest]AI_REPLAN_TRACE[ai_parse_loose_json_success] candidate=${i}, len=${candidates[i].length}`
           );
           break;
         }
@@ -231,6 +419,23 @@ export class AiService {
     }
 
     if (!items) {
+      const lineParsedItems = AiService.tryParseItemsFromLineText(contentRaw);
+      if (lineParsedItems) {
+        items = lineParsedItems;
+        hilog.warn(
+          0x0000,
+          AiService.TAG,
+          `[airest]AI_REPLAN_TRACE[ai_parse_line_fallback_success] count=${items.length}`
+        );
+      }
+    }
+
+    if (!items) {
+      hilog.error(
+        0x0000,
+        AiService.TAG,
+        `[airest]AI_REPLAN_TRACE[ai_parse_fail] rawLen=${(contentRaw || '').length}, normalizedLen=${normalized.length}, preview=${AiService.buildParsePreview(contentRaw)}`
+      );
       throw new Error('AI 返回内容不是合法 JSON');
     }
 
@@ -487,7 +692,79 @@ export class AiService {
     if (!resultObj.choices || resultObj.choices.length === 0) {
       throw new Error('AI 响应格式为空');
     }
-    return AiService.parseItemsFromContent(resultObj.choices[0].message.content);
+    const firstChoice = resultObj.choices[0];
+    const finishReason = firstChoice && typeof firstChoice.finish_reason === 'string'
+      ? firstChoice.finish_reason
+      : '';
+    const choiceRecord = firstChoice as Object as Record<string, Object>;
+    let content = '';
+    const message = choiceRecord['message'];
+    if (message && typeof message === 'object') {
+      const messageRecord = message as Record<string, Object>;
+      const messageContent = messageRecord['content'];
+      if (typeof messageContent === 'string') {
+        content = messageContent as string;
+      } else if (Array.isArray(messageContent)) {
+        const fragments: string[] = [];
+        const segments = messageContent as Object[];
+        for (let i = 0; i < segments.length; i++) {
+          const segment = segments[i];
+          if (typeof segment === 'string') {
+            fragments.push((segment as string).trim());
+            continue;
+          }
+          if (segment && typeof segment === 'object') {
+            const segmentRecord = segment as Record<string, Object>;
+            const text = segmentRecord['text'];
+            if (typeof text === 'string' && (text as string).trim().length > 0) {
+              fragments.push((text as string).trim());
+              continue;
+            }
+            const nestedText = segmentRecord['content'];
+            if (typeof nestedText === 'string' && (nestedText as string).trim().length > 0) {
+              fragments.push((nestedText as string).trim());
+            }
+          }
+        }
+        content = fragments.join('\n').trim();
+      } else if (messageContent && typeof messageContent === 'object') {
+        const contentRecord = messageContent as Record<string, Object>;
+        const text = contentRecord['text'];
+        if (typeof text === 'string') {
+          content = (text as string).trim();
+        } else {
+          content = AiService.toSafeString(messageContent).trim();
+        }
+      }
+    }
+    if (content.length === 0) {
+      const choiceText = choiceRecord['text'];
+      if (typeof choiceText === 'string') {
+        content = (choiceText as string).trim();
+      }
+    }
+    hilog.info(
+      0x0000,
+      AiService.TAG,
+      `[airest]AI_REPLAN_TRACE[ai_response_meta] finishReason=${finishReason || 'none'}, contentLen=${content.length}`
+    );
+    if (content.length === 0) {
+      throw new Error('AI 响应内容为空');
+    }
+    try {
+      return AiService.parseItemsFromContent(content);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : JSON.stringify(error);
+      hilog.error(
+        0x0000,
+        AiService.TAG,
+        `[airest]AI_REPLAN_TRACE[ai_response_parse_fail] finishReason=${finishReason || 'none'}, reason=${reason}, preview=${AiService.buildParsePreview(content)}`
+      );
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error(reason);
+    }
   }
 
   private static dedupeItemsByName(items: AiRawItem[]): AiRawItem[] {
@@ -686,6 +963,17 @@ export class AiService {
 - ${accommodationRule}`.trim();
   }
 
+  private static resolveMaxTokensForAttempt(requirement: AiGenerationRequirement, retry: number): number {
+    const dayExtra = Math.max(0, requirement.requestedDays - 3) * AiService.LONG_TRIP_TOKEN_PER_DAY;
+    const retryBonus = retry > 0 ? AiService.RETRY_TOKEN_BONUS : 0;
+    const base = retry > 0 ? AiService.RETRY_MAX_TOKENS : AiService.DEFAULT_MAX_TOKENS;
+    const budget = base + dayExtra + retryBonus;
+    return Math.min(
+      AiService.MAX_TOKENS_CEILING,
+      Math.max(AiService.DEFAULT_MAX_TOKENS, Math.floor(budget))
+    );
+  }
+
   private static async requestItineraryItems(
     systemPrompt: string,
     userPrompt: string,
@@ -820,7 +1108,7 @@ ${multiDayConstraintPrompt}
       for (let retry = 0; retry <= AiService.RETRY_TIMES; retry++) {
         let parsedItems: AiRawItem[] = [];
         const readTimeout = retry > 0 ? AiService.RETRY_READ_TIMEOUT_MS : AiService.DEFAULT_READ_TIMEOUT_MS;
-        const maxTokens = retry > 0 ? AiService.RETRY_MAX_TOKENS : AiService.DEFAULT_MAX_TOKENS;
+        const maxTokens = AiService.resolveMaxTokensForAttempt(requirement, retry);
         const attemptStartedAt = Date.now();
         hilog.info(
           0x0000,
