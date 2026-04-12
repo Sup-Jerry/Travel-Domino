@@ -28,6 +28,8 @@ import weatherPolicyResolverTest from './WeatherPolicyResolver.test';
 import weatherStrategyLinkageTest from './WeatherStrategyLinkage.test';
 import timelineWeatherLinkageIntegrationTest from './TimelineWeatherLinkageIntegration.test';
 import authServiceTest from './AuthService.test';
+import authApiClientTest from './AuthApiClient.test';
+import authGatewayTest from './AuthGateway.test';
 import authFacadeSessionManagerTest from './AuthFacadeSessionManager.test';
 import huaweiAccountProviderTest from './HuaweiAccountProvider.test';
 import avatarServiceTest from './AvatarService.test';
@@ -190,6 +192,8 @@ const registeredSuiteNames: string[] = [
   'WeatherStrategyLinkage',
   'TimelineWeatherLinkageIntegration',
   'AuthService',
+  'AuthApiClient',
+  'AuthGateway',
   'AuthFacadeSessionManager',
   'HuaweiAccountProvider',
   'AvatarService',
@@ -374,6 +378,8 @@ export default function testsuite() {
   weatherStrategyLinkageTest();
   timelineWeatherLinkageIntegrationTest();
   authServiceTest();
+  authApiClientTest();
+  authGatewayTest();
   authFacadeSessionManagerTest();
   huaweiAccountProviderTest();
   avatarServiceTest();
