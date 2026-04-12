@@ -5,6 +5,14 @@ import { promptAction } from '@kit.ArkUI';
 import { AuthFacade } from '../infrastructure/auth/AuthFacade';
 import { ProfileViewModel } from '../viewmodel/ProfileViewModel';
 
+export function resolveLogoutToastMessage(success: boolean): string {
+  return success ? '已退出登录' : '退出登录失败';
+}
+
+export function resolveLogoutRedirectUrl(): string {
+  return 'pages/LoginPage';
+}
+
 @Entry
 @Component
 struct SettingsAccountSecurityPage {
@@ -21,10 +29,10 @@ struct SettingsAccountSecurityPage {
       this.authFacade.bindContext(hostContext);
       await this.authFacade.logout();
       ProfileViewModel.getInstance().reset();
-      promptAction.openToast({ message: '已退出登录' });
-      await this.getUIContext().getRouter().replaceUrl({ url: 'pages/LoginPage' });
-    } catch (error) {
-      promptAction.openToast({ message: '退出登录失败' });
+      promptAction.openToast({ message: resolveLogoutToastMessage(true) });
+      await this.getUIContext().getRouter().replaceUrl({ url: resolveLogoutRedirectUrl() });
+    } catch (_error) {
+      promptAction.openToast({ message: resolveLogoutToastMessage(false) });
     }
   }
 

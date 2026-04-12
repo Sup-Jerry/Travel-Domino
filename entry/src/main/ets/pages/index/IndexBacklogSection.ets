@@ -1,6 +1,10 @@
 import { BacklogView } from '../components/views/BacklogView';
 import { TravelPlanItem } from '../../model/interface/IStandardEvent';
 
+export function resolveIndexBacklogSectionMaxHeight(): string {
+  return '30%';
+}
+
 @Component
 export struct IndexBacklogSection {
   @Prop items: TravelPlanItem[] = [];
@@ -20,7 +24,7 @@ export struct IndexBacklogSection {
         onMoveToSchedule: (item: TravelPlanItem) => this.onMoveToSchedule(item),
         onMoveAllToSchedule: () => this.onMoveAllToSchedule()
       })
-        .constraintSize({ maxHeight: '30%' })
+        .constraintSize({ maxHeight: resolveIndexBacklogSectionMaxHeight() })
         .zIndex(1);
 
       Divider().color(this.dividerColor);

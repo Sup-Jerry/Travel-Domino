@@ -4,6 +4,10 @@ import { IndexBacklogView } from './IndexBacklogView';
 import { IndexToolbar, IndexToolbarTheme } from './IndexToolbar';
 import { IndexWeatherHintBar, IndexWeatherHintTheme } from './IndexWeatherHintBar';
 
+export function shouldShowIndexTopAreaWeatherHintBar(weatherHintVisible: boolean): boolean {
+  return weatherHintVisible;
+}
+
 @Component
 export struct IndexTopArea {
   @Prop planTitle: string = '';
@@ -65,7 +69,7 @@ export struct IndexTopArea {
       })
 
       IndexWeatherHintBar({
-        visible: this.weatherHintVisible,
+        visible: shouldShowIndexTopAreaWeatherHintBar(this.weatherHintVisible),
         suggestionText: this.weatherSuggestionText,
         routeScore: this.weatherRouteScore,
         hintPopupVisible: this.hintPopupVisible,

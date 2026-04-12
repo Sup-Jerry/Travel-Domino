@@ -7,6 +7,18 @@ import { IndexCompanionOverlay } from './IndexCompanionOverlay';
 import { IndexScheduleArea } from './IndexScheduleArea';
 import { IndexTopArea } from './IndexTopArea';
 
+export function shouldShowIndexPageWeatherHint(
+  weatherFeatureEnabled: boolean,
+  hasManualPlanningWeatherRefresh: boolean,
+  weatherPlanningHint: string
+): boolean {
+  return weatherFeatureEnabled && hasManualPlanningWeatherRefresh && !!weatherPlanningHint;
+}
+
+export function resolveIndexPageGapsCount(gapsCount: number): number {
+  return gapsCount;
+}
+
 @Component
 export struct IndexPageLayout {
   @Prop vm: TimelineViewModel = new TimelineViewModel();
@@ -73,7 +85,11 @@ export struct IndexPageLayout {
   onSave: () => void = () => {};
 
   private isWeatherHintVisible(): boolean {
-    return this.vm.isWeatherFeatureEnabled() && this.hasManualPlanningWeatherRefresh && !!this.vm.weatherPlanningHint;
+    return shouldShowIndexPageWeatherHint(
+      this.vm.isWeatherFeatureEnabled(),
+      this.hasManualPlanningWeatherRefresh,
+      this.vm.weatherPlanningHint
+    );
   }
 
   private buildWeatherSuggestionText(): string {
@@ -146,7 +162,7 @@ export struct IndexPageLayout {
           isCompanionMode: this.isCompanionMode,
           showWeather: this.vm.isWeatherFeatureEnabled(),
           isPageRefreshing: this.isPageRefreshing,
-          gapsCount: this.vm.getSortedGaps().length,
+          gapsCount: resolveIndexPageGapsCount(this.vm.getSortedGaps().length),
           hasUnsavedChanges: this.hasUnsavedChanges,
           timelineTheme: {
             pageBg: this.themePalette.pageBg,

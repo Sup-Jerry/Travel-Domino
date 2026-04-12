@@ -107,6 +107,25 @@ import aiReplanPreviewDialogHelperTest from './AiReplanPreviewDialogHelper.test'
 import createPlanDialogHelperTest from './CreatePlanDialogHelper.test';
 import gapResolutionDialogHelperTest from './GapResolutionDialogHelper.test';
 import huaweiAccountLoginButtonHelperTest from './HuaweiAccountLoginButtonHelper.test';
+import indexToolbarHelperTest from './IndexToolbarHelper.test';
+import indexWeatherHintBarHelperTest from './IndexWeatherHintBarHelper.test';
+import indexUnsavedActionBarHelperTest from './IndexUnsavedActionBarHelper.test';
+import indexTimelineViewHelperTest from './IndexTimelineViewHelper.test';
+import indexBacklogSectionHelperTest from './IndexBacklogSectionHelper.test';
+import indexBacklogViewHelperTest from './IndexBacklogViewHelper.test';
+import indexBottomBarHelperTest from './IndexBottomBarHelper.test';
+import indexTopAreaHelperTest from './IndexTopAreaHelper.test';
+import indexCompanionOverlayHelperTest from './IndexCompanionOverlayHelper.test';
+import indexScheduleAreaHelperTest from './IndexScheduleAreaHelper.test';
+import indexPageLayoutHelperTest from './IndexPageLayoutHelper.test';
+import appTextsConstantsTest from './AppTextsConstants.test';
+import domainConstantsTest from './DomainConstants.test';
+import storageKeysTest from './StorageKeys.test';
+import entryBackupAbilityTest from './EntryBackupAbility.test';
+import settingsAdvancedPageHelperTest from './SettingsAdvancedPageHelper.test';
+import settingsNotificationPageHelperTest from './SettingsNotificationPageHelper.test';
+import settingsPrivacyPageHelperTest from './SettingsPrivacyPageHelper.test';
+import settingsAccountSecurityPageHelperTest from './SettingsAccountSecurityPageHelper.test';
 
 const registeredSuiteNames: string[] = [
   'LocalUnit',
@@ -216,7 +235,26 @@ const registeredSuiteNames: string[] = [
   'AiReplanPreviewDialogHelper',
   'CreatePlanDialogHelper',
   'GapResolutionDialogHelper',
-  'HuaweiAccountLoginButtonHelper'
+  'HuaweiAccountLoginButtonHelper',
+  'IndexToolbarHelper',
+  'IndexWeatherHintBarHelper',
+  'IndexUnsavedActionBarHelper',
+  'IndexTimelineViewHelper',
+  'IndexBacklogSectionHelper',
+  'IndexBacklogViewHelper',
+  'IndexBottomBarHelper',
+  'IndexTopAreaHelper',
+  'IndexCompanionOverlayHelper',
+  'IndexScheduleAreaHelper',
+  'IndexPageLayoutHelper',
+  'AppTextsConstants',
+  'DomainConstants',
+  'StorageKeys',
+  'EntryBackupAbility',
+  'SettingsAdvancedPageHelper',
+  'SettingsNotificationPageHelper',
+  'SettingsPrivacyPageHelper',
+  'SettingsAccountSecurityPageHelper'
 ];
 
 function containsSuite(name: string): boolean {
@@ -349,6 +387,25 @@ export default function testsuite() {
   createPlanDialogHelperTest();
   gapResolutionDialogHelperTest();
   huaweiAccountLoginButtonHelperTest();
+  indexToolbarHelperTest();
+  indexWeatherHintBarHelperTest();
+  indexUnsavedActionBarHelperTest();
+  indexTimelineViewHelperTest();
+  indexBacklogSectionHelperTest();
+  indexBacklogViewHelperTest();
+  indexBottomBarHelperTest();
+  indexTopAreaHelperTest();
+  indexCompanionOverlayHelperTest();
+  indexScheduleAreaHelperTest();
+  indexPageLayoutHelperTest();
+  appTextsConstantsTest();
+  domainConstantsTest();
+  storageKeysTest();
+  entryBackupAbilityTest();
+  settingsAdvancedPageHelperTest();
+  settingsNotificationPageHelperTest();
+  settingsPrivacyPageHelperTest();
+  settingsAccountSecurityPageHelperTest();
 
   describe('listTest', () => {
     it('normal: list_should_keep_core_test_modules_registered', 0, () => {

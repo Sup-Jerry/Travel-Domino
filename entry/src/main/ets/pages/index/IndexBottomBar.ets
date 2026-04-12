@@ -1,5 +1,13 @@
 import { PlanBottomActionBar } from '../components/views/BottomNavBar';
 
+export function shouldEnableIndexBottomBarAi(aiEnabled: boolean): boolean {
+  return aiEnabled;
+}
+
+export function shouldEnableIndexBottomBarAdd(addEnabled: boolean): boolean {
+  return addEnabled;
+}
+
 @Component
 export struct IndexBottomBar {
   @Prop aiEnabled: boolean = true;
@@ -13,8 +21,8 @@ export struct IndexBottomBar {
       onFilter: () => this.onFilter(),
       onAi: () => this.onAi(),
       onAdd: () => this.onAdd(),
-      aiEnabled: this.aiEnabled,
-      addEnabled: this.addEnabled
+      aiEnabled: shouldEnableIndexBottomBarAi(this.aiEnabled),
+      addEnabled: shouldEnableIndexBottomBarAdd(this.addEnabled)
     });
   }
 }

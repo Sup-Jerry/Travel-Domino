@@ -11,6 +11,30 @@ export interface IndexTimelineTheme {
   warning: string;
 }
 
+export function resolveIndexTimelineVisiblePlaceCount(placeCount: number): number {
+  return Math.max(0, placeCount);
+}
+
+export function buildIndexTimelineHeaderText(text: string, placeCount: number): string {
+  return `${text} 共${resolveIndexTimelineVisiblePlaceCount(placeCount)}个地点`;
+}
+
+export function shouldShowIndexTimelineGroupItems(isCollapsed: boolean): boolean {
+  return !isCollapsed;
+}
+
+export function shouldEnableIndexTimelineItem(isArchived: boolean): boolean {
+  return !isArchived;
+}
+
+export function shouldShowIndexTimelineGapHint(isArchived: boolean, gapsCount: number): boolean {
+  return !isArchived && gapsCount > 0;
+}
+
+export function resolveIndexTimelineBottomSpacerHeight(isCompanionMode: boolean): number {
+  return isCompanionMode ? 24 : 100;
+}
+
 @Component
 export struct IndexTimelineView {
   @Prop groupedEvents: DateGroup[] = [];
@@ -59,7 +83,7 @@ export struct IndexTimelineView {
         .margin({ right: 8 })
         .borderRadius(2);
 
-      Text(`${text} 共${Math.max(0, placeCount)}个地点`)
+      Text(buildIndexTimelineHeaderText(text, placeCount))
         .fontSize(16)
         .fontColor(this.theme.textPrimary)
         .fontWeight(FontWeight.Bold);
@@ -105,7 +129,7 @@ export struct IndexTimelineView {
       List({ space: 0 }) {
         ForEach(this.groupedEvents, (group: DateGroup) => {
           ListItemGroup({ header: this.buildDateHeader(group.dateHeader, group.dayOffset, group.events.length) }) {
-            if (!this.onIsDayCollapsed(group.dayOffset)) {
+            if (shouldShowIndexTimelineGroupItems(this.onIsDayCollapsed(group.dayOffset))) {
               ForEach(group.events, (item: EventEntity, dayIndex: number) => {
                 ListItem() {
                   EventItemView({
@@ -126,9 +150,9 @@ export struct IndexTimelineView {
                       this.onConflictAction(targetItem, strategy, gapMinutes);
                     }
                   })
-                    .enabled(!this.isArchived);
+                    .enabled(shouldEnableIndexTimelineItem(this.isArchived));
                 }
-                .swipeAction(this.isArchived ? undefined : {
+                .swipeAction(!shouldEnableIndexTimelineItem(this.isArchived) ? undefined : {
                   start: {
                     builder: () => {
                       this.swipeStartAction(item);
@@ -148,7 +172,7 @@ export struct IndexTimelineView {
           .divider({ strokeWidth: 0 });
         }, (group: DateGroup) => `${group.dayOffset}_${group.actualDateMs}_${group.events.length}`);
 
-        if (!this.isArchived && this.gapsCount > 0) {
+        if (shouldShowIndexTimelineGapHint(this.isArchived, this.gapsCount)) {
           ListItem() {
             Row() {
               Text('→')
@@ -167,7 +191,7 @@ export struct IndexTimelineView {
           }
         }
 
-        ListItem().height(this.isCompanionMode ? 24 : 100);
+        ListItem().height(resolveIndexTimelineBottomSpacerHeight(this.isCompanionMode));
       }
       .sticky(StickyStyle.Header);
     }

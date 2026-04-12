@@ -1,6 +1,14 @@
 import { TimelineViewModel } from '../../viewmodel/TimelineViewModel';
 import { CompanionView } from '../components/views/CompanionView';
 
+export function shouldShowIndexCompanionOverlay(isVisible: boolean): boolean {
+  return isVisible;
+}
+
+export function resolveIndexCompanionOverlayZIndex(overlayZIndex: number): number {
+  return overlayZIndex;
+}
+
 @Component
 export struct IndexCompanionOverlay {
   @Prop vm: TimelineViewModel = new TimelineViewModel();
@@ -9,12 +17,12 @@ export struct IndexCompanionOverlay {
 
   build() {
     Stack() {
-      if (this.isVisible) {
+      if (shouldShowIndexCompanionOverlay(this.isVisible)) {
         CompanionView({
           vm: this.vm,
           isShow: $isVisible
         })
-          .zIndex(this.overlayZIndex)
+          .zIndex(resolveIndexCompanionOverlayZIndex(this.overlayZIndex))
           .transition({
             type: TransitionType.All,
             opacity: 0,

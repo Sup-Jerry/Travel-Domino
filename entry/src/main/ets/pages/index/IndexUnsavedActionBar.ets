@@ -6,6 +6,10 @@ export interface IndexUnsavedActionTheme {
   cardBg: string;
 }
 
+export function shouldShowIndexUnsavedActionBar(isVisible: boolean): boolean {
+  return isVisible;
+}
+
 @Component
 export struct IndexUnsavedActionBar {
   @Prop isVisible: boolean = false;
@@ -22,7 +26,7 @@ export struct IndexUnsavedActionBar {
   onSave: () => void = () => {};
 
   build() {
-    if (this.isVisible) {
+    if (shouldShowIndexUnsavedActionBar(this.isVisible)) {
       Row() {
         Row() {
           Text('✨').fontSize(16).margin({ right: 6 });

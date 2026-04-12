@@ -3,6 +3,10 @@ import { PreferenceManager } from '../common/utils/PreferenceManager';
 import { ThemeCenter } from '../common/utils/ThemeCenter';
 import { SettingsSubPageHeader, SettingSwitchItem } from './components/views/SettingsItems';
 
+export function resolveAmapRouteApiToggleToast(enabled: boolean): string {
+  return enabled ? '已开启高德路线 API' : '已关闭高德路线 API';
+}
+
 @Entry
 @Component
 struct SettingsPrivacyPage {
@@ -42,7 +46,7 @@ struct SettingsPrivacyPage {
       const pref = PreferenceManager.getInstance();
       await pref.setAmapRouteApiEnabled(value);
       this.enableAmapRouteApi = await pref.isAmapRouteApiEnabled();
-      this.safeShowToast(this.enableAmapRouteApi ? '已开启高德路线 API' : '已关闭高德路线 API');
+      this.safeShowToast(resolveAmapRouteApiToggleToast(this.enableAmapRouteApi));
     } catch (_error) {
       this.enableAmapRouteApi = oldValue;
       this.safeShowToast('高德路线 API 设置失败');

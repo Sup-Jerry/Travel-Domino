@@ -3,6 +3,22 @@ import { PreferenceManager } from '../common/utils/PreferenceManager';
 import { ThemeCenter } from '../common/utils/ThemeCenter';
 import { SettingsSubPageHeader, SettingSwitchItem } from './components/views/SettingsItems';
 
+export function resolveTipVisibleFromHideFlag(hideTip: boolean): boolean {
+  return hideTip !== true;
+}
+
+export function resolveHideTipFromVisibleFlag(showTip: boolean): boolean {
+  return showTip !== true;
+}
+
+export function resolveArchiveTipToggleToast(showTip: boolean): string {
+  return showTip ? '已开启归档提示弹窗' : '已关闭归档提示弹窗';
+}
+
+export function resolveDeleteTipToggleToast(showTip: boolean): string {
+  return showTip ? '已开启删除提示弹窗' : '已关闭删除提示弹窗';
+}
+
 @Entry
 @Component
 struct SettingsNotificationPage {
@@ -32,8 +48,8 @@ struct SettingsNotificationPage {
       const pref = PreferenceManager.getInstance();
       const hideArchiveTip = await pref.getValue(PreferenceManager.KEY_HIDE_ARCHIVE_TIP, false);
       const hideDeleteTip = await pref.getValue(PreferenceManager.KEY_HIDE_SOFT_DELETE_TIP, false);
-      this.showArchiveTip = hideArchiveTip !== true;
-      this.showDeleteTip = hideDeleteTip !== true;
+      this.showArchiveTip = resolveTipVisibleFromHideFlag(hideArchiveTip === true);
+      this.showDeleteTip = resolveTipVisibleFromHideFlag(hideDeleteTip === true);
     } finally {
       this.loading = false;
     }
@@ -44,9 +60,9 @@ struct SettingsNotificationPage {
     this.showArchiveTip = value;
     try {
       const pref = PreferenceManager.getInstance();
-      await pref.setValue(PreferenceManager.KEY_HIDE_ARCHIVE_TIP, !value);
+      await pref.setValue(PreferenceManager.KEY_HIDE_ARCHIVE_TIP, resolveHideTipFromVisibleFlag(value));
       await this.reload();
-      this.safeShowToast(this.showArchiveTip ? '已开启归档提示弹窗' : '已关闭归档提示弹窗');
+      this.safeShowToast(resolveArchiveTipToggleToast(this.showArchiveTip));
     } catch (_error) {
       this.showArchiveTip = old;
       this.safeShowToast('归档提示弹窗设置失败');
@@ -58,9 +74,9 @@ struct SettingsNotificationPage {
     this.showDeleteTip = value;
     try {
       const pref = PreferenceManager.getInstance();
-      await pref.setValue(PreferenceManager.KEY_HIDE_SOFT_DELETE_TIP, !value);
+      await pref.setValue(PreferenceManager.KEY_HIDE_SOFT_DELETE_TIP, resolveHideTipFromVisibleFlag(value));
       await this.reload();
-      this.safeShowToast(this.showDeleteTip ? '已开启删除提示弹窗' : '已关闭删除提示弹窗');
+      this.safeShowToast(resolveDeleteTipToggleToast(this.showDeleteTip));
     } catch (_error) {
       this.showDeleteTip = old;
       this.safeShowToast('删除提示弹窗设置失败');

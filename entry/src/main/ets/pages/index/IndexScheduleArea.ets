@@ -5,6 +5,22 @@ import { IndexBottomBar } from './IndexBottomBar';
 import { IndexTimelineTheme, IndexTimelineView } from './IndexTimelineView';
 import { IndexUnsavedActionBar, IndexUnsavedActionTheme } from './IndexUnsavedActionBar';
 
+export function shouldShowIndexScheduleBottomBar(isCompanionMode: boolean): boolean {
+  return !isCompanionMode;
+}
+
+export function resolveIndexScheduleBottomBarAiEnabled(isArchived: boolean): boolean {
+  return !isArchived;
+}
+
+export function resolveIndexScheduleBottomBarAddEnabled(isArchived: boolean): boolean {
+  return !isArchived;
+}
+
+export function resolveIndexScheduleUnsavedMarginBottom(isCompanionMode: boolean): number {
+  return isCompanionMode ? 30 : 96;
+}
+
 @Component
 export struct IndexScheduleArea {
   @Prop vm: TimelineViewModel = new TimelineViewModel();
@@ -108,20 +124,20 @@ export struct IndexScheduleArea {
       .height('100%')
       .backgroundColor(this.timelineTheme.pageBg)
 
-      if (!this.isCompanionMode) {
+      if (shouldShowIndexScheduleBottomBar(this.isCompanionMode)) {
         IndexBottomBar({
           onFilter: () => this.onFilter(),
           onAi: () => this.onAi(),
           onAdd: () => this.onAdd(),
-          aiEnabled: !this.isArchived,
-          addEnabled: !this.isArchived
+          aiEnabled: resolveIndexScheduleBottomBarAiEnabled(this.isArchived),
+          addEnabled: resolveIndexScheduleBottomBarAddEnabled(this.isArchived)
         })
           .zIndex(8)
       }
 
       IndexUnsavedActionBar({
         isVisible: this.hasUnsavedChanges,
-        marginBottom: this.isCompanionMode ? 30 : 96,
+        marginBottom: resolveIndexScheduleUnsavedMarginBottom(this.isCompanionMode),
         theme: this.unsavedTheme,
         onUndo: () => this.onUndo(),
         onSave: () => this.onSave()

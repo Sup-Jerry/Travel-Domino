@@ -4,6 +4,22 @@ export interface IndexWeatherHintTheme {
   cardBgSoft: string;
 }
 
+export function resolveIndexWeatherHintLine(lines: string[], index: number): string {
+  return lines[index] ?? '';
+}
+
+export function resolveIndexWeatherScoreLine(lines: string[], index: number): string {
+  return lines[index] ?? '';
+}
+
+export function shouldShowIndexWeatherHintBar(visible: boolean): boolean {
+  return visible;
+}
+
+export function shouldShowIndexWeatherRouteScore(routeScore: number): boolean {
+  return routeScore >= 0;
+}
+
 @Component
 export struct IndexWeatherHintBar {
   @Prop visible: boolean = false;
@@ -25,11 +41,11 @@ export struct IndexWeatherHintBar {
   onScorePopupVisibleChange: (visible: boolean) => void = (_visible: boolean) => {};
 
   private resolveHintLine(index: number): string {
-    return this.hintLines[index] ?? '';
+    return resolveIndexWeatherHintLine(this.hintLines, index);
   }
 
   private resolveScoreLine(index: number): string {
-    return this.scoreLines[index] ?? '';
+    return resolveIndexWeatherScoreLine(this.scoreLines, index);
   }
 
   @Builder
@@ -112,7 +128,7 @@ export struct IndexWeatherHintBar {
   }
 
   build() {
-    if (this.visible) {
+    if (shouldShowIndexWeatherHintBar(this.visible)) {
       Row() {
         Text(this.suggestionText)
           .fontSize(13)
@@ -140,7 +156,7 @@ export struct IndexWeatherHintBar {
           .backgroundColor('#2E7D32')
           .borderRadius(1);
 
-        if (this.routeScore >= 0) {
+        if (shouldShowIndexWeatherRouteScore(this.routeScore)) {
           Column() {
             Text('评分 ⓘ')
               .fontSize(12)

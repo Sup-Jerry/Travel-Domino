@@ -5,6 +5,22 @@ export interface IndexToolbarTheme {
   textPrimary: string;
 }
 
+export function resolveIndexToolbarDisplayTitle(planTitle: string, maxLength: number = 7): string {
+  return planTitle.length > maxLength ? `${planTitle.substring(0, maxLength)}...` : planTitle;
+}
+
+export function shouldShowIndexToolbarModeTag(strategyMode: number): boolean {
+  return strategyMode !== 0;
+}
+
+export function shouldShowIndexToolbarModeExplanation(strategyMode: number, currentStrategyExplanation: string): boolean {
+  return strategyMode !== 0 && !!currentStrategyExplanation;
+}
+
+export function shouldShowIndexToolbarWeatherAction(isCompanionMode: boolean, weatherFeatureEnabled: boolean): boolean {
+  return !isCompanionMode && weatherFeatureEnabled;
+}
+
 @Component
 export struct IndexToolbar {
   @Prop planTitle: string = '行程详情';
@@ -65,21 +81,21 @@ export struct IndexToolbar {
       .onClick(() => this.onBack())
 
       Column() {
-        Text(this.planTitle.length > 7 ? `${this.planTitle.substring(0, 7)}...` : this.planTitle)
+        Text(resolveIndexToolbarDisplayTitle(this.planTitle))
           .fontSize(18)
           .fontWeight(FontWeight.Bold)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .textAlign(TextAlign.Center)
 
-        if (this.strategyMode !== 0) {
+        if (shouldShowIndexToolbarModeTag(this.strategyMode)) {
           Text(this.getModeLabel())
             .fontSize(11)
             .fontColor(this.getModeColor())
             .margin({ top: 2 })
         }
 
-        if (this.strategyMode !== 0 && this.currentStrategyExplanation) {
+        if (shouldShowIndexToolbarModeExplanation(this.strategyMode, this.currentStrategyExplanation)) {
           Text(this.currentStrategyExplanation)
             .fontSize(10)
             .fontColor(this.getModeColor())
@@ -109,7 +125,7 @@ export struct IndexToolbar {
       .margin({ right: 4 })
       .onClick(() => this.onEnterCompanion())
 
-      if (!this.isCompanionMode && this.weatherFeatureEnabled) {
+      if (shouldShowIndexToolbarWeatherAction(this.isCompanionMode, this.weatherFeatureEnabled)) {
         Button(this.weatherLoading ? '⏳' : '🌤️')
           .height(30)
           .fontSize(16)

@@ -2,6 +2,10 @@ import { EventEntity } from '../../model/entity/EventEntity';
 import { TravelPlanItem } from '../../model/interface/IStandardEvent';
 import { IndexBacklogSection } from './IndexBacklogSection';
 
+export function shouldIncludeIndexBacklogEvent(status: number): boolean {
+  return status !== 1;
+}
+
 @Component
 export struct IndexBacklogView {
   @Prop events: EventEntity[] = [];
@@ -14,7 +18,7 @@ export struct IndexBacklogView {
 
   private resolveBacklogItems(): TravelPlanItem[] {
     return this.events
-      .filter((event: EventEntity) => event.status !== 1)
+      .filter((event: EventEntity) => shouldIncludeIndexBacklogEvent(event.status))
       .map((event: EventEntity) => event.toInterface());
   }
 
