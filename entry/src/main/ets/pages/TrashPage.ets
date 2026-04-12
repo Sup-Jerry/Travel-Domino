@@ -4,6 +4,38 @@ import { ThemeCenter } from '../common/utils/ThemeCenter';
 import { DateUtil } from '../common/utils/DateUtil';
 import { PlanAppService } from '../viewmodel/PlanAppService';
 
+const TRASH_AUTO_PURGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+export function resolveTrashAutoPurgeDiffMs(
+  deleteTime: number | undefined,
+  now: number,
+  retentionMs: number = TRASH_AUTO_PURGE_MS
+): number {
+  if (!deleteTime) {
+    return -1;
+  }
+  return deleteTime + retentionMs - now;
+}
+
+export function resolveTrashRemainingTimeText(
+  deleteTime: number | undefined,
+  now: number,
+  retentionMs: number = TRASH_AUTO_PURGE_MS
+): string {
+  const diff = resolveTrashAutoPurgeDiffMs(deleteTime, now, retentionMs);
+  if (diff <= 0) {
+    return '即将清除';
+  }
+
+  const days = Math.floor(diff / (24 * 3600 * 1000));
+  const hours = Math.floor((diff % (24 * 3600 * 1000)) / (3600 * 1000));
+
+  if (days > 0) {
+    return `${days}天 ${hours}小时 后自动清除`;
+  }
+  return `${hours}小时 后自动清除`;
+}
+
 @Entry
 @Component
 struct TrashPage {
@@ -24,23 +56,7 @@ struct TrashPage {
   }
 
   private getRemainingTimeText(deleteTime: number | undefined): string {
-    if (!deleteTime) return '即将清除';
-
-    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-    const expireTime = deleteTime + sevenDaysMs;
-    const now = new Date().getTime();
-    const diff = expireTime - now;
-
-    if (diff <= 0) return '即将清除';
-
-    const days = Math.floor(diff / (24 * 3600 * 1000));
-    const hours = Math.floor((diff % (24 * 3600 * 1000)) / (3600 * 1000));
-
-    if (days > 0) {
-      return `${days}天 ${hours}小时 后自动清除`;
-    } else {
-      return `${hours}小时 后自动清除`;
-    }
+    return resolveTrashRemainingTimeText(deleteTime, Date.now());
   }
 
   handleHardDelete(item: PlanItem) {

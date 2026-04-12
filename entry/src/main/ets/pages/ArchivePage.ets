@@ -8,6 +8,22 @@ import { DateUtil } from '../common/utils/DateUtil';
 import { PlanAppService } from '../viewmodel/PlanAppService';
 import { AppTexts } from '../common/constants/AppTexts';
 
+export function shouldArchiveSkipSoftDeleteTip(isSkip: boolean): boolean {
+  return isSkip;
+}
+
+export function resolveArchiveSoftDeleteDialogTitle(): string {
+  return '移入回收站';
+}
+
+export function resolveArchiveSoftDeleteDialogMessage(): string {
+  return AppTexts.SOFT_DELETE_RECYCLE_TIP;
+}
+
+export function resolveArchiveTagText(): string {
+  return ' 已归档 ';
+}
+
 @Entry
 @Component
 struct ArchivePage {
@@ -34,13 +50,13 @@ struct ArchivePage {
       PreferenceManager.KEY_HIDE_SOFT_DELETE_TIP,
       false
     );
-    if (isSkip) {
+    if (shouldArchiveSkipSoftDeleteTip(isSkip === true)) {
       this.executeSoftDelete(item.id);
     } else {
       this.tipDialogController = new CustomDialogController({
         builder: TipDialog({
-          title: '移入回收站',
-          message: AppTexts.SOFT_DELETE_RECYCLE_TIP,
+          title: resolveArchiveSoftDeleteDialogTitle(),
+          message: resolveArchiveSoftDeleteDialogMessage(),
           storageKey: PreferenceManager.KEY_HIDE_SOFT_DELETE_TIP,
           onConfirm: (): Promise<void> => this.executeSoftDelete(item.id)
         }),
@@ -113,7 +129,7 @@ struct ArchivePage {
                       .textOverflow({ overflow: TextOverflow.Ellipsis })
                       .layoutWeight(1);
 
-                    Text(' 已归档 ')
+                    Text(resolveArchiveTagText())
                       .fontSize(10)
                       .fontColor('#FFF')
                       .backgroundColor('#B0B0B0')
