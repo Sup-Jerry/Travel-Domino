@@ -1,6 +1,10 @@
 ﻿import pasteboard from '@ohos.pasteboard';
 import { promptAction } from '@kit.ArkUI';
 
+export function canCopyPlanJsonText(jsonText: string): boolean {
+  return jsonText.length > 0;
+}
+
 @CustomDialog
 export struct PlanJsonExportDialog {
   controller: CustomDialogController;
@@ -14,7 +18,7 @@ export struct PlanJsonExportDialog {
   }
 
   private async copyJson(): Promise<void> {
-    if (!this.jsonText || this.jsonText.length <= 0) {
+    if (!canCopyPlanJsonText(this.jsonText)) {
       this.safeShowToast('没有可复制的内容');
       return;
     }
@@ -73,6 +77,8 @@ export struct PlanJsonExportDialog {
     .width('92%')
   }
 }
+
+
 
 
 

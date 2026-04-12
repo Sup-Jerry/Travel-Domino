@@ -92,6 +92,16 @@ import eventItemViewHelperTest from './EventItemViewHelper.test';
 import companionViewHelperTest from './CompanionViewHelper.test';
 import conflictSelectionDialogHelperTest from './ConflictSelectionDialogHelper.test';
 import suggestionDialogHelperTest from './SuggestionDialogHelper.test';
+import dateConflictDialogHelperTest from './DateConflictDialogHelper.test';
+import conflictCompressDialogHelperTest from './ConflictCompressDialogHelper.test';
+import recordCorrectionDialogHelperTest from './RecordCorrectionDialogHelper.test';
+import addItemDialogHelperTest from './AddItemDialogHelper.test';
+import aiInputDialogHelperTest from './AiInputDialogHelper.test';
+import planSettingsDialogHelperTest from './PlanSettingsDialogHelper.test';
+import planImportDialogHelperTest from './PlanImportDialogHelper.test';
+import planJsonImportDialogHelperTest from './PlanJsonImportDialogHelper.test';
+import planJsonExportDialogHelperTest from './PlanJsonExportDialogHelper.test';
+import planShareDialogHelperTest from './PlanShareDialogHelper.test';
 
 const registeredSuiteNames: string[] = [
   'LocalUnit',
@@ -186,7 +196,17 @@ const registeredSuiteNames: string[] = [
   'EventItemViewHelper',
   'CompanionViewHelper',
   'ConflictSelectionDialogHelper',
-  'SuggestionDialogHelper'
+  'SuggestionDialogHelper',
+  'DateConflictDialogHelper',
+  'ConflictCompressDialogHelper',
+  'RecordCorrectionDialogHelper',
+  'AddItemDialogHelper',
+  'AiInputDialogHelper',
+  'PlanSettingsDialogHelper',
+  'PlanImportDialogHelper',
+  'PlanJsonImportDialogHelper',
+  'PlanJsonExportDialogHelper',
+  'PlanShareDialogHelper'
 ];
 
 function containsSuite(name: string): boolean {
@@ -304,6 +324,16 @@ export default function testsuite() {
   companionViewHelperTest();
   conflictSelectionDialogHelperTest();
   suggestionDialogHelperTest();
+  dateConflictDialogHelperTest();
+  conflictCompressDialogHelperTest();
+  recordCorrectionDialogHelperTest();
+  addItemDialogHelperTest();
+  aiInputDialogHelperTest();
+  planSettingsDialogHelperTest();
+  planImportDialogHelperTest();
+  planJsonImportDialogHelperTest();
+  planJsonExportDialogHelperTest();
+  planShareDialogHelperTest();
 
   describe('listTest', () => {
     it('normal: list_should_keep_core_test_modules_registered', 0, () => {

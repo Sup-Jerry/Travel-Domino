@@ -5,6 +5,35 @@ import { ComposableStrategy, DensityLevel, PaceLevel, PreferenceType, EnergyLeve
 import { StrategyService } from '../../../domain/strategy/StrategyService';
 import { UserProfileService } from '../../../domain/strategy/UserProfileService';
 
+export function normalizeAiStrategyMode(mode: number): -1 | 0 | 1 | 2 {
+  if (mode === -1 || mode === 0 || mode === 1 || mode === 2) {
+    return mode;
+  }
+  return 0;
+}
+
+export function shouldUseAiInitialPrompt(initialPrompt: string): boolean {
+  return initialPrompt.trim().length > 0;
+}
+
+export function getAiLoadingTextByStrategy(strategy: number): string {
+  if (strategy === 1) {
+    return '正在生成行程（预计30-60秒）';
+  }
+  if (strategy === 2) {
+    return '正在生成行程（预计20-40秒）';
+  }
+  return '正在生成行程（预计30-50秒）';
+}
+
+export function shouldKeepCurrentModeOnRegenerate(
+  currentStrategyMode: number,
+  strategyTouched: boolean,
+  useCustomStrategy: boolean
+): boolean {
+  return currentStrategyMode === -1 && !strategyTouched && !useCustomStrategy;
+}
+
 @CustomDialog
 export struct AiInputDialog {
   controller: CustomDialogController
@@ -38,8 +67,10 @@ export struct AiInputDialog {
 
   aboutToAppear() {
     this.strategyTouched = false;
+    const normalizedInitialMode = normalizeAiStrategyMode(this.initialSelectedStrategyMode);
+    const normalizedCurrentMode = normalizeAiStrategyMode(this.currentStrategyMode);
     if (this.forceUseInitialSelection) {
-      if (this.initialSelectedStrategyMode === -1) {
+      if (normalizedInitialMode === -1) {
         this.selectedStrategy = -1;
         this.useCustomStrategy = true;
         if (this.initialCustomStrategy) {
@@ -50,19 +81,18 @@ export struct AiInputDialog {
             energy: this.initialCustomStrategy.energy
           };
         }
-      } else if (this.initialSelectedStrategyMode === 0 || this.initialSelectedStrategyMode === 1 ||
-        this.initialSelectedStrategyMode === 2) {
-        this.selectedStrategy = this.initialSelectedStrategyMode;
+      } else {
+        this.selectedStrategy = normalizedInitialMode;
         this.useCustomStrategy = false;
       }
-    } else if (this.currentStrategyMode === 0 || this.currentStrategyMode === 1 || this.currentStrategyMode === 2) {
-      this.selectedStrategy = this.currentStrategyMode;
+    } else if (normalizedCurrentMode === 0 || normalizedCurrentMode === 1 || normalizedCurrentMode === 2) {
+      this.selectedStrategy = normalizedCurrentMode;
       this.useCustomStrategy = false;
-    } else if (this.currentStrategyMode === -1) {
+    } else if (normalizedCurrentMode === -1) {
       this.selectedStrategy = -1;
       this.useCustomStrategy = true;
     }
-    if (this.initialPrompt.trim().length > 0) {
+    if (shouldUseAiInitialPrompt(this.initialPrompt)) {
       this.inputText = this.initialPrompt.trim();
     }
     void this.loadRecommendation();
@@ -80,12 +110,7 @@ export struct AiInputDialog {
 
 
   private getLoadingText(): string {
-    if (this.selectedStrategy === 1) {
-      return '正在生成行程（预计30-60秒）';
-    } else if (this.selectedStrategy === 2) {
-      return '正在生成行程（预计20-40秒）';
-    }
-    return '正在生成行程（预计30-50秒）';
+    return getAiLoadingTextByStrategy(this.selectedStrategy);
   }
 
   @Builder
@@ -388,7 +413,11 @@ export struct AiInputDialog {
                 promptAction.openToast({ message: '正在重新规划行程...' });
                 const strategy = this.useCustomStrategy ? -1 : this.selectedStrategy;
                 const custom = this.useCustomStrategy ? this.customStrategy : undefined;
-                const keepCurrentMode = this.currentStrategyMode === -1 && !this.strategyTouched && !this.useCustomStrategy;
+                const keepCurrentMode = shouldKeepCurrentModeOnRegenerate(
+                  this.currentStrategyMode,
+                  this.strategyTouched,
+                  this.useCustomStrategy
+                );
                 this.onRegenerate(strategy, custom, keepCurrentMode);
                 this.controller.close();
               });

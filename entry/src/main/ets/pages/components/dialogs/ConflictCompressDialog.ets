@@ -7,6 +7,14 @@ import {
   TimelineViewModel
 } from '../../../viewmodel/TimelineViewModel';
 
+export function canConflictCompressConfirm(selectedCount: number): boolean {
+  return selectedCount > 0;
+}
+
+export function shouldShowConflictCompressOverload(status: string, remainingGapMinutes: number): boolean {
+  return status === 'OVERLOAD' && remainingGapMinutes > 0;
+}
+
 @CustomDialog
 export struct ConflictCompressDialog {
   controller: CustomDialogController;
@@ -58,7 +66,7 @@ export struct ConflictCompressDialog {
           this.selectedIds.add(id);
         }
       });
-      if (this.selectedIds.size === 0) {
+      if (!canConflictCompressConfirm(this.selectedIds.size)) {
         selectable.forEach((item) => this.selectedIds.add(item.id));
       }
     } else {
@@ -266,7 +274,7 @@ export struct ConflictCompressDialog {
         .width('100%')
         .edgeEffect(EdgeEffect.Spring)
 
-        if (this.previewPlan?.status === 'OVERLOAD' && this.getRemainingGap() > 0) {
+        if (shouldShowConflictCompressOverload(this.previewPlan?.status ?? '', this.getRemainingGap())) {
           Text(`仍冲突 ${this.getRemainingGap()} 分钟，建议最早开始 ${this.previewPlan?.suggestedTime ?? this.targetTime}`)
             .fontSize(12)
             .fontColor('#FF4D4F')
@@ -289,7 +297,7 @@ export struct ConflictCompressDialog {
             .backgroundColor($r('app.color.accent_primary'))
             .fontColor(Color.White)
             .onClick(() => {
-              if (this.selectedIds.size === 0) {
+              if (!canConflictCompressConfirm(this.selectedIds.size)) {
                 this.safeShowToast('请先选择至少一个可压缩地点', 2000);
                 return;
               }

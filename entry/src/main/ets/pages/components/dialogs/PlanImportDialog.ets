@@ -3,6 +3,26 @@ import { PlanJsonImportCancelToken } from '../../../infrastructure/services/Plan
 import { DeepLinkService } from '../../../domain/services/DeepLinkService';
 import { CompactPlanSerializer } from '../../../domain/serializers/CompactPlanSerializer';
 
+export type PlanImportPayloadKind = 'empty' | 'deep_link' | 'compressed' | 'plain';
+
+export function classifyPlanImportPayload(rawInput: string): PlanImportPayloadKind {
+  const raw = rawInput.trim();
+  if (raw.length === 0) {
+    return 'empty';
+  }
+  if (raw.startsWith('travelapp://import')) {
+    return 'deep_link';
+  }
+  if (raw.startsWith('{"v":1')) {
+    return 'compressed';
+  }
+  return 'plain';
+}
+
+export function canStartPlanImport(rawInput: string): boolean {
+  return classifyPlanImportPayload(rawInput) !== 'empty';
+}
+
 @CustomDialog
 export struct PlanImportDialog {
   controller: CustomDialogController;
@@ -21,15 +41,16 @@ export struct PlanImportDialog {
 
   private async doImport(): Promise<void> {
     const raw = this.inputJson.trim();
-    if (!raw) {
+    if (!canStartPlanImport(raw)) {
       this.safeShowToast('请先粘贴分享数据');
       return;
     }
 
     let jsonToImport = raw;
+    const payloadKind = classifyPlanImportPayload(raw);
 
     // 检测是否为 Deep Link
-    if (raw.startsWith('travelapp://import')) {
+    if (payloadKind === 'deep_link') {
       try {
         const compressedJson = DeepLinkService.parseShareLink(raw);
         const decompressed = CompactPlanSerializer.decompressFromShare(compressedJson);
@@ -40,7 +61,7 @@ export struct PlanImportDialog {
       }
     }
     // 检测是否为压缩格式
-    else if (raw.startsWith('{"v":1')) {
+    else if (payloadKind === 'compressed') {
       try {
         const decompressed = CompactPlanSerializer.decompressFromShare(raw);
         jsonToImport = JSON.stringify({ schemaVersion: 1, exportedAt: Date.now(), sourcePlanId: 0, plan: decompressed.plan, events: decompressed.events });
