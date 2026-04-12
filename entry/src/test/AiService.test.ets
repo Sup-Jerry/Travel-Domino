@@ -14,6 +14,17 @@ export default function aiServiceTest() {
       expect(items[0].duration).assertEqual(90);
     });
 
+    it('normal: parse_should_accept_stringified_json_array', 0, () => {
+      // Arrange
+      // Act
+      // Assert
+      const content = '"[{\\"name\\":\\"景点B\\",\\"duration\\":80,\\"ai_reasoning\\":\\"推荐\\",\\"type\\":0}]"';
+      const items: AiRawItem[] = AiService.parseItemsForTest(content);
+      expect(items.length).assertEqual(1);
+      expect(items[0].name).assertEqual('景点B');
+      expect(items[0].duration).assertEqual(80);
+    });
+
     it('invalid: parse_should_fail_on_truncated_json', 0, () => {
       // Arrange
       // Act
@@ -38,6 +49,17 @@ export default function aiServiceTest() {
         message = error instanceof Error ? error.message : '';
       }
       expect(message).assertEqual('AI 响应格式为空');
+    });
+
+    it('normal: parse_model_response_should_accept_array_message_content', 0, () => {
+      // Arrange
+      const response = '{"choices":[{"finish_reason":"stop","message":{"content":[{"type":"text","text":"[{\\"name\\":\\"景点C\\",\\"duration\\":90,\\"ai_reasoning\\":\\"推荐\\",\\"type\\":0}]"}]}}]}';
+      // Act
+      const items = AiService.parseModelResponseForTest(response);
+      // Assert
+      expect(items.length).assertEqual(1);
+      expect(items[0].name).assertEqual('景点C');
+      expect(items[0].duration).assertEqual(90);
     });
 
     it('normal: parse_should_normalize_duration_and_type', 0, () => {
@@ -143,6 +165,39 @@ export default function aiServiceTest() {
       } finally {
         AiService.setRequesterForTest(null);
       }
+      expect(message).assertEqual('AI 未返回可用地点，请调整描述后重试');
+    });
+
+    it('normal: generate_with_strategy_should_raise_token_budget_for_long_trip', 0, async () => {
+      // Arrange
+      const maxTokensSeen: number[] = [];
+      let callCount = 0;
+      AiService.setRequesterForTest(async (_url, options) => {
+        callCount += 1;
+        const extraData = options.extraData as Record<string, Object>;
+        maxTokensSeen.push(Number(extraData['max_tokens']));
+        return {
+          responseCode: 200,
+          result: '{"choices":[{"message":{"content":"[]"}}]}'
+        };
+      });
+      // Act
+      let message = '';
+      try {
+        await AiService.generateItineraryWithStrategy({
+          userPrompt: '请帮我规划15天行程',
+          strategyMode: 0
+        });
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
+      } finally {
+        AiService.setRequesterForTest(null);
+      }
+      // Assert
+      expect(callCount).assertEqual(2);
+      expect(maxTokensSeen.length).assertEqual(2);
+      expect(maxTokensSeen[0]).assertEqual(2960);
+      expect(maxTokensSeen[1]).assertEqual(3200);
       expect(message).assertEqual('AI 未返回可用地点，请调整描述后重试');
     });
 
