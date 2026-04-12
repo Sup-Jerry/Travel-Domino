@@ -8,6 +8,29 @@ interface GeneratedTypeLiteralInterface_1 {
   addStr: string;
 }
 
+export function resolveGapTierColor(min: number, trigger: number): string {
+  if (min >= 150) return '#FFB800';
+  if (min >= 90) return '#007DFF';
+  if (min >= trigger) return '#4CAF50';
+  return '';
+}
+
+export function resolveGapTierLabel(min: number, trigger: number): string {
+  if (min >= 150) return '黄金重排';
+  if (min >= 90) return '体验升级';
+  if (min >= trigger) return '效率补全';
+  return '';
+}
+
+export function hasPositiveAllocationValues(values: number[]): boolean {
+  for (let i = 0; i < values.length; i++) {
+    if (values[i] > 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
 @CustomDialog
 export struct GapResolutionDialog {
   controller: CustomDialogController;
@@ -68,29 +91,17 @@ export struct GapResolutionDialog {
 
   private getTierColor(min: number): string {
     const trigger = this.vm.getIdleGapTriggerMinutes();
-    if (min >= 150) return '#FFB800'; // 黄金重排：金色
-    if (min >= 90) return '#007DFF';  // 体验升级：蓝色
-    if (min >= trigger) return '#4CAF50';  // 效率补全：绿色
-    return ''; // 阈值以下不显示
+    return resolveGapTierColor(min, trigger);
   }
 
   // 获取对应阶梯的文案
   private getTierLabel(min: number): string {
     const trigger = this.vm.getIdleGapTriggerMinutes();
-    if (min >= 150) return '黄金重排';
-    if (min >= 90) return '体验升级';
-    if (min >= trigger) return '效率补全';
-    return '';
+    return resolveGapTierLabel(min, trigger);
   }
 
   private hasPositiveAllocation(distributionMap: Map<number, number>): boolean {
-    const values = Array.from(distributionMap.values());
-    for (let i = 0; i < values.length; i++) {
-      if (values[i] > 0) {
-        return true;
-      }
-    }
-    return false;
+    return hasPositiveAllocationValues(Array.from(distributionMap.values()));
   }
 
   private getAllocatableCandidates(): EventEntity[] {

@@ -5,6 +5,39 @@
   TimelineViewModel
 } from '../../../viewmodel/TimelineViewModel';
 
+export function advanceAdjustTimeToMinutes(time: string): number {
+  const parts = time.split(':');
+  if (parts.length < 2) {
+    return 0;
+  }
+  const hour = Number.parseInt(parts[0], 10);
+  const minute = Number.parseInt(parts[1], 10);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
+    return 0;
+  }
+  return Math.max(0, Math.min(23, hour)) * 60 + Math.max(0, Math.min(59, minute));
+}
+
+export function advanceAdjustMinutesToTime(minutes: number): string {
+  const normalized = ((Math.floor(minutes) % (24 * 60)) + (24 * 60)) % (24 * 60);
+  const h = Math.floor(normalized / 60);
+  const m = normalized % 60;
+  const hh = h < 10 ? `0${h}` : `${h}`;
+  const mm = m < 10 ? `0${m}` : `${m}`;
+  return `${hh}:${mm}`;
+}
+
+export function resolveAdvanceAdjustDefaultStartTime(
+  firstCurrentStartTime: string,
+  forcedGapMinutes: number,
+  fallbackShiftMinutes: number = 30
+): string {
+  const firstMinutes = advanceAdjustTimeToMinutes(firstCurrentStartTime);
+  const expectedShift = forcedGapMinutes > 0 ? forcedGapMinutes : fallbackShiftMinutes;
+  const defaultMinutes = Math.max(0, firstMinutes - expectedShift);
+  return advanceAdjustMinutesToTime(defaultMinutes);
+}
+
 @CustomDialog
 export struct AdvanceAdjustDialog {
   controller: CustomDialogController;
@@ -30,33 +63,16 @@ export struct AdvanceAdjustDialog {
     this.context.candidates.forEach((item) => this.selectedIds.add(item.id));
     this.selectedIds = new Set(this.selectedIds);
     const first = this.context.candidates[0];
-    const firstMinutes = this.timeToMinutes(first.currentStartTime);
-    const expectedShift = this.forcedGapMinutes > 0 ? this.forcedGapMinutes : 30;
-    const defaultMinutes = Math.max(0, firstMinutes - expectedShift);
-    this.targetStartTime = this.minutesToTime(defaultMinutes);
+    this.targetStartTime = resolveAdvanceAdjustDefaultStartTime(first.currentStartTime, this.forcedGapMinutes);
     this.refreshPreview();
   }
 
   private timeToMinutes(time: string): number {
-    const parts = time.split(':');
-    if (parts.length < 2) {
-      return 0;
-    }
-    const hour = Number.parseInt(parts[0], 10);
-    const minute = Number.parseInt(parts[1], 10);
-    if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
-      return 0;
-    }
-    return Math.max(0, Math.min(23, hour)) * 60 + Math.max(0, Math.min(59, minute));
+    return advanceAdjustTimeToMinutes(time);
   }
 
   private minutesToTime(minutes: number): string {
-    const normalized = ((Math.floor(minutes) % (24 * 60)) + (24 * 60)) % (24 * 60);
-    const h = Math.floor(normalized / 60);
-    const m = normalized % 60;
-    const hh = h < 10 ? `0${h}` : `${h}`;
-    const mm = m < 10 ? `0${m}` : `${m}`;
-    return `${hh}:${mm}`;
+    return advanceAdjustMinutesToTime(minutes);
   }
 
   private refreshPreview(): void {
@@ -230,4 +246,5 @@ export struct AdvanceAdjustDialog {
     .borderRadius(16)
   }
 }
+
 

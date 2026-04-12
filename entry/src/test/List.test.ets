@@ -102,6 +102,11 @@ import planImportDialogHelperTest from './PlanImportDialogHelper.test';
 import planJsonImportDialogHelperTest from './PlanJsonImportDialogHelper.test';
 import planJsonExportDialogHelperTest from './PlanJsonExportDialogHelper.test';
 import planShareDialogHelperTest from './PlanShareDialogHelper.test';
+import advanceAdjustDialogHelperTest from './AdvanceAdjustDialogHelper.test';
+import aiReplanPreviewDialogHelperTest from './AiReplanPreviewDialogHelper.test';
+import createPlanDialogHelperTest from './CreatePlanDialogHelper.test';
+import gapResolutionDialogHelperTest from './GapResolutionDialogHelper.test';
+import huaweiAccountLoginButtonHelperTest from './HuaweiAccountLoginButtonHelper.test';
 
 const registeredSuiteNames: string[] = [
   'LocalUnit',
@@ -206,7 +211,12 @@ const registeredSuiteNames: string[] = [
   'PlanImportDialogHelper',
   'PlanJsonImportDialogHelper',
   'PlanJsonExportDialogHelper',
-  'PlanShareDialogHelper'
+  'PlanShareDialogHelper',
+  'AdvanceAdjustDialogHelper',
+  'AiReplanPreviewDialogHelper',
+  'CreatePlanDialogHelper',
+  'GapResolutionDialogHelper',
+  'HuaweiAccountLoginButtonHelper'
 ];
 
 function containsSuite(name: string): boolean {
@@ -334,6 +344,11 @@ export default function testsuite() {
   planJsonImportDialogHelperTest();
   planJsonExportDialogHelperTest();
   planShareDialogHelperTest();
+  advanceAdjustDialogHelperTest();
+  aiReplanPreviewDialogHelperTest();
+  createPlanDialogHelperTest();
+  gapResolutionDialogHelperTest();
+  huaweiAccountLoginButtonHelperTest();
 
   describe('listTest', () => {
     it('normal: list_should_keep_core_test_modules_registered', 0, () => {
