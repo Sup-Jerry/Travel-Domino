@@ -31,6 +31,8 @@ A skill is a set of local instructions to follow that is stored in a `SKILL.md` 
 - 口令默认参数：未额外说明时，保持自动推送并自动创建 Draft PR 到 `develop`（不加 `-NoPR`）。
 - 口令例外：若用户明确说“只本地提交 / 不推送 / 不要PR”，按用户指令覆盖默认行为。
 - 迭代进化：使用 `skill-evolution-manager`。
+- 日志排查：默认不要提供 PowerShell 抓取命令，只提供日志关键词，由用户自行抓取。
+- AI 重规划排查日志统一前缀：`[airest]AI_REPLAN_TRACE`（后续仅提供这一关键词）。
 
 ## 上传到 GitHub 标准流程
 1. 先确认当前分支不是 `main`（除非用户当次明确授权直推 `main`）。
