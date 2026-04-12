@@ -2,6 +2,14 @@
 import { ThemeCenter } from '../../../common/utils/ThemeCenter';
 import { DomainConstants } from '../../../common/constants/DomainConstants';
 
+export function formatCreatePlanDateText(selectedDate: Date): string {
+  return `${selectedDate.getFullYear()}/${selectedDate.getMonth() + 1}/${selectedDate.getDate()}`;
+}
+
+export function canCreatePlanWithTitle(title: string): boolean {
+  return title.trim().length > 0;
+}
+
 @CustomDialog
 export struct CreatePlanDialog {
   controller: CustomDialogController;
@@ -44,7 +52,7 @@ export struct CreatePlanDialog {
         Blank()
 
         // 显示当前选择的日期 (格式: YYYY/M/D)
-        Text(`${this.selectedDate.getFullYear()}/${this.selectedDate.getMonth() + 1}/${this.selectedDate.getDate()}`)
+        Text(formatCreatePlanDateText(this.selectedDate))
           .fontSize(16)
           .fontColor(this.getPalette().textPrimary)
           .fontWeight(FontWeight.Medium)
@@ -86,7 +94,7 @@ export struct CreatePlanDialog {
           .backgroundColor(this.getPalette().primary)
           .fontColor(Color.White)
           .onClick(async () => {
-            if (this.title.length > 0) {
+            if (canCreatePlanWithTitle(this.title)) {
               const newPlanId = await this.onCreatePlan(this.title, this.selectedDate.getTime());
               if (newPlanId > 0) {
                 this.onPlanCreated(newPlanId, this.title);

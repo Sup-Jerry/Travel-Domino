@@ -2,6 +2,22 @@ import { LoginWithHuaweiIDButton, loginComponentManager } from '@kit.AccountKit'
 import { HuaweiCredential } from '../../../domain/auth/AuthTypes';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
+export function resolveHuaweiLoginErrorCode(err: Object): number {
+  return Number((err as Record<string, Object>)?.code || 0);
+}
+
+export function resolveHuaweiLoginErrorMessage(err: Object): string {
+  return String((err as Record<string, Object>)?.message || '');
+}
+
+export function buildHuaweiLoginErrorToken(errorCode: number, errorMessage: string): string {
+  return `huawei_login_error_${errorCode}_${errorMessage}`;
+}
+
+export function hasHuaweiCredentialData(data: Object | undefined): boolean {
+  return !!data;
+}
+
 @Component
 export struct HuaweiAccountLoginButton {
   private static readonly LOG_DOMAIN: number = 0x0000;
@@ -21,8 +37,8 @@ export struct HuaweiAccountLoginButton {
   private bindLoginCallback(): void {
     hilog.info(HuaweiAccountLoginButton.LOG_DOMAIN, HuaweiAccountLoginButton.LOG_TAG, '[LOGIN_TRACE][button] bind callback');
     this.controller.onClickLoginWithHuaweiIDButton((err: Object, data: loginComponentManager.HuaweiIDCredential) => {
-      const errorCode = Number((err as Record<string, Object>)?.code || 0);
-      const errorMessage = String((err as Record<string, Object>)?.message || '');
+      const errorCode = resolveHuaweiLoginErrorCode(err);
+      const errorMessage = resolveHuaweiLoginErrorMessage(err);
       const rawErr = JSON.stringify(err);
       hilog.info(
         HuaweiAccountLoginButton.LOG_DOMAIN,
@@ -35,10 +51,10 @@ export struct HuaweiAccountLoginButton {
           HuaweiAccountLoginButton.LOG_TAG,
           `[LOGIN_TRACE][button] fail code=${errorCode}, message=${errorMessage}, raw=${rawErr}`
         );
-        this.onError(`huawei_login_error_${errorCode}_${errorMessage}`);
+        this.onError(buildHuaweiLoginErrorToken(errorCode, errorMessage));
         return;
       }
-      if (!data) {
+      if (!hasHuaweiCredentialData(data)) {
         hilog.warn(HuaweiAccountLoginButton.LOG_DOMAIN, HuaweiAccountLoginButton.LOG_TAG, '[LOGIN_TRACE][button] fail empty_credential');
         this.onError('huawei_credential_empty');
         return;

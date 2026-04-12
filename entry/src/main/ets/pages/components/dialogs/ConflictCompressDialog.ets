@@ -7,6 +7,36 @@ import {
   TimelineViewModel
 } from '../../../viewmodel/TimelineViewModel';
 
+export function canConflictCompressConfirm(selectedCount: number): boolean {
+  return selectedCount > 0;
+}
+
+export function shouldShowConflictCompressOverload(status: string, remainingGapMinutes: number): boolean {
+  return status === 'OVERLOAD' && remainingGapMinutes > 0;
+}
+
+export interface ConflictCompressAffectedItem {
+  index: number;
+  newVal: number;
+}
+
+export function resolveConflictCompressPreviewNewDuration(
+  affectedItems: ConflictCompressAffectedItem[],
+  candidateIndex: number,
+  candidateOldVal: number
+): number {
+  const match = affectedItems.find((item) => item.index === candidateIndex);
+  return match ? match.newVal : candidateOldVal;
+}
+
+export function resolveConflictCompressPreviewReduced(oldVal: number, newVal: number): number {
+  return oldVal - newVal;
+}
+
+export function resolveConflictCompressRemainingGap(remainingGapMinutes: number | undefined): number {
+  return remainingGapMinutes ?? 0;
+}
+
 @CustomDialog
 export struct ConflictCompressDialog {
   controller: CustomDialogController;
@@ -58,7 +88,7 @@ export struct ConflictCompressDialog {
           this.selectedIds.add(id);
         }
       });
-      if (this.selectedIds.size === 0) {
+      if (!canConflictCompressConfirm(this.selectedIds.size)) {
         selectable.forEach((item) => this.selectedIds.add(item.id));
       }
     } else {
@@ -122,16 +152,15 @@ export struct ConflictCompressDialog {
     if (!this.previewPlan) {
       return candidate.oldVal;
     }
-    const match = this.previewPlan.affectedItems.find((item) => item.index === candidate.index);
-    return match ? match.newVal : candidate.oldVal;
+    return resolveConflictCompressPreviewNewDuration(this.previewPlan.affectedItems, candidate.index, candidate.oldVal);
   }
 
   private getPreviewReduced(candidate: CompressionSelectionCandidate): number {
-    return candidate.oldVal - this.getPreviewNewDuration(candidate);
+    return resolveConflictCompressPreviewReduced(candidate.oldVal, this.getPreviewNewDuration(candidate));
   }
 
   private getRemainingGap(): number {
-    return this.previewPlan?.remainingGapMinutes ?? 0;
+    return resolveConflictCompressRemainingGap(this.previewPlan?.remainingGapMinutes);
   }
 
   build() {
@@ -266,7 +295,7 @@ export struct ConflictCompressDialog {
         .width('100%')
         .edgeEffect(EdgeEffect.Spring)
 
-        if (this.previewPlan?.status === 'OVERLOAD' && this.getRemainingGap() > 0) {
+        if (shouldShowConflictCompressOverload(this.previewPlan?.status ?? '', this.getRemainingGap())) {
           Text(`仍冲突 ${this.getRemainingGap()} 分钟，建议最早开始 ${this.previewPlan?.suggestedTime ?? this.targetTime}`)
             .fontSize(12)
             .fontColor('#FF4D4F')
@@ -289,7 +318,7 @@ export struct ConflictCompressDialog {
             .backgroundColor($r('app.color.accent_primary'))
             .fontColor(Color.White)
             .onClick(() => {
-              if (this.selectedIds.size === 0) {
+              if (!canConflictCompressConfirm(this.selectedIds.size)) {
                 this.safeShowToast('请先选择至少一个可压缩地点', 2000);
                 return;
               }

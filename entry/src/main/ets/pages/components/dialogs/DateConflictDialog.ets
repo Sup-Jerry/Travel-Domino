@@ -1,4 +1,12 @@
-﻿@CustomDialog
+﻿export function getDateConflictDescription(conflictDateStr: string, planStartDateStr: string): string {
+  return `conflictDate=${conflictDateStr};planStart=${planStartDateStr}`;
+}
+
+export function shouldShowDateConflictPlanStartOption(planStartDate: number): boolean {
+  return planStartDate >= 0;
+}
+
+@CustomDialog
 export struct DateConflictDialog {
   controller: CustomDialogController
   conflictDateStr: string = "" // 冲突的日期，如 "05月01日"

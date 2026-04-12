@@ -1,5 +1,14 @@
 ﻿// 文件路径: ets/pages/components/TipDialog.ets
 import { PreferenceManager } from '../../../common/utils/PreferenceManager'; // 修改点：引入管理器
+
+export function toggleTipDialogChecked(current: boolean): boolean {
+  return !current;
+}
+
+export function shouldPersistTipDialogChoice(isChecked: boolean): boolean {
+  return isChecked;
+}
+
 @CustomDialog
 export struct TipDialog {
   controller: CustomDialogController;
@@ -21,7 +30,7 @@ export struct TipDialog {
           .onChange((val) => this.isChecked = val)
           .width(20).height(20)
         Text('从此以后不再提示').fontSize(14).fontColor($r('app.color.text_secondary')).margin({ left: 8 })
-          .onClick(() => this.isChecked = !this.isChecked)
+          .onClick(() => this.isChecked = toggleTipDialogChecked(this.isChecked))
       }
       .width('100%').margin({ bottom: 20 })
 
@@ -33,7 +42,7 @@ export struct TipDialog {
         Button('确定')
           .backgroundColor($r('app.color.accent_primary')).fontColor(Color.White).layoutWeight(1).margin({ left: 12 })
           .onClick(async () => { // 修改点：异步回调
-            if (this.isChecked) {
+            if (shouldPersistTipDialogChoice(this.isChecked)) {
               // 修改点：强制物理落盘，确保状态 100% 写入磁盘
               await PreferenceManager.getInstance().setValue(this.storageKey, true);
             }
@@ -45,6 +54,7 @@ export struct TipDialog {
     .padding(24).backgroundColor($r('app.color.card_bg')).borderRadius(16).width('90%')
   }
 }
+
 
 
 

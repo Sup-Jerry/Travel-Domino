@@ -1,6 +1,14 @@
 ﻿import { promptAction } from '@kit.ArkUI';
 import { PlanJsonImportCancelToken } from '../../../infrastructure/services/PlanImportExportService';
 
+export function normalizePlanJsonImportInput(inputJson: string): string {
+  return inputJson.trim();
+}
+
+export function canStartPlanJsonImport(inputJson: string): boolean {
+  return normalizePlanJsonImportInput(inputJson).length > 0;
+}
+
 @CustomDialog
 export struct PlanJsonImportDialog {
   controller: CustomDialogController;
@@ -18,8 +26,8 @@ export struct PlanJsonImportDialog {
   }
 
   private async doImport(): Promise<void> {
-    const raw = this.inputJson.trim();
-    if (!raw) {
+    const raw = normalizePlanJsonImportInput(this.inputJson);
+    if (!canStartPlanJsonImport(this.inputJson)) {
       this.safeShowToast('请先粘贴 JSON 内容');
       return;
     }
@@ -96,4 +104,5 @@ export struct PlanJsonImportDialog {
     .width('92%')
   }
 }
+
 

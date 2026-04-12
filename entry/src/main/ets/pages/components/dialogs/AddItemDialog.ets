@@ -44,6 +44,42 @@ class MapPickerRouteParams {
   }
 }
 
+export function resolveAddItemMode(initName: string, initIsSchedule: boolean): 0 | 1 {
+  if (initName && initName.trim().length > 0) {
+    return initIsSchedule ? 1 : 0;
+  }
+  return 1;
+}
+
+export function resolveAddItemDuration(initDuration: number, defaultDuration: number): number {
+  if (initDuration > 0) {
+    return initDuration;
+  }
+  if (defaultDuration > 0) {
+    return defaultDuration;
+  }
+  return 60;
+}
+
+export function isAddItemCoordinateValid(lat: number, lng: number): boolean {
+  return Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    Math.abs(lat) <= 90 &&
+    Math.abs(lng) <= 180 &&
+    !(lat === 0 && lng === 0);
+}
+
+export function resolveAddItemScopedStorageKey(base: string, storageScopePlanId: number): string {
+  if (storageScopePlanId > 0) {
+    return `${base}_${storageScopePlanId}`;
+  }
+  return base;
+}
+
+export function isAddItemMapPickerEnabled(apiKey: string): boolean {
+  return apiKey.trim().length > 0;
+}
+
 @CustomDialog
 export struct AddItemDialog {
   controller: CustomDialogController;
@@ -110,12 +146,7 @@ export struct AddItemDialog {
       'AddItemDialog',
       `[MAP_TRACE][dialog_appear] planId=${this.storageScopePlanId}, initNameLen=${(this.initName || '').length}, initCoordValid=${initCoordValid}, initLat=${this.initLat}, initLng=${this.initLng}`
     );
-    if (this.initName) {
-      this.mode = this.initIsSchedule ? 1 : 0;
-    } else {
-      // 新建地点默认落到“日程”，避免用户保存后看不到新增项
-      this.mode = 1;
-    }
+    this.mode = resolveAddItemMode(this.initName, this.initIsSchedule);
 
     this.name = this.initName;
     this.note = this.initNote;
@@ -129,11 +160,7 @@ export struct AddItemDialog {
     }
     this.isMustVisit = (this.initPriority === 1);
 
-    if (this.initDuration > 0) {
-      this.duration = this.initDuration;
-    } else {
-      this.duration = this.globalDefaultDuration;
-    }
+    this.duration = resolveAddItemDuration(this.initDuration, this.globalDefaultDuration);
 
     let targetDate = TimelineDatePolicy.dayOffsetToDate(this.planStartDate, this.initDayOffset);
     let timeStr = this.initFixedTime || this.initSuggestedTime || '08:00';
@@ -184,23 +211,16 @@ export struct AddItemDialog {
   }
 
   private isValidCoordinate(lat: number, lng: number): boolean {
-    return Number.isFinite(lat) &&
-      Number.isFinite(lng) &&
-      Math.abs(lat) <= 90 &&
-      Math.abs(lng) <= 180 &&
-      !(lat === 0 && lng === 0);
+    return isAddItemCoordinateValid(lat, lng);
   }
 
   private scopedStorageKey(base: string): string {
-    if (this.storageScopePlanId > 0) {
-      return `${base}_${this.storageScopePlanId}`;
-    }
-    return base;
+    return resolveAddItemScopedStorageKey(base, this.storageScopePlanId);
   }
 
   private canUseMapPicker(): boolean {
     const keyLength = AppConfig.AMAP_SDK_API_KEY.trim().length;
-    const enabled = keyLength > 0;
+    const enabled = isAddItemMapPickerEnabled(AppConfig.AMAP_SDK_API_KEY);
     hilog.info(0x0000, 'AddItemDialog', `[MAP_ENTRY][config] sdkKeyConfigured=${enabled}, sdkKeyLen=${keyLength}`);
     return enabled;
   }

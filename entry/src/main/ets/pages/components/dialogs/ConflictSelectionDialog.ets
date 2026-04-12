@@ -1,5 +1,14 @@
 ﻿// 文件路径: ets/pages/components/ConflictSelectionDialog.ets
 
+
+export function getConflictSelectionGapPrompt(gapMinutes: number): string {
+  return `?????????? ${gapMinutes} ???????????`;
+}
+
+export function shouldUseConflictAdvanceAdjust(hasAdvanceAdjust: boolean): boolean {
+  return hasAdvanceAdjust;
+}
+
 @CustomDialog
 export struct ConflictSelectionDialog {
   controller: CustomDialogController;
@@ -50,7 +59,7 @@ export struct ConflictSelectionDialog {
         '⏪', '前移调整', '选择同 DayX 前序连续地点并设置新的开始时间', '#E8F5E9', '#2E7D32',
         () => {
           this.controller.close();
-          if (this.onAdvanceAdjust) {
+          if (shouldUseConflictAdvanceAdjust(!!this.onAdvanceAdjust)) {
             this.onAdvanceAdjust();
             return;
           }

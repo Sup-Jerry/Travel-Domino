@@ -1,5 +1,18 @@
 ﻿import { TravelPlanItem } from '../../../model/interface/IStandardEvent';
 
+
+export function shouldPlanItemShowCrossDayLabel(computedStartTime: string): boolean {
+  return (computedStartTime || '').indexOf('-') >= 0;
+}
+
+export function resolvePlanItemTimeText(timeText: string): string {
+  return (timeText && timeText.length > 0) ? timeText : '--:--';
+}
+
+export function canPlanItemShowConflictFixButton(isConflict: boolean, suggestedShiftMinutes: number): boolean {
+  return !!isConflict && (suggestedShiftMinutes || 0) > 0;
+}
+
 @Component
 export struct PlanItemView {
   @ObjectLink item: TravelPlanItem;
@@ -16,15 +29,15 @@ export struct PlanItemView {
     Row() {
       // 1. 左侧：时间轴
       Column() {
-        if (this.item.computedStartTime?.includes('-')) {
+        if (shouldPlanItemShowCrossDayLabel(this.item.computedStartTime || '')) {
           // 跨天显示日期 (简易版样式)
           Text(this.item.computedStartTime).fontSize(10).fontColor('#666666')
         } else {
-          Text(this.item.computedStartTime || '--:--').fontSize(14).fontWeight(FontWeight.Bold)
+          Text(resolvePlanItemTimeText(this.item.computedStartTime || '')).fontSize(14).fontWeight(FontWeight.Bold)
         }
         // 连接线 (这里简化显示，实际可以用 Line 组件)
         Text('|').fontSize(10).fontColor('#CCCCCC').margin({ top: 2, bottom: 2 })
-        Text(this.item.computedEndTime || '--:--').fontSize(12).fontColor('#999999')
+        Text(resolvePlanItemTimeText(this.item.computedEndTime || '')).fontSize(12).fontColor('#999999')
       }
       .width(50)
       .alignItems(HorizontalAlign.End)
@@ -68,7 +81,7 @@ export struct PlanItemView {
               .margin({ bottom: 4 })
 
             // 修复按钮 (仅当有建议时间时显示)
-            if ((this.item.suggestedShiftMinutes || 0) > 0) {
+            if (canPlanItemShowConflictFixButton(this.item.isConflict, this.item.suggestedShiftMinutes || 0)) {
               Button(`一键推迟 ${this.item.suggestedShiftMinutes} 分钟`)
                 .fontSize(12)
                 .height(28)
@@ -99,6 +112,7 @@ export struct PlanItemView {
     .alignItems(VerticalAlign.Top)
   }
 }
+
 
 
 

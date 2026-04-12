@@ -2,6 +2,24 @@
 import { EventEntity } from '../../../model/entity/EventEntity';
 import { DateUtil } from '../../../common/utils/DateUtil';
 
+export function resolveRecordCorrectionBaseTime(actualStart: number, dynamicStart: number, nowTs: number): number {
+  if (actualStart > 0) {
+    return actualStart;
+  }
+  if (dynamicStart > 0) {
+    return dynamicStart;
+  }
+  return nowTs;
+}
+
+export function shouldRecordCorrectionHasEndTime(actualEnd: number): boolean {
+  return actualEnd > 0;
+}
+
+export function resolveRecordCorrectionSubmitEndTs(hasEndTime: boolean, endTs: number): number {
+  return hasEndTime ? endTs : 0;
+}
+
 @CustomDialog
 export struct RecordCorrectionDialog {
   controller: CustomDialogController;
@@ -18,11 +36,13 @@ export struct RecordCorrectionDialog {
 
   aboutToAppear() {
     if (!this.event) return;
-    const baseTime = this.event.actual_start_time > 0
-      ? this.event.actual_start_time
-      : (this.event.dynamic_start_time > 0 ? this.event.dynamic_start_time : Date.now());
+    const baseTime = resolveRecordCorrectionBaseTime(
+      this.event.actual_start_time,
+      this.event.dynamic_start_time,
+      Date.now()
+    );
     this.startTime = new Date(baseTime);
-    this.hasEndTime = this.event.actual_end_time > 0;
+    this.hasEndTime = shouldRecordCorrectionHasEndTime(this.event.actual_end_time);
     this.endTime = this.hasEndTime
       ? new Date(this.event.actual_end_time)
       : new Date(baseTime);
@@ -87,7 +107,7 @@ export struct RecordCorrectionDialog {
           .onClick(() => this.controller.close())
         Button('确定修正').layoutWeight(1).backgroundColor($r('app.color.accent_primary'))
           .onClick(() => {
-            this.onConfirm(this.startTime.getTime(), this.hasEndTime ? this.endTime.getTime() : 0);
+            this.onConfirm(this.startTime.getTime(), resolveRecordCorrectionSubmitEndTs(this.hasEndTime, this.endTime.getTime()));
             this.controller.close();
           })
       }.width('100%').margin({ top: 10 })

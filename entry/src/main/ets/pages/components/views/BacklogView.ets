@@ -1,6 +1,23 @@
 ﻿import { TravelPlanItem } from '../../../model/interface/IStandardEvent';
 import { ThemeCenter } from '../../../common/utils/ThemeCenter';
 
+
+export function getBacklogExpandSymbol(isExpanded: boolean): string {
+  return isExpanded ? '\u25BC' : '\u25B6';
+}
+
+export function shouldShowBacklogMoveAllButton(itemCount: number): boolean {
+  return itemCount > 0;
+}
+
+export function shouldShowBacklogEmptyState(isExpanded: boolean, itemCount: number): boolean {
+  return isExpanded && itemCount === 0;
+}
+
+export function getBacklogBadgeText(itemCount: number): string {
+  return `${itemCount}`;
+}
+
 @Component
 export struct BacklogView {
   @Prop items: TravelPlanItem[];
@@ -24,7 +41,7 @@ export struct BacklogView {
       // 标题栏
       Row() {
         Row() {
-          Text(this.isExpanded ? '▼' : '▶')
+          Text(getBacklogExpandSymbol(this.isExpanded))
             .fontSize(12)
             .fontColor(this.getPalette().textTertiary)
             .margin({ right: 8 })
@@ -36,7 +53,7 @@ export struct BacklogView {
 
           Blank()
 
-          Text(`${this.items.length}`)
+          Text(getBacklogBadgeText(this.items.length))
             .fontSize(12)
             .fontColor(this.getPalette().textSecondary)
             .backgroundColor(this.getPalette().cardBgSoft)
@@ -50,7 +67,7 @@ export struct BacklogView {
           });
         })
 
-        if (this.items.length > 0) {
+        if (shouldShowBacklogMoveAllButton(this.items.length)) {
           Button('一键加入日程')
             .height(30)
             .fontSize(11)
@@ -68,7 +85,7 @@ export struct BacklogView {
       .padding({ bottom: this.isExpanded ? 12 : 0 })
 
       if (this.isExpanded) {
-        if (this.items.length === 0) {
+        if (shouldShowBacklogEmptyState(this.isExpanded, this.items.length)) {
           Column() {
             Text('空空如也')
               .fontSize(13)

@@ -4,6 +4,46 @@ import { ThemeCenter } from '../../../common/utils/ThemeCenter';
 
 export type AppNavTab = 'search' | 'trash' | 'home' | 'archive' | 'profile';
 
+export function getBottomNavTargetRoute(tab: AppNavTab): string {
+  if (tab === 'search') {
+    return 'pages/PlanSearchPage';
+  }
+  if (tab === 'home') {
+    return 'pages/PlanListPage';
+  }
+  if (tab === 'archive') {
+    return 'pages/ArchivePage';
+  }
+  if (tab === 'trash') {
+    return 'pages/TrashPage';
+  }
+  return 'pages/MyPage';
+}
+
+export function shouldBottomNavTapNavigate(currentTab: AppNavTab, targetTab: AppNavTab, navLocked: boolean): boolean {
+  if (currentTab === targetTab) {
+    return false;
+  }
+  return !navLocked;
+}
+
+export function resolveBottomNavVisualTab(currentTab: AppNavTab, transitionTab: AppNavTab | ''): AppNavTab {
+  return transitionTab || currentTab;
+}
+
+export function isBottomNavVisualActive(
+  tab: AppNavTab,
+  currentTab: AppNavTab,
+  transitionTab: AppNavTab | ''
+): boolean {
+  const visualTab = resolveBottomNavVisualTab(currentTab, transitionTab);
+  return visualTab === tab;
+}
+
+export function isBottomNavTabPressed(tab: AppNavTab, pressedTab: AppNavTab | ''): boolean {
+  return pressedTab === tab;
+}
+
 interface TabMeta {
   key: AppNavTab;
   label: string;
@@ -104,35 +144,17 @@ export struct GlobalBottomNavBar {
       return;
     }
 
-    if (tab === 'home') {
-      await this.safeReplaceUrl(this.createRouteOptions('pages/PlanListPage'), 'pages/PlanListPage');
-      hilog.info(0x0000, NAV_TAG, '[BOTTOM_NAV][route] to=pages/PlanListPage');
-      return;
-    }
-
-    if (tab === 'archive') {
-      await this.safeReplaceUrl(this.createRouteOptions('pages/ArchivePage'), 'pages/ArchivePage');
-      hilog.info(0x0000, NAV_TAG, '[BOTTOM_NAV][route] to=pages/ArchivePage');
-      return;
-    }
-
-    if (tab === 'trash') {
-      await this.safeReplaceUrl(this.createRouteOptions('pages/TrashPage'), 'pages/TrashPage');
-      hilog.info(0x0000, NAV_TAG, '[BOTTOM_NAV][route] to=pages/TrashPage');
-      return;
-    }
-
-    await this.safeReplaceUrl(this.createRouteOptions('pages/MyPage'), 'pages/MyPage');
-    hilog.info(0x0000, NAV_TAG, '[BOTTOM_NAV][route] to=pages/MyPage');
+    const route = getBottomNavTargetRoute(tab);
+    await this.safeReplaceUrl(this.createRouteOptions(route), route);
+    hilog.info(0x0000, NAV_TAG, `[BOTTOM_NAV][route] to=${route}`);
   }
 
   private isVisualActive(tab: AppNavTab): boolean {
-    const visualTab = this.transitionTab || this.currentTab;
-    return visualTab === tab;
+    return isBottomNavVisualActive(tab, this.currentTab, this.transitionTab);
   }
 
   private isTabPressed(tab: AppNavTab): boolean {
-    return this.pressedTab === tab;
+    return isBottomNavTabPressed(tab, this.pressedTab);
   }
 
   private setTabPressed(tab: AppNavTab, pressed: boolean): void {
@@ -161,7 +183,7 @@ export struct GlobalBottomNavBar {
       this.navLocked = false;
       return;
     }
-    if (this.navLocked) {
+    if (!shouldBottomNavTapNavigate(this.currentTab, tab, this.navLocked)) {
       return;
     }
     this.navLocked = true;

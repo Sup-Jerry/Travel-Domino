@@ -80,6 +80,33 @@ import companionWindowHelperInsetsTest from './CompanionWindowHelperInsets.test'
 import companionWindowHelperCutoutBottomRightTest from './CompanionWindowHelperCutoutBottomRight.test';
 import companionPresentationHelperTest from './CompanionPresentationHelper.test';
 import companionPresentationHelperEdgeFallbackTest from './CompanionPresentationHelperEdgeFallback.test';
+import bottomNavBarHelperTest from './BottomNavBarHelper.test';
+import appSideBarHelperTest from './AppSideBarHelper.test';
+import renameDialogHelperTest from './RenameDialogHelper.test';
+import dateFilterDialogHelperTest from './DateFilterDialogHelper.test';
+import tipDialogHelperTest from './TipDialogHelper.test';
+import planItemViewHelperTest from './PlanItemViewHelper.test';
+import backlogViewHelperTest from './BacklogViewHelper.test';
+import settingsItemsHelperTest from './SettingsItemsHelper.test';
+import eventItemViewHelperTest from './EventItemViewHelper.test';
+import companionViewHelperTest from './CompanionViewHelper.test';
+import conflictSelectionDialogHelperTest from './ConflictSelectionDialogHelper.test';
+import suggestionDialogHelperTest from './SuggestionDialogHelper.test';
+import dateConflictDialogHelperTest from './DateConflictDialogHelper.test';
+import conflictCompressDialogHelperTest from './ConflictCompressDialogHelper.test';
+import recordCorrectionDialogHelperTest from './RecordCorrectionDialogHelper.test';
+import addItemDialogHelperTest from './AddItemDialogHelper.test';
+import aiInputDialogHelperTest from './AiInputDialogHelper.test';
+import planSettingsDialogHelperTest from './PlanSettingsDialogHelper.test';
+import planImportDialogHelperTest from './PlanImportDialogHelper.test';
+import planJsonImportDialogHelperTest from './PlanJsonImportDialogHelper.test';
+import planJsonExportDialogHelperTest from './PlanJsonExportDialogHelper.test';
+import planShareDialogHelperTest from './PlanShareDialogHelper.test';
+import advanceAdjustDialogHelperTest from './AdvanceAdjustDialogHelper.test';
+import aiReplanPreviewDialogHelperTest from './AiReplanPreviewDialogHelper.test';
+import createPlanDialogHelperTest from './CreatePlanDialogHelper.test';
+import gapResolutionDialogHelperTest from './GapResolutionDialogHelper.test';
+import huaweiAccountLoginButtonHelperTest from './HuaweiAccountLoginButtonHelper.test';
 
 const registeredSuiteNames: string[] = [
   'LocalUnit',
@@ -162,7 +189,34 @@ const registeredSuiteNames: string[] = [
   'CompanionWindowHelperInsets',
   'CompanionWindowHelperCutoutBottomRight',
   'CompanionPresentationHelper',
-  'CompanionPresentationHelperEdgeFallback'
+  'CompanionPresentationHelperEdgeFallback',
+  'BottomNavBarHelper',
+  'AppSideBarHelper',
+  'RenameDialogHelper',
+  'DateFilterDialogHelper',
+  'TipDialogHelper',
+  'PlanItemViewHelper',
+  'BacklogViewHelper',
+  'SettingsItemsHelper',
+  'EventItemViewHelper',
+  'CompanionViewHelper',
+  'ConflictSelectionDialogHelper',
+  'SuggestionDialogHelper',
+  'DateConflictDialogHelper',
+  'ConflictCompressDialogHelper',
+  'RecordCorrectionDialogHelper',
+  'AddItemDialogHelper',
+  'AiInputDialogHelper',
+  'PlanSettingsDialogHelper',
+  'PlanImportDialogHelper',
+  'PlanJsonImportDialogHelper',
+  'PlanJsonExportDialogHelper',
+  'PlanShareDialogHelper',
+  'AdvanceAdjustDialogHelper',
+  'AiReplanPreviewDialogHelper',
+  'CreatePlanDialogHelper',
+  'GapResolutionDialogHelper',
+  'HuaweiAccountLoginButtonHelper'
 ];
 
 function containsSuite(name: string): boolean {
@@ -268,6 +322,33 @@ export default function testsuite() {
   companionWindowHelperCutoutBottomRightTest();
   companionPresentationHelperTest();
   companionPresentationHelperEdgeFallbackTest();
+  bottomNavBarHelperTest();
+  appSideBarHelperTest();
+  renameDialogHelperTest();
+  dateFilterDialogHelperTest();
+  tipDialogHelperTest();
+  planItemViewHelperTest();
+  backlogViewHelperTest();
+  settingsItemsHelperTest();
+  eventItemViewHelperTest();
+  companionViewHelperTest();
+  conflictSelectionDialogHelperTest();
+  suggestionDialogHelperTest();
+  dateConflictDialogHelperTest();
+  conflictCompressDialogHelperTest();
+  recordCorrectionDialogHelperTest();
+  addItemDialogHelperTest();
+  aiInputDialogHelperTest();
+  planSettingsDialogHelperTest();
+  planImportDialogHelperTest();
+  planJsonImportDialogHelperTest();
+  planJsonExportDialogHelperTest();
+  planShareDialogHelperTest();
+  advanceAdjustDialogHelperTest();
+  aiReplanPreviewDialogHelperTest();
+  createPlanDialogHelperTest();
+  gapResolutionDialogHelperTest();
+  huaweiAccountLoginButtonHelperTest();
 
   describe('listTest', () => {
     it('normal: list_should_keep_core_test_modules_registered', 0, () => {

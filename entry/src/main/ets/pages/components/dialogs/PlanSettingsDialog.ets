@@ -1,6 +1,20 @@
 import { ThemeCenter } from '../../../common/utils/ThemeCenter';
 import { DEFAULT_WEATHER_USER_PREFERENCE, WeatherUserPreference } from '../../../domain/services/WeatherModels';
 
+export type PlanSettingsAction = 'rename' | 'reschedule' | 'share' | 'weather_preference';
+
+export function getPlanSettingsActions(): PlanSettingsAction[] {
+  return ['rename', 'reschedule', 'share', 'weather_preference'];
+}
+
+export function isPlanSettingsActionSupported(action: string): boolean {
+  return getPlanSettingsActions().indexOf(action as PlanSettingsAction) >= 0;
+}
+
+export function isWeatherPreferenceLevelValid(level: number): boolean {
+  return Number.isInteger(level) && level >= 0 && level <= 2;
+}
+
 @CustomDialog
 export struct PlanSettingsDialog {
   controller: CustomDialogController;

@@ -1,8 +1,12 @@
 ﻿import { describe, it, expect } from '@ohos/hypium';
 import {
   getCompanionControlCurrentEventId,
+  resolveCompanionControlCardOpacity,
+  resolveCompanionControlCardScale,
+  resolveCompanionControlCardTranslateX,
   shouldShowCompanionWeatherCard
 } from '../main/ets/pages/components/views/companion/CompanionControlPage';
+import { CompanionCardPhase } from '../main/ets/pages/components/views/companion/CompanionAnimationHelper';
 import { EventEntity } from '../main/ets/model/entity/EventEntity';
 
 function buildEvent(id: number): EventEntity {
@@ -84,6 +88,33 @@ export default function companionControlPageHelperTest() {
       expect(hide).assertFalse();
       expect(id).assertEqual(101);
       expect(none).assertEqual(-1);
+    });
+
+    it('normal: control_card_translate_should_move_outgoing_left_when_switching', 0, () => {
+      // Arrange
+      const phase: CompanionCardPhase = 'outgoing';
+      // Act
+      const x = resolveCompanionControlCardTranslateX(true, 0.5, phase);
+      // Assert
+      expect(x).assertEqual(-9);
+    });
+
+    it('boundary: control_card_opacity_should_keep_one_when_not_switching', 0, () => {
+      // Arrange
+      const phase: CompanionCardPhase = 'stable';
+      // Act
+      const opacity = resolveCompanionControlCardOpacity(false, 0.2, phase);
+      // Assert
+      expect(opacity).assertEqual(1);
+    });
+
+    it('regression: td-20260412-control-card-scale-incoming-should-follow-progress', 0, () => {
+      // Arrange
+      const phase: CompanionCardPhase = 'incoming';
+      // Act
+      const scale = resolveCompanionControlCardScale(true, 0.5, phase);
+      // Assert
+      expect(scale).assertEqual(0.996);
     });
   });
 }

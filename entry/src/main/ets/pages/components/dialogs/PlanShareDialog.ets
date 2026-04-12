@@ -1,4 +1,4 @@
-import { promptAction } from '@kit.ArkUI';
+﻿import { promptAction } from '@kit.ArkUI';
 import { image } from '@kit.ImageKit';
 import { photoAccessHelper } from '@kit.MediaLibraryKit';
 import { abilityAccessCtrl, bundleManager, common } from '@kit.AbilityKit';
@@ -10,6 +10,24 @@ import { PlanShareImageService, ShareEventItem, ShareImageOptions } from '../../
 
 const MAX_SHARE_EVENTS = 50;
 const SAVE_MAX_ATTEMPTS = 2;
+
+export function clampPlanShareEvents(eventsCount: number, maxShareEvents: number = MAX_SHARE_EVENTS): number {
+  if (eventsCount <= 0) {
+    return 0;
+  }
+  if (eventsCount > maxShareEvents) {
+    return maxShareEvents;
+  }
+  return eventsCount;
+}
+
+export function canCopyPlanShareCompressedText(compressedJson: string): boolean {
+  return compressedJson.length > 0;
+}
+
+export function resolvePlanShareSaveQuality(attempt: number): number {
+  return attempt === 0 ? 95 : 80;
+}
 
 @CustomDialog
 export struct PlanShareDialog {
@@ -52,7 +70,7 @@ export struct PlanShareDialog {
 
   @Builder
   buildHeader() {
-    Text('分享计划')
+    Text('鍒嗕韩璁″垝')
       .fontSize(18)
       .fontWeight(FontWeight.Bold)
       .margin({ bottom: 12 })
@@ -88,7 +106,7 @@ export struct PlanShareDialog {
 
   @Builder
   buildPreview() {
-    Text('预览')
+    Text('棰勮')
       .fontSize(14)
       .fontWeight(FontWeight.Medium)
       .margin({ bottom: 8 })
@@ -104,7 +122,7 @@ export struct PlanShareDialog {
   @Builder
   buildActions() {
     Row() {
-      Button('关闭')
+      Button('鍏抽棴')
         .backgroundColor('#F0F0F0')
         .fontColor($r('app.color.text_secondary'))
         .width('30%')
@@ -150,13 +168,13 @@ export struct PlanShareDialog {
       };
 
       this.shareImage = await this.renderShareImageWithRetry(options);
-      this.safeShowToast('图片生成成功');
+      this.safeShowToast('鍥剧墖鐢熸垚鎴愬姛');
     } catch (_error) {
       const copied = await this.copyShareTextToClipboard();
       if (copied) {
         this.safeShowToast('二维码生成失败，已复制文本分享内容');
       } else {
-        this.safeShowToast('生成失败，请重试');
+        this.safeShowToast('鐢熸垚澶辫触锛岃閲嶈瘯');
       }
     } finally {
       this.isGenerating = false;
@@ -170,7 +188,7 @@ export struct PlanShareDialog {
 
     const granted = await this.requestAlbumPermission();
     if (!granted) {
-      this.safeShowToast('未获得相册权限，无法保存图片');
+      this.safeShowToast('鏈幏寰楃浉鍐屾潈闄愶紝鏃犳硶淇濆瓨鍥剧墖');
       return;
     }
 
@@ -180,12 +198,12 @@ export struct PlanShareDialog {
       const uri = await helper.createAsset(photoAccessHelper.PhotoType.IMAGE, 'jpg');
       await this.writeImageWithRetry(uri);
 
-      this.safeShowToast('已保存到相册');
+      this.safeShowToast('宸蹭繚瀛樺埌鐩稿唽');
       this.controller.close();
     } catch (_error) {
       const copied = await this.copyShareTextToClipboard();
       if (copied) {
-        this.safeShowToast('保存失败，已复制文本分享内容');
+        this.safeShowToast('淇濆瓨澶辫触锛屽凡澶嶅埗鏂囨湰鍒嗕韩鍐呭');
       } else {
         this.safeShowToast('保存失败，请检查相册权限');
       }
@@ -216,11 +234,12 @@ export struct PlanShareDialog {
   }
 
   private getRenderableEvents(): ShareEventItem[] {
-    if (this.events.length <= MAX_SHARE_EVENTS) {
+    const renderableCount = clampPlanShareEvents(this.events.length);
+    if (renderableCount >= this.events.length) {
       return this.events;
     }
     this.safeShowToast(`分享图片最多展示 ${MAX_SHARE_EVENTS} 条事件`);
-    return this.events.slice(0, MAX_SHARE_EVENTS);
+    return this.events.slice(0, renderableCount);
   }
 
   private async renderShareImageWithRetry(options: ShareImageOptions): Promise<image.PixelMap> {
@@ -245,7 +264,7 @@ export struct PlanShareDialog {
   private async writeImageWithRetry(uri: string): Promise<void> {
     let lastError: Error | null = null;
     for (let attempt = 0; attempt < SAVE_MAX_ATTEMPTS; attempt++) {
-      const quality = attempt === 0 ? 95 : 80;
+      const quality = resolvePlanShareSaveQuality(attempt);
       try {
         await this.writeImageToUri(uri, quality);
         return;
@@ -274,7 +293,7 @@ export struct PlanShareDialog {
   }
 
   private async copyShareTextToClipboard(): Promise<boolean> {
-    if (!this.compressedJson || this.compressedJson.length <= 0) {
+    if (!canCopyPlanShareCompressedText(this.compressedJson)) {
       return false;
     }
     try {
@@ -287,3 +306,5 @@ export struct PlanShareDialog {
     }
   }
 }
+
+
