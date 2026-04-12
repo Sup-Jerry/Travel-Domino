@@ -180,6 +180,11 @@ export class TimelineAiService implements ITimelineAiService {
   private async resolveHistoryPrompt(): Promise<string> {
     const snapshot = await this.host.persistence.getPlanAndEvents(this.host.planId);
     const prompt = (snapshot.plan?.lastAiPrompt || '').trim();
+    hilog.info(
+      0x0000,
+      TAG,
+      `[airest]AI_REPLAN_TRACE[service_history_prompt] planId=${this.host.planId}, promptLen=${prompt.length}`
+    );
     if (prompt.length === 0) {
       throw new Error('未找到上次生成记录');
     }
@@ -191,6 +196,11 @@ export class TimelineAiService implements ITimelineAiService {
     requestedCustomStrategy?: ComposableStrategy,
     keepCurrentMode?: boolean
   ): Promise<EffectiveStrategyChoice> {
+    hilog.info(
+      0x0000,
+      TAG,
+      `[airest]AI_REPLAN_TRACE[service_strategy_resolve_in] requestedMode=${requestedMode}, hasRequestedCustom=${requestedCustomStrategy ? 1 : 0}, keepCurrent=${keepCurrentMode === true ? 1 : 0}, currentMode=${this.host.currentStrategyMode}`
+    );
     if (keepCurrentMode === true) {
       const currentMode = TimelineAiService.normalizeStrategyMode(this.host.currentStrategyMode);
       if (currentMode === -1) {
@@ -296,7 +306,8 @@ export class TimelineAiService implements ITimelineAiService {
     const request: AiGenerateRequest = {
       userPrompt: enhancedPrompt,
       strategyMode: customStrategy ? -1 : strategyMode,
-      customStrategy: customStrategy
+      customStrategy: customStrategy,
+      allowPartialResult: true
     };
     const aiItems = await AiService.generateItineraryWithStrategy(request);
 
@@ -503,13 +514,26 @@ export class TimelineAiService implements ITimelineAiService {
 
     this.host.isRegenerating = true;
     try {
-      const prompt = await this.resolveHistoryPrompt();
-      const effective = await this.resolveEffectiveStrategy(strategyMode, customStrategy, keepCurrentMode);
-      const items = await this.buildAiCandidates(prompt, effective.mode, effective.customStrategy);
       hilog.info(
         0x0000,
         TAG,
-        `[AI_REPLAN][preview] mode=${effective.mode}, custom=${effective.customStrategy ? 1 : 0}, count=${items.length}`
+        `[airest]AI_REPLAN_TRACE[service_preview_in] planId=${this.host.planId}, strategy=${strategyMode}, custom=${customStrategy ? 1 : 0}, keepCurrent=${keepCurrentMode === true ? 1 : 0}`
+      );
+      const prompt = await this.resolveHistoryPrompt();
+      const effective = await this.resolveEffectiveStrategy(strategyMode, customStrategy, keepCurrentMode);
+      const items = await this.buildAiCandidates(prompt, effective.mode, effective.customStrategy);
+      const requestedDays = AiService.resolveRequestedDaysFromPrompt(prompt);
+      if (requestedDays > 1 && items.length > 0 && items.length < requestedDays) {
+        hilog.warn(
+          0x0000,
+          TAG,
+          `[airest]AI_REPLAN_TRACE[service_preview_partial] mode=${effective.mode}, requestedDays=${requestedDays}, generated=${items.length}`
+        );
+      }
+      hilog.info(
+        0x0000,
+        TAG,
+        `[airest]AI_REPLAN_TRACE[service_preview_out] mode=${effective.mode}, custom=${effective.customStrategy ? 1 : 0}, count=${items.length}, promptLen=${prompt.length}`
       );
       return {
         prompt: prompt,
@@ -519,6 +543,13 @@ export class TimelineAiService implements ITimelineAiService {
         itemCount: items.length,
         items: items
       };
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : JSON.stringify(error);
+      hilog.error(0x0000, TAG, `[airest]AI_REPLAN_TRACE[service_preview_fail] reason=${reason}`);
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error(reason);
     } finally {
       this.host.isRegenerating = false;
     }
@@ -536,6 +567,11 @@ export class TimelineAiService implements ITimelineAiService {
     }
     this.host.isRegenerating = true;
     try {
+      hilog.info(
+        0x0000,
+        TAG,
+        `[airest]AI_REPLAN_TRACE[service_apply_in] planId=${this.host.planId}, decision=${decision}, previewMode=${preview.strategyMode}, previewCount=${preview.items.length}`
+      );
       const undoToken = await this.captureUndoToken();
       const mode = TimelineAiService.normalizeStrategyMode(preview.strategyMode);
       const customStrategy = TimelineAiService.cloneCustomStrategy(preview.customStrategy);
@@ -550,6 +586,11 @@ export class TimelineAiService implements ITimelineAiService {
         ? Math.max(...scheduleEvents.map((event: EventEntity) => event.day_offset || 0)) + 1
         : 0;
       const allocatedDayOffsets = TimelineAiService.buildAiDayOffsets(preview.items.length, requestedDays, baseDayOffset);
+      hilog.info(
+        0x0000,
+        TAG,
+        `[airest]AI_REPLAN_TRACE[service_apply_plan] decision=${decision}, requestedDays=${requestedDays}, baseDayOffset=${baseDayOffset}, scheduleCount=${scheduleEvents.length}, allocatedCount=${allocatedDayOffsets.length}`
+      );
       const insertedIds: number[] = [];
 
       for (let i = 0; i < preview.items.length; i++) {
@@ -627,9 +668,16 @@ export class TimelineAiService implements ITimelineAiService {
       hilog.info(
         0x0000,
         TAG,
-        `[AI_REPLAN][apply] decision=${decision}, mode=${mode}, count=${insertedIds.length}`
+        `[airest]AI_REPLAN_TRACE[service_apply_out] decision=${decision}, mode=${mode}, insertedCount=${insertedIds.length}, totalEvents=${this.host.events.length}`
       );
       return undoToken;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : JSON.stringify(error);
+      hilog.error(0x0000, TAG, `[airest]AI_REPLAN_TRACE[service_apply_fail] decision=${decision}, reason=${reason}`);
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error(reason);
     } finally {
       this.host.isRegenerating = false;
     }
@@ -796,18 +844,26 @@ export class TimelineAiService implements ITimelineAiService {
   }
 
   public async regenerateWithCustomStrategy(strategy: ComposableStrategy): Promise<void> {
+    hilog.info(0x0000, TAG, `[airest]AI_REPLAN_TRACE[service_regenerate_custom] planId=${this.host.planId}`);
     const preview = await this.buildReplanPreview(-1, strategy, false);
     await this.applyReplanPreview(preview, 'OVERWRITE');
   }
 
   public async regenerateByCurrentStrategy(): Promise<void> {
+    hilog.info(
+      0x0000,
+      TAG,
+      `[airest]AI_REPLAN_TRACE[service_regenerate_current] planId=${this.host.planId}, currentMode=${this.host.currentStrategyMode}`
+    );
     const preview = await this.buildReplanPreview(this.host.currentStrategyMode, undefined, true);
     await this.applyReplanPreview(preview, 'OVERWRITE');
   }
 
   public async changeStrategyAndRegenerate(mode: number): Promise<void> {
+    hilog.info(0x0000, TAG, `[airest]AI_REPLAN_TRACE[service_regenerate_change] planId=${this.host.planId}, mode=${mode}`);
     const preview = await this.buildReplanPreview(mode, undefined, false);
     await this.applyReplanPreview(preview, 'OVERWRITE');
   }
 }
+
 

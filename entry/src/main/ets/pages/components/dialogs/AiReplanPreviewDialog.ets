@@ -3,16 +3,16 @@ import { ComposableStrategy } from '../../../domain/strategy/TravelStrategyDimen
 import { AiReplanPreviewItem, AiReplanPreviewResult } from '../../../domain/timeline/services/TimelineAiService';
 
 export function getAiReplanItemTypeLabel(itemType: number): string {
-  if (itemType === 1) return '缇庨';
-  if (itemType === 2) return '浣忓';
-  return '鏅偣';
+  if (itemType === 1) return '美食';
+  if (itemType === 2) return '住宿';
+  return '景点';
 }
 
 export function getAiReplanStrategyLabel(mode: number): string {
-  if (mode === 1) return '鐗圭鍏?';
-  if (mode === 2) return '浼戦棽';
-  if (mode === -1) return '鑷畾涔?';
-  return '榛樿';
+  if (mode === 1) return '特种兵';
+  if (mode === 2) return '休闲';
+  if (mode === -1) return '自定义';
+  return '默认';
 }
 
 
@@ -48,18 +48,18 @@ export struct AiReplanPreviewDialog {
 
   build() {
     Column() {
-      Text('AI 閲嶆柊瑙勫垝棰勮')
+      Text('AI 重新规划预览')
         .fontSize(20)
         .fontWeight(FontWeight.Bold)
         .fontColor(this.getPalette().textPrimary)
         .margin({ bottom: 10 });
 
-      Text(`鍏辩敓鎴?${this.preview.itemCount} 涓湴鐐癸紝绛栫暐锛?{this.buildStrategyLabel(this.preview.strategyMode)}`)
+      Text(`共生成 ${this.preview.itemCount} 个地点，策略：${this.buildStrategyLabel(this.preview.strategyMode)}`)
         .fontSize(13)
         .fontColor(this.getPalette().textSecondary)
         .margin({ bottom: 12 });
 
-      Text(`鎻愮ず璇嶏細${this.preview.prompt}`)
+      Text(`提示词：${this.preview.prompt}`)
         .fontSize(12)
         .fontColor(this.getPalette().textTertiary)
         .maxLines(3)
@@ -74,7 +74,7 @@ export struct AiReplanPreviewDialog {
                 .fontSize(14)
                 .fontColor(this.getPalette().textPrimary)
                 .layoutWeight(1);
-              Text(`${this.buildItemTypeLabel(item.itemType)} 路 ${item.duration}鍒嗛挓`)
+              Text(`${this.buildItemTypeLabel(item.itemType)} · ${item.duration}分钟`)
                 .fontSize(12)
                 .fontColor(this.getPalette().textSecondary);
             }
@@ -92,7 +92,7 @@ export struct AiReplanPreviewDialog {
       .scrollBar(BarState.Auto);
 
       Row() {
-        Button('鍙栨秷')
+        Button('取消')
           .height(40)
           .layoutWeight(1)
           .backgroundColor(this.getPalette().cardBg)
@@ -103,7 +103,7 @@ export struct AiReplanPreviewDialog {
             this.controller.close();
           });
 
-        Button('閲嶆柊鐢熸垚')
+        Button('重新生成')
           .height(40)
           .layoutWeight(1)
           .margin({ left: 8 })
@@ -118,7 +118,7 @@ export struct AiReplanPreviewDialog {
       .margin({ top: 14 });
 
       Row() {
-        Button('淇濈暀')
+        Button('保留')
           .height(42)
           .layoutWeight(1)
           .backgroundColor('#16A34A')
@@ -127,7 +127,7 @@ export struct AiReplanPreviewDialog {
             this.onApplyKeep();
             this.controller.close();
           });
-        Button('瑕嗙洊')
+        Button('覆盖')
           .height(42)
           .layoutWeight(1)
           .margin({ left: 8 })

@@ -1,4 +1,4 @@
-﻿// 鏂囦欢璺緞: ets/viewmodel/TimelineInteractionHelper.ets
+﻿// 文件路径: ets/viewmodel/TimelineInteractionHelper.ets
 import { TimelineViewModel } from './TimelineViewModel';
 import { EventEntity } from '../model/entity/EventEntity';
 import { hilog } from '@kit.PerformanceAnalysisKit';
@@ -7,20 +7,20 @@ import { TimelineDatePolicy } from '../domain/policy/TimelineDatePolicy';
 import { TimelineExecutionState } from '../domain/policy/TimelineExecutionState';
 
 /**
- * 涓撻棬澶勭悊 UI 浜や簰閫昏緫鐨勮緟鍔╃被
- * 浣滅敤锛氬皢 Index.ets 涓殑澶嶆潅鍒ゆ柇閫昏緫鍓ョ鍑烘潵
+ * 专门处理 UI 交互逻辑的辅助类
+ * 作用：将 Index.ets 中的复杂判断逻辑剥离出来
  */
 export class TimelineInteractionHelper {
 
   /**
-   * [鏍稿績閫昏緫] 妫€娴嬬┖绐楀苟寮圭獥
-   * @param vm 浼犲叆 ViewModel 瀹炰緥浠ヨ幏鍙栨暟鎹拰璋冪敤鏂规硶
+   * [核心逻辑] 检测空窗并回调
+   * @param vm 传入 ViewModel 实例以获取数据和调用方法
    */
   public static checkForGapAndPrompt(vm: TimelineViewModel, onGapFound?: (item: EventEntity) => void) {
     setTimeout(() => {
       const gapItem = vm.getSortedGaps().find((item: EventEntity) => !item.is_ignore_wait);
 
-      // 濡傛灉鍙戠幇浜嗙┖绐楋紝骞朵笖澶栭儴浼犱簡鍥炶皟鍑芥暟锛屽氨閫氱煡澶栭儴
+      // 如果发现了空窗，并且外部传入了回调函数，就通知外部
       if (gapItem && onGapFound) {
         onGapFound(gapItem);
       }
@@ -40,17 +40,17 @@ export class TimelineInteractionHelper {
     isHardLock: boolean = false,
     note: string = '',
     isMustVisit: boolean = false,
-    lat?: number, // 鉁?[鏂板] 鎺ユ敹绾害
-    lng?: number  // 鉁?[鏂板] 鎺ユ敹缁忓害
+    lat?: number, // 接收纬度
+    lng?: number  // 接收经度
   ): Promise<void> {
-    hilog.info(0x0000, 'TimelineHelper', `[鑺傜偣2: 涓浆绔橾 handleSaveItem 鎺ュ埌鏁版嵁 -> 鍦扮偣: ${name}, lat: ${lat}, lng: ${lng}`);
+    hilog.info(0x0000, 'TimelineHelper', `[节点2: 中转站 handleSaveItem 接到数据 -> 地点: ${name}, lat: ${lat}, lng: ${lng}`);
     const priorityVal = isMustVisit ? 1 : 0;
 
     if (editingItemId !== -1) {
-      // 鉁?[淇敼] 鎶?lat 鍜?lng 浼犵粰 updateEventInfo
+      // 把 lat 和 lng 传给 updateEventInfo
       await vm.updateEventInfo(editingItemId, name, duration, fixedTime, dayOffset || 0, isHardLock, note, priorityVal, lat, lng);
     } else {
-      // 鉁?[淇敼] 鎶?lat 鍜?lng 浼犵粰 addNewItem
+      // 把 lat 和 lng 传给 addNewItem
       await vm.addNewItem(name, duration, isSchedule, fixedTime, dayOffset || 0, preTravel ?? -1, isHardLock, note, priorityVal, lat, lng);
     }
     TimelineInteractionHelper.checkForGapAndPrompt(vm, onGapFound);
@@ -60,7 +60,7 @@ export class TimelineInteractionHelper {
     vm: TimelineViewModel,
     item: EventEntity,
     newMinutes: number,
-    // 鉁?[鏂板鍙傛暟]
+    // 新增参数
     onGapFound?: (item: EventEntity) => void
   ) {
     const index = vm.events.indexOf(item);
@@ -76,11 +76,11 @@ export class TimelineInteractionHelper {
     duration: number,
     fixedTime: string,
     lockStatus: number,
-    // 鉁?[鏂板鍙傛暟]
+    // 新增参数
     onGapFound?: (item: EventEntity) => void
   ) {
     const effectiveDayOffset = TimelineDatePolicy.resolveEventDayOffset(item);
-    vm.updateEventInfo(item.id, item.name, duration, fixedTime, effectiveDayOffset, lockStatus === 1, item.note, item.priority); // 淇敼鐐?
+    vm.updateEventInfo(item.id, item.name, duration, fixedTime, effectiveDayOffset, lockStatus === 1, item.note, item.priority); // 修改点
     const target = vm.events.find(e => e.id === item.id);
     if (target) {
       target.lock_status = lockStatus;
@@ -140,5 +140,3 @@ export class TimelineInteractionHelper {
     return TimelineDatePolicy.buildPlannedTimestamp(vm.planStartDate, dayOffset, plannedText);
   }
 }
-
-

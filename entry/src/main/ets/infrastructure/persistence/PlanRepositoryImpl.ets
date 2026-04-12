@@ -7,7 +7,7 @@ import { EventEntity } from '../../model/entity/EventEntity';
 
 export interface PlanItem {
   id: number;
-  title: string; // 瀵瑰杩樻槸鍙?title锛屾柟渚?UI 缁戝畾锛屽唴閮ㄦ槧灏勫埌 DB 鐨?name
+  title: string;
   createdAt: number;
   startDate?: number; // [鏂板]
   status?: number;    // [新增] 0:规划, 2:归档
@@ -81,7 +81,6 @@ export class PlanRepositoryImpl {
 
   /**
    * 鍒涘缓鏂拌鍒?
-   * [Phase 2 淇敼] 澧炲姞 startDate 鍙傛暟
    */
   public static async createPlan(title: string, startDate: number): Promise<number> {
     const rdbStore = RdbHelper.getInstance().getRdbStore();
@@ -92,10 +91,9 @@ export class PlanRepositoryImpl {
       valueBucket[PlanEntity.NAME] = title;
       valueBucket[PlanEntity.CREATED_AT] = new Date().getTime();
 
-      // 鉁?[Phase 2] 浣跨敤鐢ㄦ埛閫夋嫨鐨勬棩鏈?
       valueBucket[PlanEntity.START_DATE] = startDate;
 
-      valueBucket[PlanEntity.STATUS] = 0; // 瑙勫垝涓?
+      valueBucket[PlanEntity.STATUS] = 0;
       valueBucket[PlanEntity.DEL_FLAG] = 0; // 鏈垹闄?
       valueBucket[PlanEntity.ENABLE_AUTO_AMAP_ROUTE] = 1;
 
@@ -109,8 +107,6 @@ export class PlanRepositoryImpl {
   }
 
   /**
-   * [鏂板] 鏍规嵁 ID 鑾峰彇鍗曚釜璁″垝璇︽儏
-   * 浣滅敤锛歍imelineViewModel 闇€瑕佽鍙?startDate
    */
   public static async getPlanById(id: number): Promise<PlanItem | undefined> {
     const rdbStore = RdbHelper.getInstance().getRdbStore();
@@ -159,7 +155,7 @@ export class PlanRepositoryImpl {
     try {
       let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
       predicates.equalTo(PlanEntity.DEL_FLAG, 1); // 鏌ュ凡鍒犻櫎
-      predicates.orderByDesc(PlanEntity.DELETE_TIME); // 鎸夊垹闄ゆ椂闂村€掑簭
+      predicates.orderByDesc(PlanEntity.DELETE_TIME);
 
       let resultSet = await rdbStore.query(predicates);
       return PlanRepositoryImpl.parseResultSet(resultSet);
@@ -247,7 +243,6 @@ export class PlanRepositoryImpl {
     }
   }
 
-  // --- 鍐呴儴杈呭姪锛氶伩鍏嶉噸澶嶅啓瑙ｆ瀽浠ｇ爜 ---
   private static parseResultSet(resultSet: relationalStore.ResultSet): PlanItem[] {
     let resultList: PlanItem[] = [];
     try {
@@ -285,7 +280,6 @@ export class PlanRepositoryImpl {
 
   /**
    * [Phase 2 鏂板] 鏇存柊璁″垝鐘舵€?
-   * 浣滅敤锛氱敤浜?褰掓。(2) 鎴?閲嶆柊婵€娲?0)
    */
   public static async updatePlanStatus(id: number, status: number): Promise<void> {
     const rdbStore = RdbHelper.getInstance().getRdbStore();
@@ -354,7 +348,6 @@ export class PlanRepositoryImpl {
   }
 
   /**
-   * 鑾峰彇鎵€鏈夎鍒掑垪琛?(榛樿鍙煡鏈垹闄ょ殑)
    */
   public static async getPlanList(): Promise<PlanItem[]> {
     const rdbStore = RdbHelper.getInstance().getRdbStore();
@@ -362,13 +355,11 @@ export class PlanRepositoryImpl {
 
     try {
       let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
-      // 鍙煡璇㈡湭鍒犻櫎鐨?
       predicates.equalTo(PlanEntity.DEL_FLAG, 0);
       predicates.orderByDesc(PlanEntity.CREATED_AT);
 
       let resultSet = await rdbStore.query(predicates);
 
-      // 鉁?[淇敼] 鐩存帴璋冪敤 parseResultSet 澶嶇敤閫昏緫锛屼唬鐮佹洿绮剧畝
       return PlanRepositoryImpl.parseResultSet(resultSet);
     } catch (err) {
       console.error(`[PlanDao] getPlanList failed: ${JSON.stringify(err)}`);
@@ -378,7 +369,6 @@ export class PlanRepositoryImpl {
 
   /**
    * [Day 3.5 鏂板] 妯＄硦鎼滅储璁″垝
-   * 浣滅敤锛氬湪涓婚〉鎼滅储妗嗚緭鍏ュ叧閿瘝锛岃繃婊ゆ樉绀?
    */
   public static async searchPlans(keyword: string): Promise<PlanItem[]> {
     const rdbStore = RdbHelper.getInstance().getRdbStore();
@@ -386,7 +376,7 @@ export class PlanRepositoryImpl {
 
     try {
       let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
-      predicates.equalTo(PlanEntity.DEL_FLAG, 0); // 鍙兘鎼滄湭鍒犻櫎鐨?
+      predicates.equalTo(PlanEntity.DEL_FLAG, 0);
       predicates.like(PlanEntity.NAME, `%${keyword}%`); // 妯＄硦鍖归厤
       predicates.orderByDesc(PlanEntity.CREATED_AT);
 
@@ -450,7 +440,7 @@ export class PlanRepositoryImpl {
     try {
       rdbStore.beginTransaction();
       const valueBucket: ValuesBucket = {};
-      valueBucket[PlanEntity.DEL_FLAG] = 1; // 鏍囪涓哄垹闄?
+      valueBucket[PlanEntity.DEL_FLAG] = 1;
       valueBucket[PlanEntity.DELETE_TIME] = new Date().getTime(); // 璁板綍鍒犻櫎鏃堕棿
 
       let predicates = new relationalStore.RdbPredicates(PlanEntity.TABLE_NAME);
@@ -547,14 +537,11 @@ export class PlanRepositoryImpl {
 
   /**
    * [V5.0 鏂板] 鐗╃悊娓呯悊瓒呰繃 7 澶╃殑搴熷純璁″垝
-   * 寤鸿鍦?App 鍚姩鏃堕€氳繃 Worker 鎴栧欢鏃惰皟鐢?
-   * @returns 鍒犻櫎鐨勮鏁?
    */
   public static async purgeOldTrash(): Promise<number> {
     const rdbStore = RdbHelper.getInstance().getRdbStore();
     if (!rdbStore) return 0;
 
-    // 1. 璁＄畻鎴鏃堕棿 (褰撳墠鏃堕棿 - 7澶?
     const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
     const limitTime = new Date().getTime() - sevenDaysMs;
 

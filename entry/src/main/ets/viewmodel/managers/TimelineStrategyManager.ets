@@ -1,3 +1,4 @@
+﻿import { hilog } from '@kit.PerformanceAnalysisKit';
 import { ComposableStrategy } from '../../domain/strategy/TravelStrategyDimensions';
 import {
   AiReplanApplyDecision,
@@ -15,6 +16,7 @@ export interface ITimelineStrategyHost {
 }
 
 export class TimelineStrategyManager {
+  private static readonly TAG: string = 'TimelineStrategyManager';
   private readonly host: ITimelineStrategyHost;
   private readonly aiService: ITimelineAiService;
 
@@ -80,6 +82,11 @@ export class TimelineStrategyManager {
     customStrategy?: ComposableStrategy,
     keepCurrentMode?: boolean
   ): Promise<AiReplanPreviewResult> {
+    hilog.info(
+      0x0000,
+      TimelineStrategyManager.TAG,
+      `[airest]AI_REPLAN_TRACE[manager_preview_in] planId=${this.host.planId}, strategy=${strategyMode}, custom=${customStrategy ? 1 : 0}, keepCurrent=${keepCurrentMode === true ? 1 : 0}`
+    );
     return this.aiService.buildReplanPreview(strategyMode, customStrategy, keepCurrentMode);
   }
 
@@ -87,10 +94,20 @@ export class TimelineStrategyManager {
     preview: AiReplanPreviewResult,
     decision: AiReplanApplyDecision
   ): Promise<AiReplanUndoToken> {
+    hilog.info(
+      0x0000,
+      TimelineStrategyManager.TAG,
+      `[airest]AI_REPLAN_TRACE[manager_apply_in] planId=${this.host.planId}, decision=${decision}, mode=${preview.strategyMode}, count=${preview.items.length}`
+    );
     return this.aiService.applyReplanPreview(preview, decision);
   }
 
   public async restoreFromUndoToken(token: AiReplanUndoToken): Promise<void> {
+    hilog.info(
+      0x0000,
+      TimelineStrategyManager.TAG,
+      `[airest]AI_REPLAN_TRACE[manager_undo_in] planId=${this.host.planId}, tokenCreatedAt=${token.createdAt}, tokenEvents=${token.events.length}`
+    );
     await this.aiService.restoreFromUndoToken(token);
   }
 
@@ -127,3 +144,4 @@ export class TimelineStrategyManager {
     return `${safeGeneratedAt}_${safeScore}`;
   }
 }
+

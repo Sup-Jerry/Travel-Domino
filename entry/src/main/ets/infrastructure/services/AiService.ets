@@ -21,6 +21,7 @@ export interface AiGenerateRequest {
   userPrompt: string;
   strategyMode?: number;
   customStrategy?: ComposableStrategy;
+  allowPartialResult?: boolean;
 }
 
 interface AiGenerationRequirement {
@@ -68,10 +69,12 @@ export class AiService {
   private static readonly TAG = 'AiService';
   private static requesterForTest: AiRequester | null = null;
   private static readonly DEFAULT_READ_TIMEOUT_MS = 30000;
+  private static readonly DEFAULT_MAX_TOKENS = 2000;
   private static readonly DEFAULT_REQUESTED_DAYS = 1;
   private static readonly MAX_REQUESTED_DAYS = 30;
   private static readonly RETRY_TIMES = 1;
-  private static readonly RETRY_READ_TIMEOUT_MS = 45000;
+  private static readonly RETRY_READ_TIMEOUT_MS = 60000;
+  private static readonly RETRY_MAX_TOKENS = 1400;
   private static readonly MULTI_DAY_FALLBACK_DAILY_FLOOR = 2;
   private static readonly SCENIC_MIN_DURATION = 30;
   private static readonly SCENIC_MAX_DURATION = 180;
@@ -118,18 +121,119 @@ export class AiService {
     return content;
   }
 
+  private static stripMarkdownFence(raw: string): string {
+    const trimmed = (raw || '').trim();
+    const fence = trimmed.match(/```[a-zA-Z]*\s*([\s\S]*?)```/);
+    if (fence && fence.length > 1) {
+      return fence[1].trim();
+    }
+    return trimmed.replace(/```json/gi, '').replace(/```/g, '').trim();
+  }
+
+  private static removeJsonTrailingCommas(raw: string): string {
+    return (raw || '').replace(/,\s*([}\]])/g, '$1');
+  }
+
+  private static tryParseJson(raw: string): Object | null {
+    try {
+      return JSON.parse(raw) as Object;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  private static pickArrayFromObject(parsed: Object): AiRawItem[] | null {
+    const record = parsed as Record<string, Object>;
+    const preferredKeys: string[] = ['items', 'data', 'list', 'itinerary', 'result'];
+    for (let i = 0; i < preferredKeys.length; i++) {
+      const key = preferredKeys[i];
+      const value = record[key];
+      if (Array.isArray(value)) {
+        return value as AiRawItem[];
+      }
+    }
+    const keys = Object.keys(record);
+    for (let i = 0; i < keys.length; i++) {
+      const value = record[keys[i]];
+      if (Array.isArray(value)) {
+        return value as AiRawItem[];
+      }
+    }
+    return null;
+  }
+
+  private static tryParseArrayCandidate(raw: string): AiRawItem[] | null {
+    const parsed = AiService.tryParseJson(raw);
+    if (!parsed) {
+      return null;
+    }
+    if (Array.isArray(parsed)) {
+      return parsed as AiRawItem[];
+    }
+    return AiService.pickArrayFromObject(parsed);
+  }
+
+  private static buildLooseParseCandidates(contentRaw: string, normalized: string): string[] {
+    const candidates: string[] = [];
+    const seen: Set<string> = new Set<string>();
+    const pushCandidate = (value: string) => {
+      const trimmed = (value || '').trim();
+      if (trimmed.length === 0 || seen.has(trimmed)) {
+        return;
+      }
+      seen.add(trimmed);
+      candidates.push(trimmed);
+    };
+
+    const rawNoFence = AiService.stripMarkdownFence(contentRaw);
+    pushCandidate(normalized);
+    pushCandidate(AiService.removeJsonTrailingCommas(normalized));
+    pushCandidate(rawNoFence);
+    pushCandidate(AiService.removeJsonTrailingCommas(rawNoFence));
+
+    const firstBracket = rawNoFence.indexOf('[');
+    const lastBracket = rawNoFence.lastIndexOf(']');
+    if (firstBracket >= 0 && lastBracket > firstBracket) {
+      const arraySlice = rawNoFence.slice(firstBracket, lastBracket + 1);
+      pushCandidate(arraySlice);
+      pushCandidate(AiService.removeJsonTrailingCommas(arraySlice));
+    }
+
+    return candidates;
+  }
+
   private static parseItemsFromContent(contentRaw: string): AiRawItem[] {
     const normalized = AiService.unwrapContent(contentRaw);
-    let parsed = null as Object | null;
-    try {
-      parsed = JSON.parse(normalized) as Object;
-    } catch (_error) {
+    const strictParsed = AiService.tryParseJson(normalized);
+    let items = null as AiRawItem[] | null;
+    if (strictParsed) {
+      if (Array.isArray(strictParsed)) {
+        items = strictParsed as AiRawItem[];
+      } else {
+        items = AiService.pickArrayFromObject(strictParsed);
+      }
+    }
+
+    if (!items) {
+      const candidates = AiService.buildLooseParseCandidates(contentRaw, normalized);
+      for (let i = 0; i < candidates.length; i++) {
+        const parsedItems = AiService.tryParseArrayCandidate(candidates[i]);
+        if (parsedItems) {
+          items = parsedItems;
+          hilog.warn(
+            0x0000,
+            AiService.TAG,
+            `[AI_DEBUG][parse_loose_json_success] candidate=${i}, len=${candidates[i].length}`
+          );
+          break;
+        }
+      }
+    }
+
+    if (!items) {
       throw new Error('AI 返回内容不是合法 JSON');
     }
-    if (!Array.isArray(parsed)) {
-      throw new Error('AI 返回内容不是数组');
-    }
-    const items = parsed as AiRawItem[];
+
     const normalizedItems: AiRawItem[] = [];
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
@@ -495,6 +599,23 @@ export class AiService {
     return true;
   }
 
+  private static isBestEffortAcceptableForLongTrip(
+    items: AiRawItem[],
+    requirement: AiGenerationRequirement
+  ): boolean {
+    if (requirement.requestedDays < 10 || !items || items.length === 0) {
+      return false;
+    }
+
+    if (!requirement.allowAccommodation && items.some((item: AiRawItem) => item.type === 2)) {
+      return false;
+    }
+
+    const nonHotelCount = items.filter((item: AiRawItem) => item.type !== 2).length;
+    const minAcceptable = Math.max(6, Math.ceil(requirement.requestedDays * 0.4));
+    return nonHotelCount >= minAcceptable;
+  }
+
   private static isTimeoutLikeError(error: Object): boolean {
     if (!(error instanceof Error)) {
       return false;
@@ -568,7 +689,8 @@ export class AiService {
   private static async requestItineraryItems(
     systemPrompt: string,
     userPrompt: string,
-    readTimeoutMs: number = AiService.DEFAULT_READ_TIMEOUT_MS
+    readTimeoutMs: number = AiService.DEFAULT_READ_TIMEOUT_MS,
+    maxTokens: number = AiService.DEFAULT_MAX_TOKENS
   ): Promise<AiRawItem[]> {
     const options: http.HttpRequestOptions = {
       method: http.RequestMethod.POST,
@@ -578,7 +700,7 @@ export class AiService {
       },
       extraData: {
         model: 'DeepSeek-V3.2',
-        max_tokens: 2000,
+        max_tokens: maxTokens,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
@@ -658,6 +780,7 @@ export class AiService {
     AppConfig.validateAiConfig();
 
     const mode = request.strategyMode || 0;
+    const allowPartialResult = request.allowPartialResult === true;
     const strategyFragment = request.customStrategy
       ? StrategyService.buildComposablePrompt(request.customStrategy)
       : StrategyService.buildStrategyPrompt(mode);
@@ -697,14 +820,15 @@ ${multiDayConstraintPrompt}
       for (let retry = 0; retry <= AiService.RETRY_TIMES; retry++) {
         let parsedItems: AiRawItem[] = [];
         const readTimeout = retry > 0 ? AiService.RETRY_READ_TIMEOUT_MS : AiService.DEFAULT_READ_TIMEOUT_MS;
+        const maxTokens = retry > 0 ? AiService.RETRY_MAX_TOKENS : AiService.DEFAULT_MAX_TOKENS;
         const attemptStartedAt = Date.now();
         hilog.info(
           0x0000,
           AiService.TAG,
-          `[AI_DEBUG][strategy_attempt_begin] mode=${mode}, retry=${retry}, readTimeoutMs=${readTimeout}, promptLen=${currentPrompt.length}`
+          `[AI_DEBUG][strategy_attempt_begin] mode=${mode}, retry=${retry}, readTimeoutMs=${readTimeout}, maxTokens=${maxTokens}, promptLen=${currentPrompt.length}`
         );
         try {
-          parsedItems = await AiService.requestItineraryItems(systemPrompt, currentPrompt, readTimeout);
+          parsedItems = await AiService.requestItineraryItems(systemPrompt, currentPrompt, readTimeout, maxTokens);
           hilog.info(
             0x0000,
             AiService.TAG,
@@ -712,14 +836,15 @@ ${multiDayConstraintPrompt}
           );
         } catch (error) {
           const elapsedMs = Date.now() - attemptStartedAt;
+          const timeoutLike = AiService.isTimeoutLikeError(error as Object);
           const canUseFallback = retry > 0 &&
             bestEffortItems.length > 0 &&
-            AiService.isTimeoutLikeError(error as Object) &&
+            timeoutLike &&
             AiService.isFallbackAcceptableForMultiDay(bestEffortItems, requirement);
           hilog.error(
             0x0000,
             AiService.TAG,
-            `[AI_DEBUG][strategy_attempt_error] mode=${mode}, retry=${retry}, elapsedMs=${elapsedMs}, reason=${error instanceof Error ? error.message : JSON.stringify(error)}, canFallback=${canUseFallback ? 1 : 0}, bestEffortCount=${bestEffortItems.length}`
+            `[AI_DEBUG][strategy_attempt_error] mode=${mode}, retry=${retry}, elapsedMs=${elapsedMs}, timeoutLike=${timeoutLike ? 1 : 0}, reason=${error instanceof Error ? error.message : JSON.stringify(error)}, canFallback=${canUseFallback ? 1 : 0}, bestEffortCount=${bestEffortItems.length}`
           );
           if (canUseFallback) {
             finalItems = bestEffortItems;
@@ -731,12 +856,22 @@ ${multiDayConstraintPrompt}
             break;
           }
           if (retry < AiService.RETRY_TIMES) {
-            currentPrompt = AiService.buildRetryPrompt(request.userPrompt, requirement);
-            hilog.warn(
-              0x0000,
-              AiService.TAG,
-              `[AI_DEBUG][strategy_retry_after_error] mode=${mode}, retry=${retry}, nextRetry=${retry + 1}`
-            );
+            if (timeoutLike) {
+              // timeout 场景下不叠加更复杂约束，避免模型负担继续升高
+              currentPrompt = request.userPrompt;
+              hilog.warn(
+                0x0000,
+                AiService.TAG,
+                `[AI_DEBUG][strategy_retry_after_timeout] mode=${mode}, retry=${retry}, nextRetry=${retry + 1}`
+              );
+            } else {
+              currentPrompt = AiService.buildRetryPrompt(request.userPrompt, requirement);
+              hilog.warn(
+                0x0000,
+                AiService.TAG,
+                `[AI_DEBUG][strategy_retry_after_error] mode=${mode}, retry=${retry}, nextRetry=${retry + 1}`
+              );
+            }
             continue;
           }
           const retryError = error instanceof Error ? error.message : JSON.stringify(error);
@@ -776,13 +911,29 @@ ${multiDayConstraintPrompt}
         hilog.error(
           0x0000,
           AiService.TAG,
-          `[AI_DEBUG][strategy_fail] mode=${mode}, reason=${reason}, finalCount=${finalItems.length}`
+          `[AI_DEBUG][strategy_fail] mode=${mode}, allowPartial=${allowPartialResult ? 1 : 0}, reason=${reason}, finalCount=${finalItems.length}`
         );
+        if (allowPartialResult && finalItems.length > 0) {
+          hilog.warn(
+            0x0000,
+            AiService.TAG,
+            `[AI_DEBUG][strategy_soft_accept_partial] mode=${mode}, reason=${reason}, finalCount=${finalItems.length}, requestedDays=${requirement.requestedDays}`
+          );
+          return finalItems;
+        }
         if (AiService.isFallbackAcceptableForMultiDay(finalItems, requirement)) {
           hilog.warn(
             0x0000,
             AiService.TAG,
             `[AI_DEBUG][strategy_soft_accept] mode=${mode}, reason=${reason}, finalCount=${finalItems.length}`
+          );
+          return finalItems;
+        }
+        if (AiService.isBestEffortAcceptableForLongTrip(finalItems, requirement)) {
+          hilog.warn(
+            0x0000,
+            AiService.TAG,
+            `[AI_DEBUG][strategy_soft_accept_long_trip] mode=${mode}, reason=${reason}, finalCount=${finalItems.length}, requestedDays=${requirement.requestedDays}`
           );
           return finalItems;
         }
@@ -794,6 +945,9 @@ ${multiDayConstraintPrompt}
       return finalItems;
     } catch (error) {
       const rethrowMessage = error instanceof Error ? error.message : 'AI 请求失败';
+      if (AiService.isTimeoutLikeError(error as Object)) {
+        throw new Error('AI 服务响应超时，请稍后重试');
+      }
       throw new Error(rethrowMessage);
     }
   }

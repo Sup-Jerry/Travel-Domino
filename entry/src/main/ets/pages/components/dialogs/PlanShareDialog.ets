@@ -70,7 +70,7 @@ export struct PlanShareDialog {
 
   @Builder
   buildHeader() {
-    Text('鍒嗕韩璁″垝')
+    Text('分享计划')
       .fontSize(18)
       .fontWeight(FontWeight.Bold)
       .margin({ bottom: 12 })
@@ -106,7 +106,7 @@ export struct PlanShareDialog {
 
   @Builder
   buildPreview() {
-    Text('棰勮')
+    Text('预览')
       .fontSize(14)
       .fontWeight(FontWeight.Medium)
       .margin({ bottom: 8 })
@@ -122,7 +122,7 @@ export struct PlanShareDialog {
   @Builder
   buildActions() {
     Row() {
-      Button('鍏抽棴')
+      Button('关闭')
         .backgroundColor('#F0F0F0')
         .fontColor($r('app.color.text_secondary'))
         .width('30%')
@@ -168,13 +168,13 @@ export struct PlanShareDialog {
       };
 
       this.shareImage = await this.renderShareImageWithRetry(options);
-      this.safeShowToast('鍥剧墖鐢熸垚鎴愬姛');
+      this.safeShowToast('图片生成成功');
     } catch (_error) {
       const copied = await this.copyShareTextToClipboard();
       if (copied) {
         this.safeShowToast('二维码生成失败，已复制文本分享内容');
       } else {
-        this.safeShowToast('鐢熸垚澶辫触锛岃閲嶈瘯');
+        this.safeShowToast('生成失败，请重试');
       }
     } finally {
       this.isGenerating = false;
@@ -188,7 +188,7 @@ export struct PlanShareDialog {
 
     const granted = await this.requestAlbumPermission();
     if (!granted) {
-      this.safeShowToast('鏈幏寰楃浉鍐屾潈闄愶紝鏃犳硶淇濆瓨鍥剧墖');
+      this.safeShowToast('未获取相册权限，无法保存图片');
       return;
     }
 
@@ -198,12 +198,12 @@ export struct PlanShareDialog {
       const uri = await helper.createAsset(photoAccessHelper.PhotoType.IMAGE, 'jpg');
       await this.writeImageWithRetry(uri);
 
-      this.safeShowToast('宸蹭繚瀛樺埌鐩稿唽');
+      this.safeShowToast('已保存到相册');
       this.controller.close();
     } catch (_error) {
       const copied = await this.copyShareTextToClipboard();
       if (copied) {
-        this.safeShowToast('淇濆瓨澶辫触锛屽凡澶嶅埗鏂囨湰鍒嗕韩鍐呭');
+        this.safeShowToast('保存失败，已复制文本分享内容');
       } else {
         this.safeShowToast('保存失败，请检查相册权限');
       }
@@ -306,5 +306,6 @@ export struct PlanShareDialog {
     }
   }
 }
+
 
 
