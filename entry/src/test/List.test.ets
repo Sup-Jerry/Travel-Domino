@@ -161,6 +161,20 @@ import settingsPageHelperTest from './SettingsPageHelper.test';
 import settingsPreferenceInsightsPageHelperTest from './SettingsPreferenceInsightsPageHelper.test';
 import trashPageHelperTest from './TrashPageHelper.test';
 import archivePageHelperTest from './ArchivePageHelper.test';
+import phase1ZeroHitBatchATest from './Phase1ZeroHitBatchA.test';
+import phase1ZeroHitBatchBTest from './Phase1ZeroHitBatchB.test';
+import phase1ZeroHitBatchCTest from './Phase1ZeroHitBatchC.test';
+import phase1ZeroHitBatchDTest from './Phase1ZeroHitBatchD.test';
+import phase1ZeroHitBatchETest from './Phase1ZeroHitBatchE.test';
+import phase1ZeroHitBatchFTest from './Phase1ZeroHitBatchF.test';
+import phase1ZeroHitBatchGTest from './Phase1ZeroHitBatchG.test';
+import phase1ZeroHitBatchHTest from './Phase1ZeroHitBatchH.test';
+import phase1ZeroHitBatchITest from './Phase1ZeroHitBatchI.test';
+import phase1ZeroHitBatchJTest from './Phase1ZeroHitBatchJ.test';
+import phase1ZeroHitBatchKTest from './Phase1ZeroHitBatchK.test';
+import phase2CoreCoverageBatchATest from './Phase2CoreCoverageBatchA.test';
+import phase2CoreCoverageBatchBTest from './Phase2CoreCoverageBatchB.test';
+import phase2CoreCoverageBatchCTest from './Phase2CoreCoverageBatchC.test';
 
 const registeredSuiteNames: string[] = [
   'LocalUnit',
@@ -324,7 +338,21 @@ const registeredSuiteNames: string[] = [
   'SettingsPageHelper',
   'SettingsPreferenceInsightsPageHelper',
   'TrashPageHelper',
-  'ArchivePageHelper'
+  'ArchivePageHelper',
+  'Phase1ZeroHitBatchA',
+  'Phase1ZeroHitBatchB',
+  'Phase1ZeroHitBatchC',
+  'Phase1ZeroHitBatchD',
+  'Phase1ZeroHitBatchE',
+  'Phase1ZeroHitBatchF',
+  'Phase1ZeroHitBatchG',
+  'Phase1ZeroHitBatchH',
+  'Phase1ZeroHitBatchI',
+  'Phase1ZeroHitBatchJ',
+  'Phase1ZeroHitBatchK',
+  'Phase2CoreCoverageBatchA',
+  'Phase2CoreCoverageBatchB',
+  'Phase2CoreCoverageBatchC'
 ];
 
 function containsSuite(name: string): boolean {
@@ -511,6 +539,20 @@ export default function testsuite() {
   settingsPreferenceInsightsPageHelperTest();
   trashPageHelperTest();
   archivePageHelperTest();
+  phase1ZeroHitBatchATest();
+  phase1ZeroHitBatchBTest();
+  phase1ZeroHitBatchCTest();
+  phase1ZeroHitBatchDTest();
+  phase1ZeroHitBatchETest();
+  phase1ZeroHitBatchFTest();
+  phase1ZeroHitBatchGTest();
+  phase1ZeroHitBatchHTest();
+  phase1ZeroHitBatchITest();
+  phase1ZeroHitBatchJTest();
+  phase1ZeroHitBatchKTest();
+  phase2CoreCoverageBatchATest();
+  phase2CoreCoverageBatchBTest();
+  phase2CoreCoverageBatchCTest();
 
   describe('listTest', () => {
     it('normal: list_should_keep_core_test_modules_registered', 0, () => {
