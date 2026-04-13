@@ -152,6 +152,7 @@ description: 用于 Travel Domino（HarmonyOS 行程规划项目）的定向开�
 6. 涉及时间逻辑时同步核对 ViewModel、logic、entity 映射
 7. 对齐包完整后才编码；否则阻断并列缺失项
 8. 除非用户明确要求，不新增抽象层或中间服务
+9. 每新增一个功能，必须按 `unit-test-case-generator` 补齐对应单列测试；未补齐单测不得判定该功能完成
 
 ## 参考资源
 - `resources/architecture.md`
