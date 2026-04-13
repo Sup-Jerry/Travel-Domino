@@ -63,7 +63,6 @@ $resolvedEnvFile = Resolve-EnvFilePath $EnvFile
 Import-EnvFile $resolvedEnvFile
 
 $requiredEnvVars = @(
-  'AI_API_KEY',
   'AMAP_WEB_API_KEY',
   'AMAP_SDK_API_KEY',
   'AUTH_API_BASE_URL'
@@ -88,7 +87,6 @@ if (-not (Test-Path $TemplatePath)) {
 $content = Get-Content -Raw -Encoding UTF8 $TemplatePath
 
 $replacements = @{
-  '__AI_API_KEY__' = [Environment]::GetEnvironmentVariable('AI_API_KEY')
   '__AMAP_WEB_API_KEY__' = [Environment]::GetEnvironmentVariable('AMAP_WEB_API_KEY')
   '__AMAP_SDK_API_KEY__' = [Environment]::GetEnvironmentVariable('AMAP_SDK_API_KEY')
   '__AUTH_API_BASE_URL__' = [Environment]::GetEnvironmentVariable('AUTH_API_BASE_URL')

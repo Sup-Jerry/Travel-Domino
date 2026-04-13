@@ -9,6 +9,11 @@ describe('unit_test_case_generator_autofill_app_config_service', () => {
     delete process.env.JWT_SECRET;
     delete process.env.AUTH_ACCESS_TTL_SECONDS;
     delete process.env.AUTH_REFRESH_TTL_SECONDS;
+    delete process.env.AI_UPSTREAM_URL;
+    delete process.env.AI_UPSTREAM_KEY;
+    delete process.env.AI_UPSTREAM_MODEL;
+    delete process.env.AI_API_URL;
+    delete process.env.AI_API_KEY;
   });
 
   afterAll(() => {
@@ -80,5 +85,46 @@ describe('unit_test_case_generator_autofill_app_config_service', () => {
     // Assert
     expect(accessTtl).toBe(1800);
     expect(refreshTtl).toBe(604800);
+  });
+
+  it('normal: app_config_should_read_ai_upstream_values', () => {
+    // Arrange
+    process.env.AI_UPSTREAM_URL = 'https://api.modelarts-maas.com/v2/chat/completions';
+    process.env.AI_UPSTREAM_KEY = 'k_test';
+    process.env.AI_UPSTREAM_MODEL = 'glm-5';
+    const service = new AppConfigService();
+    // Act
+    const url = service.aiUpstreamUrl;
+    const key = service.aiUpstreamKey;
+    const model = service.aiUpstreamModel;
+    // Assert
+    expect(url).toBe('https://api.modelarts-maas.com/v2/chat/completions');
+    expect(key).toBe('k_test');
+    expect(model).toBe('glm-5');
+  });
+
+  it('regression: app_config_should_fallback_to_ai_api_legacy_vars', () => {
+    // Arrange
+    process.env.AI_API_URL = 'https://legacy.example/v2/chat/completions';
+    process.env.AI_API_KEY = 'legacy_key';
+    const service = new AppConfigService();
+    // Act
+    const url = service.aiUpstreamUrl;
+    const key = service.aiUpstreamKey;
+    // Assert
+    expect(url).toBe('https://legacy.example/v2/chat/completions');
+    expect(key).toBe('legacy_key');
+    expect(service.aiUpstreamModel).toBe('glm-5');
+  });
+
+  it('invalid: app_config_should_throw_when_ai_upstream_missing', () => {
+    // Arrange
+    const service = new AppConfigService();
+    // Act
+    const readUrl = () => service.aiUpstreamUrl;
+    const readKey = () => service.aiUpstreamKey;
+    // Assert
+    expect(readUrl).toThrow('AI_UPSTREAM_URL is required');
+    expect(readKey).toThrow('AI_UPSTREAM_KEY is required');
   });
 });

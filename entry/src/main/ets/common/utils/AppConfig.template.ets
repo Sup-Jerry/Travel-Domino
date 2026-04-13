@@ -5,8 +5,7 @@
 
 export class AppConfig {
   // AI 服务配置
-  static readonly AI_API_URL: string = 'https://api.modelarts-maas.com/v2/chat/completions';
-  static readonly AI_API_KEY: string = '__AI_API_KEY__';
+  static readonly AI_API_URL: string = '__AUTH_API_BASE_URL__/ai/chat/completions';
 
   // 高德 Web API Key（用于地理编码 / 逆地理编码）
   static readonly AMAP_WEB_API_KEY: string = '__AMAP_WEB_API_KEY__';
@@ -20,9 +19,6 @@ export class AppConfig {
   static validateAiConfig(): void {
     if (!AppConfig.AI_API_URL || AppConfig.AI_API_URL.trim() === '') {
       throw new Error('AI_API_URL 未配置，请检查 AppConfig.ets');
-    }
-    if (!AppConfig.AI_API_KEY || AppConfig.AI_API_KEY.trim() === '') {
-      throw new Error('AI_API_KEY 未配置，请检查 AppConfig.ets');
     }
   }
 

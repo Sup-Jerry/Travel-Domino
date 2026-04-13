@@ -3,27 +3,29 @@ import { AppModule } from '../src/app.module';
 import { AppConfigModule } from '../src/config/app-config.module';
 import { AuthModule } from '../src/modules/auth/auth.module';
 import { HealthModule } from '../src/modules/health/health.module';
+import { AiModule } from '../src/modules/ai/ai.module';
 
 describe('unit_test_case_generator_autofill_app_module', () => {
-  it('normal: app_module_should_import_app_config_auth_and_health_modules', () => {
+  it('normal: app_module_should_import_app_config_auth_health_and_ai_modules', () => {
     // Arrange
     const imports = Reflect.getMetadata(MODULE_METADATA.IMPORTS, AppModule) as unknown[] | undefined;
     // Act
     const hasCoreModules = Array.isArray(imports) &&
       imports.includes(AppConfigModule) &&
       imports.includes(AuthModule) &&
-      imports.includes(HealthModule);
+      imports.includes(HealthModule) &&
+      imports.includes(AiModule);
     // Assert
     expect(hasCoreModules).toBe(true);
   });
 
-  it('boundary: app_module_should_register_four_import_entries', () => {
+  it('boundary: app_module_should_register_five_import_entries', () => {
     // Arrange
     const imports = Reflect.getMetadata(MODULE_METADATA.IMPORTS, AppModule) as unknown[] | undefined;
     // Act
     const count = imports?.length ?? 0;
     // Assert
-    expect(count).toBe(4);
+    expect(count).toBe(5);
   });
 
   it('invalid: app_module_should_not_have_controller_metadata', () => {
@@ -61,7 +63,8 @@ describe('unit_test_case_generator_autofill_app_module', () => {
       imports.some((item) => item instanceof Promise) &&
       imports.includes(AppConfigModule) &&
       imports.includes(AuthModule) &&
-      imports.includes(HealthModule);
+      imports.includes(HealthModule) &&
+      imports.includes(AiModule);
     // Assert
     expect(pass).toBe(true);
   });

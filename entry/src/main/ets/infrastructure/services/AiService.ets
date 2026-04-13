@@ -983,11 +983,10 @@ export class AiService {
     const options: http.HttpRequestOptions = {
       method: http.RequestMethod.POST,
       header: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${AppConfig.AI_API_KEY}`
+        'Content-Type': 'application/json'
       },
       extraData: {
-        model: 'DeepSeek-V3.2',
+        model: 'glm-5',
         max_tokens: maxTokens,
         messages: [
           { role: 'system', content: systemPrompt },
@@ -1026,11 +1025,10 @@ export class AiService {
     const options: http.HttpRequestOptions = {
       method: http.RequestMethod.POST,
       header: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${AppConfig.AI_API_KEY}`
+        'Content-Type': 'application/json'
       },
       extraData: {
-        model: 'DeepSeek-V3.2',
+        model: 'glm-5',
         max_tokens: 2000,
         messages: [
           { role: 'system', content: systemPrompt },
