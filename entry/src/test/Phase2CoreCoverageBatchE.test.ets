@@ -3,6 +3,7 @@ import { EventEntity } from '../main/ets/model/entity/EventEntity';
 import { PlanStatus } from '../main/ets/domain/statemachine/PlanStatus';
 import { ComposableStrategy, DensityLevel, EnergyLevel, PaceLevel, PreferenceType } from '../main/ets/domain/strategy/TravelStrategyDimensions';
 import { TimelineWeatherService, ITimelineWeatherHost } from '../main/ets/domain/timeline/services/TimelineWeatherService';
+import { DriveStrategy } from '../main/ets/model/interface/IMapService';
 import {
   GeoPointInput,
   PlanNodeWeatherBinding,
@@ -238,6 +239,20 @@ function createReplanNodeSnapshotData(
 
 export default function phase2CoreCoverageBatchETest() {
   describe('phase2CoreCoverageBatchETest', () => {
+    it('normal: i_map_service_drive_strategy_enum_should_expose_stable_numeric_contract', 0, () => {
+      // Arrange
+      const fastest = DriveStrategy.FASTEST;
+      const avoidCongestion = DriveStrategy.AVOID_CONGESTION;
+      const economical = DriveStrategy.ECONOMICAL;
+      // Act
+      const enumSum = fastest + avoidCongestion + economical;
+      // Assert
+      expect(fastest).assertEqual(0);
+      expect(avoidCongestion).assertEqual(4);
+      expect(economical).assertEqual(1);
+      expect(enumSum).assertEqual(5);
+    });
+
     it('normal: timeline_weather_service_build_soft_preview_should_map_action_flags_and_reason', 0, () => {
       // Arrange
       const bundle = createBundle();
@@ -307,6 +322,75 @@ export default function phase2CoreCoverageBatchETest() {
       expect(changedText.indexOf('顺序变更 1 项') >= 0).assertTrue();
       expect(noop.length).assertEqual(1);
       expect(noop[0].type).assertEqual('NO_OP');
+    });
+
+    it('boundary: timeline_weather_service_explanation_and_auto_refresh_should_cover_risk_bands_and_freshness_window', 0, () => {
+      // Arrange
+      const bundle = createBundle();
+      const now = Date.now();
+      const planned = createEvent(1);
+      planned.weather_fetch_time = now;
+      bundle.host.events = [planned];
+      bundle.host.planId = 66;
+      bundle.host.executionWeatherDisplaySource = 'NEXT_FALLBACK';
+      bundle.host.executionWeatherHint = '';
+      bundle.host.weatherPlanningHint = '请带伞';
+      bundle.host.weatherCollabSummary = '跨城降雨趋势增强';
+
+      // Act
+      const invalidScoreText = bundle.service.buildWeatherScoreExplanation(-1);
+      const highRiskText = bundle.service.buildWeatherScoreExplanation(65);
+      const mediumRiskText = bundle.service.buildWeatherScoreExplanation(80);
+      const lowRiskText = bundle.service.buildWeatherScoreExplanation(95);
+      const hintText = bundle.service.buildWeatherHintExplanation();
+      const planningHintText = bundle.service.buildPlanningWeatherHintExplanation();
+      const source = bundle.service.getExecutionWeatherDisplaySource();
+      const shouldSkipRefresh = bundle.service.shouldAutoRefreshPlanningWeather(60 * 60 * 1000);
+      bundle.host.events[0].weather_fetch_time = now - (2 * 60 * 60 * 1000);
+      const shouldRefresh = bundle.service.shouldAutoRefreshPlanningWeather(60 * 60 * 1000);
+      bundle.host.planId = 0;
+      const shouldRefreshWhenNoPlan = bundle.service.shouldAutoRefreshPlanningWeather();
+
+      // Assert
+      expect(invalidScoreText.indexOf('暂无可用天气评分') >= 0).assertTrue();
+      expect(highRiskText.indexOf('高风险') >= 0).assertTrue();
+      expect(mediumRiskText.indexOf('中风险') >= 0).assertTrue();
+      expect(lowRiskText.indexOf('低风险') >= 0).assertTrue();
+      expect(hintText.indexOf('下一节点天气估算') >= 0).assertTrue();
+      expect(hintText.indexOf('请带伞') >= 0).assertTrue();
+      expect(planningHintText.indexOf('计划节点天气') >= 0).assertTrue();
+      expect(planningHintText.indexOf('跨城降雨趋势增强') >= 0).assertTrue();
+      expect(source).assertEqual('NEXT_FALLBACK');
+      expect(shouldSkipRefresh).assertFalse();
+      expect(shouldRefresh).assertTrue();
+      expect(shouldRefreshWhenNoPlan).assertTrue();
+    });
+
+    it('invalid: timeline_weather_service_resolve_start_and_immutable_guard_should_handle_invalid_id_and_locked_nodes', 0, () => {
+      // Arrange
+      const bundle = createBundle();
+      const mutable = createEvent(1);
+      const immutableDone = createEvent(2);
+      immutableDone.completion_status = EventEntity.STATE_COMPLETED;
+      const immutableLocked = createEvent(3);
+      immutableLocked.lock_status = 1;
+      immutableLocked.fixed_start_time = '08:00';
+      bundle.host.events = [mutable, immutableDone, immutableLocked];
+      const preview = createPreview('ok');
+      preview.affectedNodeIds = ['foo', '9', '3', '1'];
+
+      // Act
+      const startId = bundle.service.resolveSoftReplanStartEventId(preview);
+      const targetIds = bundle.service.resolveSoftReplanTargetEventIds(['x', '2', '3']);
+      const hasImmutable = bundle.service.containsImmutableNode(targetIds);
+      const allMutable = bundle.service.containsImmutableNode([1]);
+
+      // Assert
+      expect(startId).assertEqual(1);
+      expect(targetIds.length).assertEqual(1);
+      expect(targetIds[0]).assertEqual(3);
+      expect(hasImmutable).assertTrue();
+      expect(allMutable).assertFalse();
     });
 
     it('regression: td-20260414-phase2-weather-snapshot_restore_should_recover_state_and_recalculate', 0, () => {
