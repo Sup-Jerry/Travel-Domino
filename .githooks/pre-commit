@@ -11,3 +11,5 @@ else
 fi
 
 "$PS_BIN" -NoProfile -ExecutionPolicy Bypass -File scripts/ci/secret-scan.ps1 -Scope Staged
+
+python scripts/ci/check-evolution-garbled.py

@@ -2,6 +2,33 @@ import os
 import sys
 import json
 import datetime
+import re
+
+QUESTION_RUN_RE = re.compile(r"\?{3,}")
+MOJIBAKE_MARKERS = "鍦鐢澶鎵鏃鍚鏈璇锛銆榛樿"
+REPLACEMENT_CHAR = "\ufffd"
+COMMON_SIMPLIFIED = "的了是在和与及或不后前用户代码流程修复问题经验默认"
+
+
+def is_probably_garbled(text):
+    if not isinstance(text, str) or not text:
+        return False
+    if REPLACEMENT_CHAR in text:
+        return True
+    if QUESTION_RUN_RE.search(text):
+        return True
+    if any(token in text for token in ("锟", "烫", "ï»¿", "Ã", "Â", "鈥")):
+        return True
+    marker_hits = sum(1 for ch in text if ch in MOJIBAKE_MARKERS)
+    if len(text) >= 12 and marker_hits >= 5:
+        return True
+    if any("\ue000" <= ch <= "\uf8ff" for ch in text):
+        return True
+    cjk = sum(1 for ch in text if "\u4e00" <= ch <= "\u9fff")
+    common_hits = sum(1 for ch in text if ch in COMMON_SIMPLIFIED)
+    if cjk >= 8 and common_hits == 0 and marker_hits >= 2:
+        return True
+    return False
 
 def merge_evolution(skill_dir, new_data_json_str):
     """
@@ -24,6 +51,22 @@ def merge_evolution(skill_dir, new_data_json_str):
         new_data = json.loads(new_data_json_str)
     except json.JSONDecodeError as e:
         print(f"Error decoding new data JSON: {e}", file=sys.stderr)
+        return False
+
+    # Validate incoming payload to prevent persisting garbled text.
+    for list_key in ['preferences', 'fixes', 'contexts']:
+        value = new_data.get(list_key)
+        if isinstance(value, list):
+            for idx, item in enumerate(value):
+                if is_probably_garbled(item):
+                    print(
+                        f"Error: garbled text detected in {list_key}[{idx}]",
+                        file=sys.stderr,
+                    )
+                    return False
+    custom_prompts = new_data.get('custom_prompts')
+    if isinstance(custom_prompts, str) and is_probably_garbled(custom_prompts):
+        print("Error: garbled text detected in custom_prompts", file=sys.stderr)
         return False
 
     # Merge logic
@@ -54,7 +97,7 @@ def merge_evolution(skill_dir, new_data_json_str):
         current_data['last_evolved_hash'] = new_data['last_evolved_hash']
 
     # Save back
-    with open(evolution_json_path, 'w', encoding='utf-8') as f:
+    with open(evolution_json_path, 'w', encoding='utf-8', newline='\n') as f:
         json.dump(current_data, f, indent=2, ensure_ascii=False)
         
     print(f"Successfully merged evolution data for {os.path.basename(skill_dir)}")

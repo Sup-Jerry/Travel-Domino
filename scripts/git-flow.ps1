@@ -45,6 +45,16 @@ if (-not $repoRoot) {
 }
 
 try {
+  Write-Step '检查 skill evolution 乱码'
+  $encodingCheck = Join-Path $repoRoot 'scripts/ci/check-evolution-garbled.py'
+  if (-not (Test-Path -LiteralPath $encodingCheck)) {
+    Fail "未找到乱码检查脚本: $encodingCheck"
+  }
+  python $encodingCheck
+  if ($LASTEXITCODE -ne 0) {
+    Fail '检测到 skill evolution 乱码，请先清理后再提交。'
+  }
+
   Write-Step '暂存文件'
   if ($Files.Count -eq 0) {
     git add -A
