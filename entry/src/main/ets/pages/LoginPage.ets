@@ -35,6 +35,10 @@ struct LoginPage {
   @State private loading: boolean = false;
   private readonly authFacade: AuthFacade = AuthFacade.getInstance();
 
+  private createLoginTraceId(scene: string): string {
+    return `${scene}_${Date.now()}`;
+  }
+
   private toast(message: string): void {
     promptAction.openToast({ message });
   }
@@ -87,17 +91,18 @@ struct LoginPage {
   }
 
   private async loginWithHuaweiButton(credential: HuaweiCredential): Promise<void> {
+    const traceId = this.createLoginTraceId('button');
     if (this.loading) {
-      hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, '[LOGIN_TRACE][page] ignore duplicated loginWithHuaweiButton');
+      hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] ignore duplicated loginWithHuaweiButton trace=${traceId}`);
       return;
     }
     hilog.info(
       LoginPage.LOG_DOMAIN,
       LoginPage.LOG_TAG,
-      `[LOGIN_TRACE][page] click agreement=${this.agreementAccepted ? 1 : 0}, authCodeLen=${credential.authorizationCode.length}, openIdLen=${credential.openId.length}, unionIdLen=${credential.unionId.length}`
+      `[LOGIN_TRACE][page] click agreement=${this.agreementAccepted ? 1 : 0}, authCodeLen=${credential.authorizationCode.length}, openIdLen=${credential.openId.length}, unionIdLen=${credential.unionId.length}, trace=${traceId}`
     );
     if (!this.ensureAgreement()) {
-      hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, '[LOGIN_TRACE][page] blocked by agreement');
+      hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] blocked by agreement trace=${traceId}`);
       return;
     }
     const hostContext = this.getUIContext().getHostContext() as common.Context;
@@ -107,7 +112,7 @@ struct LoginPage {
     try {
       result = await this.authFacade.explicitLoginByButton(credential, false);
     } catch (error) {
-      hilog.error(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] login exception=${JSON.stringify(error)}`);
+      hilog.error(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] login exception=${JSON.stringify(error)}, trace=${traceId}`);
       this.toast('登录异常，请检查网络后重试');
       return;
     } finally {
@@ -117,24 +122,25 @@ struct LoginPage {
       hilog.warn(
         LoginPage.LOG_DOMAIN,
         LoginPage.LOG_TAG,
-        `[LOGIN_TRACE][page] login fail code=${result.code}, message=${result.message}, source=${result.source}`
+        `[LOGIN_TRACE][page] login fail code=${result.code}, message=${result.message}, source=${result.source}, trace=${traceId}`
       );
       this.toast(resolveLoginFailureToast('登录失败：', result.message));
       return;
     }
-    hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] login success source=${result.source}`);
+    hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] login success source=${result.source}, trace=${traceId}`);
     void this.ensureCloudProfile(hostContext, result.data);
     this.toast('登录成功');
     await this.replaceUrl('pages/PlanListPage');
   }
 
   private async loginWithHuaweiApiFallback(): Promise<void> {
+    const traceId = this.createLoginTraceId('api_fallback');
     if (this.loading) {
-      hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, '[LOGIN_TRACE][page] ignore duplicated loginWithHuaweiApiFallback');
+      hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] ignore duplicated loginWithHuaweiApiFallback trace=${traceId}`);
       return;
     }
     if (!this.ensureAgreement()) {
-      hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, '[LOGIN_TRACE][page] api_fallback blocked by agreement');
+      hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] api_fallback blocked by agreement trace=${traceId}`);
       return;
     }
     const hostContext = this.getUIContext().getHostContext() as common.Context;
@@ -144,7 +150,7 @@ struct LoginPage {
     try {
       result = await this.authFacade.explicitLoginByButton(undefined, false);
     } catch (error) {
-      hilog.error(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] api_fallback exception=${JSON.stringify(error)}`);
+      hilog.error(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] api_fallback exception=${JSON.stringify(error)}, trace=${traceId}`);
       this.toast('登录异常，请检查网络后重试');
       return;
     } finally {
@@ -154,24 +160,25 @@ struct LoginPage {
       hilog.warn(
         LoginPage.LOG_DOMAIN,
         LoginPage.LOG_TAG,
-        `[LOGIN_TRACE][page] api_fallback fail code=${result.code}, message=${result.message}, source=${result.source}`
+        `[LOGIN_TRACE][page] api_fallback fail code=${result.code}, message=${result.message}, source=${result.source}, trace=${traceId}`
       );
       this.toast(resolveLoginFailureToast('登录失败：', result.message));
       return;
     }
-    hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] api_fallback success source=${result.source}`);
+    hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] api_fallback success source=${result.source}, trace=${traceId}`);
     void this.ensureCloudProfile(hostContext, result.data);
     this.toast('登录成功');
     await this.replaceUrl('pages/PlanListPage');
   }
 
   private async loginAsGuest(): Promise<void> {
+    const traceId = this.createLoginTraceId('guest');
     if (this.loading) {
-      hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, '[LOGIN_TRACE][page] ignore duplicated loginAsGuest');
+      hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] ignore duplicated loginAsGuest trace=${traceId}`);
       return;
     }
     if (!this.ensureAgreement()) {
-      hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, '[LOGIN_TRACE][page] guest_login blocked by agreement');
+      hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] guest_login blocked by agreement trace=${traceId}`);
       return;
     }
     const hostContext = this.getUIContext().getHostContext() as common.Context;
@@ -181,7 +188,7 @@ struct LoginPage {
     try {
       result = await this.authFacade.explicitGuestLogin();
     } catch (error) {
-      hilog.error(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] guest_login exception=${JSON.stringify(error)}`);
+      hilog.error(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] guest_login exception=${JSON.stringify(error)}, trace=${traceId}`);
       this.toast('游客登录异常，请稍后重试');
       return;
     } finally {
@@ -191,12 +198,12 @@ struct LoginPage {
       hilog.warn(
         LoginPage.LOG_DOMAIN,
         LoginPage.LOG_TAG,
-        `[LOGIN_TRACE][page] guest_login fail code=${result.code}, message=${result.message}, source=${result.source}`
+        `[LOGIN_TRACE][page] guest_login fail code=${result.code}, message=${result.message}, source=${result.source}, trace=${traceId}`
       );
       this.toast(resolveLoginFailureToast('游客登录失败：', result.message));
       return;
     }
-    hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] guest_login success source=${result.source}`);
+    hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] guest_login success source=${result.source}, trace=${traceId}`);
     this.toast('游客登录成功');
     await this.replaceUrl('pages/PlanListPage');
   }
@@ -250,14 +257,23 @@ struct LoginPage {
             void this.loginWithHuaweiButton(credential);
           },
           onError: (message: string) => {
+            const traceId = this.createLoginTraceId('button_error');
             const code = parseHuaweiLoginErrorCodeFromMessage(message);
-            hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] button error message=${message}, code=${code}`);
+            hilog.warn(
+              LoginPage.LOG_DOMAIN,
+              LoginPage.LOG_TAG,
+              `[LOGIN_TRACE][page] button error message=${message}, code=${code}, trace=${traceId}`
+            );
             if (!this.ensureAgreement()) {
-              hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, '[LOGIN_TRACE][page] block fallback by agreement');
+              hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] block fallback by agreement trace=${traceId}`);
               return;
             }
             if (shouldUseHuaweiApiFallbackByCode(code)) {
-              hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, '[LOGIN_TRACE][page] trigger api_fallback by code=1001502003');
+              hilog.info(
+                LoginPage.LOG_DOMAIN,
+                LoginPage.LOG_TAG,
+                `[LOGIN_TRACE][page] trigger api_fallback by code=1001502003, trace=${traceId}`
+              );
               void this.loginWithHuaweiApiFallback();
               return;
             }

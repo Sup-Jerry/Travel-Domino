@@ -47,24 +47,27 @@ struct AuthGatePage {
 
   private async checkAndRoute(): Promise<void> {
     try {
+      hilog.info(AuthGatePage.LOG_DOMAIN, AuthGatePage.LOG_TAG, '[LOGIN_TRACE][gate] checkAndRoute start');
       const startup = await this.startupCoordinator.checkStartupAuth();
+      const target = resolveAuthGateTargetUrl(startup.success, startup.status);
       if (shouldAuthGateRouteToPlanList(startup.success, startup.status)) {
         const accountId = String(startup.data?.accountId || '').trim();
         hilog.info(
           AuthGatePage.LOG_DOMAIN,
           AuthGatePage.LOG_TAG,
-          `[LOGIN_TRACE][gate] authenticated route accountId=${accountId}, source=${startup.source}, message=${startup.message}`
+          `[LOGIN_TRACE][gate] authenticated route accountId=${accountId}, source=${startup.source}, message=${startup.message}, target=${target}`
         );
-        await this.replaceUrl(resolveAuthGateTargetUrl(startup.success, startup.status));
+        await this.replaceUrl(target);
         return;
       }
       hilog.info(
         AuthGatePage.LOG_DOMAIN,
         AuthGatePage.LOG_TAG,
-        `[LOGIN_TRACE][gate] unauthenticated route code=${startup.code}, source=${startup.source}, message=${startup.message}`
+        `[LOGIN_TRACE][gate] unauthenticated route code=${startup.code}, source=${startup.source}, message=${startup.message}, target=${target}`
       );
-      await this.replaceUrl(resolveAuthGateTargetUrl(startup.success, startup.status));
+      await this.replaceUrl(target);
     } catch (_error) {
+      hilog.error(AuthGatePage.LOG_DOMAIN, AuthGatePage.LOG_TAG, '[LOGIN_TRACE][gate] checkAndRoute exception fallback_to_login');
       await this.authFacade.logout();
       await this.replaceUrl('pages/LoginPage');
     }

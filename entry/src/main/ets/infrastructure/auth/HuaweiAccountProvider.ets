@@ -26,6 +26,11 @@ export class HuaweiAccountProvider {
     normalized.idToken = credential.idToken || '';
     normalized.openId = credential.openID || '';
     normalized.unionId = credential.unionID || '';
+    hilog.info(
+      HuaweiAccountProvider.LOG_DOMAIN,
+      HuaweiAccountProvider.LOG_TAG,
+      `[LOGIN_TRACE][provider] normalize credential authCodeLen=${normalized.authorizationCode.length}, idTokenLen=${normalized.idToken.length}, openIdLen=${normalized.openId.length}, unionIdLen=${normalized.unionId.length}`
+    );
     return normalized;
   }
 
@@ -44,6 +49,11 @@ export class HuaweiAccountProvider {
       const response = await controller.executeRequest(request);
       const typed = response as authentication.LoginWithHuaweiIDResponse;
       const credential = typed.data;
+      hilog.info(
+        HuaweiAccountProvider.LOG_DOMAIN,
+        HuaweiAccountProvider.LOG_TAG,
+        `[LOGIN_TRACE][provider] execute response hasResponse=${response ? 1 : 0}, hasData=${credential ? 1 : 0}`
+      );
       if (!credential) {
         hilog.warn(HuaweiAccountProvider.LOG_DOMAIN, HuaweiAccountProvider.LOG_TAG, '[LOGIN_TRACE][provider] empty credential');
         throw new Error('HUAWEI_CREDENTIAL_EMPTY');

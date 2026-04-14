@@ -80,15 +80,20 @@ export class AuthFacade {
   }
 
   public async silentLogin(): Promise<AuthResult<UserSession>> {
-    hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] silentLogin start');
+    const traceId = `sl_${Date.now()}`;
+    hilog.info(
+      AuthFacade.LOG_DOMAIN,
+      AuthFacade.LOG_TAG,
+      `[LOGIN_TRACE][facade] silentLogin start trace=${traceId}, hasContext=${this.appContext ? 1 : 0}`
+    );
     if (this.sessionManager.isSilentLoginBlockedAfterLogout()) {
-      hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] silentLogin blocked by logout marker(memory)');
+      hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, `[LOGIN_TRACE][facade] silentLogin blocked by logout marker(memory) trace=${traceId}`);
       return this.failure(-1, 'silent_login_blocked_after_logout', 'HUAWEI_SILENT', LoginStatus.UNAUTHENTICATED);
     }
     if (this.appContext) {
       const blocked = await this.sessionManager.isSilentLoginBlockedAfterLogoutPersisted(this.appContext);
       if (blocked) {
-        hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] silentLogin blocked by logout marker');
+        hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, `[LOGIN_TRACE][facade] silentLogin blocked by logout marker trace=${traceId}`);
         return this.failure(-1, 'silent_login_blocked_after_logout', 'HUAWEI_SILENT', LoginStatus.UNAUTHENTICATED);
       }
     }
@@ -97,7 +102,7 @@ export class AuthFacade {
     if (!workingLocal && this.appContext) {
       workingLocal = await this.sessionManager.restoreSessionPersisted(this.appContext);
       if (workingLocal) {
-        hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] silentLogin restored persisted session');
+          hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, `[LOGIN_TRACE][facade] silentLogin restored persisted session trace=${traceId}`);
       }
     }
     if (workingLocal) {
@@ -112,7 +117,7 @@ export class AuthFacade {
           workingLocal.isLogin = true;
           workingLocal.lastLoginAt = Date.now();
           await this.onLoginSuccess(workingLocal);
-          hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] silentLogin local_session ok');
+          hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, `[LOGIN_TRACE][facade] silentLogin local_session ok trace=${traceId}`);
           return this.success(workingLocal, 'LOCAL_SESSION');
         }
 
@@ -120,7 +125,7 @@ export class AuthFacade {
           hilog.warn(
             AuthFacade.LOG_DOMAIN,
             AuthFacade.LOG_TAG,
-            `[LOGIN_TRACE][facade] silentLogin local_session invalid code=${me.code}`
+            `[LOGIN_TRACE][facade] silentLogin local_session invalid code=${me.code}, trace=${traceId}`
           );
           this.sessionManager.clear();
           if (this.appContext) {
@@ -134,7 +139,7 @@ export class AuthFacade {
           hilog.warn(
             AuthFacade.LOG_DOMAIN,
             AuthFacade.LOG_TAG,
-            `[LOGIN_TRACE][facade] silentLogin local_session fallback code=${me.code}, message=${me.message}`
+            `[LOGIN_TRACE][facade] silentLogin local_session fallback code=${me.code}, message=${me.message}, trace=${traceId}`
           );
           return this.success(workingLocal, 'LOCAL_SESSION');
         }
@@ -145,7 +150,7 @@ export class AuthFacade {
         hilog.warn(
           AuthFacade.LOG_DOMAIN,
           AuthFacade.LOG_TAG,
-          `[LOGIN_TRACE][facade] silentLogin local_session fallback error=${this.normalizeError(error)}`
+          `[LOGIN_TRACE][facade] silentLogin local_session fallback error=${this.normalizeError(error)}, trace=${traceId}`
         );
         return this.success(workingLocal, 'LOCAL_SESSION');
       }
@@ -153,38 +158,51 @@ export class AuthFacade {
 
     if (!this.appContext) {
       // EntryAbility 早期阶段没有可用 UI 上下文，不能走 provider 静默登录。
-      hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] silentLogin skip provider: context unavailable');
+      hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, `[LOGIN_TRACE][facade] silentLogin skip provider: context unavailable trace=${traceId}`);
       return this.failure(-1, 'silent_login_context_unavailable', 'HUAWEI_SILENT', LoginStatus.UNAUTHENTICATED);
     }
 
     try {
       const credential = await this.huaweiProvider.silentLogin(this.appContext);
-      hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] silentLogin provider ok');
+      hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, `[LOGIN_TRACE][facade] silentLogin provider ok trace=${traceId}`);
       return this.exchangeHuaweiCredential(credential, 'HUAWEI_SILENT');
     } catch (error) {
-      hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, `[LOGIN_TRACE][facade] silentLogin fail message=${this.normalizeError(error)}`);
+      hilog.warn(
+        AuthFacade.LOG_DOMAIN,
+        AuthFacade.LOG_TAG,
+        `[LOGIN_TRACE][facade] silentLogin fail message=${this.normalizeError(error)}, trace=${traceId}`
+      );
       return this.failure(-1, this.normalizeError(error), 'HUAWEI_SILENT', LoginStatus.UNAUTHENTICATED);
     }
   }
 
   public async explicitLoginByButton(credential?: HuaweiCredential, allowGuestFallback: boolean = true): Promise<AuthResult<UserSession>> {
-    hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] explicitLoginByButton start');
+    const traceId = `el_${Date.now()}`;
+    hilog.info(
+      AuthFacade.LOG_DOMAIN,
+      AuthFacade.LOG_TAG,
+      `[LOGIN_TRACE][facade] explicitLoginByButton start trace=${traceId}, hasCredential=${credential ? 1 : 0}, allowGuestFallback=${allowGuestFallback ? 1 : 0}, hasContext=${this.appContext ? 1 : 0}`
+    );
     try {
       const finalCredential = credential || await this.huaweiProvider.explicitLogin(this.appContext || undefined);
-      hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] explicit provider ok');
+      hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, `[LOGIN_TRACE][facade] explicit provider ok trace=${traceId}`);
       return this.exchangeHuaweiCredential(finalCredential, 'HUAWEI_BUTTON');
     } catch (error) {
-      hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, `[LOGIN_TRACE][facade] explicit provider fail message=${this.normalizeError(error)}`);
+      hilog.warn(
+        AuthFacade.LOG_DOMAIN,
+        AuthFacade.LOG_TAG,
+        `[LOGIN_TRACE][facade] explicit provider fail message=${this.normalizeError(error)}, trace=${traceId}`
+      );
       if (!allowGuestFallback) {
-        hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] explicit guestFallback disabled');
+        hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, `[LOGIN_TRACE][facade] explicit guestFallback disabled trace=${traceId}`);
         return this.failure(-1, this.normalizeError(error), 'HUAWEI_BUTTON', LoginStatus.LOGIN_FAILED);
       }
       const guestResult = await this.tryGuestFallback();
       if (guestResult.success) {
-        hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] explicit fallback guest ok');
+        hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, `[LOGIN_TRACE][facade] explicit fallback guest ok trace=${traceId}`);
         return guestResult;
       }
-      hilog.error(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] explicit fallback guest fail');
+      hilog.error(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, `[LOGIN_TRACE][facade] explicit fallback guest fail trace=${traceId}`);
       return this.failure(-1, this.normalizeError(error), 'HUAWEI_BUTTON', LoginStatus.LOGIN_FAILED);
     }
   }
