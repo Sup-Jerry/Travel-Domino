@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+﻿import { BadRequestException, HttpException, Injectable, InternalServerErrorException, Logger, UnauthorizedException } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
 import { AppConfigService } from '../../config/app-config.service';
 import { PgService } from '../../config/pg.service';
@@ -32,6 +32,7 @@ type QueryExecutor = (sql: string, params?: unknown[]) => Promise<{ rowCount: nu
 @Injectable()
 export class AuthService {
   private static readonly USERNAME_PATTERN: RegExp = /^[\u4E00-\u9FFFa-zA-Z0-9_ ]+$/;
+  private readonly logger = new Logger(AuthService.name);
 
   constructor(
     private readonly config: AppConfigService,
@@ -73,67 +74,101 @@ export class AuthService {
   }
 
   async socialLogin(dto: SocialLoginDto, ip: string): Promise<unknown> {
-    return this.pg.withTransaction(async (query) => {
-      const providerType = String(dto.providerType || '').trim().toUpperCase();
-      const credential: SocialCredentialLike = dto.credential || {};
-      const providerUid = this.buildProviderUid(credential);
-      if (!providerType || !providerUid) {
-        throw new BadRequestException('THIRD_PARTY_AUTH_FAILED');
+    const providerType = String(dto.providerType || '').trim().toUpperCase();
+    const credential: SocialCredentialLike = dto.credential || {};
+    const providerUid = this.buildProviderUid(credential);
+    const uidSource = String(
+      credential.unionId ? 'unionId' : credential.openId ? 'openId' : credential.authCode ? 'authCode' : credential.idToken ? 'idToken' : 'none'
+    );
+    this.logger.log(
+      `[AUTH_TRACE][auth_social_service_in] provider=${providerType}, ip=${ip || ''}, uidSource=${uidSource}, uidLen=${providerUid.length}`
+    );
+    let phase = 'init';
+    try {
+      return await this.pg.withTransaction(async (query) => {
+        if (!providerType || !providerUid) {
+          this.logger.warn(
+            `[AUTH_TRACE][auth_social_service_bad_input] provider=${providerType}, uidSource=${uidSource}, uidLen=${providerUid.length}`
+          );
+          throw new BadRequestException('THIRD_PARTY_AUTH_FAILED');
+        }
+
+        phase = 'load_identity';
+        const identityRes = await query(
+          `select identity_id,user_id from auth_identity where provider_type=$1 and provider_uid=$2 and bind_status='BOUND' limit 1`,
+          [providerType, providerUid]
+        );
+
+        let userId = '';
+        if (identityRes.rowCount > 0) {
+          phase = 'update_identity';
+          const identityId = String(identityRes.rows[0].identity_id || '');
+          userId = String(identityRes.rows[0].user_id || '');
+          await query(
+            `update auth_identity
+             set provider_open_id=$2, provider_union_id=$3, last_used_time=now(), updated_at=now()
+             where identity_id=$1`,
+            [identityId, String(credential.openId || ''), String(credential.unionId || '')]
+          );
+        } else {
+          phase = 'create_user';
+          userId = this.nextId('u');
+          await query(
+            `insert into user_account(user_id,nickname,avatar_url,mobile_masked,status,is_guest,profile_completed,default_login_method,register_time,last_login_time,mobile_bind_time)
+             values($1,$2,'','','ACTIVE',false,true,$3,now(),now(),null)`,
+            [userId, this.buildDefaultUsername(), providerType]
+          );
+
+          phase = 'create_identity';
+          await query(
+            `insert into auth_identity(identity_id,user_id,provider_type,provider_uid,provider_open_id,provider_union_id,phone_number,bind_status,bind_time,last_used_time)
+             values($1,$2,$3,$4,$5,$6,'','BOUND',now(),now())`,
+            [
+              this.nextId('idn'),
+              userId,
+              providerType,
+              providerUid,
+              String(credential.openId || ''),
+              String(credential.unionId || '')
+            ]
+          );
+        }
+
+        phase = 'update_last_login';
+        await query(
+          `update user_account set last_login_time=now(), default_login_method=$2 where user_id=$1`,
+          [userId, providerType]
+        );
+
+        phase = 'issue_session';
+        const session = await this.issueSession(
+          userId,
+          dto.deviceInfo.deviceId,
+          dto.deviceInfo.deviceName,
+          dto.deviceInfo.platform,
+          providerType,
+          ip,
+          query
+        );
+
+        phase = 'load_profile';
+        const profile = await this.loadProfile(userId, query);
+        this.logger.log(
+          `[AUTH_TRACE][auth_social_service_ok] provider=${providerType}, uidSource=${uidSource}, uidLen=${providerUid.length}, userId=${userId}`
+        );
+        return { user: profile, session };
+      });
+    } catch (error) {
+      const name = error instanceof Error ? error.name : 'unknown';
+      const reason = error instanceof Error ? error.message : 'unknown';
+      this.logger.error(
+        `[AUTH_TRACE][auth_social_service_fail] provider=${providerType}, uidSource=${uidSource}, uidLen=${providerUid.length}, phase=${phase}, errorName=${name}, reason=${reason}`
+      );
+      if (error instanceof HttpException) {
+        throw error;
       }
-
-      const identityRes = await query(
-        `select identity_id,user_id from auth_identity where provider_type=$1 and provider_uid=$2 and bind_status='BOUND' limit 1`,
-        [providerType, providerUid]
-      );
-
-      let userId = '';
-      if (identityRes.rowCount > 0) {
-        const identityId = String(identityRes.rows[0].identity_id || '');
-        userId = String(identityRes.rows[0].user_id || '');
-        await query(
-          `update auth_identity
-           set provider_open_id=$2, provider_union_id=$3, last_used_time=now(), updated_at=now()
-           where identity_id=$1`,
-          [identityId, String(credential.openId || ''), String(credential.unionId || '')]
-        );
-      } else {
-        userId = this.nextId('u');
-        await query(
-          `insert into user_account(user_id,nickname,avatar_url,mobile_masked,status,is_guest,profile_completed,default_login_method,register_time,last_login_time,mobile_bind_time)
-           values($1,$2,'','','ACTIVE',false,true,$3,now(),now(),null)`,
-          [userId, this.buildDefaultUsername(), providerType]
-        );
-        await query(
-          `insert into auth_identity(identity_id,user_id,provider_type,provider_uid,provider_open_id,provider_union_id,phone_number,bind_status,bind_time,last_used_time)
-           values($1,$2,$3,$4,$5,$6,'','BOUND',now(),now())`,
-          [
-            this.nextId('idn'),
-            userId,
-            providerType,
-            providerUid,
-            String(credential.openId || ''),
-            String(credential.unionId || '')
-          ]
-        );
-      }
-
-      await query(
-        `update user_account set last_login_time=now(), default_login_method=$2 where user_id=$1`,
-        [userId, providerType]
-      );
-
-      const session = await this.issueSession(
-        userId,
-        dto.deviceInfo.deviceId,
-        dto.deviceInfo.deviceName,
-        dto.deviceInfo.platform,
-        providerType,
-        ip,
-        query
-      );
-      const profile = await this.loadProfile(userId, query);
-      return { user: profile, session };
-    });
+      throw new InternalServerErrorException(`social_login_internal_${phase}`);
+    }
   }
 
   async updateUsername(accessToken: string, dto: UpdateUsernameDto): Promise<unknown> {
@@ -319,4 +354,6 @@ export class AuthService {
     return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
   }
 }
+
+
 

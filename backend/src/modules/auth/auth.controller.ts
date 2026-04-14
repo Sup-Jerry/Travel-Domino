@@ -10,7 +10,7 @@ export class AuthController {
 
   @Post('guest/create')
   async guestCreate(@Body() dto: GuestCreateDto, @Ip() ip: string): Promise<unknown> {
-    this.logger.log(`[airest]AI_BACKEND_TRACE[auth_guest_create_in] ip=${ip || ''}, deviceIdLen=${(dto.deviceInfo?.deviceId || '').length}`);
+    this.logger.log(`[AUTH_TRACE][auth_guest_create_in] ip=${ip || ''}, deviceIdLen=${(dto.deviceInfo?.deviceId || '').length}`);
     return this.authService.guestCreate(dto, ip || '');
   }
 
@@ -18,22 +18,22 @@ export class AuthController {
   async socialLogin(@Body() dto: SocialLoginDto, @Ip() ip: string): Promise<unknown> {
     const provider = dto.providerType || '';
     this.logger.log(
-      `[airest]AI_BACKEND_TRACE[auth_social_login_in] provider=${provider}, ip=${ip || ''}, hasAuthCode=${dto.credential?.authCode ? 1 : 0}, hasOpenId=${dto.credential?.openId ? 1 : 0}, hasUnionId=${dto.credential?.unionId ? 1 : 0}`
+      `[AUTH_TRACE][auth_social_login_in] provider=${provider}, ip=${ip || ''}, hasAuthCode=${dto.credential?.authCode ? 1 : 0}, hasOpenId=${dto.credential?.openId ? 1 : 0}, hasUnionId=${dto.credential?.unionId ? 1 : 0}`
     );
     try {
       const result = await this.authService.socialLogin(dto, ip || '');
-      this.logger.log(`[airest]AI_BACKEND_TRACE[auth_social_login_ok] provider=${provider}`);
+      this.logger.log(`[AUTH_TRACE][auth_social_login_ok] provider=${provider}`);
       return result;
     } catch (error) {
       const reason = error instanceof Error ? error.message : 'unknown';
-      this.logger.error(`[airest]AI_BACKEND_TRACE[auth_social_login_fail] provider=${provider}, reason=${reason}`);
+      this.logger.error(`[AUTH_TRACE][auth_social_login_fail] provider=${provider}, reason=${reason}`);
       throw error;
     }
   }
 
   @Get('me')
   async me(@Headers('authorization') authHeader: string): Promise<unknown> {
-    this.logger.log(`[airest]AI_BACKEND_TRACE[auth_me_in] hasAuthHeader=${authHeader ? 1 : 0}`);
+    this.logger.log(`[AUTH_TRACE][auth_me_in] hasAuthHeader=${authHeader ? 1 : 0}`);
     return this.authService.me(authHeader || '');
   }
 
@@ -69,4 +69,5 @@ export class AuthController {
     return this.authService.updateUsername(authHeader || '', dto);
   }
 }
+
 

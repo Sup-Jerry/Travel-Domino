@@ -16,9 +16,12 @@ export class AppStartupCoordinator {
 
   public async checkStartupAuth(): Promise<AuthResult<UserSession>> {
     if (this.startupAuthInFlight) {
+      hilog.info(AppStartupCoordinator.LOG_DOMAIN, AppStartupCoordinator.LOG_TAG, '[LOGIN_TRACE][startup] reuse in_flight startup auth');
       return this.startupAuthInFlight;
     }
+    hilog.info(AppStartupCoordinator.LOG_DOMAIN, AppStartupCoordinator.LOG_TAG, '[LOGIN_TRACE][startup] checkStartupAuth start');
     this.startupAuthInFlight = this.doCheckStartupAuth().finally(() => {
+      hilog.info(AppStartupCoordinator.LOG_DOMAIN, AppStartupCoordinator.LOG_TAG, '[LOGIN_TRACE][startup] checkStartupAuth end clear in_flight');
       this.startupAuthInFlight = null;
     });
     return this.startupAuthInFlight;
@@ -26,6 +29,11 @@ export class AppStartupCoordinator {
 
   private async doCheckStartupAuth(): Promise<AuthResult<UserSession>> {
     const silent = await this.silentLoginWithTimeout();
+    hilog.info(
+      AppStartupCoordinator.LOG_DOMAIN,
+      AppStartupCoordinator.LOG_TAG,
+      `[LOGIN_TRACE][startup] silent result success=${silent.success ? 1 : 0}, code=${silent.code}, source=${silent.source}, status=${silent.status}`
+    );
     if (silent.success) {
       return silent;
     }
