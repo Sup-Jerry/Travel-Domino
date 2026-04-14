@@ -3,7 +3,7 @@ import { EventEntity } from '../main/ets/model/entity/EventEntity';
 import { PlanStatus } from '../main/ets/domain/statemachine/PlanStatus';
 import { ComposableStrategy, DensityLevel, EnergyLevel, PaceLevel, PreferenceType } from '../main/ets/domain/strategy/TravelStrategyDimensions';
 import { TimelineWeatherService, ITimelineWeatherHost } from '../main/ets/domain/timeline/services/TimelineWeatherService';
-import { DriveStrategy } from '../main/ets/model/interface/IMapService';
+import * as MapServiceContract from '../main/ets/model/interface/IMapService';
 import {
   GeoPointInput,
   PlanNodeWeatherBinding,
@@ -241,9 +241,11 @@ export default function phase2CoreCoverageBatchETest() {
   describe('phase2CoreCoverageBatchETest', () => {
     it('normal: i_map_service_drive_strategy_enum_should_expose_stable_numeric_contract', 0, () => {
       // Arrange
-      const fastest = DriveStrategy.FASTEST;
-      const avoidCongestion = DriveStrategy.AVOID_CONGESTION;
-      const economical = DriveStrategy.ECONOMICAL;
+      const strategyObj = Reflect.get(MapServiceContract as Object, 'DriveStrategy') as Object;
+      const fastest = Reflect.get(strategyObj, 'FASTEST') as number;
+      const avoidCongestion = Reflect.get(strategyObj, 'AVOID_CONGESTION') as number;
+      const economical = Reflect.get(strategyObj, 'ECONOMICAL') as number;
+      const defaultStrategy = Reflect.get(MapServiceContract as Object, 'DEFAULT_DRIVE_STRATEGY') as number;
       // Act
       const enumSum = fastest + avoidCongestion + economical;
       // Assert
@@ -251,6 +253,7 @@ export default function phase2CoreCoverageBatchETest() {
       expect(avoidCongestion).assertEqual(4);
       expect(economical).assertEqual(1);
       expect(enumSum).assertEqual(5);
+      expect(defaultStrategy).assertEqual(0);
     });
 
     it('normal: timeline_weather_service_build_soft_preview_should_map_action_flags_and_reason', 0, () => {
@@ -446,3 +449,5 @@ export default function phase2CoreCoverageBatchETest() {
     });
   });
 }
+
+
