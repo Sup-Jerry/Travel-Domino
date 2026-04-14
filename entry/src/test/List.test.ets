@@ -175,6 +175,8 @@ import phase1ZeroHitBatchKTest from './Phase1ZeroHitBatchK.test';
 import phase2CoreCoverageBatchATest from './Phase2CoreCoverageBatchA.test';
 import phase2CoreCoverageBatchBTest from './Phase2CoreCoverageBatchB.test';
 import phase2CoreCoverageBatchCTest from './Phase2CoreCoverageBatchC.test';
+import phase2CoreCoverageBatchDTest from './Phase2CoreCoverageBatchD.test';
+import phase2CoreCoverageBatchETest from './Phase2CoreCoverageBatchE.test';
 
 const registeredSuiteNames: string[] = [
   'LocalUnit',
@@ -352,7 +354,9 @@ const registeredSuiteNames: string[] = [
   'Phase1ZeroHitBatchK',
   'Phase2CoreCoverageBatchA',
   'Phase2CoreCoverageBatchB',
-  'Phase2CoreCoverageBatchC'
+  'Phase2CoreCoverageBatchC',
+  'Phase2CoreCoverageBatchD',
+  'Phase2CoreCoverageBatchE'
 ];
 
 function containsSuite(name: string): boolean {
@@ -553,6 +557,8 @@ export default function testsuite() {
   phase2CoreCoverageBatchATest();
   phase2CoreCoverageBatchBTest();
   phase2CoreCoverageBatchCTest();
+  phase2CoreCoverageBatchDTest();
+  phase2CoreCoverageBatchETest();
 
   describe('listTest', () => {
     it('normal: list_should_keep_core_test_modules_registered', 0, () => {
