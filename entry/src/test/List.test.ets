@@ -196,6 +196,12 @@ import phase2CoreCoverageBatchTTest from './Phase2CoreCoverageBatchT.test';
 import phase2CoreCoverageBatchUTest from './Phase2CoreCoverageBatchU.test';
 import phase2CoreCoverageBatchVTest from './Phase2CoreCoverageBatchV.test';
 import phase2CoreCoverageBatchWTest from './Phase2CoreCoverageBatchW.test';
+import phase2CoreCoverageBatchXTest from './Phase2CoreCoverageBatchX.test';
+import phase2CoreCoverageBatchYTest from './Phase2CoreCoverageBatchY.test';
+import phase2CoreCoverageBatchZTest from './Phase2CoreCoverageBatchZ.test';
+import phase2CoreCoverageBatchAATest from './Phase2CoreCoverageBatchAA.test';
+import phase2CoreCoverageBatchABTest from './Phase2CoreCoverageBatchAB.test';
+import phase2CoreCoverageBatchACTest from './Phase2CoreCoverageBatchAC.test';
 
 const registeredSuiteNames: string[] = [
   'LocalUnit',
@@ -394,7 +400,13 @@ const registeredSuiteNames: string[] = [
   'Phase2CoreCoverageBatchT',
   'Phase2CoreCoverageBatchU',
   'Phase2CoreCoverageBatchV',
-  'Phase2CoreCoverageBatchW'
+  'Phase2CoreCoverageBatchW',
+  'Phase2CoreCoverageBatchX',
+  'Phase2CoreCoverageBatchY',
+  'Phase2CoreCoverageBatchZ',
+  'Phase2CoreCoverageBatchAA',
+  'Phase2CoreCoverageBatchAB',
+  'Phase2CoreCoverageBatchAC'
 ];
 
 function containsSuite(name: string): boolean {
@@ -616,6 +628,12 @@ export default function testsuite() {
   phase2CoreCoverageBatchUTest();
   phase2CoreCoverageBatchVTest();
   phase2CoreCoverageBatchWTest();
+  phase2CoreCoverageBatchXTest();
+  phase2CoreCoverageBatchYTest();
+  phase2CoreCoverageBatchZTest();
+  phase2CoreCoverageBatchAATest();
+  phase2CoreCoverageBatchABTest();
+  phase2CoreCoverageBatchACTest();
 
   describe('listTest', () => {
     it('normal: list_should_keep_core_test_modules_registered', 0, () => {
