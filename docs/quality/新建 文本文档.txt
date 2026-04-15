@@ -1,0 +1,72 @@
+  第一轮：同时开3个 Codex 窗口
+
+  窗口1 — Batch AE prompt
+
+  项目路径：ETravel
+  任务：为 domainstatemachine 核心文件补充单测
+
+  目标文件（逐个读取后写测试）：
+  - entrysrcmainetsdomainstatemachinePlanStateMachine.ets
+  - entrysrcmainetsdomainstatemachineTransitionEngine.ets
+  - entrysrcmainetsdomainstatemachineStateEvaluator.ets
+  - entrysrcmainetsdomainstatemachineReplanCoordinator.ets
+  - entrysrcmainetsdomainstatemachineExecutionContext.ets
+
+  要求：
+  1. 逐个读取每个文件，理解公开方法和分支逻辑
+  2. 参考 entrysrctestAiService.test.ets 的测试风格
+  3. 每个方法覆盖 normal  boundary  invalid 三类 case
+  4. 所有测试写入 entrysrctestPhase2BatchAE.test.ets
+  5. 不要修改 List.test.ets
+  6. 完成后输出需要追加到 List.test.ets 的 import 行（格式参考现有 import）
+
+  ---
+  窗口2 — Batch AG prompt
+
+  项目路径：ETravel
+  任务：为 domaintimelineservices 核心文件补充单测
+
+  目标文件：
+  - entrysrcmainetsdomaintimelineservicesTimelineCalculationService.ets
+  - entrysrcmainetsdomaintimelineservicesTimelineConflictResolver.ets
+  - entrysrcmainetsdomaintimelineservicesTimelineCompressionService.ets
+  - entrysrcmainetsdomaintimelineservicesTimelineDistributionService.ets
+
+  要求：
+  1. 逐个读取每个文件，理解公开方法和分支逻辑
+  2. 参考 entrysrctestAiService.test.ets 的测试风格
+  3. 每个方法覆盖 normal  boundary  invalid 三类 case
+  4. 所有测试写入 entrysrctestPhase2BatchAG.test.ets
+  5. 不要修改 List.test.ets
+  6. 完成后输出需要追加到 List.test.ets 的 import 行
+
+  ---
+  窗口3 — Batch AI prompt
+
+  项目路径：ETravel
+  任务：为 Weather 服务层补充单测
+
+  目标文件：
+  - entrysrcmainetsdomainservicesWeatherContextBuilder.ets
+  - entrysrcmainetsdomainservicesWeatherDomainService.ets
+  - entrysrcmainetsinfrastructureservicesWeatherReminderCoordinator.ets
+
+  要求：
+  1. 逐个读取每个文件，理解公开方法和分支逻辑
+  2. 参考 entrysrctestAiService.test.ets 的测试风格
+  3. 每个方法覆盖 normal  boundary  invalid 三类 case
+  4. 所有测试写入 entrysrctestPhase2BatchAI.test.ets
+  5. 不要修改 List.test.ets
+  6. 完成后输出需要追加到 List.test.ets 的 import 行
+
+  ---
+  三个窗口都完成后，回到主窗口执行
+
+  把以下 import 行追加到 entrysrctestList.test.ets：
+  [粘贴三个窗口输出的 import 行]
+
+  追加完成后运行：
+  powershell -ExecutionPolicy Bypass -File scriptsciunit-all.ps1
+
+  ---
+  验收通过后，我给你第二轮（AF + AH + AK）的 prompt。
