@@ -177,6 +177,15 @@ import phase2CoreCoverageBatchBTest from './Phase2CoreCoverageBatchB.test';
 import phase2CoreCoverageBatchCTest from './Phase2CoreCoverageBatchC.test';
 import phase2CoreCoverageBatchDTest from './Phase2CoreCoverageBatchD.test';
 import phase2CoreCoverageBatchETest from './Phase2CoreCoverageBatchE.test';
+import phase2CoreCoverageBatchFTest from './Phase2CoreCoverageBatchF.test';
+import phase2CoreCoverageBatchGTest from './Phase2CoreCoverageBatchG.test';
+import phase2CoreCoverageBatchHTest from './Phase2CoreCoverageBatchH.test';
+import phase2CoreCoverageBatchITest from './Phase2CoreCoverageBatchI.test';
+import phase2CoreCoverageBatchJTest from './Phase2CoreCoverageBatchJ.test';
+import phase2CoreCoverageBatchKTest from './Phase2CoreCoverageBatchK.test';
+import phase2CoreCoverageBatchLTest from './Phase2CoreCoverageBatchL.test';
+import phase2CoreCoverageBatchMTest from './Phase2CoreCoverageBatchM.test';
+import phase2CoreCoverageBatchNTest from './Phase2CoreCoverageBatchN.test';
 
 const registeredSuiteNames: string[] = [
   'LocalUnit',
@@ -356,7 +365,16 @@ const registeredSuiteNames: string[] = [
   'Phase2CoreCoverageBatchB',
   'Phase2CoreCoverageBatchC',
   'Phase2CoreCoverageBatchD',
-  'Phase2CoreCoverageBatchE'
+  'Phase2CoreCoverageBatchE',
+  'Phase2CoreCoverageBatchF',
+  'Phase2CoreCoverageBatchG',
+  'Phase2CoreCoverageBatchH',
+  'Phase2CoreCoverageBatchI',
+  'Phase2CoreCoverageBatchJ',
+  'Phase2CoreCoverageBatchK',
+  'Phase2CoreCoverageBatchL',
+  'Phase2CoreCoverageBatchM',
+  'Phase2CoreCoverageBatchN'
 ];
 
 function containsSuite(name: string): boolean {
@@ -559,6 +577,15 @@ export default function testsuite() {
   phase2CoreCoverageBatchCTest();
   phase2CoreCoverageBatchDTest();
   phase2CoreCoverageBatchETest();
+  phase2CoreCoverageBatchFTest();
+  phase2CoreCoverageBatchGTest();
+  phase2CoreCoverageBatchHTest();
+  phase2CoreCoverageBatchITest();
+  phase2CoreCoverageBatchJTest();
+  phase2CoreCoverageBatchKTest();
+  phase2CoreCoverageBatchLTest();
+  phase2CoreCoverageBatchMTest();
+  phase2CoreCoverageBatchNTest();
 
   describe('listTest', () => {
     it('normal: list_should_keep_core_test_modules_registered', 0, () => {

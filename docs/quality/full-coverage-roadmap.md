@@ -129,3 +129,26 @@
 1. M1（第1周）: 完成 20 个 `0-hit` 清零。
 2. M2（第2-3周）: 完成低覆盖核心深补并达到阶段阈值。
 3. M3（第4周）: 全覆盖收口 + CI 强门禁 + 封板报告。
+
+## 7. 执行进度（更新至 2026-04-15）
+
+1. 阶段 1：已完成（`0-hit` 已从 `20` 降到 `1`，剩余 `IMapService.ets` 为接口声明文件）。
+2. 阶段 2：已完成批次 `A-K`（本次新增 `Batch I/J/K`）。
+3. 本次门禁结果：
+   - `scripts/ci/validate-unit-test-cases.ps1`：通过
+   - `scripts/ci/unit-all.ps1`：通过
+4. 当前 `entry` 覆盖快照（来自 `entry/.test/default/outputs/test/reports/coverageReport.json`）：
+   - 总体：`Functions 17%`，`Branches 32.1%`，`Lines 31.3%`
+   - `TimelineWeatherService.ets`：`Functions 66.2%`，`Branches 62.4%`，`Lines 82.5%`
+   - `AuthFacade.ets`：`Functions 100%`，`Branches 63.5%`，`Lines 75.2%`
+
+## 8. Progress Snapshot (2026-04-15, Batch N)
+1. Phase 2 completed batches: `A-N`.
+2. Latest quality gates:
+   - `scripts/ci/validate-unit-test-cases.ps1`: passed
+   - `scripts/ci/unit-all.ps1`: passed
+3. Latest `entry` coverage (`entry/.test/default/outputs/test/reports/coverageReport.json`):
+   - Overall: `Functions 17.1%`, `Branches 32.9%`, `Lines 31.6%`
+   - `AuthFacade.ets`: `Functions 100%`, `Branches 100%`, `Lines 97.3%`
+   - `TimelineWeatherService.ets`: `Functions 71.9%`, `Branches 65.6%`, `Lines 85.2%`
+4. Executable zero-hit files: `0`.

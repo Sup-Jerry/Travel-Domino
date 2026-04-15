@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsArray, IsBoolean, IsInt, IsNumber, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
 
 export class AiChatMessageDto {
   @IsString()
@@ -7,6 +7,12 @@ export class AiChatMessageDto {
 
   @IsString()
   content!: string;
+}
+
+export class AiResponseFormatDto {
+  @IsString()
+  @IsIn(['json_object'])
+  type!: 'json_object';
 }
 
 export class AiChatCompletionsDto {
@@ -28,5 +34,10 @@ export class AiChatCompletionsDto {
   @IsOptional()
   @IsBoolean()
   stream?: boolean;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AiResponseFormatDto)
+  response_format?: AiResponseFormatDto;
 }
 

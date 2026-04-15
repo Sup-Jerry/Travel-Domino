@@ -2,8 +2,14 @@ import { AppConfigService } from '../src/config/app-config.service';
 
 describe('unit_test_case_generator_autofill_app_config_service', () => {
   const ORIGINAL_ENV = process.env;
+  let originalLocalEnv: Map<string, string>;
+
+  beforeAll(() => {
+    originalLocalEnv = (AppConfigService as any).localEnv as Map<string, string>;
+  });
 
   beforeEach(() => {
+    (AppConfigService as any).localEnv = new Map<string, string>();
     process.env = { ...ORIGINAL_ENV };
     delete process.env.DATABASE_URL;
     delete process.env.JWT_SECRET;
@@ -17,6 +23,7 @@ describe('unit_test_case_generator_autofill_app_config_service', () => {
   });
 
   afterAll(() => {
+    (AppConfigService as any).localEnv = originalLocalEnv;
     process.env = ORIGINAL_ENV;
   });
 
@@ -89,18 +96,18 @@ describe('unit_test_case_generator_autofill_app_config_service', () => {
 
   it('normal: app_config_should_read_ai_upstream_values', () => {
     // Arrange
-    process.env.AI_UPSTREAM_URL = 'https://api.modelarts-maas.com/v2/chat/completions';
+    process.env.AI_UPSTREAM_URL = 'https://api.deepseek.com/chat/completions';
     process.env.AI_UPSTREAM_KEY = 'k_test';
-    process.env.AI_UPSTREAM_MODEL = 'glm-5';
+    process.env.AI_UPSTREAM_MODEL = 'deepseek-chat';
     const service = new AppConfigService();
     // Act
     const url = service.aiUpstreamUrl;
     const key = service.aiUpstreamKey;
     const model = service.aiUpstreamModel;
     // Assert
-    expect(url).toBe('https://api.modelarts-maas.com/v2/chat/completions');
+    expect(url).toBe('https://api.deepseek.com/chat/completions');
     expect(key).toBe('k_test');
-    expect(model).toBe('glm-5');
+    expect(model).toBe('deepseek-chat');
   });
 
   it('regression: app_config_should_fallback_to_ai_api_legacy_vars', () => {
@@ -114,7 +121,7 @@ describe('unit_test_case_generator_autofill_app_config_service', () => {
     // Assert
     expect(url).toBe('https://legacy.example/v2/chat/completions');
     expect(key).toBe('legacy_key');
-    expect(service.aiUpstreamModel).toBe('glm-5');
+    expect(service.aiUpstreamModel).toBe('deepseek-chat');
   });
 
   it('invalid: app_config_should_throw_when_ai_upstream_missing', () => {

@@ -898,7 +898,55 @@ export class AiService {
       return false;
     }
     const message = (error.message || '').toLowerCase();
-    return message.indexOf('timeout') >= 0 || message.indexOf('2300028') >= 0;
+    return message.indexOf('timeout') >= 0 ||
+      message.indexOf('2300028') >= 0 ||
+      message.indexOf('ai_upstream_timeout') >= 0;
+  }
+
+  private static resolveNon200ErrorMessage(response: HttpResponseLike): string {
+    const status = Number(response.responseCode || 0);
+    const raw = typeof response.result === 'string'
+      ? response.result
+      : JSON.stringify(response.result);
+    const normalized = (raw || '').trim();
+    let backendMessage = '';
+    if (normalized.length > 0) {
+      const parsed = AiService.tryParseJson(normalized);
+      if (parsed && typeof parsed === 'object') {
+        const record = parsed as Record<string, Object>;
+        const messageValue = record['message'];
+        if (typeof messageValue === 'string' && (messageValue as string).trim().length > 0) {
+          backendMessage = (messageValue as string).trim();
+        }
+      }
+    }
+    const upperMessage = backendMessage.toUpperCase();
+    if (status === 429 || upperMessage.indexOf('AI_DEEPSEEK_RATE_LIMIT') >= 0) {
+      return 'AI 服务请求过于频繁，请稍后重试';
+    }
+    if (status === 401 || upperMessage.indexOf('AI_DEEPSEEK_AUTH_FAILED') >= 0) {
+      return 'AI 服务鉴权失败，请联系管理员检查后端 AI KEY';
+    }
+    if (status === 402 || upperMessage.indexOf('AI_DEEPSEEK_INSUFFICIENT_BALANCE') >= 0) {
+      return 'AI 账户余额不足，请充值后重试';
+    }
+    if (status === 400 || status === 422 ||
+      upperMessage.indexOf('AI_DEEPSEEK_BAD_REQUEST') >= 0 ||
+      upperMessage.indexOf('AI_DEEPSEEK_INVALID_PARAMETERS') >= 0) {
+      return 'AI 请求参数异常，请调整输入后重试';
+    }
+    if (status === 500 || status === 503 ||
+      upperMessage.indexOf('AI_DEEPSEEK_SERVER_ERROR') >= 0 ||
+      upperMessage.indexOf('AI_DEEPSEEK_SERVER_BUSY') >= 0) {
+      return 'AI 服务暂时不可用，请稍后重试';
+    }
+    if (upperMessage.indexOf('AI_UPSTREAM_TIMEOUT') >= 0) {
+      return 'AI 服务响应超时，请稍后重试';
+    }
+    if (status >= 500) {
+      return 'AI 服务暂时不可用，请稍后重试';
+    }
+    return '网络请求失败';
   }
 
   private static getInsufficientReason(
@@ -986,12 +1034,13 @@ export class AiService {
         'Content-Type': 'application/json'
       },
       extraData: {
-        model: 'glm-5',
+        model: 'deepseek-chat',
         max_tokens: maxTokens,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
+        response_format: { type: 'json_object' },
         stream: false
       },
       expectDataType: http.HttpDataType.STRING,
@@ -1000,7 +1049,7 @@ export class AiService {
 
     const response = await AiService.doRequest(AppConfig.AI_API_URL, options);
     if (response.responseCode !== 200) {
-      throw new Error('网络请求失败');
+      throw new Error(AiService.resolveNon200ErrorMessage(response));
     }
     const resultStr = typeof response.result === 'string'
       ? response.result
@@ -1014,7 +1063,7 @@ export class AiService {
     const systemPrompt = `
         你是一个专业的行程规划助手。请根据用户需求生成行程列表。
         【输出规则】
-        1. 必须返回纯 JSON 数组，严禁包含 Markdown 格式。
+        1. 必须返回纯 json 数组，严禁包含 Markdown 格式。
         2. 数组对象字段：
            - "name": (String) 名称
            - "duration": (Number) 分钟数
@@ -1028,12 +1077,13 @@ export class AiService {
         'Content-Type': 'application/json'
       },
       extraData: {
-        model: 'glm-5',
+        model: 'deepseek-chat',
         max_tokens: 2000,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userRequest }
         ],
+        response_format: { type: 'json_object' },
         stream: false
       },
       expectDataType: http.HttpDataType.STRING,
@@ -1045,7 +1095,7 @@ export class AiService {
 
       if (response.responseCode !== 200) {
         hilog.error(0x0000, AiService.TAG, `[AI_TRACE][generateItinerary] non-200 responseCode=${response.responseCode}`);
-        throw new Error('网络请求失败');
+        throw new Error(AiService.resolveNon200ErrorMessage(response));
       }
 
       const resultStr = typeof response.result === 'string' ? response.result : JSON.stringify(response.result);
@@ -1090,7 +1140,7 @@ ${multiDayConstraintPrompt}
 3. 住宿(type=2)：仅当用户明确提到住宿/酒店时可输出，且适合20:00-次日8:00
 4. 按时间顺序安排，确保活动时间段合理衔接
 【输出规则】
-1. 必须返回纯 JSON 数组，严禁包含 Markdown 格式。
+1. 必须返回纯 json 数组，严禁包含 Markdown 格式。
 2. 数组对象字段：
    - "name": (String) 名称
    - "duration": (Number) 分钟数

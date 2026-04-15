@@ -8,6 +8,24 @@ interface UpstreamResponse {
   body: string;
 }
 
+const DEEPSEEK_STATUS_ERROR_MAP: Record<number, string> = {
+  400: 'AI_DEEPSEEK_BAD_REQUEST',
+  401: 'AI_DEEPSEEK_AUTH_FAILED',
+  402: 'AI_DEEPSEEK_INSUFFICIENT_BALANCE',
+  422: 'AI_DEEPSEEK_INVALID_PARAMETERS',
+  429: 'AI_DEEPSEEK_RATE_LIMIT',
+  500: 'AI_DEEPSEEK_SERVER_ERROR',
+  503: 'AI_DEEPSEEK_SERVER_BUSY'
+};
+
+export function mapAiUpstreamHttpError(statusCode: number): string {
+  const direct = DEEPSEEK_STATUS_ERROR_MAP[statusCode];
+  if (typeof direct === 'string' && direct.length > 0) {
+    return direct;
+  }
+  return `AI_UPSTREAM_HTTP_${statusCode}`;
+}
+
 @Injectable()
 export class AiService {
   private static readonly DEFAULT_MAX_TOKENS = 2000;
@@ -32,6 +50,9 @@ export class AiService {
     if (typeof dto.temperature === 'number') {
       payload.temperature = dto.temperature;
     }
+    if (dto.response_format?.type === 'json_object') {
+      payload.response_format = { type: 'json_object' };
+    }
 
     const raw = JSON.stringify(payload);
     this.logger.log(
@@ -47,8 +68,11 @@ export class AiService {
       `[airest]AI_BACKEND_TRACE[ai_service_upstream_response] status=${upstream.statusCode}, bodyLen=${upstream.body.length}, costMs=${Date.now() - startedAt}`
     );
     if (upstream.statusCode < 200 || upstream.statusCode >= 300) {
-      this.logger.error(`[airest]AI_BACKEND_TRACE[ai_service_upstream_http_fail] status=${upstream.statusCode}`);
-      throw new BadGatewayException(`AI_UPSTREAM_HTTP_${upstream.statusCode}`);
+      const errorCode = mapAiUpstreamHttpError(upstream.statusCode);
+      this.logger.error(
+        `[airest]AI_BACKEND_TRACE[ai_service_upstream_http_fail] status=${upstream.statusCode}, code=${errorCode}`
+      );
+      throw new BadGatewayException(errorCode);
     }
 
     try {
@@ -61,17 +85,33 @@ export class AiService {
 
   private async postJson(urlRaw: string, body: string, apiKey: string): Promise<UpstreamResponse> {
     return new Promise<UpstreamResponse>((resolve, reject) => {
+      let settled = false;
+      const safeReject = (error: BadGatewayException): void => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        reject(error);
+      };
+      const safeResolve = (value: UpstreamResponse): void => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        resolve(value);
+      };
+
       let url: URL;
       try {
         url = new URL(urlRaw);
       } catch (_error) {
         this.logger.error('[airest]AI_BACKEND_TRACE[ai_service_url_invalid]');
-        reject(new BadGatewayException('AI_UPSTREAM_URL_INVALID'));
+        safeReject(new BadGatewayException('AI_UPSTREAM_URL_INVALID'));
         return;
       }
       if (url.protocol !== 'https:') {
         this.logger.error(`[airest]AI_BACKEND_TRACE[ai_service_url_not_https] protocol=${url.protocol}`);
-        reject(new BadGatewayException('AI_UPSTREAM_URL_NOT_HTTPS'));
+        safeReject(new BadGatewayException('AI_UPSTREAM_URL_NOT_HTTPS'));
         return;
       }
 
@@ -95,7 +135,7 @@ export class AiService {
             chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
           });
           res.on('end', () => {
-            resolve({
+            safeResolve({
               statusCode: res.statusCode || 500,
               body: Buffer.concat(chunks).toString('utf8')
             });
@@ -105,11 +145,16 @@ export class AiService {
 
       req.on('timeout', () => {
         this.logger.error('[airest]AI_BACKEND_TRACE[ai_service_request_timeout]');
+        safeReject(new BadGatewayException('AI_UPSTREAM_TIMEOUT'));
         req.destroy(new Error('AI_UPSTREAM_TIMEOUT'));
       });
       req.on('error', (error: Error) => {
         this.logger.error(`[airest]AI_BACKEND_TRACE[ai_service_request_error] reason=${error.message}`);
-        reject(new BadGatewayException('AI_UPSTREAM_REQUEST_FAILED'));
+        if (error.message === 'AI_UPSTREAM_TIMEOUT') {
+          safeReject(new BadGatewayException('AI_UPSTREAM_TIMEOUT'));
+          return;
+        }
+        safeReject(new BadGatewayException('AI_UPSTREAM_REQUEST_FAILED'));
       });
 
       req.write(body);

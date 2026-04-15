@@ -91,7 +91,7 @@ export class AppConfigService {
   }
 
   get aiUpstreamModel(): string {
-    const val = this.readEnv('AI_UPSTREAM_MODEL', 'glm-5');
-    return val.trim() || 'glm-5';
+    const val = this.readEnv('AI_UPSTREAM_MODEL', 'deepseek-chat');
+    return val.trim() || 'deepseek-chat';
   }
 }
