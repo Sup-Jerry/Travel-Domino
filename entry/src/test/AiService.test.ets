@@ -319,6 +319,70 @@ export default function aiServiceTest() {
       expect(message).assertEqual('AI 返回地点数量不足，无法满足3天行程，请补充更多偏好后重试');
     });
   });
+  it('invalid: generate_with_strategy_should_not_retry_on_401', 0, async () => {
+    // Arrange
+    let callCount = 0;
+    AiService.setRequesterForTest(async () => {
+      callCount += 1;
+      return {
+        responseCode: 401,
+        result: '{"message":"AI_DEEPSEEK_AUTH_FAILED"}'
+      };
+    });
+
+    // Act
+    let message = '';
+    try {
+      await AiService.generateItineraryWithStrategy({
+        userPrompt: '一日游',
+        strategyMode: 0
+      });
+    } catch (error) {
+      message = error instanceof Error ? error.message : '';
+    } finally {
+      AiService.setRequesterForTest(null);
+    }
+
+    // Assert
+    expect(callCount).assertEqual(1);
+    expect(message).assertEqual('AI 服务鉴权失败，请联系管理员检查后端 AI KEY');
+  });
+
+  it('normal: generate_with_strategy_should_retry_on_503', 0, async () => {
+    // Arrange
+    let callCount = 0;
+    const successResult = '{"choices":[{"message":{"content":"[{\\\"name\\\":\\\"故宫\\\",\\\"duration\\\":120,\\\"ai_reasoning\\\":\\\"经典必去\\\",\\\"type\\\":0},{\\\"name\\\":\\\"王府井\\\",\\\"duration\\\":90,\\\"ai_reasoning\\\":\\\"商圈体验\\\",\\\"type\\\":1},{\\\"name\\\":\\\"景山公园\\\",\\\"duration\\\":90,\\\"ai_reasoning\\\":\\\"俯瞰中轴线\\\",\\\"type\\\":0},{\\\"name\\\":\\\"什刹海\\\",\\\"duration\\\":90,\\\"ai_reasoning\\\":\\\"胡同风情\\\",\\\"type\\\":1}]"}}]}';
+    AiService.setRequesterForTest(async () => {
+      callCount += 1;
+      if (callCount === 1) {
+        return {
+          responseCode: 503,
+          result: '{"message":"AI_DEEPSEEK_SERVER_BUSY"}'
+        };
+      }
+      return {
+        responseCode: 200,
+        result: successResult
+      };
+    });
+
+    // Act
+    let itemsLength = 0;
+    try {
+      const items = await AiService.generateItineraryWithStrategy({
+        userPrompt: '北京一日游',
+        strategyMode: 0
+      });
+      itemsLength = items.length;
+    } finally {
+      AiService.setRequesterForTest(null);
+    }
+
+    // Assert
+    expect(callCount).assertEqual(2);
+    expect(itemsLength).assertEqual(4);
+  });
+
   describe('unit_test_case_generator_backfill_AiService', () => {
     it('conflict: multi_day_without_accommodation_should_reject_hotel_only_result', 0, async () => {
       // Arrange

@@ -48,6 +48,7 @@ import timelineEventMutationManagerTest from './TimelineEventMutationManager.tes
 import timelineCompressionCoordinatorTest from './TimelineCompressionCoordinator.test';
 import timelineDistributionCoordinatorTest from './TimelineDistributionCoordinator.test';
 import timelineStrategyManagerTest from './TimelineStrategyManager.test';
+import timelineAiServiceReplanTest from './TimelineAiServiceReplan.test';
 import timelineCompanionManagerTest from './TimelineCompanionManager.test';
 import appStartupCoordinatorTest from './AppStartupCoordinator.test';
 import timelineWeatherCoordinatorTest from './TimelineWeatherCoordinator.test';
@@ -186,6 +187,21 @@ import phase2CoreCoverageBatchKTest from './Phase2CoreCoverageBatchK.test';
 import phase2CoreCoverageBatchLTest from './Phase2CoreCoverageBatchL.test';
 import phase2CoreCoverageBatchMTest from './Phase2CoreCoverageBatchM.test';
 import phase2CoreCoverageBatchNTest from './Phase2CoreCoverageBatchN.test';
+import phase2CoreCoverageBatchOTest from './Phase2CoreCoverageBatchO.test';
+import phase2CoreCoverageBatchPTest from './Phase2CoreCoverageBatchP.test';
+import phase2CoreCoverageBatchQTest from './Phase2CoreCoverageBatchQ.test';
+import phase2CoreCoverageBatchRTest from './Phase2CoreCoverageBatchR.test';
+import phase2CoreCoverageBatchSTest from './Phase2CoreCoverageBatchS.test';
+import phase2CoreCoverageBatchTTest from './Phase2CoreCoverageBatchT.test';
+import phase2CoreCoverageBatchUTest from './Phase2CoreCoverageBatchU.test';
+import phase2CoreCoverageBatchVTest from './Phase2CoreCoverageBatchV.test';
+import phase2CoreCoverageBatchWTest from './Phase2CoreCoverageBatchW.test';
+import phase2CoreCoverageBatchXTest from './Phase2CoreCoverageBatchX.test';
+import phase2CoreCoverageBatchYTest from './Phase2CoreCoverageBatchY.test';
+import phase2CoreCoverageBatchZTest from './Phase2CoreCoverageBatchZ.test';
+import phase2CoreCoverageBatchAATest from './Phase2CoreCoverageBatchAA.test';
+import phase2CoreCoverageBatchABTest from './Phase2CoreCoverageBatchAB.test';
+import phase2CoreCoverageBatchACTest from './Phase2CoreCoverageBatchAC.test';
 
 const registeredSuiteNames: string[] = [
   'LocalUnit',
@@ -237,6 +253,7 @@ const registeredSuiteNames: string[] = [
   'TimelineCompressionCoordinator',
   'TimelineDistributionCoordinator',
   'TimelineStrategyManager',
+  'TimelineAiServiceReplan',
   'TimelineCompanionManager',
   'AppStartupCoordinator',
   'TimelineWeatherCoordinator',
@@ -374,7 +391,22 @@ const registeredSuiteNames: string[] = [
   'Phase2CoreCoverageBatchK',
   'Phase2CoreCoverageBatchL',
   'Phase2CoreCoverageBatchM',
-  'Phase2CoreCoverageBatchN'
+  'Phase2CoreCoverageBatchN',
+  'Phase2CoreCoverageBatchO',
+  'Phase2CoreCoverageBatchP',
+  'Phase2CoreCoverageBatchQ',
+  'Phase2CoreCoverageBatchR',
+  'Phase2CoreCoverageBatchS',
+  'Phase2CoreCoverageBatchT',
+  'Phase2CoreCoverageBatchU',
+  'Phase2CoreCoverageBatchV',
+  'Phase2CoreCoverageBatchW',
+  'Phase2CoreCoverageBatchX',
+  'Phase2CoreCoverageBatchY',
+  'Phase2CoreCoverageBatchZ',
+  'Phase2CoreCoverageBatchAA',
+  'Phase2CoreCoverageBatchAB',
+  'Phase2CoreCoverageBatchAC'
 ];
 
 function containsSuite(name: string): boolean {
@@ -448,6 +480,7 @@ export default function testsuite() {
   timelineCompressionCoordinatorTest();
   timelineDistributionCoordinatorTest();
   timelineStrategyManagerTest();
+  timelineAiServiceReplanTest();
   timelineCompanionManagerTest();
   appStartupCoordinatorTest();
   timelineWeatherCoordinatorTest();
@@ -586,6 +619,21 @@ export default function testsuite() {
   phase2CoreCoverageBatchLTest();
   phase2CoreCoverageBatchMTest();
   phase2CoreCoverageBatchNTest();
+  phase2CoreCoverageBatchOTest();
+  phase2CoreCoverageBatchPTest();
+  phase2CoreCoverageBatchQTest();
+  phase2CoreCoverageBatchRTest();
+  phase2CoreCoverageBatchSTest();
+  phase2CoreCoverageBatchTTest();
+  phase2CoreCoverageBatchUTest();
+  phase2CoreCoverageBatchVTest();
+  phase2CoreCoverageBatchWTest();
+  phase2CoreCoverageBatchXTest();
+  phase2CoreCoverageBatchYTest();
+  phase2CoreCoverageBatchZTest();
+  phase2CoreCoverageBatchAATest();
+  phase2CoreCoverageBatchABTest();
+  phase2CoreCoverageBatchACTest();
 
   describe('listTest', () => {
     it('normal: list_should_keep_core_test_modules_registered', 0, () => {
@@ -649,6 +697,7 @@ export default function testsuite() {
     });
   });
 }
+
 
 
 

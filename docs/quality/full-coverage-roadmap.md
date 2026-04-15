@@ -152,3 +152,33 @@
    - `AuthFacade.ets`: `Functions 100%`, `Branches 100%`, `Lines 97.3%`
    - `TimelineWeatherService.ets`: `Functions 71.9%`, `Branches 65.6%`, `Lines 85.2%`
 4. Executable zero-hit files: `0`.
+
+## 9. Progress Snapshot (2026-04-15, Batch AA)
+1. Phase 2 completed batches: `A-AA`.
+2. Latest quality gates:
+   - `scripts/ci/validate-unit-test-cases.ps1`: passed
+   - `scripts/ci/unit-all.ps1`: passed
+3. Latest `entry` coverage (`entry/.test/default/outputs/test/reports/coverageReport.json`):
+   - Overall: `Functions 18.6%`, `Branches 36.5%`, `Lines 34.7%`
+   - `PlanRepositoryImpl.ets`: `Functions 95.8%`, `Branches 44.7%`, `Lines 40.9%`
+4. Zero-hit function files: `1` (`entry/src/main/ets/model/interface/IMapService.ets`).
+
+## 10. Progress Snapshot (2026-04-15, Batch AB)
+1. Phase 2 completed batches: `A-AB`.
+2. Latest quality gates:
+   - `scripts/ci/validate-unit-test-cases.ps1`: passed
+   - `scripts/ci/unit-all.ps1`: passed
+3. Latest `entry` coverage (`entry/.test/default/outputs/test/reports/coverageReport.json`):
+   - Overall: `Functions 18.7%`, `Branches 37.2%`, `Lines 35.1%`
+   - `PlanRepositoryImpl.ets`: `Functions 95.8%`, `Branches 52.6%`, `Lines 48.6%`
+4. Zero-hit function files: `1` (`entry/src/main/ets/model/interface/IMapService.ets`).
+
+## 11. Progress Snapshot (2026-04-15, Batch AC)
+1. Phase 2 completed batches: `A-AC`.
+2. Latest quality gates:
+   - `scripts/ci/validate-unit-test-cases.ps1`: passed
+   - `scripts/ci/unit-all.ps1`: passed
+3. Latest `entry` coverage (`entry/.test/default/outputs/test/reports/coverageReport.json`):
+   - Overall: `Functions 18.7%`, `Branches 37.4%`, `Lines 35.3%`
+   - `PlanRepositoryImpl.ets`: `Functions 95.8%`, `Branches 68.4%`, `Lines 67.2%`
+4. Zero-hit function files: `1` (`entry/src/main/ets/model/interface/IMapService.ets`).

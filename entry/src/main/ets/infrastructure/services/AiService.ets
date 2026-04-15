@@ -4,6 +4,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AppConfig } from '../../common/utils/AppConfig';
 import { PreferenceManager, AiDailyPoiRangeConfig } from '../../common/utils/PreferenceManager';
 import { HttpRequestHelper } from '../adapters/HttpRequestHelper';
+import { AiResponseParser } from './AiResponseParser';
 import { ComposableStrategy, PreferenceType } from '../../domain/strategy/TravelStrategyDimensions';
 import { StrategyBuilder } from '../../domain/strategy/StrategyBuilder';
 import { StrategyService } from '../../domain/strategy/StrategyService';
@@ -64,6 +65,15 @@ interface HttpResponseLike {
 
 type AiRequester = (url: string, options: http.HttpRequestOptions) => Promise<HttpResponseLike>;
 
+class AiHttpError extends Error {
+  public httpStatus: number = 0;
+
+  constructor(message: string, httpStatus: number) {
+    super(message);
+    this.httpStatus = httpStatus;
+  }
+}
+
 
 export class AiService {
   private static readonly TAG = 'AiService';
@@ -75,6 +85,8 @@ export class AiService {
   private static readonly RETRY_TIMES = 1;
   private static readonly RETRY_READ_TIMEOUT_MS = 60000;
   private static readonly RETRY_MAX_TOKENS = 2200;
+  private static readonly RETRY_BASE_DELAY_MS = 600;
+  private static readonly RETRY_JITTER_MS = 300;
   private static readonly MAX_TOKENS_CEILING = 3200;
   private static readonly LONG_TRIP_TOKEN_PER_DAY = 80;
   private static readonly RETRY_TOKEN_BONUS = 300;
@@ -679,92 +691,15 @@ export class AiService {
   }
 
   public static parseItemsForTest(contentRaw: string): AiRawItem[] {
-    return AiService.parseItemsFromContent(contentRaw);
+    return AiResponseParser.parseItemsFromContent(contentRaw, (item: AiRawItem) => {
+      return AiService.normalizeItem(item);
+    }) as AiRawItem[];
   }
 
   public static parseModelResponseForTest(resultStr: string): AiRawItem[] {
-    let resultObj = null as PanguResponse | null;
-    try {
-      resultObj = JSON.parse(resultStr) as PanguResponse;
-    } catch (_error) {
-      throw new Error('AI 顶层响应不是合法 JSON');
-    }
-    if (!resultObj.choices || resultObj.choices.length === 0) {
-      throw new Error('AI 响应格式为空');
-    }
-    const firstChoice = resultObj.choices[0];
-    const finishReason = firstChoice && typeof firstChoice.finish_reason === 'string'
-      ? firstChoice.finish_reason
-      : '';
-    const choiceRecord = firstChoice as Object as Record<string, Object>;
-    let content = '';
-    const message = choiceRecord['message'];
-    if (message && typeof message === 'object') {
-      const messageRecord = message as Record<string, Object>;
-      const messageContent = messageRecord['content'];
-      if (typeof messageContent === 'string') {
-        content = messageContent as string;
-      } else if (Array.isArray(messageContent)) {
-        const fragments: string[] = [];
-        const segments = messageContent as Object[];
-        for (let i = 0; i < segments.length; i++) {
-          const segment = segments[i];
-          if (typeof segment === 'string') {
-            fragments.push((segment as string).trim());
-            continue;
-          }
-          if (segment && typeof segment === 'object') {
-            const segmentRecord = segment as Record<string, Object>;
-            const text = segmentRecord['text'];
-            if (typeof text === 'string' && (text as string).trim().length > 0) {
-              fragments.push((text as string).trim());
-              continue;
-            }
-            const nestedText = segmentRecord['content'];
-            if (typeof nestedText === 'string' && (nestedText as string).trim().length > 0) {
-              fragments.push((nestedText as string).trim());
-            }
-          }
-        }
-        content = fragments.join('\n').trim();
-      } else if (messageContent && typeof messageContent === 'object') {
-        const contentRecord = messageContent as Record<string, Object>;
-        const text = contentRecord['text'];
-        if (typeof text === 'string') {
-          content = (text as string).trim();
-        } else {
-          content = AiService.toSafeString(messageContent).trim();
-        }
-      }
-    }
-    if (content.length === 0) {
-      const choiceText = choiceRecord['text'];
-      if (typeof choiceText === 'string') {
-        content = (choiceText as string).trim();
-      }
-    }
-    hilog.info(
-      0x0000,
-      AiService.TAG,
-      `[airest]AI_REPLAN_TRACE[ai_response_meta] finishReason=${finishReason || 'none'}, contentLen=${content.length}`
-    );
-    if (content.length === 0) {
-      throw new Error('AI 响应内容为空');
-    }
-    try {
-      return AiService.parseItemsFromContent(content);
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : JSON.stringify(error);
-      hilog.error(
-        0x0000,
-        AiService.TAG,
-        `[airest]AI_REPLAN_TRACE[ai_response_parse_fail] finishReason=${finishReason || 'none'}, reason=${reason}, preview=${AiService.buildParsePreview(content)}`
-      );
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error(reason);
-    }
+    return AiResponseParser.parseModelResponseForTest(resultStr, (item: AiRawItem) => {
+      return AiService.normalizeItem(item);
+    }) as AiRawItem[];
   }
 
   private static dedupeItemsByName(items: AiRawItem[]): AiRawItem[] {
@@ -901,6 +836,53 @@ export class AiService {
     return message.indexOf('timeout') >= 0 ||
       message.indexOf('2300028') >= 0 ||
       message.indexOf('ai_upstream_timeout') >= 0;
+  }
+
+  private static resolveErrorHttpStatus(error: Object): number {
+    if (error instanceof AiHttpError) {
+      const status = Number(error.httpStatus);
+      if (Number.isFinite(status) && status > 0) {
+        return Math.floor(status);
+      }
+      return 0;
+    }
+    if (!(error instanceof Error)) {
+      return 0;
+    }
+    return 0;
+  }
+
+  private static buildHttpError(message: string, httpStatus: number): Error {
+    return new AiHttpError(message, httpStatus);
+  }
+
+  private static shouldRetryError(error: Object): boolean {
+    if (AiService.isTimeoutLikeError(error)) {
+      return true;
+    }
+    const status = AiService.resolveErrorHttpStatus(error);
+    if (status === 429 || status === 500 || status === 503) {
+      return true;
+    }
+    if (!(error instanceof Error)) {
+      return false;
+    }
+    const upper = (error.message || '').toUpperCase();
+    return upper.indexOf('AI_DEEPSEEK_RATE_LIMIT') >= 0 ||
+      upper.indexOf('AI_DEEPSEEK_SERVER_ERROR') >= 0 ||
+      upper.indexOf('AI_DEEPSEEK_SERVER_BUSY') >= 0 ||
+      upper.indexOf('AI_UPSTREAM_TIMEOUT') >= 0 ||
+      upper.indexOf('AI_UPSTREAM_REQUEST_FAILED') >= 0;
+  }
+
+  private static async waitBeforeRetry(retry: number): Promise<void> {
+    const safeRetry = Number.isFinite(retry) ? Math.max(0, Math.floor(retry)) : 0;
+    const backoff = AiService.RETRY_BASE_DELAY_MS * Math.pow(2, safeRetry);
+    const jitter = Math.floor(Math.random() * AiService.RETRY_JITTER_MS);
+    const delayMs = backoff + jitter;
+    await new Promise<void>((resolve) => {
+      setTimeout(() => resolve(), delayMs);
+    });
   }
 
   private static resolveNon200ErrorMessage(response: HttpResponseLike): string {
@@ -1049,7 +1031,10 @@ export class AiService {
 
     const response = await AiService.doRequest(AppConfig.AI_API_URL, options);
     if (response.responseCode !== 200) {
-      throw new Error(AiService.resolveNon200ErrorMessage(response));
+      throw AiService.buildHttpError(
+        AiService.resolveNon200ErrorMessage(response),
+        Number(response.responseCode || 0)
+      );
     }
     const resultStr = typeof response.result === 'string'
       ? response.result
@@ -1173,6 +1158,7 @@ ${multiDayConstraintPrompt}
         } catch (error) {
           const elapsedMs = Date.now() - attemptStartedAt;
           const timeoutLike = AiService.isTimeoutLikeError(error as Object);
+          const retryable = AiService.shouldRetryError(error as Object);
           const canUseFallback = retry > 0 &&
             bestEffortItems.length > 0 &&
             timeoutLike &&
@@ -1180,7 +1166,7 @@ ${multiDayConstraintPrompt}
           hilog.error(
             0x0000,
             AiService.TAG,
-            `[AI_DEBUG][strategy_attempt_error] mode=${mode}, retry=${retry}, elapsedMs=${elapsedMs}, timeoutLike=${timeoutLike ? 1 : 0}, reason=${error instanceof Error ? error.message : JSON.stringify(error)}, canFallback=${canUseFallback ? 1 : 0}, bestEffortCount=${bestEffortItems.length}`
+            `[AI_DEBUG][strategy_attempt_error] mode=${mode}, retry=${retry}, elapsedMs=${elapsedMs}, timeoutLike=${timeoutLike ? 1 : 0}, retryable=${retryable ? 1 : 0}, reason=${error instanceof Error ? error.message : JSON.stringify(error)}, canFallback=${canUseFallback ? 1 : 0}, bestEffortCount=${bestEffortItems.length}`
           );
           if (canUseFallback) {
             finalItems = bestEffortItems;
@@ -1191,7 +1177,7 @@ ${multiDayConstraintPrompt}
             );
             break;
           }
-          if (retry < AiService.RETRY_TIMES) {
+          if (retry < AiService.RETRY_TIMES && retryable) {
             if (timeoutLike) {
               // timeout 场景下不叠加更复杂约束，避免模型负担继续升高
               currentPrompt = request.userPrompt;
@@ -1208,6 +1194,7 @@ ${multiDayConstraintPrompt}
                 `[AI_DEBUG][strategy_retry_after_error] mode=${mode}, retry=${retry}, nextRetry=${retry + 1}`
               );
             }
+            await AiService.waitBeforeRetry(retry);
             continue;
           }
           const retryError = error instanceof Error ? error.message : JSON.stringify(error);
