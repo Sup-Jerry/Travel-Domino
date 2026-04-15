@@ -48,6 +48,7 @@ import timelineEventMutationManagerTest from './TimelineEventMutationManager.tes
 import timelineCompressionCoordinatorTest from './TimelineCompressionCoordinator.test';
 import timelineDistributionCoordinatorTest from './TimelineDistributionCoordinator.test';
 import timelineStrategyManagerTest from './TimelineStrategyManager.test';
+import timelineAiServiceReplanTest from './TimelineAiServiceReplan.test';
 import timelineCompanionManagerTest from './TimelineCompanionManager.test';
 import appStartupCoordinatorTest from './AppStartupCoordinator.test';
 import timelineWeatherCoordinatorTest from './TimelineWeatherCoordinator.test';
@@ -191,6 +192,10 @@ import phase2CoreCoverageBatchPTest from './Phase2CoreCoverageBatchP.test';
 import phase2CoreCoverageBatchQTest from './Phase2CoreCoverageBatchQ.test';
 import phase2CoreCoverageBatchRTest from './Phase2CoreCoverageBatchR.test';
 import phase2CoreCoverageBatchSTest from './Phase2CoreCoverageBatchS.test';
+import phase2CoreCoverageBatchTTest from './Phase2CoreCoverageBatchT.test';
+import phase2CoreCoverageBatchUTest from './Phase2CoreCoverageBatchU.test';
+import phase2CoreCoverageBatchVTest from './Phase2CoreCoverageBatchV.test';
+import phase2CoreCoverageBatchWTest from './Phase2CoreCoverageBatchW.test';
 
 const registeredSuiteNames: string[] = [
   'LocalUnit',
@@ -242,6 +247,7 @@ const registeredSuiteNames: string[] = [
   'TimelineCompressionCoordinator',
   'TimelineDistributionCoordinator',
   'TimelineStrategyManager',
+  'TimelineAiServiceReplan',
   'TimelineCompanionManager',
   'AppStartupCoordinator',
   'TimelineWeatherCoordinator',
@@ -384,7 +390,11 @@ const registeredSuiteNames: string[] = [
   'Phase2CoreCoverageBatchP',
   'Phase2CoreCoverageBatchQ',
   'Phase2CoreCoverageBatchR',
-  'Phase2CoreCoverageBatchS'
+  'Phase2CoreCoverageBatchS',
+  'Phase2CoreCoverageBatchT',
+  'Phase2CoreCoverageBatchU',
+  'Phase2CoreCoverageBatchV',
+  'Phase2CoreCoverageBatchW'
 ];
 
 function containsSuite(name: string): boolean {
@@ -458,6 +468,7 @@ export default function testsuite() {
   timelineCompressionCoordinatorTest();
   timelineDistributionCoordinatorTest();
   timelineStrategyManagerTest();
+  timelineAiServiceReplanTest();
   timelineCompanionManagerTest();
   appStartupCoordinatorTest();
   timelineWeatherCoordinatorTest();
@@ -601,6 +612,10 @@ export default function testsuite() {
   phase2CoreCoverageBatchQTest();
   phase2CoreCoverageBatchRTest();
   phase2CoreCoverageBatchSTest();
+  phase2CoreCoverageBatchTTest();
+  phase2CoreCoverageBatchUTest();
+  phase2CoreCoverageBatchVTest();
+  phase2CoreCoverageBatchWTest();
 
   describe('listTest', () => {
     it('normal: list_should_keep_core_test_modules_registered', 0, () => {

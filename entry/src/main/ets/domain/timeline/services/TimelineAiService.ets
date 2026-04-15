@@ -66,6 +66,8 @@ interface EffectiveStrategyChoice {
   customStrategy?: ComposableStrategy;
 }
 
+type InsertAiEventHook = (planId: number, item: TravelPlanItem) => Promise<number>;
+
 export interface ITimelineAiHost {
   events: EventEntity[];
   planId: number;
@@ -121,10 +123,22 @@ export interface ITimelineAiService {
 }
 
 export class TimelineAiService implements ITimelineAiService {
+  private static insertAiEventHookForTest: InsertAiEventHook | null = null;
   private host: ITimelineAiHost;
 
   constructor(host: ITimelineAiHost) {
     this.host = host;
+  }
+
+  public static setInsertAiEventHookForTest(hook: InsertAiEventHook | null): void {
+    TimelineAiService.insertAiEventHookForTest = hook;
+  }
+
+  private static async insertAiEvent(planId: number, item: TravelPlanItem): Promise<number> {
+    if (TimelineAiService.insertAiEventHookForTest) {
+      return TimelineAiService.insertAiEventHookForTest(planId, item);
+    }
+    return EventRepositoryImpl.insertEvent(planId, item);
   }
 
   public static buildAiDayOffsets(totalItems: number, requestedDays: number, baseDayOffset: number): number[] {
@@ -354,6 +368,50 @@ export class TimelineAiService implements ITimelineAiService {
     };
   }
 
+  private async restoreUndoSnapshotUnsafe(token: AiReplanUndoToken): Promise<void> {
+    await this.host.persistence.saveAllEvents(this.host.planId, token.events);
+    this.host.events = token.events.map((item: TravelPlanItem) => EventEntity.fromInterface(item, this.host.planId));
+
+    const restoredMode = TimelineAiService.normalizeStrategyMode(token.strategyMode);
+    if (restoredMode === -1) {
+      await PlanRepositoryImpl.updateStrategyDimensions(
+        this.host.planId,
+        token.strategyDensity,
+        token.strategyPace,
+        token.strategyPreference,
+        token.strategyEnergy
+      );
+    } else {
+      await this.host.persistence.updateStrategyMode(this.host.planId, restoredMode);
+    }
+    this.host.currentStrategyMode = restoredMode;
+    await this.host.persistence.saveAiContext(this.host.planId, token.lastAiPrompt, token.lastStrategyExplanation);
+
+    this.host.markScheduleChanged();
+    this.host.recalculateFromIndex(0);
+    this.host.events = [...this.host.events];
+  }
+
+  private static countAiSourceInTokenEvents(events: TravelPlanItem[]): number {
+    return events.filter((item: TravelPlanItem) => Number(item.source || 0) === 1).length;
+  }
+
+  private ensureRollbackConsistency(token: AiReplanUndoToken): void {
+    const expectedMode = TimelineAiService.normalizeStrategyMode(token.strategyMode);
+    const actualMode = TimelineAiService.normalizeStrategyMode(this.host.currentStrategyMode);
+    if (actualMode !== expectedMode) {
+      throw new Error(`rollback_mode_mismatch expected=${expectedMode} actual=${actualMode}`);
+    }
+    if (this.host.events.length !== token.events.length) {
+      throw new Error(`rollback_event_count_mismatch expected=${token.events.length} actual=${this.host.events.length}`);
+    }
+    const actualAiCount = this.host.events.filter((event: EventEntity) => event.source === 1).length;
+    const expectedAiCount = TimelineAiService.countAiSourceInTokenEvents(token.events);
+    if (actualAiCount !== expectedAiCount) {
+      throw new Error(`rollback_ai_count_mismatch expected=${expectedAiCount} actual=${actualAiCount}`);
+    }
+  }
+
   public async generateByAi(userPrompt: string, strategyMode: number = 0, customStrategy?: ComposableStrategy): Promise<void> {
     try {
       this.host.currentStrategyMode = strategyMode;
@@ -580,18 +638,24 @@ export class TimelineAiService implements ITimelineAiService {
       throw new Error('预览结果为空，无法应用');
     }
     this.host.isRegenerating = true;
+    let undoToken = null as AiReplanUndoToken | null;
+    let beforeTotalCount = this.host.events.length;
+    let beforeAiCount = this.host.events.filter((event: EventEntity) => event.source === 1).length;
+    let removedAiCount = 0;
+    let insertedCount = 0;
     try {
       hilog.info(
         0x0000,
         TAG,
-        `[airest]AI_REPLAN_TRACE[service_apply_in] planId=${this.host.planId}, decision=${decision}, previewMode=${preview.strategyMode}, previewCount=${preview.items.length}`
+        `[airest]AI_REPLAN_TRACE[service_apply_in] planId=${this.host.planId}, decision=${decision}, previewMode=${preview.strategyMode}, previewCount=${preview.items.length}, beforeTotal=${beforeTotalCount}, beforeAi=${beforeAiCount}`
       );
-      const undoToken = await this.captureUndoToken();
+      undoToken = await this.captureUndoToken();
       const mode = TimelineAiService.normalizeStrategyMode(preview.strategyMode);
       const customStrategy = TimelineAiService.cloneCustomStrategy(preview.customStrategy);
       if (decision === 'OVERWRITE') {
         await EventRepositoryImpl.deleteEventsBySource(this.host.planId, 1);
         this.host.events = this.host.events.filter((event: EventEntity) => event.source !== 1);
+        removedAiCount = beforeAiCount;
       }
 
       const requestedDays = AiService.resolveRequestedDaysFromPrompt(preview.prompt);
@@ -629,9 +693,10 @@ export class TimelineAiService implements ITimelineAiService {
           address: '',
           travelMode: 2
         };
-        const newId = await EventRepositoryImpl.insertEvent(this.host.planId, newItem);
+        const newId = await TimelineAiService.insertAiEvent(this.host.planId, newItem);
         newItem.id = newId;
         insertedIds.push(newId);
+        insertedCount += 1;
         this.host.events.push(EventEntity.fromInterface(newItem, this.host.planId));
       }
 
@@ -682,12 +747,36 @@ export class TimelineAiService implements ITimelineAiService {
       hilog.info(
         0x0000,
         TAG,
-        `[airest]AI_REPLAN_TRACE[service_apply_out] decision=${decision}, mode=${mode}, insertedCount=${insertedIds.length}, totalEvents=${this.host.events.length}`
+        `[airest]AI_REPLAN_TRACE[service_apply_out] decision=${decision}, mode=${mode}, insertedCount=${insertedIds.length}, removedAi=${removedAiCount}, totalEvents=${this.host.events.length}`
       );
       return undoToken;
     } catch (error) {
       const reason = error instanceof Error ? error.message : JSON.stringify(error);
-      hilog.error(0x0000, TAG, `[airest]AI_REPLAN_TRACE[service_apply_fail] decision=${decision}, reason=${reason}`);
+      hilog.error(
+        0x0000,
+        TAG,
+        `[airest]AI_REPLAN_TRACE[service_apply_fail] decision=${decision}, reason=${reason}, beforeTotal=${beforeTotalCount}, beforeAi=${beforeAiCount}, removedAi=${removedAiCount}, inserted=${insertedCount}, currentTotal=${this.host.events.length}`
+      );
+      if (undoToken) {
+        try {
+          await this.restoreUndoSnapshotUnsafe(undoToken);
+          this.ensureRollbackConsistency(undoToken);
+          const rollbackAiCount = this.host.events.filter((event: EventEntity) => event.source === 1).length;
+          hilog.warn(
+            0x0000,
+            TAG,
+            `[airest]AI_REPLAN_TRACE[service_apply_rollback_ok] decision=${decision}, restoredCount=${undoToken.events.length}, restoredAi=${rollbackAiCount}`
+          );
+        } catch (rollbackError) {
+          const rollbackReason = rollbackError instanceof Error ? rollbackError.message : JSON.stringify(rollbackError);
+          hilog.error(
+            0x0000,
+            TAG,
+            `[airest]AI_REPLAN_TRACE[service_apply_rollback_fail] decision=${decision}, reason=${rollbackReason}`
+          );
+          throw new Error(`${reason}; 回滚失败: ${rollbackReason}`);
+        }
+      }
       if (error instanceof Error) {
         throw error;
       }
@@ -706,27 +795,8 @@ export class TimelineAiService implements ITimelineAiService {
     }
     this.host.isRegenerating = true;
     try {
-      await this.host.persistence.saveAllEvents(this.host.planId, token.events);
-      this.host.events = token.events.map((item: TravelPlanItem) => EventEntity.fromInterface(item, this.host.planId));
-
+      await this.restoreUndoSnapshotUnsafe(token);
       const restoredMode = TimelineAiService.normalizeStrategyMode(token.strategyMode);
-      if (restoredMode === -1) {
-        await PlanRepositoryImpl.updateStrategyDimensions(
-          this.host.planId,
-          token.strategyDensity,
-          token.strategyPace,
-          token.strategyPreference,
-          token.strategyEnergy
-        );
-      } else {
-        await this.host.persistence.updateStrategyMode(this.host.planId, restoredMode);
-      }
-      this.host.currentStrategyMode = restoredMode;
-      await this.host.persistence.saveAiContext(this.host.planId, token.lastAiPrompt, token.lastStrategyExplanation);
-
-      this.host.markScheduleChanged();
-      this.host.recalculateFromIndex(0);
-      this.host.events = [...this.host.events];
       hilog.info(0x0000, TAG, `[AI_REPLAN][undo] restoredCount=${this.host.events.length}, mode=${restoredMode}`);
     } finally {
       this.host.isRegenerating = false;
