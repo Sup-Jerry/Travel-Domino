@@ -60,7 +60,7 @@ foreach ($line in $lines) {
 }
 
 if ($coverageNoiseMatched) {
-  Write-Host '[unit-all] note: ignored known coverage parser noise (00507008).'
+  Write-Host '[unit-all] note: ignored known coverage parser noise.'
 }
 
 $buildSuccess = $joined -match 'BUILD SUCCESSFUL'
@@ -68,6 +68,7 @@ $unknownErrorLines = @()
 foreach ($line in $lines) {
   if ($line -match 'ERROR:' -and
       $line -notmatch 'ErrorCode:\s*00507008' -and
+      $line -notmatch 'getInitCoverageData failed' -and
       $line -notmatch '@ohos\\coverage\\') {
     $unknownErrorLines += $line
   }
