@@ -31,6 +31,7 @@ A skill is a set of local instructions to follow that is stored in a `SKILL.md` 
 - 口令默认参数：未额外说明时，保持自动推送并自动创建 Draft PR 到 `develop`（不加 `-NoPR`）。
 - 口令例外：若用户明确说“只本地提交 / 不推送 / 不要PR”，按用户指令覆盖默认行为。
 - 迭代进化：使用 `skill-evolution-manager`。
+- 计划执行对齐：若属于有计划的开发，或用户明确说明“计划在这里/按计划开发”，开发过程中必须主动读取计划内容并持续对齐，确保完成计划。
 - 日志排查：默认不要提供 PowerShell 抓取命令，只提供日志关键词，由用户自行抓取。
 - 日志前缀策略：根据实际排查链路决定，不强制固定单一前缀；给用户时仅提供本次实际使用的关键词（例如 `AI_REPLAN_TRACE`、`AI_BACKEND_TRACE`、`AUTH_TRACE`）。
 
