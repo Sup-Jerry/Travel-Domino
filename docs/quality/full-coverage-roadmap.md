@@ -182,3 +182,16 @@
    - Overall: `Functions 18.7%`, `Branches 37.4%`, `Lines 35.3%`
    - `PlanRepositoryImpl.ets`: `Functions 95.8%`, `Branches 68.4%`, `Lines 67.2%`
 4. Zero-hit function files: `1` (`entry/src/main/ets/model/interface/IMapService.ets`).
+
+## 12. Progress Snapshot (2026-04-15, Batch AD)
+1. Phase 2 completed batches: `A-AD`.
+2. Latest quality gates:
+   - `scripts/ci/validate-unit-test-cases.ps1`: passed
+   - `scripts/ci/unit-all.ps1`: passed
+3. Latest `entry` coverage (`entry/.test/default/outputs/test/reports/coverageReport.json`):
+   - Overall: `Functions 18.7%`, `Branches 37.4%`, `Lines 35.4%`
+   - `PlanRepositoryImpl.ets`: `Functions 95.8%`, `Branches 73.7%`, `Lines 70.7%`
+4. Target function status:
+   - `searchAllPlansPaged`: branches `2/2` (covered)
+   - `purgeOldTrash`: branches `1/3` (still pending deep-branch path)
+5. Zero-hit function files: `1` (`entry/src/main/ets/model/interface/IMapService.ets`).
