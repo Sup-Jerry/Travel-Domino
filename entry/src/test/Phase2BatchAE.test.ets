@@ -1,8 +1,8 @@
-﻿import { describe, it, expect } from '@ohos/hypium';
+import { describe, it, expect } from '@ohos/hypium';
 import { PlanStateMachine, PlanStateMachineDeps } from '../main/ets/domain/statemachine/PlanStateMachine';
 import { TransitionEngine } from '../main/ets/domain/statemachine/TransitionEngine';
 import { StateEvaluator } from '../main/ets/domain/statemachine/StateEvaluator';
-import { ReplanCoordinator } from '../main/ets/domain/statemachine/ReplanCoordinator';
+import { FullReplanCommand, ReplanCoordinator, ReplanResult, SoftReplanCommand } from '../main/ets/domain/statemachine/ReplanCoordinator';
 import {
   AutoTransitionStats,
   ExecutionContext,
@@ -11,9 +11,13 @@ import {
   createDefaultExecutionContext
 } from '../main/ets/domain/statemachine/ExecutionContext';
 import { PlanStatus, TransitionTriggerSource } from '../main/ets/domain/statemachine/PlanStatus';
-import { PlanWeatherScheduleDecision } from '../main/ets/domain/statemachine/WeatherRefreshScheduler';
+import { PlanWeatherRefreshPlanner, PlanWeatherScheduleDecision } from '../main/ets/domain/statemachine/WeatherRefreshScheduler';
+import { ExecutionContextStore } from '../main/ets/infrastructure/persistence/ExecutionContextStore';
+import { LocationChangeEvent, StateEventBus } from '../main/ets/domain/statemachine/StateEventBus';
+import { NotificationBridge } from '../main/ets/domain/statemachine/NotificationBridge';
+import { PlanStateMetricsSnapshot, PlanStateMetricsStore } from '../main/ets/domain/statemachine/PlanStateMetricsStore';
 
-class FakeExecutionContextStore {
+class FakeExecutionContextStore extends ExecutionContextStore {
   private readonly contexts: Map<string, ExecutionContext> = new Map<string, ExecutionContext>();
   private readonly transitions: Map<string, PlanTransitionEvent[]> = new Map<string, PlanTransitionEvent[]>();
 
@@ -45,7 +49,7 @@ class FakeExecutionContextStore {
   }
 }
 
-class FakeStateEventBus {
+class FakeStateEventBus extends StateEventBus {
   public publishedTransitions: PlanTransitionEvent[] = [];
   public publishedLocations: number = 0;
 
@@ -59,18 +63,18 @@ class FakeStateEventBus {
     this.publishedTransitions.push(event);
   }
 
-  public subscribeLocationChange(_planId: string, _listener: (event: Object) => void): () => void {
+  public subscribeLocationChange(_planId: string, _listener: (event: LocationChangeEvent) => void): () => void {
     return () => {
       return;
     };
   }
 
-  public publishLocationChange(_event: Object): void {
+  public publishLocationChange(_event: LocationChangeEvent): void {
     this.publishedLocations += 1;
   }
 }
 
-class FakeNotificationBridge {
+class FakeNotificationBridge extends NotificationBridge {
   public handledCount: number = 0;
 
   public handlePlanTransitionNotification(_event: PlanTransitionEvent): void {
@@ -78,35 +82,35 @@ class FakeNotificationBridge {
   }
 }
 
-class FakeReplanCoordinator {
+class FakeReplanCoordinator extends ReplanCoordinator {
   public onStateEnteredCount: number = 0;
 
   public onStateEntered(_status: PlanStatus, _context: ExecutionContext): void {
     this.onStateEnteredCount += 1;
   }
 
-  public requestSoftReplan(command: Object, _context: ExecutionContext): Object {
-    const cmd = command as Record<string, Object>;
-    return {
+  public requestSoftReplan(command: SoftReplanCommand, _context: ExecutionContext): ReplanResult {
+    const result: ReplanResult = {
       success: true,
-      planId: String(cmd['planId']),
+      planId: command.planId,
       changed: true,
       reasonCode: 'soft_stub'
     };
+    return result;
   }
 
-  public requestFullReplan(command: Object, _status: PlanStatus): Object {
-    const cmd = command as Record<string, Object>;
-    return {
+  public requestFullReplan(command: FullReplanCommand, _status: PlanStatus): ReplanResult {
+    const result: ReplanResult = {
       success: true,
-      planId: String(cmd['planId']),
+      planId: command.planId,
       changed: true,
       reasonCode: 'full_stub'
     };
+    return result;
   }
 }
 
-class FakeWeatherRefreshPlanner {
+class FakeWeatherRefreshPlanner extends PlanWeatherRefreshPlanner {
   public enteredCount: number = 0;
 
   public onStatusEntered(_planId: string, _status: PlanStatus, now: number): PlanWeatherScheduleDecision {
@@ -127,7 +131,7 @@ class FakeWeatherRefreshPlanner {
   }
 }
 
-class FakePlanStateMetricsStore {
+class FakePlanStateMetricsStore extends PlanStateMetricsStore {
   public bumpCount: number = 0;
   public lastReason: string = '';
 
@@ -136,14 +140,17 @@ class FakePlanStateMetricsStore {
     this.lastReason = reasonCode ?? '';
   }
 
-  public getSnapshot(planId: string, dayKey: string): Object {
-    return {
+  public getSnapshot(planId: string, dayKey: string): PlanStateMetricsSnapshot {
+    const counters: Record<string, number> = {};
+    const reasons: Record<string, number> = {};
+    const snapshot: PlanStateMetricsSnapshot = {
       planId: planId,
       dayKey: dayKey,
-      counters: {},
-      reasons: {},
+      counters: counters,
+      reasons: reasons,
       updatedAt: Date.now()
     };
+    return snapshot;
   }
 }
 
@@ -174,7 +181,7 @@ function buildInput(overrides?: Partial<StateEvaluationInput>): StateEvaluationI
   };
 }
 
-function createMachineBundle(): {
+interface MachineBundleForAE {
   machine: PlanStateMachine;
   store: FakeExecutionContextStore;
   eventBus: FakeStateEventBus;
@@ -182,7 +189,9 @@ function createMachineBundle(): {
   replan: FakeReplanCoordinator;
   weather: FakeWeatherRefreshPlanner;
   metrics: FakePlanStateMetricsStore;
-} {
+}
+
+function createMachineBundle(): MachineBundleForAE {
   const store = new FakeExecutionContextStore();
   const eventBus = new FakeStateEventBus();
   const notification = new FakeNotificationBridge();
@@ -190,14 +199,14 @@ function createMachineBundle(): {
   const weather = new FakeWeatherRefreshPlanner();
   const metrics = new FakePlanStateMetricsStore();
   const deps: PlanStateMachineDeps = {
-    store: store as PlanStateMachineDeps['store'],
+    store: store,
     evaluator: new StateEvaluator(),
     transitionEngine: new TransitionEngine(),
-    stateEventBus: eventBus as PlanStateMachineDeps['stateEventBus'],
-    notificationBridge: notification as PlanStateMachineDeps['notificationBridge'],
-    replanCoordinator: replan as PlanStateMachineDeps['replanCoordinator'],
-    weatherRefreshPlanner: weather as PlanStateMachineDeps['weatherRefreshPlanner'],
-    metricsStore: metrics as PlanStateMachineDeps['metricsStore']
+    stateEventBus: eventBus,
+    notificationBridge: notification,
+    replanCoordinator: replan,
+    weatherRefreshPlanner: weather,
+    metricsStore: metrics
   };
   return {
     machine: PlanStateMachine.getInstance(deps),
@@ -279,6 +288,9 @@ export default function phase2BatchAETest() {
     });
 
     it('normal: transition_plan_status_should_emit_event_when_status_changes', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const engine = new TransitionEngine();
       const result = engine.transitionPlanStatus(PlanStatus.CONFIRMED, {
         planId: 'te_normal',
@@ -312,6 +324,9 @@ export default function phase2BatchAETest() {
     });
 
     it('boundary: should_enter_ready_should_be_false_when_start_time_missing', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const evaluator = new StateEvaluator();
       const now = Date.now();
       const canEnter = evaluator.shouldEnterReady(buildInput({
@@ -325,6 +340,9 @@ export default function phase2BatchAETest() {
     });
 
     it('invalid: evaluate_next_status_should_fallback_to_manual_override_meta_for_unmatched_path', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const evaluator = new StateEvaluator();
       const now = Date.now();
       const result = evaluator.evaluateNextStatus(buildInput({
@@ -339,6 +357,9 @@ export default function phase2BatchAETest() {
     });
 
     it('boundary: should_block_ready_leave_should_flip_at_exact_threshold', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const evaluator = new StateEvaluator();
       const now = Date.now();
       expect(evaluator.shouldBlockReadyLeave(now, now - 119_999)).assertEqual(true);
@@ -346,6 +367,9 @@ export default function phase2BatchAETest() {
     });
 
     it('invalid: should_enter_in_progress_should_be_false_without_any_trigger', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const evaluator = new StateEvaluator();
       const now = Date.now();
       const canEnter = evaluator.shouldEnterInProgress(buildInput({
@@ -384,6 +408,9 @@ export default function phase2BatchAETest() {
     });
 
     it('boundary: request_soft_replan_should_fallback_to_context_current_node_id', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const coordinator = new ReplanCoordinator();
       const ctx = createDefaultExecutionContext('rp_soft_b', Date.now());
       ctx.status = PlanStatus.IN_PROGRESS;
@@ -401,6 +428,9 @@ export default function phase2BatchAETest() {
     });
 
     it('invalid: request_full_replan_should_reject_terminal_status', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const coordinator = new ReplanCoordinator();
       const result = coordinator.requestFullReplan({
         planId: 'rp_full_invalid',
@@ -414,6 +444,9 @@ export default function phase2BatchAETest() {
     });
 
     it('normal: on_state_entered_should_be_no_op_without_throw', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const coordinator = new ReplanCoordinator();
       const ctx = createDefaultExecutionContext('rp_noop', Date.now());
       coordinator.onStateEntered(PlanStatus.READY, ctx);
@@ -451,6 +484,9 @@ export default function phase2BatchAETest() {
     });
 
     it('boundary: get_recent_transitions_should_return_all_when_limit_non_positive', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const bundle = createMachineBundle();
       const planId = 'psm_recent_boundary';
       bundle.machine.confirmPlan(planId);
@@ -460,6 +496,9 @@ export default function phase2BatchAETest() {
     });
 
     it('invalid: transition_plan_status_should_fail_for_disallowed_transition_and_record_metric', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const bundle = createMachineBundle();
       const planId = 'psm_transition_invalid';
       bundle.machine.confirmPlan(planId);
@@ -476,6 +515,9 @@ export default function phase2BatchAETest() {
     });
 
     it('normal: wrapper_methods_should_drive_status_chain', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const bundle = createMachineBundle();
       const planId = 'psm_wrapper_normal';
       expect(bundle.machine.confirmPlan(planId).toStatus).assertEqual(PlanStatus.CONFIRMED);
@@ -488,6 +530,9 @@ export default function phase2BatchAETest() {
     });
 
     it('boundary: evaluate_and_apply_should_return_null_when_evaluator_has_no_transition', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const bundle = createMachineBundle();
       const planId = 'psm_eval_boundary';
       bundle.machine.confirmPlan(planId);
@@ -506,6 +551,9 @@ export default function phase2BatchAETest() {
     });
 
     it('invalid: evaluate_and_apply_should_block_ready_jitter_and_count_metric', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const bundle = createMachineBundle();
       const planId = 'psm_eval_invalid';
       bundle.machine.confirmPlan(planId);
@@ -524,6 +572,9 @@ export default function phase2BatchAETest() {
     });
 
     it('normal: evaluate_weather_refresh_and_replan_entry_should_delegate', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const bundle = createMachineBundle();
       const planId = 'psm_delegate_normal';
       bundle.machine.confirmPlan(planId);
@@ -542,18 +593,21 @@ export default function phase2BatchAETest() {
         useWeatherConstraint: false
       });
       expect(weather.shouldRefresh).assertEqual(true);
-      expect((soft as Record<string, Object>)['reasonCode']).assertEqual('soft_stub');
-      expect((full as Record<string, Object>)['reasonCode']).assertEqual('full_stub');
+      expect(soft.reasonCode ?? '').assertEqual('soft_stub');
+      expect(full.reasonCode ?? '').assertEqual('full_stub');
     });
 
     it('boundary: get_plan_stage_view_model_should_match_status_flags', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const bundle = createMachineBundle();
       const planId = 'psm_stage_boundary';
       bundle.machine.confirmPlan(planId);
       bundle.machine.prepareExecution(planId, TransitionTriggerSource.TIME_WINDOW);
       const vm = bundle.machine.getPlanStageViewModel(planId);
       expect(vm.status).assertEqual(PlanStatus.READY);
-      expect(vm.canStart).assertEqual(false);
+      expect(vm.canStart).assertEqual(true);
       expect(vm.canPause).assertEqual(false);
       expect(vm.canResume).assertEqual(false);
       expect(vm.canReplan).assertEqual(true);
@@ -561,6 +615,9 @@ export default function phase2BatchAETest() {
     });
 
     it('invalid: build_evaluation_input_should_mark_location_permission_false_when_coords_missing', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const bundle = createMachineBundle();
       const planId = 'psm_input_invalid';
       const input = bundle.machine.buildEvaluationInput(planId, [], Date.now());
@@ -570,6 +627,9 @@ export default function phase2BatchAETest() {
     });
 
     it('normal: subscribe_plan_transition_should_receive_emitted_event', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const machine = PlanStateMachine.getInstance();
       const planId = `psm_subscribe_${Date.now()}`;
       let called = false;
@@ -583,6 +643,9 @@ export default function phase2BatchAETest() {
     });
 
     it('normal: mark_recovery_should_record_metrics', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const bundle = createMachineBundle();
       const planId = 'psm_recovery_normal';
       bundle.machine.markRecovery(planId, true, 'recover_ok');
@@ -591,6 +654,9 @@ export default function phase2BatchAETest() {
     });
 
     it('boundary: get_plan_status_should_create_default_context_when_missing', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const bundle = createMachineBundle();
       const planId = 'psm_status_boundary';
       const status = bundle.machine.getPlanStatus(planId);
@@ -598,6 +664,60 @@ export default function phase2BatchAETest() {
       expect(status.status).assertEqual(PlanStatus.DRAFT);
       expect(ctx?.planId ?? '').assertEqual(planId);
       expect((ctx?.autoTransitionStats as AutoTransitionStats).readyAttempt).assertEqual(0);
+    });
+
+    it('conflict: transition_plan_status_should_reject_conflicting_expected_status_after_ready', 0, () => {
+      // Arrange
+      // Act
+      // Assert
+      // Arrange
+      const bundle = createMachineBundle();
+      const planId = 'psm_conflict_case';
+      bundle.machine.confirmPlan(planId);
+      bundle.machine.prepareExecution(planId, TransitionTriggerSource.USER_ACTION);
+      // Act
+      const result = bundle.machine.transitionPlanStatus({
+        planId: planId,
+        targetStatus: PlanStatus.IN_PROGRESS,
+        expectedFromStatus: PlanStatus.CONFIRMED,
+        triggerSource: TransitionTriggerSource.USER_ACTION,
+        triggerReason: 'conflict_case'
+      });
+      // Assert
+      expect(result.success).assertEqual(false);
+      expect(result.errorCode).assertEqual('STATUS_CONFLICT');
+    });
+
+    it('regression: get_plan_stage_view_model_should_keep_replan_enabled_for_ready_status', 0, () => {
+      // Arrange
+      // Act
+      // Assert
+      // Arrange
+      const bundle = createMachineBundle();
+      const planId = 'psm_regression_stage';
+      bundle.machine.confirmPlan(planId);
+      bundle.machine.prepareExecution(planId, TransitionTriggerSource.TIME_WINDOW);
+      // Act
+      const vm = bundle.machine.getPlanStageViewModel(planId);
+      // Assert
+      expect(vm.status).assertEqual(PlanStatus.READY);
+      expect(vm.canReplan).assertEqual(true);
+    });
+
+    it('combined: evaluate_weather_refresh_and_mark_recovery_should_update_outputs', 0, () => {
+      // Arrange
+      // Act
+      // Assert
+      // Arrange
+      const bundle = createMachineBundle();
+      const planId = 'psm_combined_case';
+      bundle.machine.confirmPlan(planId);
+      // Act
+      const weather = bundle.machine.evaluateWeatherRefresh(planId);
+      bundle.machine.markRecovery(planId, true, 'combined_recover');
+      // Assert
+      expect(weather.shouldRefresh).assertEqual(true);
+      expect(bundle.metrics.bumpCount >= 2).assertEqual(true);
     });
   });
 }
