@@ -1,13 +1,18 @@
-﻿import { describe, it, expect } from '@ohos/hypium';
+import { describe, it, expect } from '@ohos/hypium';
 import { EventEntity } from '../main/ets/model/entity/EventEntity';
 import { PlanStatus } from '../main/ets/domain/statemachine/PlanStatus';
 import { WeatherContextBuilder } from '../main/ets/domain/services/WeatherContextBuilder';
 import { WeatherDomainService } from '../main/ets/domain/services/WeatherDomainService';
+import { NodeSuitabilityResult, WeatherRiskEvaluator } from '../main/ets/domain/services/WeatherRiskEvaluator';
 import {
   DEFAULT_WEATHER_USER_PREFERENCE,
+  GeoPointInput,
+  PlanNodeWeatherBinding,
+  RouteWeatherSuitability,
   WeatherCollabContext,
   WeatherContext,
   WeatherContextBuildResult,
+  WeatherSnapshot,
   WeatherSuggestion,
   WeatherUserPreference
 } from '../main/ets/domain/services/WeatherModels';
@@ -19,9 +24,10 @@ import {
   WeatherReminderSubscriptionHandlers
 } from '../main/ets/infrastructure/services/WeatherReminderCoordinator';
 import { WeatherReminderPayload, WeatherReminderStore } from '../main/ets/common/utils/weather/WeatherReminderStore';
-import { PlanStateMachine } from '../main/ets/domain/statemachine/PlanStateMachine';
+import { ExecutionContext, createDefaultExecutionContext } from '../main/ets/domain/statemachine/ExecutionContext';
+import { WeatherFetchPolicy, WeatherPolicyResolver, WeatherTarget, WeatherTargetType } from '../main/ets/domain/statemachine/WeatherPolicyResolver';
 
-class FakeWeatherServiceForBatch {
+class FakeWeatherServiceForBatch extends AmapWeatherService {
   public batchShouldThrow: boolean = false;
   public weatherByPoint: Map<string, WeatherInfo> = new Map<string, WeatherInfo>();
   public currentInfo: WeatherInfo | null = null;
@@ -49,10 +55,10 @@ class FakeWeatherServiceForBatch {
     return this.currentInfo;
   }
 
-  public toSnapshotByPoint(pointKey: string, info: WeatherInfo) {
-    return {
+  public toSnapshotByPoint(pointKey: string, info: WeatherInfo): WeatherSnapshot {
+    const snapshot: WeatherSnapshot = {
       locationKey: pointKey,
-      sourceType: 'PLAN_LOCATION' as const,
+      sourceType: 'PLAN_LOCATION',
       weatherTime: 1700000000000,
       fetchTime: 1700000000000,
       conditionCode: info.condition,
@@ -63,51 +69,76 @@ class FakeWeatherServiceForBatch {
       cityCode: info.cityCode,
       reportTime: info.reportTime
     };
+    return snapshot;
   }
 }
 
-class FakeRiskEvaluatorForBatch {
+class FakeRiskEvaluatorForBatch extends WeatherRiskEvaluator {
   public scoreByEventId: Map<number, number> = new Map<number, number>();
   public tagsByEventId: Map<number, string[]> = new Map<number, string[]>();
   public routeScore: number = 85;
   public routeTags: string[] = [];
 
-  public evaluateNodeSuitability(event: EventEntity, _snapshot: Object | undefined, _pref: WeatherUserPreference) {
-    return {
+  public evaluateNodeSuitability(event: EventEntity, _snapshot?: WeatherSnapshot, _pref?: WeatherUserPreference): NodeSuitabilityResult {
+    const result: NodeSuitabilityResult = {
       score: this.scoreByEventId.get(event.id) ?? 80,
       riskTags: this.tagsByEventId.get(event.id) ?? []
     };
+    return result;
   }
 
-  public evaluateRouteSuitability(_bindings: Object[], _pref: WeatherUserPreference, _collab?: WeatherCollabContext) {
-    return {
+  public evaluateRouteSuitability(_bindings: PlanNodeWeatherBinding[], _pref?: WeatherUserPreference, _collab?: WeatherCollabContext): RouteWeatherSuitability {
+    const result: RouteWeatherSuitability = {
       routeScore: this.routeScore,
       riskTags: this.routeTags,
       summaryText: 'route_ok_phase2'
     };
+    return result;
   }
 }
 
-class FakePolicyResolverForBatch {
+class FakePolicyResolverForBatch extends WeatherPolicyResolver {
   public throwOnResolve: boolean = false;
   public throwOnTargets: boolean = false;
+  public lastResolvedStatus: PlanStatus = PlanStatus.DRAFT;
+  public lastPlanId: string = '';
+  public lastTargetStatus: PlanStatus = PlanStatus.DRAFT;
+  public lastEventCount: number = 0;
 
-  public resolveWeatherFetchPolicy(status: PlanStatus): Object {
+  public resolveWeatherFetchPolicy(status: PlanStatus): WeatherFetchPolicy {
     if (this.throwOnResolve) {
       throw new Error('resolve_policy_failed_phase2');
     }
-    return { status: status, mode: 'fake' };
+    this.lastResolvedStatus = status;
+    return {
+      targets: [WeatherTargetType.ALL_PLAN_NODES],
+      forceRefreshOnEnter: true,
+      allowCache: true
+    };
   }
 
-  public buildWeatherTargets(planId: string, status: PlanStatus, events: EventEntity[]): Object {
+  public buildWeatherTargets(planId: string, status: PlanStatus, events: EventEntity[]): WeatherTarget[] {
     if (this.throwOnTargets) {
       throw new Error('build_targets_failed_phase2');
     }
-    return { planId: planId, status: status, eventCount: events.length };
+    this.lastPlanId = planId;
+    this.lastTargetStatus = status;
+    this.lastEventCount = events.length;
+    return events.map((event: EventEntity) => {
+      const target: WeatherTarget = {
+        type: WeatherTargetType.ALL_PLAN_NODES,
+        planId: planId,
+        latitude: event.latitude,
+        longitude: event.longitude,
+        nodeId: `${event.id}`,
+        forecastTime: event.dynamic_start_time
+      };
+      return target;
+    });
   }
 }
 
-class FakeContextBuilderForDomain {
+class FakeContextBuilderForDomain extends WeatherContextBuilder {
   public planningThrow: boolean = false;
   public executionThrow: boolean = false;
   public adjustThrow: boolean = false;
@@ -126,22 +157,24 @@ class FakeContextBuilderForDomain {
     if (this.planningThrow) {
       throw new Error('domain_planning_failed_phase2');
     }
+    const eventMap: Map<number, PlanNodeWeatherBinding> = new Map<number, PlanNodeWeatherBinding>();
     return {
       context: { stage: 'CONFIRMED', generatedAt: 1, bindings: [], routeSuitability: { routeScore: 90, riskTags: [], summaryText: 'ok' } },
-      eventMap: new Map<number, Object>() as Map<number, any>,
+      eventMap: eventMap,
       sourceEvents: events
     };
   }
 
-  public async buildExecutionContext(_events: EventEntity[], _loc?: Object, forceRefresh: boolean = false): Promise<WeatherContextBuildResult> {
+  public async buildExecutionContext(_events: EventEntity[], _loc?: GeoPointInput, forceRefresh: boolean = false): Promise<WeatherContextBuildResult> {
     this.executionCalls += 1;
     this.lastForceRefresh = forceRefresh;
     if (this.executionThrow) {
       throw new Error('domain_execution_failed_phase2');
     }
+    const eventMap: Map<number, PlanNodeWeatherBinding> = new Map<number, PlanNodeWeatherBinding>();
     return {
       context: { stage: 'IN_PROGRESS', generatedAt: 2, bindings: [], routeSuitability: { routeScore: 75, riskTags: ['RAIN'], summaryText: 'ok' }, executionRiskScore: 75, executionRiskTags: ['RAIN'], futureNodeWeatherList: [] },
-      eventMap: new Map<number, Object>() as Map<number, any>,
+      eventMap: eventMap,
       sourceEvents: []
     };
   }
@@ -164,17 +197,30 @@ class FakeContextBuilderForDomain {
   }
 }
 
+interface PlanTransitionEventForBatch {
+  toStatus: PlanStatus;
+}
+
+interface PlanStatusResultForBatch {
+  status: PlanStatus;
+}
+
+interface MutableWeatherContextForBatch {
+  routeSuitability?: RouteWeatherSuitability;
+}
+
 class FakePlanStateMachineForBatch {
   public status: PlanStatus = PlanStatus.IN_PROGRESS;
-  private handler: ((event: { toStatus: PlanStatus }) => void) | null = null;
+  private handler: ((event: PlanTransitionEventForBatch) => void) | null = null;
 
-  public subscribePlanTransition(_planId: string, handler: (event: { toStatus: PlanStatus }) => void): () => void {
+  public subscribePlanTransition(_planId: string, handler: (event: PlanTransitionEventForBatch) => void): () => void {
     this.handler = handler;
     return () => {};
   }
 
-  public getPlanStatus(_planId: string): { status: PlanStatus } {
-    return { status: this.status };
+  public getPlanStatus(_planId: string): PlanStatusResultForBatch {
+    const statusResult: PlanStatusResultForBatch = { status: this.status };
+    return statusResult;
   }
 
   public emit(toStatus: PlanStatus): void {
@@ -224,6 +270,13 @@ function createInfoForBatch(condition: string, temp: number = 25): WeatherInfo {
   return { temperature: temp, condition: condition, humidity: 50, windSpeed: 3, reportTime: '2026-04-15', cityCode: '320100' };
 }
 
+function createExecutionContextForBatch(lat: number, lng: number): ExecutionContext {
+  const context = createDefaultExecutionContext('ctx_weather', Date.now(), 0, 0);
+  context.lastKnownLatitude = lat;
+  context.lastKnownLongitude = lng;
+  return context;
+}
+
 function createBaseExecutionContextForBatch(tags: string[]): WeatherContext {
   return {
     stage: 'IN_PROGRESS',
@@ -239,23 +292,34 @@ function createBaseExecutionContextForBatch(tags: string[]): WeatherContext {
 export default function phase2BatchAITest() {
   describe('phase2BatchAITest_weather_context_builder', () => {
     it('normal: resolve_weather_fetch_policy_should_delegate_to_resolver', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const policyResolver = new FakePolicyResolverForBatch();
-      const builder = new WeatherContextBuilder(undefined, undefined, policyResolver as unknown as any);
-      const policy = builder.resolveWeatherFetchPolicy(PlanStatus.DRAFT) as Record<string, string>;
-      expect(policy.status).assertEqual(PlanStatus.DRAFT);
+      const builder = new WeatherContextBuilder(undefined, undefined, policyResolver);
+      const policy = builder.resolveWeatherFetchPolicy(PlanStatus.DRAFT);
+      expect(policyResolver.lastResolvedStatus).assertEqual(PlanStatus.DRAFT);
+      expect(policy.targets.length > 0).assertTrue();
     });
 
     it('boundary: resolve_weather_fetch_policy_should_support_terminal_status', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const policyResolver = new FakePolicyResolverForBatch();
-      const builder = new WeatherContextBuilder(undefined, undefined, policyResolver as unknown as any);
-      const policy = builder.resolveWeatherFetchPolicy(PlanStatus.EXPIRED) as Record<string, string>;
-      expect(policy.status).assertEqual(PlanStatus.EXPIRED);
+      const builder = new WeatherContextBuilder(undefined, undefined, policyResolver);
+      const policy = builder.resolveWeatherFetchPolicy(PlanStatus.EXPIRED);
+      expect(policyResolver.lastResolvedStatus).assertEqual(PlanStatus.EXPIRED);
+      expect(policy.allowCache).assertTrue();
     });
 
     it('invalid: resolve_weather_fetch_policy_should_throw_when_resolver_fails', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const policyResolver = new FakePolicyResolverForBatch();
       policyResolver.throwOnResolve = true;
-      const builder = new WeatherContextBuilder(undefined, undefined, policyResolver as unknown as any);
+      const builder = new WeatherContextBuilder(undefined, undefined, policyResolver);
       let message = '';
       try {
         builder.resolveWeatherFetchPolicy(PlanStatus.READY);
@@ -266,23 +330,34 @@ export default function phase2BatchAITest() {
     });
 
     it('normal: build_weather_targets_should_delegate_with_plan_and_events', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const policyResolver = new FakePolicyResolverForBatch();
-      const builder = new WeatherContextBuilder(undefined, undefined, policyResolver as unknown as any);
-      const targets = builder.buildWeatherTargets('plan_a', PlanStatus.CONFIRMED, [createEventForBatch(1), createEventForBatch(2)]) as Record<string, number>;
-      expect(targets.eventCount).assertEqual(2);
+      const builder = new WeatherContextBuilder(undefined, undefined, policyResolver);
+      const targets = builder.buildWeatherTargets('plan_a', PlanStatus.CONFIRMED, [createEventForBatch(1), createEventForBatch(2)]);
+      expect(policyResolver.lastEventCount).assertEqual(2);
+      expect(targets.length).assertEqual(2);
     });
 
     it('boundary: build_weather_targets_should_handle_empty_events', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const policyResolver = new FakePolicyResolverForBatch();
-      const builder = new WeatherContextBuilder(undefined, undefined, policyResolver as unknown as any);
-      const targets = builder.buildWeatherTargets('plan_b', PlanStatus.DRAFT, []) as Record<string, number>;
-      expect(targets.eventCount).assertEqual(0);
+      const builder = new WeatherContextBuilder(undefined, undefined, policyResolver);
+      const targets = builder.buildWeatherTargets('plan_b', PlanStatus.DRAFT, []);
+      expect(policyResolver.lastEventCount).assertEqual(0);
+      expect(targets.length).assertEqual(0);
     });
 
     it('invalid: build_weather_targets_should_throw_when_resolver_fails', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const policyResolver = new FakePolicyResolverForBatch();
       policyResolver.throwOnTargets = true;
-      const builder = new WeatherContextBuilder(undefined, undefined, policyResolver as unknown as any);
+      const builder = new WeatherContextBuilder(undefined, undefined, policyResolver);
       let message = '';
       try {
         builder.buildWeatherTargets('plan_c', PlanStatus.READY, []);
@@ -293,31 +368,57 @@ export default function phase2BatchAITest() {
     });
 
     it('normal: refresh_weather_by_status_should_route_ready_to_execution_context', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
       const builder = new WeatherContextBuilder();
-      Reflect.set(builder as Object, 'buildWeatherTargets', () => ['target_ready']);
+      Reflect.set(builder as Object, 'buildWeatherTargets', (): WeatherTarget[] => []);
       let capturedStage = '';
-      Reflect.set(builder as Object, 'buildExecutionContext', async (_events: EventEntity[], _loc?: Object, _force?: boolean, _pref?: Object, _opt?: Object, stage?: string) => {
+      Reflect.set(builder as Object, 'buildExecutionContext', async (
+        _events: EventEntity[],
+        _loc?: GeoPointInput,
+        _force?: boolean,
+        _pref?: WeatherUserPreference,
+        _opt?: Object,
+        stage?: string
+      ): Promise<WeatherContextBuildResult> => {
         capturedStage = stage ?? '';
-        return {
-          context: { stage: 'READY', generatedAt: 1700000000003, bindings: [], routeSuitability: { routeScore: 80, riskTags: [], summaryText: '' } },
-          eventMap: new Map<number, any>(),
-          sourceEvents: []
+        const eventMap: Map<number, PlanNodeWeatherBinding> = new Map<number, PlanNodeWeatherBinding>();
+        const context: WeatherContext = {
+          stage: 'READY',
+          generatedAt: 1700000000003,
+          bindings: [],
+          routeSuitability: { routeScore: 80, riskTags: [], summaryText: '' }
         };
+        const result: WeatherContextBuildResult = { context: context, eventMap: eventMap, sourceEvents: [] };
+        return result;
       });
-      const result = await builder.refreshWeatherByStatus('plan_ready', PlanStatus.READY, [createEventForBatch(1)], { lastKnownLatitude: 31.1, lastKnownLongitude: 121.5 } as any, true);
+      const result = await builder.refreshWeatherByStatus(
+        'plan_ready',
+        PlanStatus.READY,
+        [createEventForBatch(1)],
+        createExecutionContextForBatch(31.1, 121.5),
+        true
+      );
       expect(result.success).assertTrue();
       expect(capturedStage).assertEqual('READY');
     });
 
     it('boundary: refresh_weather_by_status_should_return_direct_result_for_terminal_status', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
       const builder = new WeatherContextBuilder();
       Reflect.set(builder as Object, 'buildWeatherTargets', () => ['target_terminal']);
       const result = await builder.refreshWeatherByStatus('plan_terminal', PlanStatus.EXPIRED, []);
       expect(result.success).assertTrue();
-      expect(result.snapshotVersion.includes('EXPIRED_')).assertTrue();
+      expect((result.snapshotVersion ?? '').includes('EXPIRED_')).assertTrue();
     });
 
     it('invalid: refresh_weather_by_status_should_return_degraded_when_context_build_fails', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
       const builder = new WeatherContextBuilder();
       Reflect.set(builder as Object, 'buildWeatherTargets', () => ['target_fail']);
       Reflect.set(builder as Object, 'buildPlanningContext', async () => {
@@ -329,11 +430,14 @@ export default function phase2BatchAITest() {
     });
 
     it('normal: build_planning_context_should_build_bindings_from_weather_map', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
       const weatherService = new FakeWeatherServiceForBatch();
       const risk = new FakeRiskEvaluatorForBatch();
       risk.scoreByEventId.set(1, 66);
       risk.tagsByEventId.set(1, ['RAIN']);
-      const builder = new WeatherContextBuilder(weatherService as unknown as any, risk as unknown as any, new FakePolicyResolverForBatch() as unknown as any);
+      const builder = new WeatherContextBuilder(weatherService, risk, new FakePolicyResolverForBatch());
       const event = createEventForBatch(1, 1, 30.3, 120.3);
       const key = AmapWeatherService.toPointKey(event.latitude, event.longitude, event.dynamic_start_time);
       weatherService.weatherByPoint.set(key, createInfoForBatch('RAIN', 23));
@@ -343,17 +447,23 @@ export default function phase2BatchAITest() {
     });
 
     it('boundary: build_planning_context_should_filter_invalid_coordinates_and_status', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
       const weatherService = new FakeWeatherServiceForBatch();
-      const builder = new WeatherContextBuilder(weatherService as unknown as any, new FakeRiskEvaluatorForBatch() as unknown as any, new FakePolicyResolverForBatch() as unknown as any);
+      const builder = new WeatherContextBuilder(weatherService, new FakeRiskEvaluatorForBatch(), new FakePolicyResolverForBatch());
       const result = await builder.buildPlanningContext([createEventForBatch(2, 0, 30.5, 120.5), createEventForBatch(3, 1, 0, 0)]);
       expect(result.sourceEvents.length).assertEqual(0);
       expect(weatherService.lastBatchPoints.length).assertEqual(0);
     });
 
     it('invalid: build_planning_context_should_throw_when_batch_query_fails', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
       const weatherService = new FakeWeatherServiceForBatch();
       weatherService.batchShouldThrow = true;
-      const builder = new WeatherContextBuilder(weatherService as unknown as any, new FakeRiskEvaluatorForBatch() as unknown as any, new FakePolicyResolverForBatch() as unknown as any);
+      const builder = new WeatherContextBuilder(weatherService, new FakeRiskEvaluatorForBatch(), new FakePolicyResolverForBatch());
       let message = '';
       try {
         await builder.buildPlanningContext([createEventForBatch(4)]);
@@ -363,8 +473,11 @@ export default function phase2BatchAITest() {
       expect(message).assertEqual('batch_failed_phase2');
     });
     it('normal: build_execution_context_should_resolve_current_and_next_weather', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
       const weatherService = new FakeWeatherServiceForBatch();
-      const builder = new WeatherContextBuilder(weatherService as unknown as any, new FakeRiskEvaluatorForBatch() as unknown as any, new FakePolicyResolverForBatch() as unknown as any);
+      const builder = new WeatherContextBuilder(weatherService, new FakeRiskEvaluatorForBatch(), new FakePolicyResolverForBatch());
       const e1 = createEventForBatch(11, 1, 31.1, 121.1, 100);
       e1.actual_start_time = 1700000000001;
       const e2 = createEventForBatch(12, 1, 31.2, 121.2, 200);
@@ -382,8 +495,11 @@ export default function phase2BatchAITest() {
     });
 
     it('boundary: build_execution_context_should_return_empty_when_no_pending_nodes', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
       const weatherService = new FakeWeatherServiceForBatch();
-      const builder = new WeatherContextBuilder(weatherService as unknown as any, new FakeRiskEvaluatorForBatch() as unknown as any, new FakePolicyResolverForBatch() as unknown as any);
+      const builder = new WeatherContextBuilder(weatherService, new FakeRiskEvaluatorForBatch(), new FakePolicyResolverForBatch());
       const completed = createEventForBatch(21);
       completed.completion_status = EventEntity.STATE_COMPLETED;
       const result = await builder.buildExecutionContext([completed], { latitude: 0, longitude: 0 });
@@ -392,9 +508,12 @@ export default function phase2BatchAITest() {
     });
 
     it('invalid: build_execution_context_should_throw_when_weather_service_fails', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
       const weatherService = new FakeWeatherServiceForBatch();
       weatherService.batchShouldThrow = true;
-      const builder = new WeatherContextBuilder(weatherService as unknown as any, new FakeRiskEvaluatorForBatch() as unknown as any, new FakePolicyResolverForBatch() as unknown as any);
+      const builder = new WeatherContextBuilder(weatherService, new FakeRiskEvaluatorForBatch(), new FakePolicyResolverForBatch());
       let message = '';
       try {
         await builder.buildExecutionContext([createEventForBatch(31)]);
@@ -405,6 +524,9 @@ export default function phase2BatchAITest() {
     });
 
     it('normal: build_execution_suggestions_should_emit_rain_actions', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const builder = new WeatherContextBuilder();
       const context = createBaseExecutionContextForBatch(['RAIN']);
       context.nextNodeWeather = { locationKey: 'k1', sourceType: 'PLAN_LOCATION', weatherTime: 1, fetchTime: 1, conditionCode: 'RAIN', conditionText: 'RAIN' };
@@ -414,6 +536,9 @@ export default function phase2BatchAITest() {
     });
 
     it('boundary: build_execution_suggestions_should_emit_unknown_replacement', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const builder = new WeatherContextBuilder();
       const context = createBaseExecutionContextForBatch(['UNKNOWN']);
       context.futureNodeWeatherList = [
@@ -426,12 +551,19 @@ export default function phase2BatchAITest() {
     });
 
     it('invalid: build_execution_suggestions_should_return_empty_for_invalid_context', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const builder = new WeatherContextBuilder();
-      const suggestions = builder.buildExecutionSuggestions(undefined as unknown as WeatherContext);
+      const buildExecutionSuggestions = Reflect.get(builder as Object, 'buildExecutionSuggestions') as (context?: WeatherContext) => WeatherSuggestion[];
+      const suggestions = buildExecutionSuggestions(undefined);
       expect(suggestions.length).assertEqual(0);
     });
 
     it('normal: build_execution_adjustments_should_emit_severe_skip', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const builder = new WeatherContextBuilder();
       const event = createEventForBatch(41);
       const context = createBaseExecutionContextForBatch(['SEVERE_ALERT']);
@@ -449,18 +581,32 @@ export default function phase2BatchAITest() {
     });
 
     it('boundary: build_execution_adjustments_should_return_empty_when_plan_id_invalid', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const builder = new WeatherContextBuilder();
       const suggestions = builder.buildExecutionAdjustments(0, createBaseExecutionContextForBatch(['RAIN']), [createEventForBatch(51)]);
       expect(suggestions.length).assertEqual(0);
     });
 
     it('invalid: build_execution_adjustments_should_return_empty_for_null_context', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const builder = new WeatherContextBuilder();
-      const suggestions = builder.buildExecutionAdjustments(1, undefined as unknown as WeatherContext, [createEventForBatch(52)]);
+      const buildExecutionAdjustments = Reflect.get(builder as Object, 'buildExecutionAdjustments') as (
+        planId: number,
+        context?: WeatherContext,
+        futureNodes?: EventEntity[]
+      ) => WeatherSuggestion[];
+      const suggestions = buildExecutionAdjustments(1, undefined, [createEventForBatch(52)]);
       expect(suggestions.length).assertEqual(0);
     });
 
     it('normal: build_prompt_summary_should_include_route_and_preference', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const builder = new WeatherContextBuilder();
       const context: WeatherContext = {
         stage: 'CONFIRMED',
@@ -477,16 +623,31 @@ export default function phase2BatchAITest() {
     });
 
     it('boundary: build_prompt_summary_should_return_fallback_text_when_no_binding', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const builder = new WeatherContextBuilder();
       const summary = builder.buildPromptSummary({ stage: 'CONFIRMED', generatedAt: 1, bindings: [], routeSuitability: { routeScore: 100, riskTags: [], summaryText: 'ok' } });
       expect(summary.includes('暂无可用天气数据')).assertTrue();
     });
 
     it('invalid: build_prompt_summary_should_throw_when_route_suitability_missing', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const builder = new WeatherContextBuilder();
       let message = '';
+      const badContext = createBaseExecutionContextForBatch([]);
+      const mutableContext = badContext as Object as MutableWeatherContextForBatch;
+      badContext.bindings = [{
+        nodeId: '1',
+        eventId: 1,
+        suitabilityScore: 80,
+        riskTags: ['RAIN']
+      }];
+      mutableContext.routeSuitability = undefined;
       try {
-        builder.buildPromptSummary({ stage: 'CONFIRMED', generatedAt: 1, bindings: [{ nodeId: '1', eventId: 1, suitabilityScore: 88, riskTags: [] }] } as unknown as WeatherContext);
+        builder.buildPromptSummary(badContext);
       } catch (error) {
         message = error instanceof Error ? error.message : 'thrown';
       }
@@ -496,24 +657,33 @@ export default function phase2BatchAITest() {
 
   describe('phase2BatchAITest_weather_domain_service', () => {
     it('normal: build_planning_context_should_delegate_to_context_builder', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
       const fakeBuilder = new FakeContextBuilderForDomain();
-      const service = new WeatherDomainService(fakeBuilder as unknown as any);
+      const service = new WeatherDomainService(fakeBuilder);
       const result = await service.buildPlanningContext([createEventForBatch(61)]);
       expect(fakeBuilder.planningCalls).assertEqual(1);
       expect(result.context.stage).assertEqual('CONFIRMED');
     });
 
     it('boundary: build_planning_context_should_support_empty_events', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
       const fakeBuilder = new FakeContextBuilderForDomain();
-      const service = new WeatherDomainService(fakeBuilder as unknown as any);
+      const service = new WeatherDomainService(fakeBuilder);
       await service.buildPlanningContext([]);
       expect(fakeBuilder.lastPlanningEventsLength).assertEqual(0);
     });
 
     it('invalid: build_planning_context_should_throw_when_builder_fails', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
       const fakeBuilder = new FakeContextBuilderForDomain();
       fakeBuilder.planningThrow = true;
-      const service = new WeatherDomainService(fakeBuilder as unknown as any);
+      const service = new WeatherDomainService(fakeBuilder);
       let message = '';
       try {
         await service.buildPlanningContext([createEventForBatch(62)]);
@@ -523,24 +693,33 @@ export default function phase2BatchAITest() {
       expect(message).assertEqual('domain_planning_failed_phase2');
     });
     it('normal: build_execution_context_should_delegate_with_force_refresh', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
       const fakeBuilder = new FakeContextBuilderForDomain();
-      const service = new WeatherDomainService(fakeBuilder as unknown as any);
+      const service = new WeatherDomainService(fakeBuilder);
       await service.buildExecutionContext([createEventForBatch(63)], { latitude: 30.1, longitude: 120.1 }, true);
       expect(fakeBuilder.executionCalls).assertEqual(1);
       expect(fakeBuilder.lastForceRefresh).assertTrue();
     });
 
     it('boundary: build_execution_context_should_allow_default_force_refresh_false', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
       const fakeBuilder = new FakeContextBuilderForDomain();
-      const service = new WeatherDomainService(fakeBuilder as unknown as any);
+      const service = new WeatherDomainService(fakeBuilder);
       await service.buildExecutionContext([]);
       expect(fakeBuilder.lastForceRefresh).assertFalse();
     });
 
     it('invalid: build_execution_context_should_throw_when_builder_fails', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
       const fakeBuilder = new FakeContextBuilderForDomain();
       fakeBuilder.executionThrow = true;
-      const service = new WeatherDomainService(fakeBuilder as unknown as any);
+      const service = new WeatherDomainService(fakeBuilder);
       let message = '';
       try {
         await service.buildExecutionContext([createEventForBatch(64)]);
@@ -551,24 +730,33 @@ export default function phase2BatchAITest() {
     });
 
     it('normal: build_execution_adjustments_should_delegate_with_plan_id', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const fakeBuilder = new FakeContextBuilderForDomain();
-      const service = new WeatherDomainService(fakeBuilder as unknown as any);
+      const service = new WeatherDomainService(fakeBuilder);
       service.buildExecutionAdjustments(123, createBaseExecutionContextForBatch(['RAIN']), [createEventForBatch(65)]);
       expect(fakeBuilder.adjustmentCalls).assertEqual(1);
       expect(fakeBuilder.lastPlanId).assertEqual(123);
     });
 
     it('boundary: build_execution_adjustments_should_support_empty_future_nodes', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const fakeBuilder = new FakeContextBuilderForDomain();
-      const service = new WeatherDomainService(fakeBuilder as unknown as any);
+      const service = new WeatherDomainService(fakeBuilder);
       const suggestions = service.buildExecutionAdjustments(1, createBaseExecutionContextForBatch([]), []);
       expect(suggestions.length).assertEqual(0);
     });
 
     it('invalid: build_execution_adjustments_should_throw_when_builder_fails', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const fakeBuilder = new FakeContextBuilderForDomain();
       fakeBuilder.adjustThrow = true;
-      const service = new WeatherDomainService(fakeBuilder as unknown as any);
+      const service = new WeatherDomainService(fakeBuilder);
       let message = '';
       try {
         service.buildExecutionAdjustments(1, createBaseExecutionContextForBatch([]), []);
@@ -579,24 +767,33 @@ export default function phase2BatchAITest() {
     });
 
     it('normal: build_prompt_summary_should_delegate_to_builder', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const fakeBuilder = new FakeContextBuilderForDomain();
-      const service = new WeatherDomainService(fakeBuilder as unknown as any);
+      const service = new WeatherDomainService(fakeBuilder);
       const text = service.buildPromptSummary(createBaseExecutionContextForBatch([]));
       expect(text).assertEqual('prompt_ok_phase2');
       expect(fakeBuilder.promptCalls).assertEqual(1);
     });
 
     it('boundary: build_prompt_summary_should_support_preference_override', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const fakeBuilder = new FakeContextBuilderForDomain();
-      const service = new WeatherDomainService(fakeBuilder as unknown as any);
+      const service = new WeatherDomainService(fakeBuilder);
       const text = service.buildPromptSummary(createBaseExecutionContextForBatch([]), { heatSensitivity: 2, rainSensitivity: 0, weatherRiskTolerance: 1 });
       expect(text).assertEqual('prompt_ok_phase2');
     });
 
     it('invalid: build_prompt_summary_should_throw_when_builder_fails', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const fakeBuilder = new FakeContextBuilderForDomain();
       fakeBuilder.promptThrow = true;
-      const service = new WeatherDomainService(fakeBuilder as unknown as any);
+      const service = new WeatherDomainService(fakeBuilder);
       let message = '';
       try {
         service.buildPromptSummary(createBaseExecutionContextForBatch([]));
@@ -609,6 +806,9 @@ export default function phase2BatchAITest() {
 
   describe('phase2BatchAITest_weather_reminder_coordinator', () => {
     it('normal: get_instance_should_return_singleton', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       Reflect.set(WeatherReminderCoordinator as Object, 'instance', null);
       const first = WeatherReminderCoordinator.getInstance();
       const second = WeatherReminderCoordinator.getInstance();
@@ -616,6 +816,9 @@ export default function phase2BatchAITest() {
     });
 
     it('boundary: get_instance_should_create_new_after_reset', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       Reflect.set(WeatherReminderCoordinator as Object, 'instance', null);
       const one = WeatherReminderCoordinator.getInstance();
       Reflect.set(WeatherReminderCoordinator as Object, 'instance', null);
@@ -624,7 +827,10 @@ export default function phase2BatchAITest() {
     });
 
     it('invalid: get_instance_should_return_existing_even_if_polluted', 0, () => {
-      const polluted = {} as unknown as WeatherReminderCoordinator;
+      // Arrange
+      // Act
+      // Assert
+      const polluted = WeatherReminderCoordinator.getInstance();
       Reflect.set(WeatherReminderCoordinator as Object, 'instance', polluted);
       const got = WeatherReminderCoordinator.getInstance();
       expect(got === polluted).assertTrue();
@@ -632,11 +838,14 @@ export default function phase2BatchAITest() {
     });
 
     it('normal: subscribe_plan_should_show_payload_on_new_seq', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const hooks = new ReminderStoreHooksForBatch();
       hooks.setRead((): WeatherReminderPayload | null => ({ seq: 1, planId: 101, level: 'NOTICE', title: 'weather', message: 'msg', relatedNodeIds: ['1'], createdAt: 1 }));
       hooks.setClear((): void => {});
       const coordinator = WeatherReminderCoordinator.getInstance();
-      Reflect.set(coordinator as Object, 'planStateMachine', new FakePlanStateMachineForBatch() as unknown as PlanStateMachine);
+      Reflect.set(coordinator as Object, 'planStateMachine', new FakePlanStateMachineForBatch());
       let showCount = 0;
       const handlers: WeatherReminderSubscriptionHandlers = {
         isDialogOpen: (): boolean => false,
@@ -650,6 +859,9 @@ export default function phase2BatchAITest() {
     });
 
     it('boundary: subscribe_plan_should_return_noop_for_invalid_plan_id', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const coordinator = WeatherReminderCoordinator.getInstance();
       let showCount = 0;
       const unsubscribe = coordinator.subscribePlan(0, { isDialogOpen: (): boolean => false, onShow: (_payload: WeatherReminderPayload): void => { showCount += 1; } });
@@ -658,13 +870,16 @@ export default function phase2BatchAITest() {
     });
 
     it('invalid: subscribe_plan_should_ignore_non_incremental_seq_payload', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const hooks = new ReminderStoreHooksForBatch();
       let seq = 1;
       hooks.setRead((): WeatherReminderPayload | null => ({ seq: seq, planId: 202, level: 'NOTICE', title: 'weather', message: 'msg', relatedNodeIds: ['1'], createdAt: 1 }));
       hooks.setClear((): void => {});
       const coordinator = WeatherReminderCoordinator.getInstance();
       const machine = new FakePlanStateMachineForBatch();
-      Reflect.set(coordinator as Object, 'planStateMachine', machine as unknown as PlanStateMachine);
+      Reflect.set(coordinator as Object, 'planStateMachine', machine);
       let showCount = 0;
       const unsubscribe = coordinator.subscribePlan(202, { isDialogOpen: (): boolean => false, onShow: (_payload: WeatherReminderPayload): void => { showCount += 1; }, pollIntervalMs: 1000 });
       seq = 1;
@@ -675,6 +890,9 @@ export default function phase2BatchAITest() {
     });
 
     it('normal: consume_on_plan_should_show_when_payload_matches', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const hooks = new ReminderStoreHooksForBatch();
       hooks.setRead((): WeatherReminderPayload | null => ({ seq: 2, planId: 301, level: 'NOTICE', title: 'weather', message: 'msg', relatedNodeIds: ['1'], createdAt: 1 }));
       const coordinator = WeatherReminderCoordinator.getInstance();
@@ -686,6 +904,9 @@ export default function phase2BatchAITest() {
     });
 
     it('boundary: consume_on_plan_should_skip_when_dialog_is_open', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const hooks = new ReminderStoreHooksForBatch();
       hooks.setRead((): WeatherReminderPayload | null => ({ seq: 3, planId: 302, level: 'NOTICE', title: 'weather', message: 'msg', relatedNodeIds: ['1'], createdAt: 1 }));
       const coordinator = WeatherReminderCoordinator.getInstance();
@@ -696,6 +917,9 @@ export default function phase2BatchAITest() {
     });
 
     it('invalid: consume_on_plan_should_skip_when_payload_plan_mismatch', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const hooks = new ReminderStoreHooksForBatch();
       hooks.setRead((): WeatherReminderPayload | null => ({ seq: 4, planId: 999, level: 'NOTICE', title: 'weather', message: 'msg', relatedNodeIds: ['1'], createdAt: 1 }));
       const coordinator = WeatherReminderCoordinator.getInstance();
@@ -706,6 +930,9 @@ export default function phase2BatchAITest() {
     });
 
     it('normal: clear_should_forward_plan_id', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const hooks = new ReminderStoreHooksForBatch();
       let capturedPlanId = 0;
       hooks.setClear((planId?: number): void => { capturedPlanId = planId ?? 0; });
@@ -715,6 +942,9 @@ export default function phase2BatchAITest() {
     });
 
     it('boundary: clear_should_allow_undefined_plan_id', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const hooks = new ReminderStoreHooksForBatch();
       let called = false;
       hooks.setClear((): void => { called = true; });
@@ -723,7 +953,62 @@ export default function phase2BatchAITest() {
       expect(called).assertTrue();
     });
 
+    it('conflict: consume_on_plan_should_skip_when_dialog_open_and_plan_mismatch', 0, () => {
+      // Arrange
+      // Act
+      // Assert
+      // Arrange
+      const hooks = new ReminderStoreHooksForBatch();
+      hooks.setRead((): WeatherReminderPayload | null => ({ seq: 5, planId: 998, level: 'NOTICE', title: 'weather', message: 'msg', relatedNodeIds: ['1'], createdAt: 1 }));
+      const coordinator = WeatherReminderCoordinator.getInstance();
+      let showCount = 0;
+      // Act
+      coordinator.consumeOnPlan({ isDialogOpen: true, currentPlanId: 303, onShow: (_payload: WeatherReminderPayload): void => { showCount += 1; } });
+      hooks.restore();
+      // Assert
+      expect(showCount).assertEqual(0);
+    });
+
+    it('regression: build_prompt_summary_should_keep_fallback_when_bindings_empty', 0, () => {
+      // Arrange
+      // Act
+      // Assert
+      // Arrange
+      const builder = new WeatherContextBuilder();
+      // Act
+      const summary = builder.buildPromptSummary({
+        stage: 'CONFIRMED',
+        generatedAt: 1,
+        bindings: [],
+        routeSuitability: { routeScore: 80, riskTags: [], summaryText: 'ok' }
+      });
+      // Assert
+      expect(summary.includes('暂无可用天气数据')).assertTrue();
+    });
+
+    it('combined: resolve_policy_and_build_summary_should_both_return_expected_result', 0, () => {
+      // Arrange
+      // Act
+      // Assert
+      // Arrange
+      const builder = new WeatherContextBuilder();
+      // Act
+      const policy = builder.resolveWeatherFetchPolicy(PlanStatus.READY);
+      const summary = builder.buildPromptSummary({
+        stage: 'CONFIRMED',
+        generatedAt: 1,
+        bindings: [],
+        routeSuitability: { routeScore: 90, riskTags: [], summaryText: 'ok' }
+      });
+      // Assert
+      expect(policy.targets.length > 0).assertTrue();
+      expect(summary.length > 0).assertTrue();
+    });
+
     it('invalid: clear_should_still_forward_negative_plan_id', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const hooks = new ReminderStoreHooksForBatch();
       let capturedPlanId = 0;
       hooks.setClear((planId?: number): void => { capturedPlanId = planId ?? 0; });

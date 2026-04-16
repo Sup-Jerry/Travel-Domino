@@ -86,7 +86,10 @@
 
 ```
 把以下 import 行追加到 entry/src/test/List.test.ets：
-[粘贴 AE / AG / AI 三个窗口输出的 import 行]
+import phase2BatchAITest from './Phase2BatchAI.test';
+import phase2BatchAGTest from './Phase2BatchAG.test';
+import phase2BatchAETest from './Phase2BatchAE.test';
+
 
 追加完成后运行验收：
 powershell -ExecutionPolicy Bypass -File scripts/ci/validate-unit-test-cases.ps1
