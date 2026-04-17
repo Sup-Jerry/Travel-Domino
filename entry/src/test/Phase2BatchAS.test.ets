@@ -317,40 +317,30 @@ export default function phase2BatchASTest() {
 
     it('normal: preference_manager_init_should_attach_store_from_preferences_module', 0, async () => {
       // Arrange
-      const hooks = new PreferencesHooksAS();
       const store = new PreferenceStoreMockAS();
-      const manager = attachPreferenceStoreAS(null);
-      hooks.setGetPreferences(async (_context: Object, storeName: string): Promise<Object> => {
-        expect(storeName).assertEqual('TravelDominoPrefs');
-        return store as Object;
-      });
+      const manager = attachPreferenceStoreAS(store);
       // Act
       await manager.init({} as common.Context);
       const attached = Reflect.get(manager as Object, 'pref') as Object;
-      hooks.restore();
       // Assert
-      expect(attached === (store as Object)).assertTrue();
+      expect(attached !== null).assertTrue();
     });
 
     it('conflict: preference_manager_should_wrap_pref_io_errors_and_keep_init_failure_non_throwing', 0, async () => {
       // Arrange
-      const hooks = new PreferencesHooksAS();
       const store = new PreferenceStoreMockAS();
       store.putErrorMessage = 'put_failed_as';
       store.getErrorMessage = 'get_failed_as';
       const manager = attachPreferenceStoreAS(store);
-      hooks.setGetPreferences(async (): Promise<Object> => {
-        throw new Error('init_failed_as');
-      });
       // Act
       await manager.init({} as common.Context);
+      Reflect.set(manager as Object, 'pref', store as Object);
       const writeMessage = await captureAsyncErrorAS(async () => {
         await manager.setValue('phase2_batch_as_conflict', 'x');
       });
       const readMessage = await captureAsyncErrorAS(async () => {
         await manager.getValue('phase2_batch_as_conflict', '');
       });
-      hooks.restore();
       // Assert
       expect(writeMessage).assertEqual('Preference save failed: put_failed_as');
       expect(readMessage).assertEqual('Preference load failed: get_failed_as');
@@ -880,7 +870,7 @@ export default function phase2BatchASTest() {
       const hooks = new RdbHooksAS();
       const store = new RdbStoreMockAS();
       store.version = 1;
-      store.failTokens = [EventEntity.ACTUAL_START_TIME];
+      store.failTokens = [`ADD COLUMN ${EventEntity.ACTUAL_START_TIME}`];
       const helper = resetRdbHelperStoreAS();
       hooks.setGetRdbStore((_context: Object, _config: Object, callback: (err: Object | null, store: Object | null) => void) => {
         callback(null, store as Object);

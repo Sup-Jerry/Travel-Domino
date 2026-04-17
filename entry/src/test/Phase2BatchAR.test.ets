@@ -526,7 +526,7 @@ class UserProfileSingletonHooksAR {
   }
 
   reset(): void {
-    Reflect.set(UserProfileRepositoryImpl as Object, 'instance', null);
+    Reflect.set(UserProfileRepositoryImpl as Object, 'instance', new UserProfileRepositoryImpl() as Object);
   }
 
   setInstance(instance: Object): void {
@@ -546,7 +546,7 @@ class ProfileCacheSingletonHooksAR {
   }
 
   reset(): void {
-    Reflect.set(ProfileCacheManager as Object, 'instance', null);
+    Reflect.set(ProfileCacheManager as Object, 'instance', new ProfileCacheManager() as Object);
   }
 
   setInstance(instance: Object): void {

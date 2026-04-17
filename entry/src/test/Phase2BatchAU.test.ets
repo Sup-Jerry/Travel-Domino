@@ -1,4 +1,4 @@
-import { describe, it, expect } from '@ohos/hypium';
+﻿import { describe, it, expect } from '@ohos/hypium';
 import { PlanStateMachine, PlanStateMachineDeps } from '../main/ets/domain/statemachine/PlanStateMachine';
 import { LocationChangeEvent, StateEventBus } from '../main/ets/domain/statemachine/StateEventBus';
 import { TransitionEngine } from '../main/ets/domain/statemachine/TransitionEngine';
@@ -35,6 +35,31 @@ interface PlanTimeWindowForAU {
   startTime: number;
   endTime: number;
 }
+
+class StateEvaluatorPrivateProxyAU {
+  resolveTransitionMeta(_input: StateEvaluationInput, _next: PlanStatus): TransitionMetaForAU {
+    return { triggerSource: TransitionTriggerSource.MANUAL_OVERRIDE, triggerReason: '' };
+  }
+}
+
+class PlanStateMachinePrivateProxyAU {
+  resolvePlannedWindowByEvents(_scheduled: EventEntity[], _fallbackStart: number, _fallbackEnd: number): PlanTimeWindowForAU {
+    return { startTime: 0, endTime: 0 };
+  }
+
+  resolveEventStartTime(_event: EventEntity): number {
+    return 0;
+  }
+
+  resolveEventEndTime(_event: EventEntity, _startTime: number): number {
+    return 0;
+  }
+
+  measureDistanceMeters(_lat1: number, _lng1: number, _lat2: number, _lng2: number): number {
+    return 0;
+  }
+}
+
 
 interface EventOverridesForAU {
   id?: number;
@@ -475,7 +500,7 @@ export default function phase2BatchAUTest() {
     it('invalid: state_evaluator_private_transition_meta_should_fallback_to_manual_override_when_no_branch_matches', 0, () => {
       // Arrange
       const evaluator = new StateEvaluator();
-      const resolveTransitionMeta = Reflect.get(evaluator as Object, 'resolveTransitionMeta') as Function;
+      const evaluatorInternal = evaluator as Object as StateEvaluatorPrivateProxyAU;
       const input = buildInputForAU({
         currentStatus: PlanStatus.CONFIRMED,
         firstNodeStartTime: undefined,
@@ -483,10 +508,7 @@ export default function phase2BatchAUTest() {
         motionDetected: false
       });
       // Act
-      const meta = (resolveTransitionMeta as (input: StateEvaluationInput, next: PlanStatus) => TransitionMetaForAU)(
-        input,
-        PlanStatus.CONFIRMED
-      );
+      const meta = evaluatorInternal.resolveTransitionMeta(input, PlanStatus.CONFIRMED);
       // Assert
       expect(meta.triggerSource).assertEqual(TransitionTriggerSource.MANUAL_OVERRIDE);
       expect(meta.triggerReason).assertEqual('state_adjustment');
@@ -654,10 +676,7 @@ export default function phase2BatchAUTest() {
     it('boundary: plan_state_machine_private_time_helpers_should_cover_valid_and_fallback_paths', 0, () => {
       // Arrange
       const bundle = createMachineBundleForAU();
-      const resolvePlannedWindow = Reflect.get(bundle.machine as Object, 'resolvePlannedWindowByEvents') as Function;
-      const resolveEventStartTime = Reflect.get(bundle.machine as Object, 'resolveEventStartTime') as Function;
-      const resolveEventEndTime = Reflect.get(bundle.machine as Object, 'resolveEventEndTime') as Function;
-      const measureDistanceMeters = Reflect.get(bundle.machine as Object, 'measureDistanceMeters') as Function;
+      const machineInternal = bundle.machine as Object as PlanStateMachinePrivateProxyAU;
       const eventWithDynamicEnd = createEventForAU({
         id: 201,
         dynamic_start_time: 1_000,
@@ -677,34 +696,16 @@ export default function phase2BatchAUTest() {
         duration: 15
       });
       // Act
-      const startWithValue = (resolveEventStartTime as (event: EventEntity) => number)(eventWithDynamicEnd);
-      const startWithoutValue = (resolveEventStartTime as (event: EventEntity) => number)(eventWithNoTime);
-      const endWithDynamic = (resolveEventEndTime as (event: EventEntity, startTime: number) => number)(eventWithDynamicEnd, 1_000);
-      const endWithZeroDuration = (resolveEventEndTime as (event: EventEntity, startTime: number) => number)(eventWithNoTime, 4_000);
-      const endWithMissingStart = (resolveEventEndTime as (event: EventEntity, startTime: number) => number)(eventWithNoTime, 0);
-      const endWithDuration = (resolveEventEndTime as (event: EventEntity, startTime: number) => number)(eventWithDurationOnly, 3_000);
-      const windowWithValues = (resolvePlannedWindow as (
-        scheduled: EventEntity[],
-        fallbackStart: number,
-        fallbackEnd: number
-      ) => PlanTimeWindowForAU)([eventWithDynamicEnd, eventWithNoTime, eventWithDurationOnly], 111, 222);
-      const windowFallback = (resolvePlannedWindow as (
-        scheduled: EventEntity[],
-        fallbackStart: number,
-        fallbackEnd: number
-      ) => PlanTimeWindowForAU)([eventWithNoTime], 111, 222);
-      const validDistance = (measureDistanceMeters as (
-        lat1: number,
-        lng1: number,
-        lat2: number,
-        lng2: number
-      ) => number)(31.2304, 121.4737, 31.2305, 121.4738);
-      const invalidDistance = (measureDistanceMeters as (
-        lat1: number,
-        lng1: number,
-        lat2: number,
-        lng2: number
-      ) => number)(Number.NaN, 121.4737, 31.2305, 121.4738);
+      const startWithValue = machineInternal.resolveEventStartTime(eventWithDynamicEnd);
+      const startWithoutValue = machineInternal.resolveEventStartTime(eventWithNoTime);
+      const endWithDynamic = machineInternal.resolveEventEndTime(eventWithDynamicEnd, 1_000);
+      const endWithZeroDuration = machineInternal.resolveEventEndTime(eventWithNoTime, 4_000);
+      const endWithMissingStart = machineInternal.resolveEventEndTime(eventWithNoTime, 0);
+      const endWithDuration = machineInternal.resolveEventEndTime(eventWithDurationOnly, 3_000);
+      const windowWithValues = machineInternal.resolvePlannedWindowByEvents([eventWithDynamicEnd, eventWithNoTime, eventWithDurationOnly], 111, 222);
+      const windowFallback = machineInternal.resolvePlannedWindowByEvents([eventWithNoTime], 111, 222);
+      const validDistance = machineInternal.measureDistanceMeters(31.2304, 121.4737, 31.2305, 121.4738);
+      const invalidDistance = machineInternal.measureDistanceMeters(Number.NaN, 121.4737, 31.2305, 121.4738);
       // Assert
       expect(startWithValue).assertEqual(1_000);
       expect(startWithoutValue).assertEqual(0);
@@ -756,14 +757,14 @@ export default function phase2BatchAUTest() {
       const pausedWeather = (resolveWeatherMode as (status: PlanStatus) => string)(PlanStatus.PAUSED);
       const completedWeather = (resolveWeatherMode as (status: PlanStatus) => string)(PlanStatus.COMPLETED);
       // Assert
-      expect(draftLabel).assertEqual('草稿');
-      expect(confirmedLabel).assertEqual('已确认未开始');
-      expect(readyLabel).assertEqual('执行预备');
-      expect(inProgressLabel).assertEqual('执行中');
-      expect(pausedLabel).assertEqual('暂停中');
-      expect(completedLabel).assertEqual('已完成');
-      expect(cancelledLabel).assertEqual('已取消');
-      expect(expiredLabel).assertEqual('已失效');
+      expect(draftLabel).assertEqual('\u8349\u7A3F');
+      expect(confirmedLabel).assertEqual('\u5DF2\u786E\u8BA4\u672A\u5F00\u59CB');
+      expect(readyLabel).assertEqual('\u6267\u884C\u9884\u5907');
+      expect(inProgressLabel).assertEqual('\u6267\u884C\u4E2D');
+      expect(pausedLabel).assertEqual('\u6682\u505C\u4E2D');
+      expect(completedLabel).assertEqual('\u5DF2\u5B8C\u6210');
+      expect(cancelledLabel).assertEqual('\u5DF2\u53D6\u6D88');
+      expect(expiredLabel).assertEqual('\u5DF2\u5931\u6548');
       expect(draftWeather).assertEqual('PLAN_LOCATION');
       expect(readyWeather).assertEqual('CURRENT_AND_PLAN');
       expect(pausedWeather).assertEqual('CURRENT_PRIORITY');
@@ -787,3 +788,6 @@ export default function phase2BatchAUTest() {
     });
   });
 }
+
+
+

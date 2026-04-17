@@ -863,7 +863,7 @@ export default function phase2BatchATTest() {
       expect(updated).assertEqual(1);
       expect(host.currentStrategyMode).assertEqual(-1);
       expect(host.events.length).assertEqual(1);
-      expect(persistence.lastAiExplanation).assertEqual('\\u5DF2\\u91C7\\u7528\\u81EA\\u5B9A\\u4E49\\u7B56\\u7565');
+      expect(persistence.lastAiExplanation).assertEqual('\u5DF2\u91C7\u7528\u81EA\u5B9A\u4E49\u7B56\u7565');
     });
 
     it('boundary: timeline_ai_trigger_strategy_adaptation_should_noop_when_engine_returns_null', 0, async () => {
@@ -902,7 +902,7 @@ export default function phase2BatchATTest() {
       const decision: AdaptationDecision = {
         reason: 'EXCESSIVE_TRAFFIC',
         adjustments: { density: -1 },
-        message: '\\u5EFA\\u8BAE\\u964D\\u4F4E\\u666F\\u70B9\\u5BC6\\u5EA6'
+        message: '\u5EFA\u8BAE\u964D\u4F4E\u666F\u70B9\u5BC6\u5EA6'
       };
       strategyHooks.set('analyzeAndDecide', (_context: BehaviorContext): AdaptationDecision | null => {
         return decision;
@@ -1227,4 +1227,5 @@ export default function phase2BatchATTest() {
     });
   });
 }
+
 

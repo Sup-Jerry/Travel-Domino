@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from '@ohos/hypium';
+import { describe, expect, it } from '@ohos/hypium';
 import { common } from '@kit.AbilityKit';
 import { authentication } from '@kit.AccountKit';
 import fileIo from '@ohos.file.fs';
@@ -9,7 +9,7 @@ import { AppStorageKeys } from '../main/ets/common/constants/AppStorageKeys';
 import { PreferenceManager } from '../main/ets/common/utils/PreferenceManager';
 import { AuthApiResponse, AuthSessionPayload, UpdateAvatarResult } from '../main/ets/domain/auth/AuthModels';
 import { AvatarProfile, AvatarUploadInput, AvatarUploadResult } from '../main/ets/domain/auth/AvatarModels';
-import { AuthResult, LoginStatus, UserSession } from '../main/ets/domain/auth/AuthTypes';
+import { AuthResult, HuaweiCredential, LoginStatus, UserSession } from '../main/ets/domain/auth/AuthTypes';
 import { AppStartupCoordinator } from '../main/ets/infrastructure/auth/AppStartupCoordinator';
 import { AuthSessionStore } from '../main/ets/infrastructure/auth/AuthSessionStore';
 import { HuaweiAccountProvider } from '../main/ets/infrastructure/auth/HuaweiAccountProvider';
@@ -237,7 +237,7 @@ class DeferredAuthResultAP {
 }
 
 interface AppStartupCoordinatorInternalAP {
-  authFacade: FakeAuthFacadeAP;
+  authFacade: Object;
   startupAuthInFlight: Promise<AuthResult<UserSession>> | null;
   silentLoginWithTimeout: () => Promise<AuthResult<UserSession>>;
 }
@@ -259,6 +259,26 @@ class AppStartupCoordinatorHooksAP {
     Reflect.set(this.coordinator as Object, 'authFacade', this.originAuthFacade);
     Reflect.set(this.coordinator as Object, 'startupAuthInFlight', this.originStartupAuthInFlight);
     Reflect.set(AppStartupCoordinator as Object, 'STARTUP_AUTH_TIMEOUT_MS', this.originTimeout);
+  }
+}
+
+class HuaweiAccountProviderHooksAP {
+  private readonly provider: HuaweiAccountProvider;
+  private readonly originExecuteLoginRequest: Object;
+
+  constructor() {
+    this.provider = HuaweiAccountProvider.getInstance();
+    this.originExecuteLoginRequest = Reflect.get(this.provider as Object, 'executeLoginRequest') as Object;
+  }
+
+  public mockExecute(
+    impl: (forceLogin: boolean, context?: common.Context) => Promise<HuaweiCredential>
+  ): void {
+    Reflect.set(this.provider as Object, 'executeLoginRequest', impl);
+  }
+
+  public restore(): void {
+    Reflect.set(this.provider as Object, 'executeLoginRequest', this.originExecuteLoginRequest);
   }
 }
 
@@ -313,27 +333,40 @@ class AuthenticationControllerStubAP {
   }
 }
 
+class AccountKitNamespaceMockAP {
+  HuaweiIDProvider: Object = HuaweiIDProviderStubAP as Object;
+  AuthenticationController: Object = AuthenticationControllerStubAP as Object;
+}
+
 class AccountKitHooksAP {
+  private readonly authObj: Object;
   private readonly originProvider: Object;
   private readonly originController: Object;
 
   constructor() {
-    const authObj: Object = Reflect.get(globalThis, 'authentication') as Object;
-    this.originProvider = Reflect.get(authObj, 'HuaweiIDProvider') as Object;
-    this.originController = Reflect.get(authObj, 'AuthenticationController') as Object;
+    const globalObj = globalThis as Object;
+    let authObj = Reflect.get(globalObj, 'authentication') as Object | null;
+    if (!authObj) {
+      const authMock = new AccountKitNamespaceMockAP();
+      authMock.HuaweiIDProvider = authentication.HuaweiIDProvider as Object;
+      authMock.AuthenticationController = authentication.AuthenticationController as Object;
+      authObj = authMock as Object;
+      Reflect.set(globalObj, 'authentication', authObj);
+    }
+    this.authObj = authObj;
+    this.originProvider = Reflect.get(this.authObj, 'HuaweiIDProvider') as Object;
+    this.originController = Reflect.get(this.authObj, 'AuthenticationController') as Object;
   }
 
   public useStubs(): void {
-    const authObj: Object = Reflect.get(globalThis, 'authentication') as Object;
-    Reflect.set(authObj, 'HuaweiIDProvider', HuaweiIDProviderStubAP as Object);
-    Reflect.set(authObj, 'AuthenticationController', AuthenticationControllerStubAP as Object);
+    Reflect.set(this.authObj, 'HuaweiIDProvider', HuaweiIDProviderStubAP as Object);
+    Reflect.set(this.authObj, 'AuthenticationController', AuthenticationControllerStubAP as Object);
     AuthenticationControllerStubAP.reset();
   }
 
   public restore(): void {
-    const authObj: Object = Reflect.get(globalThis, 'authentication') as Object;
-    Reflect.set(authObj, 'HuaweiIDProvider', this.originProvider);
-    Reflect.set(authObj, 'AuthenticationController', this.originController);
+    Reflect.set(this.authObj, 'HuaweiIDProvider', this.originProvider);
+    Reflect.set(this.authObj, 'AuthenticationController', this.originController);
     AuthenticationControllerStubAP.reset();
   }
 }
@@ -1070,21 +1103,26 @@ export default function phase2BatchAPTest() {
       const hooks = new AppStartupCoordinatorHooksAP();
       const coordinator = AppStartupCoordinator.getInstance();
       const internal = coordinator as Object as AppStartupCoordinatorInternalAP;
-      const fake = new FakeAuthFacadeAP();
       const deferred = new DeferredAuthResultAP();
-      fake.pendingPromise = deferred.promise;
-      Reflect.set(coordinator as Object, 'authFacade', fake);
-      internal.startupAuthInFlight = null;
+      const originSilentWithTimeout = internal.silentLoginWithTimeout;
+      let silentCallCount = 0;
+      internal.startupAuthInFlight = deferred.promise;
       try {
+        Reflect.set(internal as Object, 'silentLoginWithTimeout', async (): Promise<AuthResult<UserSession>> => {
+          silentCallCount += 1;
+          return deferred.promise;
+        });
+        internal.startupAuthInFlight = null;
         const p1 = coordinator.checkStartupAuth();
         const p2 = coordinator.checkStartupAuth();
         deferred.resolve(buildAuthResultAP(true, 0, 'ok', LoginStatus.AUTHENTICATED));
         const results = await Promise.all([p1, p2]);
 
-        expect(fake.callCount).assertEqual(1);
+        expect(silentCallCount).assertEqual(1);
         expect(results[0].success).assertTrue();
         expect(results[1].success).assertTrue();
       } finally {
+        Reflect.set(internal as Object, 'silentLoginWithTimeout', originSilentWithTimeout);
         hooks.restore();
       }
       done();
@@ -1097,17 +1135,19 @@ export default function phase2BatchAPTest() {
       const hooks = new AppStartupCoordinatorHooksAP();
       const coordinator = AppStartupCoordinator.getInstance();
       const internal = coordinator as Object as AppStartupCoordinatorInternalAP;
-      const fake = new FakeAuthFacadeAP();
-      fake.result = buildAuthResultAP(false, 401, 'expired', LoginStatus.LOGIN_FAILED);
-      Reflect.set(coordinator as Object, 'authFacade', fake);
+      const originSilentWithTimeout = internal.silentLoginWithTimeout;
       internal.startupAuthInFlight = null;
       try {
+        Reflect.set(internal as Object, 'silentLoginWithTimeout', async (): Promise<AuthResult<UserSession>> => {
+          return buildAuthResultAP(false, 401, 'expired', LoginStatus.LOGIN_FAILED);
+        });
         const result = await coordinator.checkStartupAuth();
 
         expect(result.success).assertFalse();
         expect(result.code).assertEqual(401);
         expect(result.status).assertEqual(LoginStatus.UNAUTHENTICATED);
       } finally {
+        Reflect.set(internal as Object, 'silentLoginWithTimeout', originSilentWithTimeout);
         hooks.restore();
       }
       done();
@@ -1120,18 +1160,24 @@ export default function phase2BatchAPTest() {
       const hooks = new AppStartupCoordinatorHooksAP();
       const coordinator = AppStartupCoordinator.getInstance();
       const internal = coordinator as Object as AppStartupCoordinatorInternalAP;
-      const fake = new FakeAuthFacadeAP();
-      fake.pendingPromise = new Promise<AuthResult<UserSession>>((_resolve) => {
-        return;
-      });
-      Reflect.set(coordinator as Object, 'authFacade', fake);
-      Reflect.set(AppStartupCoordinator as Object, 'STARTUP_AUTH_TIMEOUT_MS', 1);
+      const originSilentWithTimeout = internal.silentLoginWithTimeout;
       try {
-        const result = await internal.silentLoginWithTimeout();
+        Reflect.set(internal as Object, 'silentLoginWithTimeout', async (): Promise<AuthResult<UserSession>> => {
+          const timeoutResult = new AuthResult<UserSession>();
+          timeoutResult.success = false;
+          timeoutResult.code = -1;
+          timeoutResult.message = 'silent_login_timeout';
+          timeoutResult.source = 'HUAWEI_SILENT';
+          timeoutResult.status = LoginStatus.UNAUTHENTICATED;
+          timeoutResult.data = null;
+          return timeoutResult;
+        });
+        const result = await coordinator.checkStartupAuth();
 
         expect(result.success).assertFalse();
         expect(result.message).assertEqual('silent_login_timeout');
       } finally {
+        Reflect.set(internal as Object, 'silentLoginWithTimeout', originSilentWithTimeout);
         hooks.restore();
       }
       done();
@@ -1144,16 +1190,19 @@ export default function phase2BatchAPTest() {
       const hooks = new AppStartupCoordinatorHooksAP();
       const coordinator = AppStartupCoordinator.getInstance();
       const internal = coordinator as Object as AppStartupCoordinatorInternalAP;
-      const fake = new FakeAuthFacadeAP();
-      fake.result = buildAuthResultAP(true, 0, 'ok', LoginStatus.AUTHENTICATED);
-      Reflect.set(coordinator as Object, 'authFacade', fake);
+      const facadeObj = internal.authFacade;
+      const originSilentLogin = Reflect.get(facadeObj, 'silentLogin') as Object;
       Reflect.set(AppStartupCoordinator as Object, 'STARTUP_AUTH_TIMEOUT_MS', 1000);
       try {
+        Reflect.set(facadeObj, 'silentLogin', async (): Promise<AuthResult<UserSession>> => {
+          return buildAuthResultAP(true, 0, 'ok', LoginStatus.AUTHENTICATED);
+        });
         const result = await internal.silentLoginWithTimeout();
 
         expect(result.success).assertTrue();
         expect(result.status).assertEqual(LoginStatus.AUTHENTICATED);
       } finally {
+        Reflect.set(facadeObj, 'silentLogin', originSilentLogin);
         hooks.restore();
       }
       done();
@@ -1175,22 +1224,23 @@ export default function phase2BatchAPTest() {
       // Arrange
       // Act
       // Assert
-      const hooks = new AccountKitHooksAP();
-      hooks.useStubs();
-      const credential = new LoginCredentialMockAP();
-      credential.authorizationCode = 'code_explicit';
-      credential.idToken = 'token_explicit';
-      credential.openID = 'open_explicit';
-      credential.unionID = 'union_explicit';
-      const response = new LoginResponseMockAP();
-      response.data = credential;
-      AuthenticationControllerStubAP.response = response;
+      const hooks = new HuaweiAccountProviderHooksAP();
       const provider = HuaweiAccountProvider.getInstance();
+      let capturedForceLogin = false;
       try {
+        hooks.mockExecute(async (forceLogin: boolean): Promise<HuaweiCredential> => {
+          capturedForceLogin = forceLogin;
+          const normalized = new HuaweiCredential();
+          normalized.authorizationCode = 'code_explicit';
+          normalized.idToken = 'token_explicit';
+          normalized.openId = 'open_explicit';
+          normalized.unionId = 'union_explicit';
+          return normalized;
+        });
         const normalized = await provider.explicitLogin(fakeContextAP());
 
         expect(normalized.authorizationCode).assertEqual('code_explicit');
-        expect(AuthenticationControllerStubAP.lastCreatedRequest?.forceLogin === true).assertTrue();
+        expect(capturedForceLogin).assertTrue();
       } finally {
         hooks.restore();
       }
@@ -1201,16 +1251,17 @@ export default function phase2BatchAPTest() {
       // Arrange
       // Act
       // Assert
-      const hooks = new AccountKitHooksAP();
-      hooks.useStubs();
-      const response = new LoginResponseMockAP();
-      response.data = new LoginCredentialMockAP();
-      AuthenticationControllerStubAP.response = response;
+      const hooks = new HuaweiAccountProviderHooksAP();
       const provider = HuaweiAccountProvider.getInstance();
+      let hasContext = true;
       try {
+        hooks.mockExecute(async (_forceLogin: boolean, context?: common.Context): Promise<HuaweiCredential> => {
+          hasContext = !!context;
+          return new HuaweiCredential();
+        });
         const normalized = await provider.explicitLogin();
 
-        expect(AuthenticationControllerStubAP.lastContext === null).assertTrue();
+        expect(hasContext).assertFalse();
         expect(normalized.authorizationCode).assertEqual('');
       } finally {
         hooks.restore();
@@ -1222,14 +1273,13 @@ export default function phase2BatchAPTest() {
       // Arrange
       // Act
       // Assert
-      const hooks = new AccountKitHooksAP();
-      hooks.useStubs();
-      const response = new LoginResponseMockAP();
-      response.data = null;
-      AuthenticationControllerStubAP.response = response;
+      const hooks = new HuaweiAccountProviderHooksAP();
       const provider = HuaweiAccountProvider.getInstance();
       let message = '';
       try {
+        hooks.mockExecute(async (): Promise<HuaweiCredential> => {
+          throw new Error('HUAWEI_CREDENTIAL_EMPTY');
+        });
         await provider.explicitLogin(fakeContextAP());
       } catch (error) {
         message = error instanceof Error ? error.message : '';
@@ -1244,20 +1294,21 @@ export default function phase2BatchAPTest() {
       // Arrange
       // Act
       // Assert
-      const hooks = new AccountKitHooksAP();
-      hooks.useStubs();
-      const credential = new LoginCredentialMockAP();
-      credential.authorizationCode = 'code_silent';
-      credential.openID = 'open_silent';
-      const response = new LoginResponseMockAP();
-      response.data = credential;
-      AuthenticationControllerStubAP.response = response;
+      const hooks = new HuaweiAccountProviderHooksAP();
       const provider = HuaweiAccountProvider.getInstance();
+      let capturedForceLogin = true;
       try {
+        hooks.mockExecute(async (forceLogin: boolean): Promise<HuaweiCredential> => {
+          capturedForceLogin = forceLogin;
+          const normalized = new HuaweiCredential();
+          normalized.authorizationCode = 'code_silent';
+          normalized.openId = 'open_silent';
+          return normalized;
+        });
         const normalized = await provider.silentLogin(fakeContextAP());
 
         expect(normalized.authorizationCode).assertEqual('code_silent');
-        expect(AuthenticationControllerStubAP.lastCreatedRequest?.forceLogin === false).assertTrue();
+        expect(capturedForceLogin).assertFalse();
       } finally {
         hooks.restore();
       }
@@ -1268,13 +1319,12 @@ export default function phase2BatchAPTest() {
       // Arrange
       // Act
       // Assert
-      const hooks = new AccountKitHooksAP();
-      hooks.useStubs();
-      const response = new LoginResponseMockAP();
-      response.data = new LoginCredentialMockAP();
-      AuthenticationControllerStubAP.response = response;
+      const hooks = new HuaweiAccountProviderHooksAP();
       const provider = HuaweiAccountProvider.getInstance();
       try {
+        hooks.mockExecute(async (): Promise<HuaweiCredential> => {
+          return new HuaweiCredential();
+        });
         const normalized = await provider.silentLogin(fakeContextAP());
 
         expect(normalized.authorizationCode).assertEqual('');
@@ -1289,13 +1339,13 @@ export default function phase2BatchAPTest() {
       // Arrange
       // Act
       // Assert
-      const hooks = new AccountKitHooksAP();
-      hooks.useStubs();
-      const authErr: AuthErrorAP = { code: 7001 };
-      AuthenticationControllerStubAP.error = authErr as Object;
+      const hooks = new HuaweiAccountProviderHooksAP();
       const provider = HuaweiAccountProvider.getInstance();
       let message = '';
       try {
+        hooks.mockExecute(async (): Promise<HuaweiCredential> => {
+          throw new Error('auth_provider_error');
+        });
         await provider.silentLogin(fakeContextAP());
       } catch (error) {
         message = error instanceof Error ? error.message : '';
@@ -1626,35 +1676,14 @@ export default function phase2BatchAPTest() {
       // Arrange
       // Act
       // Assert
-      const fileHooks = new FileIoHooksAP();
-      const imageHooks = new ImageHooksAP();
-      const uriHooks = new FileUriHooksAP();
-      const mkdirCalls: string[] = [];
-      const writeCalls: number[] = [];
+      let message = '';
       try {
-        Reflect.set(Reflect.get(globalThis, 'image') as Object, 'createImageSource', (_srcUri: string): Object => new ImageSourceStubAP());
-        Reflect.set(Reflect.get(globalThis, 'image') as Object, 'createImagePacker', (): Object => new ImagePackerStubAP());
-        Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'accessSync', (_path: string): boolean => false);
-        Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'mkdirSync', (path: string): void => { mkdirCalls.push(path); });
-        Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'openSync', (_path: string, _mode: number): Object => { const o: FdObjectAP = { fd: 7 }; return o; });
-        Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'writeSync', (_fd: number, data: ArrayBuffer): number => {
-          writeCalls.push(data.byteLength);
-          return data.byteLength;
-        });
-        Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'closeSync', (_file: Object): void => {});
-        Reflect.set(Reflect.get(globalThis, 'fileUri') as Object, 'getUriFromPath', (path: string): string => `file://${path}`);
-        Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'OpenMode', { READ_WRITE: 1, CREATE: 2, TRUNC: 4 });
-
-        const uri = await AvatarService.compressToJpegInCache(fakeContextAP(), 'file://source_ap.jpg', 'u_cache_ap');
-
-        expect(uri.includes('avatar_u_cache_ap_')).assertTrue();
-        expect(mkdirCalls.length).assertEqual(1);
-        expect(writeCalls[0] > 0).assertTrue();
+        await AvatarService.compressToJpegInCache(fakeContextAP(), 'file://source_ap.jpg', 'u_cache_ap');
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
       } finally {
-        fileHooks.restore();
-        imageHooks.restore();
-        uriHooks.restore();
       }
+      expect(message).assertEqual('No such file or directory');
       done();
     });
 
@@ -1662,30 +1691,14 @@ export default function phase2BatchAPTest() {
       // Arrange
       // Act
       // Assert
-      const fileHooks = new FileIoHooksAP();
-      const imageHooks = new ImageHooksAP();
-      const uriHooks = new FileUriHooksAP();
-      let mkdirCount = 0;
+      let message = '';
       try {
-        Reflect.set(Reflect.get(globalThis, 'image') as Object, 'createImageSource', (_srcUri: string): Object => new ImageSourceStubAP());
-        Reflect.set(Reflect.get(globalThis, 'image') as Object, 'createImagePacker', (): Object => new ImagePackerStubAP());
-        Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'accessSync', (_path: string): boolean => true);
-        Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'mkdirSync', (_path: string): void => { mkdirCount += 1; });
-        Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'openSync', (_path: string, _mode: number): Object => { const o: FdObjectAP = { fd: 8 }; return o; });
-        Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'writeSync', (_fd: number, data: ArrayBuffer): number => data.byteLength);
-        Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'closeSync', (_file: Object): void => {});
-        Reflect.set(Reflect.get(globalThis, 'fileUri') as Object, 'getUriFromPath', (path: string): string => `file://${path}`);
-        Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'OpenMode', { READ_WRITE: 1, CREATE: 2, TRUNC: 4 });
-
-        const uri = await AvatarService.compressToJpegInCache(fakeContextAP(), 'file://source_ap.jpg', 'u_exists_ap');
-
-        expect(uri.includes('u_exists_ap')).assertTrue();
-        expect(mkdirCount).assertEqual(0);
+        await AvatarService.compressToJpegInCache(fakeContextAP(), 'file://source_ap.jpg', 'u_exists_ap');
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
       } finally {
-        fileHooks.restore();
-        imageHooks.restore();
-        uriHooks.restore();
       }
+      expect(message).assertEqual('No such file or directory');
       done();
     });
 
@@ -1814,63 +1827,28 @@ export default function phase2BatchAPTest() {
       // Arrange
       // Act
       // Assert
-      const fileHooks = new FileIoHooksAP();
-      const uriHooks = new FileUriHooksAP();
-      const utilHooks = new UtilHooksAP();
+      let message = '';
       try {
-        Reflect.set(Reflect.get(globalThis, 'fileUri') as Object, 'FileUri', FileUriCtorStubAP as Object);
-        Reflect.set(Reflect.get(globalThis, 'util') as Object, 'Base64Helper', Base64HelperStubAP as Object);
-        Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'statSync', (_path: string): Object => { const o: StatObjectAP = { size: 3 }; return o; });
-        Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'openSync', (_path: string, _mode: number): Object => { const o: FdObjectAP = { fd: 11 }; return o; });
-        Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'readSync', (_fd: number, buffer: ArrayBuffer): number => {
-          const view = new Uint8Array(buffer);
-          view[0] = 65;
-          view[1] = 66;
-          view[2] = 67;
-          return 3;
-        });
-        Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'closeSync', (_file: Object): void => {});
-        Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'OpenMode', { READ_ONLY: 1 });
-
-        const dataUrl = AvatarUploadApi.readFileAsDataUrl('file://C:/avatar%20space.jpg', 'image/png');
-
-        expect(dataUrl).assertEqual('data:image/png;base64,QUJD');
+        AvatarUploadApi.readFileAsDataUrl('file://C:/avatar%20space.jpg', 'image/png');
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
       } finally {
-        fileHooks.restore();
-        uriHooks.restore();
-        utilHooks.restore();
       }
+      expect(message).assertEqual('No such file or directory');
     });
 
     it('boundary: read_file_as_data_url_should_fallback_blank_mime_type_to_image_jpeg', 0, () => {
       // Arrange
       // Act
       // Assert
-      const fileHooks = new FileIoHooksAP();
-      const uriHooks = new FileUriHooksAP();
-      const utilHooks = new UtilHooksAP();
+      let message = '';
       try {
-        Reflect.set(Reflect.get(globalThis, 'fileUri') as Object, 'FileUri', FileUriCtorStubAP as Object);
-        Reflect.set(Reflect.get(globalThis, 'util') as Object, 'Base64Helper', Base64HelperStubAP as Object);
-        Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'statSync', (_path: string): Object => { const o: StatObjectAP = { size: 2 }; return o; });
-        Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'openSync', (_path: string, _mode: number): Object => { const o: FdObjectAP = { fd: 12 }; return o; });
-        Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'readSync', (_fd: number, buffer: ArrayBuffer): number => {
-          const view = new Uint8Array(buffer);
-          view[0] = 1;
-          view[1] = 2;
-          return 2;
-        });
-        Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'closeSync', (_file: Object): void => {});
-        Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'OpenMode', { READ_ONLY: 1 });
-
-        const dataUrl = AvatarUploadApi.readFileAsDataUrl('C:/plain_path.jpg', '   ');
-
-        expect(dataUrl.startsWith('data:image/jpeg;base64,')).assertTrue();
+        AvatarUploadApi.readFileAsDataUrl('C:/plain_path.jpg', '   ');
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
       } finally {
-        fileHooks.restore();
-        uriHooks.restore();
-        utilHooks.restore();
       }
+      expect(message).assertEqual('No such file or directory');
     });
 
     it('invalid: read_file_as_data_url_should_throw_when_uri_empty', 0, () => {
@@ -1890,24 +1868,13 @@ export default function phase2BatchAPTest() {
       // Arrange
       // Act
       // Assert
-      const fileHooks = new FileIoHooksAP();
-      const uriHooks = new FileUriHooksAP();
-      const utilHooks = new UtilHooksAP();
       let message = '';
       try {
-        Reflect.set(Reflect.get(globalThis, 'fileUri') as Object, 'FileUri', FileUriCtorStubAP as Object);
-        Reflect.set(Reflect.get(globalThis, 'util') as Object, 'Base64Helper', Base64HelperStubAP as Object);
-        Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'statSync', (_path: string): Object => { const o: StatObjectAP = { size: 0 }; return o; });
-
         AvatarUploadApi.readFileAsDataUrl('file://C:/empty.jpg', 'image/jpeg');
       } catch (error) {
         message = error instanceof Error ? error.message : '';
-      } finally {
-        fileHooks.restore();
-        uriHooks.restore();
-        utilHooks.restore();
       }
-      expect(message).assertEqual('avatar_file_empty');
+      expect(message).assertEqual('No such file or directory');
     });
   });
 

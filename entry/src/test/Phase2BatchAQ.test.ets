@@ -653,13 +653,12 @@ export default function phase2BatchAQTest() {
       Reflect.set(engine as Object, 'refreshFencesNow', async (reason: string): Promise<void> => { refreshedReason = reason; });
       Reflect.set(engine as Object, 'ensureReminderConsistency', (): void => { ensuredConsistency = true; });
       Reflect.set(engine as Object, 'locationManager', manager as Object);
-      const start = Reflect.get(engine as Object, 'start') as (planId: number, vm: Object, context: Object) => void;
       // Act
       const vmArg8Obj: PollutedMapServiceAQ = { marker: '' };
       const vmArg8: Object = vmArg8Obj as Object;
       const ctxArg8Obj: PollutedMapServiceAQ = { marker: '' };
       const ctxArg8: Object = ctxArg8Obj as Object;
-      start(8, vmArg8, ctxArg8);
+      engine.start(8, vmArg8 as never, ctxArg8 as never);
       // Assert
       expect(Reflect.get(engine as Object, 'activePagePlanId') as number).assertEqual(8);
       expect(manager.startCalls).assertEqual(1);
@@ -676,13 +675,12 @@ export default function phase2BatchAQTest() {
       Reflect.set(engine as Object, 'refreshFencesNow', async (_reason: string): Promise<void> => {});
       Reflect.set(engine as Object, 'ensureReminderConsistency', (): void => {});
       Reflect.set(engine as Object, 'locationManager', manager as Object);
-      const start = Reflect.get(engine as Object, 'start') as (planId: number, vm: Object, context: Object) => void;
       // Act
       const vmArg0Obj: PollutedMapServiceAQ = { marker: '' };
       const vmArg0: Object = vmArg0Obj as Object;
       const ctxArg0Obj: PollutedMapServiceAQ = { marker: '' };
       const ctxArg0: Object = ctxArg0Obj as Object;
-      start(0, vmArg0, ctxArg0);
+      engine.start(0, vmArg0 as never, ctxArg0 as never);
       // Assert
       expect(Reflect.get(engine as Object, 'activePagePlanId') as number).assertEqual(0);
       expect(manager.startCalls).assertEqual(1);
@@ -697,13 +695,12 @@ export default function phase2BatchAQTest() {
       Reflect.set(engine as Object, 'ensureClients', (): boolean => false);
       Reflect.set(engine as Object, 'refreshFencesNow', async (_reason: string): Promise<void> => { refreshed = true; });
       Reflect.set(engine as Object, 'locationManager', manager as Object);
-      const start = Reflect.get(engine as Object, 'start') as (planId: number, vm: Object, context: Object) => void;
       // Act
       const vmArg1Obj: PollutedMapServiceAQ = { marker: '' };
       const vmArg1: Object = vmArg1Obj as Object;
       const ctxArg1Obj: PollutedMapServiceAQ = { marker: '' };
       const ctxArg1: Object = ctxArg1Obj as Object;
-      start(1, vmArg1, ctxArg1);
+      engine.start(1, vmArg1 as never, ctxArg1 as never);
       // Assert
       expect(manager.startCalls).assertEqual(0);
       expect(refreshed).assertEqual(false);
@@ -1852,8 +1849,9 @@ export default function phase2BatchAQTest() {
       const engine = resetTrafficEngineAQ();
       const from = createLocationAQ('X', 31.20, 121.40);
       const to = createLocationAQ('Y', 31.30, 121.50);
-      const key = `${from.name}-${to.name}-0`;
-      const cache = Reflect.get(engine as Object, 'commuteCache') as Map<string, number>;
+      const key = buildTrafficKeyAQ(engine, from, to, 0);
+      Reflect.set(engine as Object, 'mapService', new FakeMapServiceAQ() as Object);
+      const cache = Reflect.get(engine as Object, 'cache') as Map<string, number>;
       cache.set(key, 12);
       // Act
       const minutes = engine.getCommuteMinutes(from, to, 0);
@@ -1866,8 +1864,9 @@ export default function phase2BatchAQTest() {
       const engine = resetTrafficEngineAQ();
       const from = createLocationAQ('P', 31.20, 121.40);
       const to = createLocationAQ('Q', 31.30, 121.50);
-      const cache = Reflect.get(engine as Object, 'commuteCache') as Map<string, number>;
-      cache.set(`${from.name}-${to.name}-1`, 20);
+      Reflect.set(engine as Object, 'mapService', new FakeMapServiceAQ() as Object);
+      const cache = Reflect.get(engine as Object, 'cache') as Map<string, number>;
+      cache.set(buildTrafficKeyAQ(engine, from, to, 1), 20);
       // Act
       const minutesMode0 = engine.getCommuteMinutes(from, to, 0);
       const minutesMode1 = engine.getCommuteMinutes(from, to, 1);
@@ -1886,8 +1885,8 @@ export default function phase2BatchAQTest() {
       // Act - first call triggers fetch
       const first = engine.getCommuteMinutes(from, to, 0);
       // Simulate cache populated
-      const cache = Reflect.get(engine as Object, 'commuteCache') as Map<string, number>;
-      cache.set(`${from.name}-${to.name}-0`, 15);
+      const cache = Reflect.get(engine as Object, 'cache') as Map<string, number>;
+      cache.set(buildTrafficKeyAQ(engine, from, to, 0), 15);
       const second = engine.getCommuteMinutes(from, to, 0);
       // Assert
       expect(first).assertEqual(DomainConstants.COMMUTE_LOADING);
