@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-11T22:47:36.707989",
+  "last_updated": "2026-04-17T11:30:42.541821",
   "preferences": [
     "When user asks to clean project, run preview first and explicitly explain MinSizeMB threshold impact before apply.",
     "When user reports remaining size after cleanup, provide top directory size breakdown first, then offer safe second pass.",
@@ -10,7 +10,9 @@
     "瘦身前先确认 git 状态，避免误删本轮新增未跟踪文件。",
     "当瘦身紧跟复盘任务时，严格在复盘沉淀完成后再执行清理。",
     "用户要求瘦身时默认执行两阶段：先 MinSizeMB=20 预览，若无候选再降到 1 做安全二次扫描。",
-    "瘦身阶段需与上传阶段解耦，清理报告用于回执，不默认纳入提交文件。"
+    "瘦身阶段需与上传阶段解耦，清理报告用于回执，不默认纳入提交文件。",
+    "当用户明确要求不要删除可重复构建文件时，app-size-pruner 默认只做预览或仅清理非构建类临时/日志/备份文件。",
+    "瘦身流程保持先预览再执行，并在结果中明确“未删除构建可再生文件”的约束执行情况。"
   ],
   "fixes": [
     "Default MinSizeMB 20 can miss many 1-20MB build artifacts; run a second scan with MinSizeMB 1 for safe whitelist cleanup when user still needs more space.",
@@ -21,7 +23,8 @@
     "若首轮清理释放不足，可在安全规则不变前提下再降 MinSizeMB 做第二轮扫描。",
     "清理结果必须保留 .app-size-prune-report-*.json 作为可审计证据。",
     "在单测高频执行后，优先清理 .tmp 和 build-logs 中 safe-extension 日志文件以快速回收空间。",
-    "执行 apply 后必须回传删除数量、释放空间与 .app-size-prune-report 路径。"
+    "执行 apply 后必须回传删除数量、释放空间与 .app-size-prune-report 路径。",
+    "遇到“不可删构建产物”约束时，必须排除 build/dist/out/target/node_modules/.hvigor/oh_modules 等目录，不将其纳入删除集合。"
   ],
   "contexts": [
     "Workspace is often a Git repo on Windows PowerShell; safe cleanup must keep Git-tracked files untouched."

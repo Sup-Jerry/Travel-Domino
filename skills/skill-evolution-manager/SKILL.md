@@ -130,6 +130,9 @@ Agent 调用 `scripts/smart_stitch.py`，将 `evolution.json` 的内容转化为
 - 复盘回报保持中文、精简，并附脚本执行证据与落盘文件。
 - 当用户明确指定顺序为复盘->瘦身->发布时，严格按该顺序执行并分阶段回报。
 - 多轮 N4 补测场景中，继续迭代默认先落地当前批次并保持 unit-all 绿色，再进入复盘沉淀。
+- 当用户明确要求先反思再瘦身时，严格按顺序执行：skill-evolution-manager -> app-size-pruner。
+- 当用户追加约束“不要删除可重复构建文件”时，瘦身阶段禁止删除 build/dist/out/node_modules/.hvigor/oh_modules 等可再生产物。
+- 涉及脚本参数数组时，优先在当前 PowerShell 会话直接调用脚本并用数组变量传参，避免嵌套 powershell 导致 -Files 失效。
 
 ### Known Fixes & Workarounds
 - Before any edit, restate user intent and explicitly state whether code will be changed.
@@ -199,3 +202,5 @@ Agent 调用 `scripts/smart_stitch.py`，将 `evolution.json` 的内容转化为
 - 发布到 GitHub 在本仓库必须优先使用 scripts/git-auto-publish.ps1，不使用裸 git push 作为默认流程。
 - CompanionDisplayHelper 的分值分档断言需避免字符串全等误判，优先按分档边界语义断言。
 - 执行发布脚本时，-Files 参数在 PowerShell 中应通过数组变量传递，避免被拼成单字符串。
+- git-auto-publish 在嵌套 PowerShell 场景下可能把多文件参数拼成单一路径；改为会话内直接调用脚本可稳定提交指定文件。
+- 当目录已被 Git 作为 gitlink 跟踪时，仅写 .gitignore 不生效；需先 git rm --cached 后再用 ignore 规则阻止再次跟踪。
