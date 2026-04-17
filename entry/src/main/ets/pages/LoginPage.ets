@@ -321,4 +321,8 @@ struct LoginPage {
   }
 }
 
+export function createLoginPageForTest(): Object {
+  return new LoginPage(undefined, new LocalStorage()) as Object;
+}
+
 

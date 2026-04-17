@@ -89,6 +89,37 @@ export function resolvePlanListShareCategory(event: TravelPlanItem): string {
   return '灵活行程';
 }
 
+export function sortPlanListShareEvents(events: TravelPlanItem[]): TravelPlanItem[] {
+  return events.slice().sort((left: TravelPlanItem, right: TravelPlanItem) => {
+    const leftDay = Number(left.dayOffset ?? 0);
+    const rightDay = Number(right.dayOffset ?? 0);
+    if (leftDay !== rightDay) {
+      return leftDay - rightDay;
+    }
+    return Number(left.sortOrder ?? 0) - Number(right.sortOrder ?? 0);
+  });
+}
+
+export function buildPlanListShareEventItems(events: TravelPlanItem[]): ShareEventItem[] {
+  const sorted = sortPlanListShareEvents(events);
+  return sorted.map((event: TravelPlanItem): ShareEventItem => {
+    const durationMinutes = Number.isFinite(Number(event.duration)) ? Math.max(0, Math.floor(Number(event.duration))) : 0;
+    const durationHoursRaw = durationMinutes / 60;
+    const durationHours = Math.round(durationHoursRaw * 10) / 10;
+    const dayOffset = Number.isFinite(Number(event.dayOffset)) ? Math.max(0, Math.floor(Number(event.dayOffset))) : 0;
+    return {
+      name: event.name && event.name.trim().length > 0 ? event.name.trim() : '未命名地点',
+      dayOffset: dayOffset,
+      startTime: resolvePlanListShareStartTime(event),
+      endTime: resolvePlanListShareEndTime(event, durationMinutes),
+      duration: durationHours > 0 ? durationHours : 0.5,
+      icon: resolvePlanListShareIcon(event),
+      location: event.address && event.address.trim().length > 0 ? event.address.trim() : '待补充地点',
+      category: resolvePlanListShareCategory(event)
+    };
+  });
+}
+
 @Entry
 @Component
 struct PlanListPage {
@@ -391,47 +422,7 @@ struct PlanListPage {
   }
 
   private convertToShareEvents(events: TravelPlanItem[]): ShareEventItem[] {
-    const sorted = events.slice().sort((left: TravelPlanItem, right: TravelPlanItem) => {
-      const leftDay = Number(left.dayOffset ?? 0);
-      const rightDay = Number(right.dayOffset ?? 0);
-      if (leftDay !== rightDay) {
-        return leftDay - rightDay;
-      }
-      return Number(left.sortOrder ?? 0) - Number(right.sortOrder ?? 0);
-    });
-
-    return sorted.map((event: TravelPlanItem): ShareEventItem => {
-      const durationMinutes = Number.isFinite(Number(event.duration)) ? Math.max(0, Math.floor(Number(event.duration))) : 0;
-      const durationHoursRaw = durationMinutes / 60;
-      const durationHours = Math.round(durationHoursRaw * 10) / 10;
-      const dayOffset = Number.isFinite(Number(event.dayOffset)) ? Math.max(0, Math.floor(Number(event.dayOffset))) : 0;
-      return {
-        name: event.name && event.name.trim().length > 0 ? event.name.trim() : '未命名地点',
-        dayOffset: dayOffset,
-        startTime: this.resolveShareStartTime(event),
-        endTime: this.resolveShareEndTime(event, durationMinutes),
-        duration: durationHours > 0 ? durationHours : 0.5,
-        icon: this.resolveShareIcon(event),
-        location: event.address && event.address.trim().length > 0 ? event.address.trim() : '待补充地点',
-        category: this.resolveShareCategory(event)
-      };
-    });
-  }
-
-  private resolveShareStartTime(event: TravelPlanItem): string {
-    return resolvePlanListShareStartTime(event);
-  }
-
-  private resolveShareEndTime(event: TravelPlanItem, durationMinutes: number): string {
-    return resolvePlanListShareEndTime(event, durationMinutes);
-  }
-
-  private resolveShareIcon(event: TravelPlanItem): string {
-    return resolvePlanListShareIcon(event);
-  }
-
-  private resolveShareCategory(event: TravelPlanItem): string {
-    return resolvePlanListShareCategory(event);
+    return buildPlanListShareEventItems(events);
   }
 
   private openImportDialog(): void {
@@ -489,14 +480,7 @@ struct PlanListPage {
   }
 
   private sortEventsForShare(events: TravelPlanItem[]): TravelPlanItem[] {
-    return events.slice().sort((left: TravelPlanItem, right: TravelPlanItem) => {
-      const leftDay = Number(left.dayOffset ?? 0);
-      const rightDay = Number(right.dayOffset ?? 0);
-      if (leftDay !== rightDay) {
-        return leftDay - rightDay;
-      }
-      return Number(left.sortOrder ?? 0) - Number(right.sortOrder ?? 0);
-    });
+    return sortPlanListShareEvents(events);
   }
 
   private async importPlanFromJson(jsonText: string, cancelToken: PlanJsonImportCancelToken): Promise<void> {

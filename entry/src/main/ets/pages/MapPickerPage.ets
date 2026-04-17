@@ -70,6 +70,32 @@ export function formatMapPickerDistance(distance?: number): string {
   return `${Math.floor(distance)}m`;
 }
 
+export function resolveMapPickerCenterHint(centerSource: string, queryName: string): string {
+  const safeSource = String(centerSource || '').trim();
+  const safeQueryName = String(queryName || '').trim();
+  if (safeSource === 'geocode') {
+    return safeQueryName.length > 0
+      ? `已按“${safeQueryName}”定位到附近，可拖动微调`
+      : '已按地点名定位到附近，可拖动微调';
+  }
+  if (safeSource === 'existing') {
+    return '已定位到已保存坐标，可拖动微调';
+  }
+  return '已定位到当前位置，可拖动选点';
+}
+
+export function resolveMapPickerSelectionAddress(currentAddress: string, lat: number, lng: number): string {
+  const normalizedAddress = String(currentAddress || '').trim();
+  if (normalizedAddress.length === 0 || normalizedAddress === '未知坐标点') {
+    return buildMapPickerCoordinateFallbackAddress(lat, lng);
+  }
+  return normalizedAddress;
+}
+
+export function resolveMapPickerStorageKey(planId: number): string {
+  return planId > 0 ? `pickedLocationStr_${Math.floor(planId)}` : 'pickedLocationStr';
+}
+
 @Entry
 @Component
 struct MapPickerPage {
@@ -145,15 +171,7 @@ struct MapPickerPage {
       }
 
       const centerSource = params.centerSource ?? 'current';
-      if (centerSource === 'geocode') {
-        this.centerHint = queryName.length > 0
-          ? `已按“${queryName}”定位到附近，可拖动微调`
-          : '已按地点名定位到附近，可拖动微调';
-      } else if (centerSource === 'existing') {
-        this.centerHint = '已定位到已保存坐标，可拖动微调';
-      } else {
-        this.centerHint = '已定位到当前位置，可拖动选点';
-      }
+      this.centerHint = resolveMapPickerCenterHint(centerSource, queryName);
       hilog.info(
         0x0000,
         'MapPickerPage',
@@ -404,17 +422,13 @@ struct MapPickerPage {
       this.safeShowToast('正在解析地点名称，请稍候再确认');
       return;
     }
-    const normalizedAddress = (this.currentAddress || '').trim();
-    let finalAddress = normalizedAddress;
-    if (normalizedAddress.length === 0 || normalizedAddress === '未知坐标点') {
-      finalAddress = this.buildCoordinateFallbackAddress(this.currentLat, this.currentLng);
-    }
+    const finalAddress = resolveMapPickerSelectionAddress(this.currentAddress, this.currentLat, this.currentLng);
 
     // 实例化我们刚才定义的明确结构类
     const resultObj = new PickedLocation(this.currentLat, this.currentLng, finalAddress);
 
     // 转化为字符串传出
-    const key = this.storageScopePlanId > 0 ? `pickedLocationStr_${this.storageScopePlanId}` : 'pickedLocationStr';
+    const key = resolveMapPickerStorageKey(this.storageScopePlanId);
     AppStorage.setOrCreate(key, JSON.stringify(resultObj));
     this.getUIContext().getRouter().back();
   }

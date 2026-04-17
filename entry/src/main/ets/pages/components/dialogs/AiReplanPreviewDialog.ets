@@ -15,6 +15,10 @@ export function getAiReplanStrategyLabel(mode: number): string {
   return '默认';
 }
 
+export function buildAiReplanPreviewSummary(preview: AiReplanPreviewResult): string {
+  return `共生成 ${preview.itemCount} 个地点，策略：${getAiReplanStrategyLabel(preview.strategyMode)}`;
+}
+
 
 @CustomDialog
 export struct AiReplanPreviewDialog {
@@ -54,7 +58,7 @@ export struct AiReplanPreviewDialog {
         .fontColor(this.getPalette().textPrimary)
         .margin({ bottom: 10 });
 
-      Text(`共生成 ${this.preview.itemCount} 个地点，策略：${this.buildStrategyLabel(this.preview.strategyMode)}`)
+      Text(buildAiReplanPreviewSummary(this.preview))
         .fontSize(13)
         .fontColor(this.getPalette().textSecondary)
         .margin({ bottom: 12 });

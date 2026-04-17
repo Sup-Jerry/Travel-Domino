@@ -38,6 +38,43 @@ export function resolveAdvanceAdjustDefaultStartTime(
   return advanceAdjustMinutesToTime(defaultMinutes);
 }
 
+export function resolveAdvanceAdjustSelectedIds(candidates: AdvanceAdjustCandidate[]): Set<number> {
+  const ids = new Set<number>();
+  candidates.forEach((item: AdvanceAdjustCandidate) => ids.add(item.id));
+  return ids;
+}
+
+export function toggleAdvanceAdjustSelection(selectedIds: Set<number>, id: number, checked: boolean): Set<number> {
+  const nextSelectedIds = new Set<number>(selectedIds);
+  if (checked) {
+    nextSelectedIds.add(id);
+  } else {
+    nextSelectedIds.delete(id);
+  }
+  return nextSelectedIds;
+}
+
+export function resolveAdvanceAdjustSelectedSummary(preview: AdvanceAdjustPreview | null): string {
+  return `已选 ${preview?.selectedCount ?? 0} 个，预计前移 ${preview?.shiftMinutes ?? 0} 分钟`;
+}
+
+export function resolveAdvanceAdjustPreviewGapMessage(preview: AdvanceAdjustPreview | null): string {
+  const requiredGapMinutes = preview?.requiredGapMinutes ?? 0;
+  const remainingGapMinutes = preview?.remainingGapMinutes ?? 0;
+  if (remainingGapMinutes > 0) {
+    return `最少前移 ${requiredGapMinutes} 分钟；还差 ${remainingGapMinutes} 分钟`;
+  }
+  return `最少前移 ${requiredGapMinutes} 分钟；已达到消冲突阈值`;
+}
+
+export function resolveAdvanceAdjustPreviewGapColor(preview: AdvanceAdjustPreview | null): string {
+  return (preview?.remainingGapMinutes ?? 0) > 0 ? '#FF4D4F' : '#2E7D32';
+}
+
+export function resolveAdvanceAdjustPreviewRangeMessage(preview: AdvanceAdjustPreview | null): string {
+  return `首地点：${preview?.firstNewStartTime ?? '-'}，末地点：${preview?.lastNewEndTime ?? '-'}`;
+}
+
 @CustomDialog
 export struct AdvanceAdjustDialog {
   controller: CustomDialogController;
@@ -60,8 +97,7 @@ export struct AdvanceAdjustDialog {
       this.preview = null;
       return;
     }
-    this.context.candidates.forEach((item) => this.selectedIds.add(item.id));
-    this.selectedIds = new Set(this.selectedIds);
+    this.selectedIds = resolveAdvanceAdjustSelectedIds(this.context.candidates);
     const first = this.context.candidates[0];
     this.targetStartTime = resolveAdvanceAdjustDefaultStartTime(first.currentStartTime, this.forcedGapMinutes);
     this.refreshPreview();
@@ -103,12 +139,7 @@ export struct AdvanceAdjustDialog {
   }
 
   private toggleOne(id: number, checked: boolean): void {
-    if (checked) {
-      this.selectedIds.add(id);
-    } else {
-      this.selectedIds.delete(id);
-    }
-    this.selectedIds = new Set(this.selectedIds);
+    this.selectedIds = toggleAdvanceAdjustSelection(this.selectedIds, id, checked);
     this.refreshPreview();
   }
 
@@ -185,18 +216,16 @@ export struct AdvanceAdjustDialog {
         .margin({ top: 10 })
 
         Column() {
-          Text(`已选 ${this.preview?.selectedCount ?? 0} 个，预计前移 ${this.preview?.shiftMinutes ?? 0} 分钟`)
+          Text(resolveAdvanceAdjustSelectedSummary(this.preview))
             .fontSize(12)
             .fontColor($r('app.color.text_secondary'))
             .width('100%')
-          Text((this.preview?.remainingGapMinutes ?? 0) > 0
-            ? `最少前移 ${this.preview?.requiredGapMinutes ?? 0} 分钟；还差 ${this.preview?.remainingGapMinutes ?? 0} 分钟`
-            : `最少前移 ${this.preview?.requiredGapMinutes ?? 0} 分钟；已达到消冲突阈值`)
+          Text(resolveAdvanceAdjustPreviewGapMessage(this.preview))
             .fontSize(12)
-            .fontColor((this.preview?.remainingGapMinutes ?? 0) > 0 ? '#FF4D4F' : '#2E7D32')
+            .fontColor(resolveAdvanceAdjustPreviewGapColor(this.preview))
             .width('100%')
             .margin({ top: 4 })
-          Text(`首地点：${this.preview?.firstNewStartTime ?? '-'}，末地点：${this.preview?.lastNewEndTime ?? '-'}`)
+          Text(resolveAdvanceAdjustPreviewRangeMessage(this.preview))
             .fontSize(12)
             .fontColor($r('app.color.text_secondary'))
             .width('100%')

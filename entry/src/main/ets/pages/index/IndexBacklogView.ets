@@ -6,6 +6,12 @@ export function shouldIncludeIndexBacklogEvent(status: number): boolean {
   return status !== 1;
 }
 
+export function resolveIndexBacklogItems(events: EventEntity[]): TravelPlanItem[] {
+  return events
+    .filter((event: EventEntity) => shouldIncludeIndexBacklogEvent(event.status))
+    .map((event: EventEntity) => event.toInterface());
+}
+
 @Component
 export struct IndexBacklogView {
   @Prop events: EventEntity[] = [];
@@ -17,9 +23,7 @@ export struct IndexBacklogView {
   onMoveAllToSchedule: () => void = () => {};
 
   private resolveBacklogItems(): TravelPlanItem[] {
-    return this.events
-      .filter((event: EventEntity) => shouldIncludeIndexBacklogEvent(event.status))
-      .map((event: EventEntity) => event.toInterface());
+    return resolveIndexBacklogItems(this.events);
   }
 
   build() {

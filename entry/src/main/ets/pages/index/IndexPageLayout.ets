@@ -19,6 +19,28 @@ export function resolveIndexPageGapsCount(gapsCount: number): number {
   return gapsCount;
 }
 
+export function buildIndexPageWeatherSuggestionText(
+  collabLabel: string,
+  planningHint: string,
+  collabSummary: string,
+  strategyHint: string
+): string {
+  return IndexHelpers.buildWeatherSuggestionText({
+    collabLabel: collabLabel,
+    planningHint: planningHint,
+    collabSummary: collabSummary,
+    strategyHint: strategyHint
+  });
+}
+
+export function buildIndexPageHintLines(weatherHintExplanation: string): string[] {
+  return IndexHelpers.splitLines(weatherHintExplanation);
+}
+
+export function buildIndexPageScoreLines(weatherScoreExplanation: string): string[] {
+  return IndexHelpers.splitLines(weatherScoreExplanation);
+}
+
 @Component
 export struct IndexPageLayout {
   @Prop vm: TimelineViewModel = new TimelineViewModel();
@@ -84,31 +106,6 @@ export struct IndexPageLayout {
   onUndo: () => void = () => {};
   onSave: () => void = () => {};
 
-  private isWeatherHintVisible(): boolean {
-    return shouldShowIndexPageWeatherHint(
-      this.vm.isWeatherFeatureEnabled(),
-      this.hasManualPlanningWeatherRefresh,
-      this.vm.weatherPlanningHint
-    );
-  }
-
-  private buildWeatherSuggestionText(): string {
-    return IndexHelpers.buildWeatherSuggestionText({
-      collabLabel: this.vm.weatherCollabLabel,
-      planningHint: this.vm.weatherPlanningHint,
-      collabSummary: this.vm.weatherCollabSummary,
-      strategyHint: this.vm.weatherStrategyHint
-    });
-  }
-
-  private buildHintLines(): string[] {
-    return IndexHelpers.splitLines(this.vm.buildPlanningWeatherHintExplanation());
-  }
-
-  private buildScoreLines(): string[] {
-    return IndexHelpers.splitLines(this.vm.buildWeatherScoreExplanation(this.vm.weatherRouteScore));
-  }
-
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
       Column() {
@@ -120,13 +117,22 @@ export struct IndexPageLayout {
           isArchived: this.vm.isArchived,
           weatherFeatureEnabled: this.vm.isWeatherFeatureEnabled(),
           weatherLoading: this.vm.weatherLoading,
-          weatherHintVisible: this.isWeatherHintVisible(),
-          weatherSuggestionText: this.buildWeatherSuggestionText(),
+          weatherHintVisible: shouldShowIndexPageWeatherHint(
+            this.vm.isWeatherFeatureEnabled(),
+            this.hasManualPlanningWeatherRefresh,
+            this.vm.weatherPlanningHint
+          ),
+          weatherSuggestionText: buildIndexPageWeatherSuggestionText(
+            this.vm.weatherCollabLabel,
+            this.vm.weatherPlanningHint,
+            this.vm.weatherCollabSummary,
+            this.vm.weatherStrategyHint
+          ),
           weatherRouteScore: this.vm.weatherRouteScore,
           hintPopupVisible: this.showPlanningWeatherHintPopup,
           scorePopupVisible: this.showPlanningWeatherScorePopup,
-          hintLines: this.buildHintLines(),
-          scoreLines: this.buildScoreLines(),
+          hintLines: buildIndexPageHintLines(this.vm.buildPlanningWeatherHintExplanation()),
+          scoreLines: buildIndexPageScoreLines(this.vm.buildWeatherScoreExplanation(this.vm.weatherRouteScore)),
           events: this.vm.events,
           backlogExpanded: this.backlogExpanded,
           dividerColor: this.themePalette.divider,

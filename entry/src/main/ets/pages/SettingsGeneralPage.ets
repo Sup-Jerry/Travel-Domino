@@ -33,6 +33,74 @@ export function resolveSettingsGeneralAiPoiInput(rawInput: string, fallback: num
   return PreferenceManager.normalizeAiPoiCount(source, fallback);
 }
 
+export interface SettingsGeneralAiPoiInputState {
+  defaultMinInput: string;
+  defaultMaxInput: string;
+  soldierMinInput: string;
+  soldierMaxInput: string;
+  leisureMinInput: string;
+  leisureMaxInput: string;
+}
+
+interface SettingsGeneralAiPoiRangePair {
+  min: number;
+  max: number;
+}
+
+function buildSettingsGeneralAiPoiRangePair(
+  minInput: string,
+  maxInput: string,
+  fallbackMin: number,
+  fallbackMax: number
+): SettingsGeneralAiPoiRangePair {
+  const min = resolveSettingsGeneralAiPoiInput(minInput, fallbackMin);
+  const max = resolveSettingsGeneralAiPoiInput(maxInput, fallbackMax);
+  if (min > max) {
+    const swapped: SettingsGeneralAiPoiRangePair = {
+      min: max,
+      max: min
+    };
+    return swapped;
+  }
+  const result: SettingsGeneralAiPoiRangePair = {
+    min: min,
+    max: max
+  };
+  return result;
+}
+
+export function buildSettingsGeneralAiPoiRangeConfig(
+  inputState: SettingsGeneralAiPoiInputState,
+  current: AiDailyPoiRangeConfig
+): AiDailyPoiRangeConfig {
+  const defaultRange = buildSettingsGeneralAiPoiRangePair(
+    inputState.defaultMinInput,
+    inputState.defaultMaxInput,
+    current.defaultMin,
+    current.defaultMax
+  );
+  const soldierRange = buildSettingsGeneralAiPoiRangePair(
+    inputState.soldierMinInput,
+    inputState.soldierMaxInput,
+    current.soldierMin,
+    current.soldierMax
+  );
+  const leisureRange = buildSettingsGeneralAiPoiRangePair(
+    inputState.leisureMinInput,
+    inputState.leisureMaxInput,
+    current.leisureMin,
+    current.leisureMax
+  );
+  return {
+    defaultMin: defaultRange.min,
+    defaultMax: defaultRange.max,
+    soldierMin: soldierRange.min,
+    soldierMax: soldierRange.max,
+    leisureMin: leisureRange.min,
+    leisureMax: leisureRange.max
+  };
+}
+
 @Entry
 @Component
 struct SettingsGeneralPage {
@@ -193,22 +261,18 @@ struct SettingsGeneralPage {
     }
   }
 
-  private parseAiPoiInput(raw: string, fallback: number): number {
-    return resolveSettingsGeneralAiPoiInput(raw, fallback);
-  }
-
   private async saveAiDailyPoiRanges(): Promise<void> {
     try {
       const pref = PreferenceManager.getInstance();
       const current = await pref.getAiDailyPoiRangeConfig();
-      const next: AiDailyPoiRangeConfig = {
-        defaultMin: this.parseAiPoiInput(this.aiDefaultMinInput, current.defaultMin),
-        defaultMax: this.parseAiPoiInput(this.aiDefaultMaxInput, current.defaultMax),
-        soldierMin: this.parseAiPoiInput(this.aiSoldierMinInput, current.soldierMin),
-        soldierMax: this.parseAiPoiInput(this.aiSoldierMaxInput, current.soldierMax),
-        leisureMin: this.parseAiPoiInput(this.aiLeisureMinInput, current.leisureMin),
-        leisureMax: this.parseAiPoiInput(this.aiLeisureMaxInput, current.leisureMax)
-      };
+      const next = buildSettingsGeneralAiPoiRangeConfig({
+        defaultMinInput: this.aiDefaultMinInput,
+        defaultMaxInput: this.aiDefaultMaxInput,
+        soldierMinInput: this.aiSoldierMinInput,
+        soldierMaxInput: this.aiSoldierMaxInput,
+        leisureMinInput: this.aiLeisureMinInput,
+        leisureMaxInput: this.aiLeisureMaxInput
+      }, current);
       await pref.setAiDailyPoiRangeConfig(next);
       const stored = await pref.getAiDailyPoiRangeConfig();
       this.aiDefaultMinInput = `${stored.defaultMin}`;

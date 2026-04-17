@@ -14,6 +14,45 @@ export function getSettingsSubPageBackLabel(): string {
   return '\u8FD4\u56DE';
 }
 
+export interface SettingSwitchRenderState {
+  showLoading: boolean;
+  showToggle: boolean;
+  loadingText: string;
+}
+
+export interface SettingSelectRenderState {
+  valueText: string;
+  trailingText: string;
+}
+
+export interface SettingsSubPageHeaderState {
+  title: string;
+  backLabel: string;
+}
+
+export function resolveSettingSwitchRenderState(loading: boolean): SettingSwitchRenderState {
+  const showLoading = shouldShowSettingSwitchLoading(loading);
+  return {
+    showLoading: showLoading,
+    showToggle: !showLoading,
+    loadingText: showLoading ? '加载中...' : ''
+  };
+}
+
+export function resolveSettingSelectRenderState(valueText: string): SettingSelectRenderState {
+  return {
+    valueText: resolveSettingSelectValueText(valueText),
+    trailingText: '>'
+  };
+}
+
+export function resolveSettingsSubPageHeaderState(title: string): SettingsSubPageHeaderState {
+  return {
+    title: title,
+    backLabel: getSettingsSubPageBackLabel()
+  };
+}
+
 @Component
 export struct SettingSwitchItem {
   @Prop title: string = '';
@@ -42,8 +81,8 @@ export struct SettingSwitchItem {
       .alignItems(HorizontalAlign.Start)
       .layoutWeight(1);
 
-      if (shouldShowSettingSwitchLoading(this.loading)) {
-        Text('加载中...')
+      if (resolveSettingSwitchRenderState(this.loading).showLoading) {
+        Text(resolveSettingSwitchRenderState(this.loading).loadingText)
           .fontSize(12)
           .fontColor('#AAA');
       } else {
@@ -89,11 +128,11 @@ export struct SettingSelectItem {
       .alignItems(HorizontalAlign.Start)
       .layoutWeight(1);
 
-      Text(resolveSettingSelectValueText(this.valueText))
+      Text(resolveSettingSelectRenderState(this.valueText).valueText)
         .fontSize(13)
         .fontColor(this.actionColor);
 
-      Text('>')
+      Text(resolveSettingSelectRenderState(this.valueText).trailingText)
         .fontSize(14)
         .fontColor(this.textSecondary)
         .margin({ left: 8 });
@@ -160,14 +199,14 @@ export struct SettingsSubPageHeader {
 
   build() {
     Stack() {
-      Text(this.title)
+      Text(resolveSettingsSubPageHeaderState(this.title).title)
         .fontSize(20)
         .fontWeight(FontWeight.Bold)
         .fontColor(this.getPalette().textPrimary)
         .align(Alignment.Center);
 
       Row() {
-        Button(getSettingsSubPageBackLabel())
+        Button(resolveSettingsSubPageHeaderState(this.title).backLabel)
           .type(ButtonType.Capsule)
           .fontSize(14)
           .height(32)

@@ -44,6 +44,57 @@ export function isBottomNavTabPressed(tab: AppNavTab, pressedTab: AppNavTab | ''
   return pressedTab === tab;
 }
 
+export interface BottomNavTapPlan {
+  shouldNavigate: boolean;
+  nextTransitionTab: AppNavTab | '';
+  nextNavLocked: boolean;
+}
+
+export interface BottomNavNavigateAction {
+  kind: 'noop' | 'search' | 'route';
+  route: string;
+}
+
+export function resolveBottomNavNavigateAction(currentTab: AppNavTab, targetTab: AppNavTab): BottomNavNavigateAction {
+  if (targetTab === currentTab) {
+    return { kind: 'noop', route: '' };
+  }
+  if (targetTab === 'search') {
+    return { kind: 'search', route: 'pages/PlanSearchPage' };
+  }
+  return { kind: 'route', route: getBottomNavTargetRoute(targetTab) };
+}
+
+export function resolveBottomNavTapPlan(
+  currentTab: AppNavTab,
+  targetTab: AppNavTab,
+  navLocked: boolean
+): BottomNavTapPlan {
+  if (targetTab === currentTab) {
+    return {
+      shouldNavigate: false,
+      nextTransitionTab: '',
+      nextNavLocked: false
+    };
+  }
+  if (!shouldBottomNavTapNavigate(currentTab, targetTab, navLocked)) {
+    return {
+      shouldNavigate: false,
+      nextTransitionTab: '',
+      nextNavLocked: navLocked
+    };
+  }
+  return {
+    shouldNavigate: true,
+    nextTransitionTab: targetTab,
+    nextNavLocked: true
+  };
+}
+
+export function resolveBottomNavPressedTab(tab: AppNavTab, pressed: boolean): AppNavTab | '' {
+  return pressed ? tab : '';
+}
+
 interface TabMeta {
   key: AppNavTab;
   label: string;
@@ -134,19 +185,19 @@ export struct GlobalBottomNavBar {
 
   private async navigateTo(tab: AppNavTab): Promise<void> {
     hilog.info(0x0000, NAV_TAG, `[BOTTOM_NAV][tap] tab=${tab}, current=${this.currentTab}`);
-    if (tab === this.currentTab) {
+    const action = resolveBottomNavNavigateAction(this.currentTab, tab);
+    if (action.kind === 'noop') {
       return;
     }
 
-    if (tab === 'search') {
+    if (action.kind === 'search') {
       await this.onSearchTap();
       hilog.info(0x0000, NAV_TAG, '[BOTTOM_NAV][route] to=pages/PlanSearchPage');
       return;
     }
 
-    const route = getBottomNavTargetRoute(tab);
-    await this.safeReplaceUrl(this.createRouteOptions(route), route);
-    hilog.info(0x0000, NAV_TAG, `[BOTTOM_NAV][route] to=${route}`);
+    await this.safeReplaceUrl(this.createRouteOptions(action.route), action.route);
+    hilog.info(0x0000, NAV_TAG, `[BOTTOM_NAV][route] to=${action.route}`);
   }
 
   private isVisualActive(tab: AppNavTab): boolean {
@@ -158,7 +209,7 @@ export struct GlobalBottomNavBar {
   }
 
   private setTabPressed(tab: AppNavTab, pressed: boolean): void {
-    const next = pressed ? tab : '';
+    const next = resolveBottomNavPressedTab(tab, pressed);
     if (this.pressedTab === next) {
       return;
     }
@@ -178,17 +229,15 @@ export struct GlobalBottomNavBar {
   }
 
   private handleTabTap(tab: AppNavTab): void {
-    if (tab === this.currentTab) {
-      this.transitionTab = '';
-      this.navLocked = false;
+    const plan = resolveBottomNavTapPlan(this.currentTab, tab, this.navLocked);
+    if (!plan.shouldNavigate) {
+      this.transitionTab = plan.nextTransitionTab;
+      this.navLocked = plan.nextNavLocked;
       return;
     }
-    if (!shouldBottomNavTapNavigate(this.currentTab, tab, this.navLocked)) {
-      return;
-    }
-    this.navLocked = true;
+    this.navLocked = plan.nextNavLocked;
     this.getUIContext().animateTo({ duration: 160, curve: Curve.Friction }, () => {
-      this.transitionTab = tab;
+      this.transitionTab = plan.nextTransitionTab;
     });
     setTimeout(() => {
       void this.navigateTo(tab);

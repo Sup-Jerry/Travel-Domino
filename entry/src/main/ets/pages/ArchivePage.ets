@@ -201,6 +201,10 @@ struct ArchivePage {
   }
 }
 
+export function createArchivePageForTest(): Object {
+  return new ArchivePage(undefined, new LocalStorage()) as Object;
+}
+
 
 
 

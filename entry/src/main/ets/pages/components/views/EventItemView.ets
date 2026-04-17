@@ -8,7 +8,7 @@ import { promptAction } from '@kit.ArkUI';
 import { ThemeCenter } from '../../../common/utils/ThemeCenter';
 import { DomainConstants } from '../../../common/constants/DomainConstants';
 
-interface TimeRangeMeta {
+export interface EventItemTimeRangeMeta {
   text: string;
   isEstimated: boolean;
 }
@@ -48,6 +48,150 @@ export function resolveEventItemConflictGapMinutes(gapMinutes: number, conflictM
   }
   const parsed = Number.parseInt(match[1], 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+export function resolveEventItemThemeColor(
+  eventType: number,
+  eventSource: number,
+  name: string,
+  effectiveTheme: string,
+  defaultPrimary: string
+): string {
+  const isDark = effectiveTheme === 'dark';
+  if (eventType === 1) {
+    return isDark ? '#FFB85C' : '#FF9800';
+  }
+  if (eventType === 2) {
+    return isDark ? '#B889E0' : '#7B1FA2';
+  }
+  if (eventType === 3) {
+    return isDark ? '#9FB1C8' : '#9E9E9E';
+  }
+  if (eventType === 0 && eventSource === 1) {
+    return isDark ? '#57C6B7' : '#009688';
+  }
+  if (/饭|餐|吃|饮|饿|茶|咖/.test(name)) {
+    return isDark ? '#FFB85C' : '#FF9800';
+  }
+  if (/车|路|交通|行|地铁|站|飞|铁|航/.test(name)) {
+    return isDark ? '#9FB1C8' : '#9E9E9E';
+  }
+  if (/宿|住|房|酒店|寓/.test(name)) {
+    return isDark ? '#B889E0' : '#7B1FA2';
+  }
+  if (/景|游|玩|园|山|水|馆|寺|塔/.test(name)) {
+    return isDark ? '#57C6B7' : '#009688';
+  }
+  return defaultPrimary;
+}
+
+export function resolveEventItemStartTimeDisplay(computedTime: string, fixedStartTime: string): string {
+  if (computedTime) {
+    return computedTime;
+  }
+  if (fixedStartTime) {
+    return fixedStartTime;
+  }
+  return '--:--';
+}
+
+export function formatEventItemTimestamp(ts: number): string {
+  if (ts <= 0) {
+    return '--:--';
+  }
+  return DateUtil.formatDate(new Date(ts), 'HH:mm');
+}
+
+export function resolveEventItemPlanRange(computedTime: string, fixedStartTime: string, duration: number): string {
+  const start = resolveEventItemStartTimeDisplay(computedTime, fixedStartTime);
+  const end = DateUtil.calculateEndTime(start, duration);
+  return `${start}-${end}`;
+}
+
+export function resolveEventItemForecastRange(dynamicStartTime: number, dynamicEndTime: number, planRange: string): string {
+  if (dynamicStartTime > 0 && dynamicEndTime > 0) {
+    return `${formatEventItemTimestamp(dynamicStartTime)}-${formatEventItemTimestamp(dynamicEndTime)}`;
+  }
+  return planRange;
+}
+
+export function resolveEventItemActualRangeMeta(
+  actualStartTime: number,
+  actualEndTime: number,
+  dynamicStartTime: number,
+  dynamicEndTime: number,
+  duration: number,
+  planRange: string
+): EventItemTimeRangeMeta {
+  if (actualStartTime > 0 && actualEndTime > 0) {
+    return {
+      text: `${formatEventItemTimestamp(actualStartTime)}-${formatEventItemTimestamp(actualEndTime)}`,
+      isEstimated: false
+    };
+  }
+  if (actualStartTime > 0) {
+    const estimatedEnd = actualStartTime + (duration * 60 * 1000);
+    return {
+      text: `${formatEventItemTimestamp(actualStartTime)}-${formatEventItemTimestamp(estimatedEnd)}`,
+      isEstimated: true
+    };
+  }
+  if (dynamicStartTime > 0 && dynamicEndTime > 0) {
+    return {
+      text: `${formatEventItemTimestamp(dynamicStartTime)}-${formatEventItemTimestamp(dynamicEndTime)}`,
+      isEstimated: true
+    };
+  }
+  return {
+    text: planRange,
+    isEstimated: true
+  };
+}
+
+export function resolveEventItemCompanionOpacity(
+  isCompanionMode: boolean,
+  eventId: number,
+  companionCurrentEventId: number,
+  completionStatus: number,
+  actualStartTime: number
+): number {
+  if (!isCompanionMode) {
+    return 1;
+  }
+  if (eventId === companionCurrentEventId) {
+    return 1;
+  }
+  if (completionStatus === EventEntity.STATE_COMPLETED) {
+    return 0.45;
+  }
+  if (completionStatus === EventEntity.STATE_SKIPPED) {
+    return 0.30;
+  }
+  if (actualStartTime > 0 && completionStatus === EventEntity.STATE_PENDING) {
+    return 1;
+  }
+  return 0.55;
+}
+
+export function resolveEventItemCompanionStateLabel(
+  completionStatus: number,
+  actualStartTime: number,
+  eventId: number,
+  companionCurrentEventId: number
+): string {
+  if (completionStatus === EventEntity.STATE_COMPLETED) {
+    return 'COMPLETED';
+  }
+  if (completionStatus === EventEntity.STATE_SKIPPED) {
+    return 'SKIPPED';
+  }
+  if (actualStartTime > 0) {
+    return 'ACTIVE';
+  }
+  if (eventId === companionCurrentEventId) {
+    return 'READY';
+  }
+  return 'FUTURE';
 }
 
 @Component
@@ -142,26 +286,17 @@ export struct EventItemView {
   }
 
   private getThemeColor(name: string): string {
-    const isDark = this.effectiveTheme === 'dark';
-    // 如果 AI 明确指定了类型 (0:景点, 1:美食, 2:住宿, 3:交通)
-    if (this.event.type === 1) return isDark ? '#FFB85C' : '#FF9800'; // 橙色 (吃)
-    if (this.event.type === 2) return isDark ? '#B889E0' : '#7B1FA2'; // 紫色 (住)
-    if (this.event.type === 3) return isDark ? '#9FB1C8' : '#9E9E9E'; // 灰色 (行)
-    if (this.event.type === 0 && this.event.source === 1) return isDark ? '#57C6B7' : '#009688'; // 绿色 (AI生成的景点)
-
-    // 正则兜底 (保持你原有的优秀逻辑)
-    if (/饭|餐|吃|饮|饿|茶|咖/.test(name)) return isDark ? '#FFB85C' : '#FF9800';
-    if (/车|路|交通|行|地铁|站|飞|铁|航/.test(name)) return isDark ? '#9FB1C8' : '#9E9E9E';
-    if (/宿|住|房|酒店|寓/.test(name)) return isDark ? '#B889E0' : '#7B1FA2';
-    if (/景|游|玩|园|山|水|馆|寺|塔/.test(name)) return isDark ? '#57C6B7' : '#009688';
-
-    return this.getPalette().primary; // 默认蓝
+    return resolveEventItemThemeColor(
+      this.event.type,
+      this.event.source,
+      name,
+      this.effectiveTheme,
+      this.getPalette().primary
+    );
   }
 
   private getStartTimeDisplay(): string {
-    if (this.event.computed_time) return this.event.computed_time;
-    if (this.event.fixed_start_time) return this.event.fixed_start_time;
-    return `--:--`;
+    return resolveEventItemStartTimeDisplay(this.event.computed_time, this.event.fixed_start_time);
   }
 
   private getEndTimeDisplay(): string {
@@ -174,93 +309,52 @@ export struct EventItemView {
   }
   // 修改点：内部辅助方法，用于统一处理时间戳转 HH:mm
   private formatTs(ts: number): string {
-    if (ts <= 0) return '--:--';
-    return DateUtil.formatDate(new Date(ts), 'HH:mm');
+    return formatEventItemTimestamp(ts);
   }
 
   private getPlanRange(): string {
-    const start = this.event.computed_time || this.event.fixed_start_time || '--:--';
-    const end = DateUtil.calculateEndTime(start, this.event.duration);
-    return `${start}-${end}`;
+    return resolveEventItemPlanRange(this.event.computed_time, this.event.fixed_start_time, this.event.duration);
   }
 
   private getForecastRange(): string {
-    if (this.event.dynamic_start_time > 0 && this.event.dynamic_end_time > 0) {
-      return `${this.formatTs(this.event.dynamic_start_time)}-${this.formatTs(this.event.dynamic_end_time)}`;
-    }
-    return this.getPlanRange();
+    return resolveEventItemForecastRange(
+      this.event.dynamic_start_time,
+      this.event.dynamic_end_time,
+      this.getPlanRange()
+    );
   }
 
-  private getActualRangeMeta(): TimeRangeMeta {
-    if (this.event.actual_start_time > 0 && this.event.actual_end_time > 0) {
-      return {
-        text: `${this.formatTs(this.event.actual_start_time)}-${this.formatTs(this.event.actual_end_time)}`,
-        isEstimated: false
-      };
-    }
-
-    if (this.event.actual_start_time > 0) {
-      const estimatedEnd = this.event.actual_start_time + (this.event.duration * 60 * 1000);
-      return {
-        text: `${this.formatTs(this.event.actual_start_time)}-${this.formatTs(estimatedEnd)}`,
-        isEstimated: true
-      };
-    }
-
-    if (this.event.dynamic_start_time > 0 && this.event.dynamic_end_time > 0) {
-      return {
-        text: `${this.formatTs(this.event.dynamic_start_time)}-${this.formatTs(this.event.dynamic_end_time)}`,
-        isEstimated: true
-      };
-    }
-
-    return {
-      text: this.getPlanRange(),
-      isEstimated: true
-    };
+  private getActualRangeMeta(): EventItemTimeRangeMeta {
+    return resolveEventItemActualRangeMeta(
+      this.event.actual_start_time,
+      this.event.actual_end_time,
+      this.event.dynamic_start_time,
+      this.event.dynamic_end_time,
+      this.event.duration,
+      this.getPlanRange()
+    );
   }
 
   private getActualMainColor(): ResourceColor {
     return this.event.is_forecast_conflict ? this.getPalette().danger : this.getPalette().primary;
   }
   private getCompanionOpacity(): number {
-    if (!this.isCompanionMode) {
-      return 1;
-    }
-
-    if (this.event.id === this.companionCurrentEventId) {
-      return 1;
-    }
-
-    if (this.event.completion_status === EventEntity.STATE_COMPLETED) {
-      return 0.45;
-    }
-
-    if (this.event.completion_status === EventEntity.STATE_SKIPPED) {
-      return 0.30;
-    }
-
-    if (this.event.actual_start_time > 0 && this.event.completion_status === EventEntity.STATE_PENDING) {
-      return 1;
-    }
-
-    return 0.55;
+    return resolveEventItemCompanionOpacity(
+      this.isCompanionMode,
+      this.event.id,
+      this.companionCurrentEventId,
+      this.event.completion_status,
+      this.event.actual_start_time
+    );
   }
 
   private getCompanionStateLabel(): string {
-    if (this.event.completion_status === EventEntity.STATE_COMPLETED) {
-      return 'COMPLETED';
-    }
-    if (this.event.completion_status === EventEntity.STATE_SKIPPED) {
-      return 'SKIPPED';
-    }
-    if (this.event.actual_start_time > 0) {
-      return 'ACTIVE';
-    }
-    if (this.event.id === this.companionCurrentEventId) {
-      return 'READY';
-    }
-    return 'FUTURE';
+    return resolveEventItemCompanionStateLabel(
+      this.event.completion_status,
+      this.event.actual_start_time,
+      this.event.id,
+      this.companionCurrentEventId
+    );
   }
 
   private getCompanionCardBackground(): ResourceColor {

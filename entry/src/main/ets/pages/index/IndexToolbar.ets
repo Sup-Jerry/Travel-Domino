@@ -21,6 +21,32 @@ export function shouldShowIndexToolbarWeatherAction(isCompanionMode: boolean, we
   return !isCompanionMode && weatherFeatureEnabled;
 }
 
+export function resolveIndexToolbarModeLabel(strategyMode: number): string {
+  if (strategyMode === 1) {
+    return '🚀 特种兵模式';
+  }
+  if (strategyMode === 2) {
+    return '🌴 休闲模式';
+  }
+  if (strategyMode === -1) {
+    return '🎛 自定义策略';
+  }
+  return '';
+}
+
+export function resolveIndexToolbarModeColor(strategyMode: number, fallbackColor: string): string {
+  if (strategyMode === 1) {
+    return '#FF6B35';
+  }
+  if (strategyMode === 2) {
+    return '#4CAF50';
+  }
+  if (strategyMode === -1) {
+    return '#2196F3';
+  }
+  return fallbackColor;
+}
+
 @Component
 export struct IndexToolbar {
   @Prop planTitle: string = '行程详情';
@@ -41,32 +67,6 @@ export struct IndexToolbar {
   onOpenSettings: () => void = () => {};
   onEnterCompanion: () => void = () => {};
   onRefreshWeather: () => void = () => {};
-
-  private getModeLabel(): string {
-    if (this.strategyMode === 1) {
-      return '🚀 特种兵模式';
-    }
-    if (this.strategyMode === 2) {
-      return '🌴 休闲模式';
-    }
-    if (this.strategyMode === -1) {
-      return '🎛 自定义策略';
-    }
-    return '';
-  }
-
-  private getModeColor(): string {
-    if (this.strategyMode === 1) {
-      return '#FF6B35';
-    }
-    if (this.strategyMode === 2) {
-      return '#4CAF50';
-    }
-    if (this.strategyMode === -1) {
-      return '#2196F3';
-    }
-    return this.theme.textTertiary;
-  }
 
   build() {
     Row() {
@@ -89,16 +89,16 @@ export struct IndexToolbar {
           .textAlign(TextAlign.Center)
 
         if (shouldShowIndexToolbarModeTag(this.strategyMode)) {
-          Text(this.getModeLabel())
+          Text(resolveIndexToolbarModeLabel(this.strategyMode))
             .fontSize(11)
-            .fontColor(this.getModeColor())
+            .fontColor(resolveIndexToolbarModeColor(this.strategyMode, this.theme.textTertiary))
             .margin({ top: 2 })
         }
 
         if (shouldShowIndexToolbarModeExplanation(this.strategyMode, this.currentStrategyExplanation)) {
           Text(this.currentStrategyExplanation)
             .fontSize(10)
-            .fontColor(this.getModeColor())
+            .fontColor(resolveIndexToolbarModeColor(this.strategyMode, this.theme.textTertiary))
             .margin({ top: 1 })
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
