@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from '@ohos/hypium';
+import { describe, it, expect } from '@ohos/hypium';
 import { common } from '@kit.AbilityKit';
 import { PoiItem } from '@amap/amap_lbs_search';
 import { ArrivalReminderAction, ArrivalReminderEngine } from '../main/ets/infrastructure/services/ArrivalReminderEngine';
@@ -248,105 +248,105 @@ class AmapHooksAQ {
   private readonly originGetRegeoBySdkNearby: Object;
 
   constructor() {
-    this.originRequest = Reflect.get(HttpRequestHelper, 'request') as Object;
-    this.originValidateAmapWebConfig = Reflect.get(AppConfig, 'validateAmapWebConfig') as Object;
-    this.originGetRuntimeContext = Reflect.get(AmapService, 'getRuntimeContext') as Object;
-    this.originSearchPoiBySdk = Reflect.get(AmapService, 'searchPoiBySdk') as Object;
-    this.originSearchPoiWithWebFallback = Reflect.get(AmapService, 'searchPoiWithWebFallback') as Object;
-    this.originGetGeocodeBySdkGeoSearch = Reflect.get(AmapService, 'getGeocodeBySdkGeoSearch') as Object;
-    this.originGetGeocodeBySdkKeyword = Reflect.get(AmapService, 'getGeocodeBySdkKeyword') as Object;
-    this.originGetGeocodeByWeb = Reflect.get(AmapService, 'getGeocodeByWeb') as Object;
-    this.originGetCityCodeByCoordinate = Reflect.get(AmapService, 'getCityCodeByCoordinate') as Object;
-    this.originGetCityCodeBySdkGeoSearch = Reflect.get(AmapService, 'getCityCodeBySdkGeoSearch') as Object;
-    this.originGetRegeo = Reflect.get(AmapService, 'getRegeo') as Object;
-    this.originGetRegeoBySdkGeoSearch = Reflect.get(AmapService, 'getRegeoBySdkGeoSearch') as Object;
-    this.originGetRegeoBySdkNearby = Reflect.get(AmapService, 'getRegeoBySdkNearby') as Object;
+    this.originRequest = Reflect.get(Object(HttpRequestHelper), 'request') as Object;
+    this.originValidateAmapWebConfig = Reflect.get(Object(AppConfig), 'validateAmapWebConfig') as Object;
+    this.originGetRuntimeContext = Reflect.get(Object(AmapService), 'getRuntimeContext') as Object;
+    this.originSearchPoiBySdk = Reflect.get(Object(AmapService), 'searchPoiBySdk') as Object;
+    this.originSearchPoiWithWebFallback = Reflect.get(Object(AmapService), 'searchPoiWithWebFallback') as Object;
+    this.originGetGeocodeBySdkGeoSearch = Reflect.get(Object(AmapService), 'getGeocodeBySdkGeoSearch') as Object;
+    this.originGetGeocodeBySdkKeyword = Reflect.get(Object(AmapService), 'getGeocodeBySdkKeyword') as Object;
+    this.originGetGeocodeByWeb = Reflect.get(Object(AmapService), 'getGeocodeByWeb') as Object;
+    this.originGetCityCodeByCoordinate = Reflect.get(Object(AmapService), 'getCityCodeByCoordinate') as Object;
+    this.originGetCityCodeBySdkGeoSearch = Reflect.get(Object(AmapService), 'getCityCodeBySdkGeoSearch') as Object;
+    this.originGetRegeo = Reflect.get(Object(AmapService), 'getRegeo') as Object;
+    this.originGetRegeoBySdkGeoSearch = Reflect.get(Object(AmapService), 'getRegeoBySdkGeoSearch') as Object;
+    this.originGetRegeoBySdkNearby = Reflect.get(Object(AmapService), 'getRegeoBySdkNearby') as Object;
   }
 
   public setRequest(
     fn: (ownerTag: string, requestName: string, url: string, options: Object) => Promise<Object>
   ): void {
-    Reflect.set(HttpRequestHelper, 'request', fn);
+    Reflect.set(Object(HttpRequestHelper), 'request', fn);
   }
 
   public setValidateAmapWebConfig(fn: () => void): void {
-    Reflect.set(AppConfig, 'validateAmapWebConfig', fn);
+    Reflect.set(Object(AppConfig), 'validateAmapWebConfig', fn);
   }
 
   public setGetRuntimeContext(fn: () => Object | null): void {
-    Reflect.set(AmapService, 'getRuntimeContext', fn);
+    Reflect.set(Object(AmapService), 'getRuntimeContext', fn);
   }
 
   public setSearchPoiBySdk(
     fn: (context: Object, keyword: string, centerLat: number, centerLng: number, limit: number, nearbyOnly: boolean) => Promise<PoiSearchItem[]>
   ): void {
-    Reflect.set(AmapService, 'searchPoiBySdk', fn);
+    Reflect.set(Object(AmapService), 'searchPoiBySdk', fn);
   }
 
   public setSearchPoiWithWebFallback(
     fn: (keyword: string, centerLat: number, centerLng: number, limit: number) => Promise<PoiSearchItem[]>
   ): void {
-    Reflect.set(AmapService, 'searchPoiWithWebFallback', fn);
+    Reflect.set(Object(AmapService), 'searchPoiWithWebFallback', fn);
   }
 
   public setGetGeocodeBySdkGeoSearch(
     fn: (address: string, context: Object) => Promise<GeoCoordinate | null>
   ): void {
-    Reflect.set(AmapService, 'getGeocodeBySdkGeoSearch', fn);
+    Reflect.set(Object(AmapService), 'getGeocodeBySdkGeoSearch', fn);
   }
 
   public setGetGeocodeBySdkKeyword(
     fn: (address: string, context: Object) => Promise<GeoCoordinate | null>
   ): void {
-    Reflect.set(AmapService, 'getGeocodeBySdkKeyword', fn);
+    Reflect.set(Object(AmapService), 'getGeocodeBySdkKeyword', fn);
   }
 
   public setGetGeocodeByWeb(fn: (address: string) => Promise<GeoCoordinate | null>): void {
-    Reflect.set(AmapService, 'getGeocodeByWeb', fn);
+    Reflect.set(Object(AmapService), 'getGeocodeByWeb', fn);
   }
 
   public setGetCityCodeByCoordinate(
     fn: (latitude: number, longitude: number) => Promise<string | null>
   ): void {
-    Reflect.set(AmapService, 'getCityCodeByCoordinate', fn);
+    Reflect.set(Object(AmapService), 'getCityCodeByCoordinate', fn);
   }
 
   public setGetCityCodeBySdkGeoSearch(
     fn: (context: Object, latitude: number, longitude: number) => Promise<string | null>
   ): void {
-    Reflect.set(AmapService, 'getCityCodeBySdkGeoSearch', fn);
+    Reflect.set(Object(AmapService), 'getCityCodeBySdkGeoSearch', fn);
   }
 
   public setGetRegeo(fn: (latitude: number, longitude: number) => Promise<string | null>): void {
-    Reflect.set(AmapService, 'getRegeo', fn);
+    Reflect.set(Object(AmapService), 'getRegeo', fn);
   }
 
   public setGetRegeoBySdkGeoSearch(
     fn: (context: Object, latitude: number, longitude: number) => Promise<string | null>
   ): void {
-    Reflect.set(AmapService, 'getRegeoBySdkGeoSearch', fn);
+    Reflect.set(Object(AmapService), 'getRegeoBySdkGeoSearch', fn);
   }
 
   public setGetRegeoBySdkNearby(
     fn: (context: Object, latitude: number, longitude: number) => Promise<string | null>
   ): void {
-    Reflect.set(AmapService, 'getRegeoBySdkNearby', fn);
+    Reflect.set(Object(AmapService), 'getRegeoBySdkNearby', fn);
   }
 
   public restore(): void {
-    Reflect.set(HttpRequestHelper, 'request', this.originRequest);
-    Reflect.set(AppConfig, 'validateAmapWebConfig', this.originValidateAmapWebConfig);
-    Reflect.set(AmapService, 'getRuntimeContext', this.originGetRuntimeContext);
-    Reflect.set(AmapService, 'searchPoiBySdk', this.originSearchPoiBySdk);
-    Reflect.set(AmapService, 'searchPoiWithWebFallback', this.originSearchPoiWithWebFallback);
-    Reflect.set(AmapService, 'getGeocodeBySdkGeoSearch', this.originGetGeocodeBySdkGeoSearch);
-    Reflect.set(AmapService, 'getGeocodeBySdkKeyword', this.originGetGeocodeBySdkKeyword);
-    Reflect.set(AmapService, 'getGeocodeByWeb', this.originGetGeocodeByWeb);
-    Reflect.set(AmapService, 'getCityCodeByCoordinate', this.originGetCityCodeByCoordinate);
-    Reflect.set(AmapService, 'getCityCodeBySdkGeoSearch', this.originGetCityCodeBySdkGeoSearch);
-    Reflect.set(AmapService, 'getRegeo', this.originGetRegeo);
-    Reflect.set(AmapService, 'getRegeoBySdkGeoSearch', this.originGetRegeoBySdkGeoSearch);
-    Reflect.set(AmapService, 'getRegeoBySdkNearby', this.originGetRegeoBySdkNearby);
+    Reflect.set(Object(HttpRequestHelper), 'request', this.originRequest);
+    Reflect.set(Object(AppConfig), 'validateAmapWebConfig', this.originValidateAmapWebConfig);
+    Reflect.set(Object(AmapService), 'getRuntimeContext', this.originGetRuntimeContext);
+    Reflect.set(Object(AmapService), 'searchPoiBySdk', this.originSearchPoiBySdk);
+    Reflect.set(Object(AmapService), 'searchPoiWithWebFallback', this.originSearchPoiWithWebFallback);
+    Reflect.set(Object(AmapService), 'getGeocodeBySdkGeoSearch', this.originGetGeocodeBySdkGeoSearch);
+    Reflect.set(Object(AmapService), 'getGeocodeBySdkKeyword', this.originGetGeocodeBySdkKeyword);
+    Reflect.set(Object(AmapService), 'getGeocodeByWeb', this.originGetGeocodeByWeb);
+    Reflect.set(Object(AmapService), 'getCityCodeByCoordinate', this.originGetCityCodeByCoordinate);
+    Reflect.set(Object(AmapService), 'getCityCodeBySdkGeoSearch', this.originGetCityCodeBySdkGeoSearch);
+    Reflect.set(Object(AmapService), 'getRegeo', this.originGetRegeo);
+    Reflect.set(Object(AmapService), 'getRegeoBySdkGeoSearch', this.originGetRegeoBySdkGeoSearch);
+    Reflect.set(Object(AmapService), 'getRegeoBySdkNearby', this.originGetRegeoBySdkNearby);
   }
 }
 
@@ -358,39 +358,39 @@ class RepoHooksAQ {
   private readonly originEventGetAllEvents: Object;
 
   constructor() {
-    this.originPlanConsumeDirtyPlanIds = Reflect.get(PlanRepositoryImpl, 'consumeDirtyPlanIds') as Object;
-    this.originPlanGetPlanList = Reflect.get(PlanRepositoryImpl, 'getPlanList') as Object;
-    this.originPlanGetPlanById = Reflect.get(PlanRepositoryImpl, 'getPlanById') as Object;
-    this.originEventConsumeDirtyPlanIds = Reflect.get(EventRepositoryImpl, 'consumeDirtyPlanIds') as Object;
-    this.originEventGetAllEvents = Reflect.get(EventRepositoryImpl, 'getAllEvents') as Object;
+    this.originPlanConsumeDirtyPlanIds = Reflect.get(Object(PlanRepositoryImpl), 'consumeDirtyPlanIds') as Object;
+    this.originPlanGetPlanList = Reflect.get(Object(PlanRepositoryImpl), 'getPlanList') as Object;
+    this.originPlanGetPlanById = Reflect.get(Object(PlanRepositoryImpl), 'getPlanById') as Object;
+    this.originEventConsumeDirtyPlanIds = Reflect.get(Object(EventRepositoryImpl), 'consumeDirtyPlanIds') as Object;
+    this.originEventGetAllEvents = Reflect.get(Object(EventRepositoryImpl), 'getAllEvents') as Object;
   }
 
   public setPlanConsumeDirtyPlanIds(fn: () => number[]): void {
-    Reflect.set(PlanRepositoryImpl, 'consumeDirtyPlanIds', fn);
+    Reflect.set(Object(PlanRepositoryImpl), 'consumeDirtyPlanIds', fn);
   }
 
   public setPlanGetPlanList(fn: () => Promise<PlanItem[]>): void {
-    Reflect.set(PlanRepositoryImpl, 'getPlanList', fn);
+    Reflect.set(Object(PlanRepositoryImpl), 'getPlanList', fn);
   }
 
   public setPlanGetPlanById(fn: (planId: number) => Promise<PlanItem | undefined>): void {
-    Reflect.set(PlanRepositoryImpl, 'getPlanById', fn);
+    Reflect.set(Object(PlanRepositoryImpl), 'getPlanById', fn);
   }
 
   public setEventConsumeDirtyPlanIds(fn: () => number[]): void {
-    Reflect.set(EventRepositoryImpl, 'consumeDirtyPlanIds', fn);
+    Reflect.set(Object(EventRepositoryImpl), 'consumeDirtyPlanIds', fn);
   }
 
   public setEventGetAllEvents(fn: (planId: number) => Promise<Object[]>): void {
-    Reflect.set(EventRepositoryImpl, 'getAllEvents', fn);
+    Reflect.set(Object(EventRepositoryImpl), 'getAllEvents', fn);
   }
 
   public restore(): void {
-    Reflect.set(PlanRepositoryImpl, 'consumeDirtyPlanIds', this.originPlanConsumeDirtyPlanIds);
-    Reflect.set(PlanRepositoryImpl, 'getPlanList', this.originPlanGetPlanList);
-    Reflect.set(PlanRepositoryImpl, 'getPlanById', this.originPlanGetPlanById);
-    Reflect.set(EventRepositoryImpl, 'consumeDirtyPlanIds', this.originEventConsumeDirtyPlanIds);
-    Reflect.set(EventRepositoryImpl, 'getAllEvents', this.originEventGetAllEvents);
+    Reflect.set(Object(PlanRepositoryImpl), 'consumeDirtyPlanIds', this.originPlanConsumeDirtyPlanIds);
+    Reflect.set(Object(PlanRepositoryImpl), 'getPlanList', this.originPlanGetPlanList);
+    Reflect.set(Object(PlanRepositoryImpl), 'getPlanById', this.originPlanGetPlanById);
+    Reflect.set(Object(EventRepositoryImpl), 'consumeDirtyPlanIds', this.originEventConsumeDirtyPlanIds);
+    Reflect.set(Object(EventRepositoryImpl), 'getAllEvents', this.originEventGetAllEvents);
   }
 }
 
@@ -456,17 +456,17 @@ function createLocationAQ(name: string, latitude: number = 31.23, longitude: num
 }
 
 function resetArrivalEngineAQ(): ArrivalReminderEngine {
-  Reflect.set(ArrivalReminderEngine as Object, 'instance', null);
+  Reflect.set(Object(ArrivalReminderEngine), 'instance', null);
   return ArrivalReminderEngine.getInstance();
 }
 
 function resetTrafficEngineAQ(): TrafficEngine {
-  Reflect.set(TrafficEngine as Object, 'instance', null);
+  Reflect.set(Object(TrafficEngine), 'instance', null);
   return TrafficEngine.getInstance();
 }
 
 function clearAmapPoiCacheAQ(): void {
-  const cache = Reflect.get(AmapService as Object, 'poiSearchCache') as Map<string, Object>;
+  const cache = Reflect.get(Object(AmapService), 'poiSearchCache') as Map<string, Object>;
   cache.clear();
 }
 
@@ -568,7 +568,7 @@ export default function phase2BatchAQTest() {
 
     it('normal: arrival_get_instance_should_return_singleton', 0, () => {
       // Arrange
-      Reflect.set(ArrivalReminderEngine as Object, 'instance', null);
+      Reflect.set(Object(ArrivalReminderEngine), 'instance', null);
       // Act
       const first = ArrivalReminderEngine.getInstance();
       const second = ArrivalReminderEngine.getInstance();
@@ -578,9 +578,9 @@ export default function phase2BatchAQTest() {
 
     it('boundary: arrival_get_instance_should_create_new_after_reset', 0, () => {
       // Arrange
-      Reflect.set(ArrivalReminderEngine as Object, 'instance', null);
+      Reflect.set(Object(ArrivalReminderEngine), 'instance', null);
       const first = ArrivalReminderEngine.getInstance();
-      Reflect.set(ArrivalReminderEngine as Object, 'instance', null);
+      Reflect.set(Object(ArrivalReminderEngine), 'instance', null);
       // Act
       const second = ArrivalReminderEngine.getInstance();
       // Assert
@@ -591,12 +591,12 @@ export default function phase2BatchAQTest() {
       // Arrange
       const pollutedObj: PollutedMapServiceAQ = { marker: '' };
       const polluted: ArrivalReminderEngine = pollutedObj as Object as ArrivalReminderEngine;
-      Reflect.set(ArrivalReminderEngine as Object, 'instance', polluted as Object);
+      Reflect.set(Object(ArrivalReminderEngine), 'instance', polluted as Object);
       // Act
       const current = ArrivalReminderEngine.getInstance();
       // Assert
       expect(current === polluted).assertTrue();
-      Reflect.set(ArrivalReminderEngine as Object, 'instance', null);
+      Reflect.set(Object(ArrivalReminderEngine), 'instance', null);
     });
 
     it('normal: arrival_last_known_location_should_return_snapshot', 0, () => {
@@ -1002,7 +1002,7 @@ export default function phase2BatchAQTest() {
       // Arrange
       AmapService.bindRuntimeContext(new RuntimeContextMockAQ('temp') as Object as common.Context);
       // Act
-      Reflect.set(AmapService as Object, 'runtimeContext', null);
+      Reflect.set(Object(AmapService), 'runtimeContext', null);
       const current = AmapService.getRuntimeContext();
       // Assert
       expect(current === null).assertTrue();
@@ -1661,7 +1661,7 @@ export default function phase2BatchAQTest() {
   describe('phase2BatchAQTest_trafficEngine', () => {
     it('normal: traffic_get_instance_should_return_singleton', 0, () => {
       // Arrange
-      Reflect.set(TrafficEngine as Object, 'instance', null);
+      Reflect.set(Object(TrafficEngine), 'instance', null);
       // Act
       const first = TrafficEngine.getInstance();
       const second = TrafficEngine.getInstance();
@@ -1671,9 +1671,9 @@ export default function phase2BatchAQTest() {
 
     it('boundary: traffic_get_instance_should_create_new_after_reset', 0, () => {
       // Arrange
-      Reflect.set(TrafficEngine as Object, 'instance', null);
+      Reflect.set(Object(TrafficEngine), 'instance', null);
       const first = TrafficEngine.getInstance();
-      Reflect.set(TrafficEngine as Object, 'instance', null);
+      Reflect.set(Object(TrafficEngine), 'instance', null);
       // Act
       const second = TrafficEngine.getInstance();
       // Assert
@@ -1684,12 +1684,12 @@ export default function phase2BatchAQTest() {
       // Arrange
       const pollutedObj2: PollutedMapServiceAQ = { marker: '' };
       const polluted: TrafficEngine = pollutedObj2 as Object as TrafficEngine;
-      Reflect.set(TrafficEngine as Object, 'instance', polluted as Object);
+      Reflect.set(Object(TrafficEngine), 'instance', polluted as Object);
       // Act
       const current = TrafficEngine.getInstance();
       // Assert
       expect(current === polluted).assertTrue();
-      Reflect.set(TrafficEngine as Object, 'instance', null);
+      Reflect.set(Object(TrafficEngine), 'instance', null);
     });
 
     it('normal: traffic_initialize_should_create_long_lived_map_service', 0, () => {

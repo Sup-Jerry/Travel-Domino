@@ -319,17 +319,17 @@ class RdbHooksAR {
   private readonly originPredicates: Object;
 
   constructor() {
-    this.originGetInstance = Reflect.get(RdbHelper, 'getInstance') as Object;
+    this.originGetInstance = Reflect.get(Object(RdbHelper), 'getInstance') as Object;
     this.originPredicates = Reflect.get(Reflect.get(globalThis, 'relationalStore') as Object, 'RdbPredicates') as Object;
   }
 
   bindStore(store: Object | null): void {
-    Reflect.set(RdbHelper, 'getInstance', (): Object => new FakeRdbHelperAR(store) as Object);
+    Reflect.set(Object(RdbHelper), 'getInstance', (): Object => new FakeRdbHelperAR(store) as Object);
     Reflect.set(Reflect.get(globalThis, 'relationalStore') as Object, 'RdbPredicates', FakePredicatesAR);
   }
 
   restore(): void {
-    Reflect.set(RdbHelper, 'getInstance', this.originGetInstance);
+    Reflect.set(Object(RdbHelper), 'getInstance', this.originGetInstance);
     Reflect.set(Reflect.get(globalThis, 'relationalStore') as Object, 'RdbPredicates', this.originPredicates);
   }
 }
@@ -427,15 +427,15 @@ class CloudQueryHooksAR {
   private readonly originWhere: Object;
 
   constructor() {
-    this.originWhere = Reflect.get(CloudDBZoneQuery as Object, 'where') as Object;
+    this.originWhere = Reflect.get(Object(CloudDBZoneQuery), 'where') as Object;
   }
 
   install(): void {
-    Reflect.set(CloudDBZoneQuery as Object, 'where', (_klass: Object): Object => new FakeCloudQueryBuilderAR() as Object);
+    Reflect.set(Object(CloudDBZoneQuery), 'where', (_klass: Object): Object => new FakeCloudQueryBuilderAR() as Object);
   }
 
   restore(): void {
-    Reflect.set(CloudDBZoneQuery as Object, 'where', this.originWhere);
+    Reflect.set(Object(CloudDBZoneQuery), 'where', this.originWhere);
   }
 }
 
@@ -474,15 +474,15 @@ class PreferenceHooksAR {
   private readonly originGetInstance: Object;
 
   constructor() {
-    this.originGetInstance = Reflect.get(PreferenceManager, 'getInstance') as Object;
+    this.originGetInstance = Reflect.get(Object(PreferenceManager), 'getInstance') as Object;
   }
 
   setInstance(instance: Object): void {
-    Reflect.set(PreferenceManager, 'getInstance', (): Object => instance);
+    Reflect.set(Object(PreferenceManager), 'getInstance', (): Object => instance);
   }
 
   restore(): void {
-    Reflect.set(PreferenceManager, 'getInstance', this.originGetInstance);
+    Reflect.set(Object(PreferenceManager), 'getInstance', this.originGetInstance);
   }
 }
 
@@ -522,19 +522,19 @@ class UserProfileSingletonHooksAR {
   private readonly originInstance: Object;
 
   constructor() {
-    this.originInstance = Reflect.get(UserProfileRepositoryImpl as Object, 'instance') as Object;
+    this.originInstance = Reflect.get(Object(UserProfileRepositoryImpl), 'instance') as Object;
   }
 
   reset(): void {
-    Reflect.set(UserProfileRepositoryImpl as Object, 'instance', new UserProfileRepositoryImpl() as Object);
+    Reflect.set(Object(UserProfileRepositoryImpl), 'instance', new UserProfileRepositoryImpl() as Object);
   }
 
   setInstance(instance: Object): void {
-    Reflect.set(UserProfileRepositoryImpl as Object, 'instance', instance);
+    Reflect.set(Object(UserProfileRepositoryImpl), 'instance', instance);
   }
 
   restore(): void {
-    Reflect.set(UserProfileRepositoryImpl as Object, 'instance', this.originInstance);
+    Reflect.set(Object(UserProfileRepositoryImpl), 'instance', this.originInstance);
   }
 }
 
@@ -542,19 +542,19 @@ class ProfileCacheSingletonHooksAR {
   private readonly originInstance: Object;
 
   constructor() {
-    this.originInstance = Reflect.get(ProfileCacheManager as Object, 'instance') as Object;
+    this.originInstance = Reflect.get(Object(ProfileCacheManager), 'instance') as Object;
   }
 
   reset(): void {
-    Reflect.set(ProfileCacheManager as Object, 'instance', new ProfileCacheManager() as Object);
+    Reflect.set(Object(ProfileCacheManager), 'instance', new ProfileCacheManager() as Object);
   }
 
   setInstance(instance: Object): void {
-    Reflect.set(ProfileCacheManager as Object, 'instance', instance);
+    Reflect.set(Object(ProfileCacheManager), 'instance', instance);
   }
 
   restore(): void {
-    Reflect.set(ProfileCacheManager as Object, 'instance', this.originInstance);
+    Reflect.set(Object(ProfileCacheManager), 'instance', this.originInstance);
   }
 }
 
