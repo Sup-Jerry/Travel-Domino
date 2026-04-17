@@ -214,3 +214,14 @@
 3. Latest `entry` coverage (`entry/.test/default/outputs/test/reports/coverageReport.json`):
    - Overall: `Functions 20.8%`, `Branches 44.2%`, `Lines 40.1%`
 4. Zero-hit function files: `1` (`entry/src/main/ets/model/interface/IMapService.ets`, interface declaration — excluded).
+
+## 15. Progress Snapshot (2026-04-17, Batch BC-BN)
+1. Phase 2 completed batches: `A-BN` (`docs/quality/codex-prompts-phase2c.md` executed for `BC-BN`, and `List.test.ets` registration is complete).
+2. Latest quality gates:
+   - `scripts/ci/validate-unit-test-cases.ps1`: passed (260 files checked)
+   - `scripts/ci/unit-all.ps1`: passed (BUILD SUCCESSFUL)
+3. Latest `entry` coverage (`entry/.test/default/outputs/test/reports/coverageReport.json`):
+   - Overall: `Functions 25.4%`, `Branches 56.6%`, `Lines 51.5%`
+4. Zero-hit function files: `1` (`entry/src/main/ets/model/interface/IMapService.ets`, interface declaration - excluded).
+5. Notes:
+   - `Phase2BatchBC` - `Phase2BatchBN` are now wired into `entry/src/test/List.test.ets`.

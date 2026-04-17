@@ -123,7 +123,7 @@ export default function phase2BatchBLTest() {
       expect(text.indexOf('3') >= 0).assertEqual(true);
     });
 
-    it('normal: timeline_visibility_and_item_enabled_flags_should_match_state', 0, () => {
+    it('conflict: timeline_visibility_and_item_enabled_flags_should_match_state', 0, () => {
       // Arrange
       // Act
       const showGroupWhenCollapsed = shouldShowIndexTimelineGroupItems(true);
@@ -166,7 +166,7 @@ export default function phase2BatchBLTest() {
       expect(miss).assertEqual('');
     });
 
-    it('boundary: resolve_score_line_should_fallback_to_empty_string', 0, () => {
+    it('invalid: resolve_score_line_should_fallback_to_empty_string', 0, () => {
       // Arrange
       const lines = ['S1'];
       // Act

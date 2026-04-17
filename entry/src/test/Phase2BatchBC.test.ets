@@ -111,16 +111,21 @@ class FakePlanStateMachineBC {
     this.markRecoveryCalls.push(`${ok ? 'ok' : 'fail'}:${reason}`);
   }
 
-  buildEvaluationInput(planId: string, _events: EventEntity[], now: number): Object {
-    return { planId: planId, now: now };
+  buildEvaluationInput(planId: string, _events: EventEntity[], now: number): EvaluationInputBC {
+    const input = new EvaluationInputBC();
+    input.planId = planId;
+    input.now = now;
+    return input;
   }
 
   evaluateAndApply(_input: Object): void {
     this.evaluateCalls += 1;
   }
 
-  getPlanStatus(_planId: string): Object {
-    return { status: this.status };
+  getPlanStatus(_planId: string): PlanStatusSnapshotBC {
+    const snapshot = new PlanStatusSnapshotBC();
+    snapshot.status = this.status;
+    return snapshot;
   }
 
   subscribePlanTransition(_planId: string, _listener: (event: Object) => void): () => void {
@@ -131,12 +136,18 @@ class FakePlanStateMachineBC {
     return (): void => {};
   }
 
-  pauseExecution(_planId: string): Object {
-    return { success: false, toStatus: PlanStatus.DRAFT };
+  pauseExecution(_planId: string): ExecutionTransitionResultBC {
+    const result = new ExecutionTransitionResultBC();
+    result.success = false;
+    result.toStatus = PlanStatus.DRAFT;
+    return result;
   }
 
-  resumeExecution(_planId: string): Object {
-    return { success: false, toStatus: PlanStatus.DRAFT };
+  resumeExecution(_planId: string): ExecutionTransitionResultBC {
+    const result = new ExecutionTransitionResultBC();
+    result.success = false;
+    result.toStatus = PlanStatus.DRAFT;
+    return result;
   }
 
   confirmPlan(_planId: string): void {
@@ -148,7 +159,55 @@ class FakePlanStateMachineBC {
   }
 }
 
-class FakePlanStateHostBC implements ITimelinePlanStateHost {
+class EvaluationInputBC {
+  planId: string = '';
+  now: number = 0;
+}
+
+class PlanStatusSnapshotBC {
+  status: PlanStatus = PlanStatus.DRAFT;
+}
+
+class ExecutionTransitionResultBC {
+  success: boolean = false;
+  toStatus: PlanStatus = PlanStatus.DRAFT;
+}
+
+class WeatherPolicyStubBC {
+  allowLocationTrigger: boolean = true;
+}
+
+class CompanionContextStubBC {
+  runtimeState: string = 'IDLE';
+}
+
+class ExecutionContextStubBC {
+  plannedEndTime: number = 0;
+  status: PlanStatus = PlanStatus.DRAFT;
+  currentNodeId: string = '';
+}
+
+class CompanionManagerProxyBC {
+  context: CompanionContextStubBC = new CompanionContextStubBC();
+  event: EventEntity | null = null;
+  throwMessage: string = '';
+
+  getCompanionContext(_nowTs: number): CompanionContextStubBC {
+    if (this.throwMessage !== '') {
+      throw new Error(this.throwMessage);
+    }
+    return this.context;
+  }
+
+  getRealActiveEvent(schedule?: EventEntity[]): EventEntity | null {
+    if (this.event !== null) {
+      return this.event;
+    }
+    return schedule && schedule.length > 0 ? schedule[0] : null;
+  }
+}
+
+class FakePlanStateHostBC {
   planId: number = 10;
   planName: string = 'plan_bc';
   events: EventEntity[] = [];
@@ -163,10 +222,16 @@ class FakePlanStateHostBC implements ITimelinePlanStateHost {
   executionWeatherSuggestions: WeatherSuggestion[] = [];
   executionWeatherAppliedSummary: string = '';
   executionWeatherLevel: 'INFO' | 'NOTICE' | 'WARNING' = 'INFO';
-  weatherFacade: WeatherFacade = { resolveSchedulePolicy: (_stage: WeatherStageType): Object => ({ allowLocationTrigger: true }) } as WeatherFacade;
+  weatherFacade: WeatherFacade = new WeatherFacade();
   planStateMachine: FakePlanStateMachineBC = new FakePlanStateMachineBC();
   persistDateCalls: number = 0;
   throwPersistDate: boolean = false;
+
+  constructor() {
+    Reflect.set(this.weatherFacade as Object, 'resolveSchedulePolicy', (_stage: WeatherStageType): WeatherPolicyStubBC => {
+      return new WeatherPolicyStubBC();
+    });
+  }
 
   resolveCurrentWeatherStage(): WeatherStageType {
     return 'READY';
@@ -188,8 +253,8 @@ class FakePlanStateHostBC implements ITimelinePlanStateHost {
     return;
   }
 
-  getCompanionContext(_nowTs?: number): Object {
-    return { runtimeState: 'IDLE' };
+  getCompanionContext(_nowTs?: number): CompanionContextStubBC {
+    return new CompanionContextStubBC();
   }
 
   recalculateFromIndex(_startIndex: number): void {
@@ -333,6 +398,7 @@ function createEventBC(id: number, name: string, status: number = 1): EventEntit
 export default function phase2BatchBCTest() {
   describe('phase2BatchBCTest_timeline_viewmodel', () => {
     it('normal: set_filter_should_update_range_and_regenerate_groups', 0, () => {
+      // Arrange // Act // Assert
       const vm = new TimelineViewModel();
       let regenerateCalls = 0;
       Reflect.set(vm as Object, 'generateGroups', (): void => { regenerateCalls += 1; });
@@ -343,6 +409,7 @@ export default function phase2BatchBCTest() {
     });
 
     it('boundary: clear_filter_should_reset_range_to_zero', 0, () => {
+      // Arrange // Act // Assert
       const vm = new TimelineViewModel();
       vm.filterStart = 99;
       vm.filterEnd = 199;
@@ -352,11 +419,13 @@ export default function phase2BatchBCTest() {
     });
 
     it('invalid: get_schedule_version_should_keep_default_zero_before_mark_changed', 0, () => {
+      // Arrange // Act // Assert
       const vm = new TimelineViewModel();
       expect(vm.getScheduleVersion()).assertEqual(0);
     });
 
     it('normal: reload_idle_gap_settings_should_apply_preference_values', 0, async () => {
+      // Arrange // Act // Assert
       const vm = new TimelineViewModel();
       const pref = new FakePreferenceBC();
       pref.enabled = false;
@@ -372,6 +441,7 @@ export default function phase2BatchBCTest() {
     });
 
     it('boundary: reload_idle_gap_settings_should_normalize_out_of_range_threshold', 0, async () => {
+      // Arrange // Act // Assert
       const vm = new TimelineViewModel();
       const pref = new FakePreferenceBC();
       pref.threshold = 9999;
@@ -386,6 +456,7 @@ export default function phase2BatchBCTest() {
     });
 
     it('invalid: reload_idle_gap_settings_should_fallback_to_default_when_preference_throws', 0, async () => {
+      // Arrange // Act // Assert
       const vm = new TimelineViewModel();
       const pref = new FakePreferenceBC();
       pref.throwEnabled = true;
@@ -399,34 +470,32 @@ export default function phase2BatchBCTest() {
       expect(vm.idleGapTriggerMinutes).assertEqual(45);
     });
 
-    it('normal: get_companion_context_should_delegate_to_companion_manager', 0, () => {
+    it('combined: get_companion_context_should_delegate_to_companion_manager', 0, () => {
+      // Arrange // Act // Assert
       const vm = new TimelineViewModel();
-      const expected = { runtimeState: 'READY' };
-      Reflect.set(vm as Object, 'companionManager', {
-        getCompanionContext: (_nowTs: number): Object => expected,
-        getRealActiveEvent: (_schedule?: EventEntity[]): EventEntity | null => null
-      });
+      const companionManager = new CompanionManagerProxyBC();
+      companionManager.context.runtimeState = 'READY';
+      Reflect.set(vm as Object, 'companionManager', companionManager);
       const context = vm.getCompanionContext(123);
       expect(String((context as Object as Record<string, Object>)['runtimeState'])).assertEqual('READY');
     });
 
     it('boundary: get_real_active_event_should_forward_explicit_schedule_argument', 0, () => {
+      // Arrange // Act // Assert
       const vm = new TimelineViewModel();
       const active = createEventBC(88, 'active_bc');
-      Reflect.set(vm as Object, 'companionManager', {
-        getCompanionContext: (_nowTs: number): Object => ({ runtimeState: 'IDLE' }),
-        getRealActiveEvent: (schedule?: EventEntity[]): EventEntity | null => schedule && schedule.length > 0 ? schedule[0] : null
-      });
+      const companionManager = new CompanionManagerProxyBC();
+      Reflect.set(vm as Object, 'companionManager', companionManager);
       const picked = vm.getRealActiveEvent([active]);
       expect(picked?.id ?? -1).assertEqual(88);
     });
 
     it('invalid: get_companion_context_should_propagate_delegate_error', 0, () => {
+      // Arrange // Act // Assert
       const vm = new TimelineViewModel();
-      Reflect.set(vm as Object, 'companionManager', {
-        getCompanionContext: (_nowTs: number): Object => { throw new Error('companion_context_fail_bc'); },
-        getRealActiveEvent: (_schedule?: EventEntity[]): EventEntity | null => null
-      });
+      const companionManager = new CompanionManagerProxyBC();
+      companionManager.throwMessage = 'companion_context_fail_bc';
+      Reflect.set(vm as Object, 'companionManager', companionManager);
       let message = '';
       try {
         vm.getCompanionContext();
@@ -439,15 +508,17 @@ export default function phase2BatchBCTest() {
 
   describe('phase2BatchBCTest_timeline_plan_state_manager', () => {
     it('normal: on_location_sample_should_update_execution_context_for_valid_coordinate', 0, () => {
+      // Arrange // Act // Assert
       const host = new FakePlanStateHostBC();
-      const manager = new TimelinePlanStateManager(host);
+      const manager = new TimelinePlanStateManager(host as Object as ITimelinePlanStateHost);
       manager.onLocationSampleForStateMachine(30.1, 120.2, 2, 15, 100);
       expect(host.planStateMachine.updateExecutionContextCalls).assertEqual(1);
     });
 
     it('boundary: on_location_sample_should_keep_only_latest_three_samples', 0, () => {
+      // Arrange // Act // Assert
       const host = new FakePlanStateHostBC();
-      const manager = new TimelinePlanStateManager(host);
+      const manager = new TimelinePlanStateManager(host as Object as ITimelinePlanStateHost);
       manager.onLocationSampleForStateMachine(30.1, 120.1, 1, 10, 100);
       manager.onLocationSampleForStateMachine(30.2, 120.2, 1, 10, 200);
       manager.onLocationSampleForStateMachine(30.3, 120.3, 1, 10, 300);
@@ -457,38 +528,41 @@ export default function phase2BatchBCTest() {
     });
 
     it('invalid: on_location_sample_should_ignore_nan_coordinate', 0, () => {
+      // Arrange // Act // Assert
       const host = new FakePlanStateHostBC();
-      const manager = new TimelinePlanStateManager(host);
+      const manager = new TimelinePlanStateManager(host as Object as ITimelinePlanStateHost);
       manager.onLocationSampleForStateMachine(Number.NaN, 120.2, 2, 15, 100);
       expect(host.planStateMachine.updateExecutionContextCalls).assertEqual(0);
     });
 
-    it('normal: recover_runtime_state_should_mark_partial_context_and_restore', 0, () => {
+    it('regression: recover_runtime_state_should_mark_partial_context_and_restore', 0, () => {
+      // Arrange // Act // Assert
       const host = new FakePlanStateHostBC();
-      host.planStateMachine.executionContext = {
-        plannedEndTime: Date.now() + 10000,
-        status: PlanStatus.IN_PROGRESS,
-        currentNodeId: ''
-      };
+      const executionContext = new ExecutionContextStubBC();
+      executionContext.plannedEndTime = Date.now() + 10000;
+      executionContext.status = PlanStatus.IN_PROGRESS;
+      host.planStateMachine.executionContext = executionContext;
       host.planStateMachine.status = PlanStatus.IN_PROGRESS;
-      const manager = new TimelinePlanStateManager(host);
+      const manager = new TimelinePlanStateManager(host as Object as ITimelinePlanStateHost);
       manager.recoverPlanRuntimeState();
       expect(host.planStateMachine.markRecoveryCalls.indexOf('fail:context_partial') >= 0).assertTrue();
       expect(host.planStateMachine.markRecoveryCalls[host.planStateMachine.markRecoveryCalls.length - 1]).assertEqual('ok:context_restored');
     });
 
     it('boundary: update_plan_date_should_skip_persist_when_plan_id_is_minus_one', 0, async () => {
+      // Arrange // Act // Assert
       const host = new FakePlanStateHostBC();
       host.planId = -1;
-      const manager = new TimelinePlanStateManager(host);
+      const manager = new TimelinePlanStateManager(host as Object as ITimelinePlanStateHost);
       await manager.updatePlanDate(new Date(2026, 3, 18, 10, 20).getTime());
       expect(host.persistDateCalls).assertEqual(0);
     });
 
     it('invalid: update_plan_date_should_propagate_persist_error', 0, async () => {
+      // Arrange // Act // Assert
       const host = new FakePlanStateHostBC();
       host.throwPersistDate = true;
-      const manager = new TimelinePlanStateManager(host);
+      const manager = new TimelinePlanStateManager(host as Object as ITimelinePlanStateHost);
       let message = '';
       try {
         await manager.updatePlanDate(new Date(2026, 3, 19).getTime());
@@ -501,6 +575,7 @@ export default function phase2BatchBCTest() {
 
   describe('phase2BatchBCTest_timeline_event_mutation_manager', () => {
     it('normal: move_to_backlog_should_demote_schedule_item', 0, async () => {
+      // Arrange // Act // Assert
       const host = new FakeMutationHostBC();
       const target = createEventBC(201, 'to_backlog', 1);
       host.events = [target];
@@ -512,6 +587,7 @@ export default function phase2BatchBCTest() {
     });
 
     it('boundary: update_event_info_should_keep_old_coordinates_when_resolved_point_missing', 0, async () => {
+      // Arrange // Act // Assert
       const host = new FakeMutationHostBC();
       const target = createEventBC(202, 'origin', 1);
       target.latitude = 31.2;
@@ -531,6 +607,7 @@ export default function phase2BatchBCTest() {
     });
 
     it('invalid: move_to_backlog_should_throw_for_invalid_item', 0, async () => {
+      // Arrange // Act // Assert
       const host = new FakeMutationHostBC();
       const manager = new TimelineEventMutationManager(host, new FakeBehaviorTrackerBC(), new FakeStrategyManagerBC() as Object as TimelineStrategyManager);
       let message = '';
@@ -542,7 +619,8 @@ export default function phase2BatchBCTest() {
       expect(message.indexOf('invalid_item') >= 0).assertTrue();
     });
 
-    it('normal: resolve_conflict_by_moving_plan_should_update_plan_date_then_update_event', 0, async () => {
+    it('conflict: resolve_conflict_by_moving_plan_should_update_plan_date_then_update_event', 0, async () => {
+      // Arrange // Act // Assert
       const host = new FakeMutationHostBC();
       const target = createEventBC(203, 'target_bc', 1);
       host.events = [target];
@@ -560,6 +638,7 @@ export default function phase2BatchBCTest() {
     });
 
     it('boundary: hard_delete_should_throw_when_mutation_is_locked', 0, async () => {
+      // Arrange // Act // Assert
       const host = new FakeMutationHostBC();
       host.tryBeginMutationResult = false;
       const target = createEventBC(204, 'locked_bc', 1);
@@ -575,6 +654,7 @@ export default function phase2BatchBCTest() {
     });
 
     it('invalid: resolve_conflict_by_moving_plan_should_propagate_plan_date_error', 0, async () => {
+      // Arrange // Act // Assert
       const host = new FakeMutationHostBC();
       host.throwUpdatePlanDate = true;
       const manager = new TimelineEventMutationManager(host, new FakeBehaviorTrackerBC(), new FakeStrategyManagerBC() as Object as TimelineStrategyManager);
@@ -590,6 +670,7 @@ export default function phase2BatchBCTest() {
 
   describe('phase2BatchBCTest_timeline_companion_manager', () => {
     it('normal: get_real_active_event_should_prefer_active_event', 0, () => {
+      // Arrange // Act // Assert
       const active = createEventBC(301, 'active', 1);
       active.actual_start_time = Date.now() - 1000;
       const pending = createEventBC(302, 'pending', 1);
@@ -602,6 +683,7 @@ export default function phase2BatchBCTest() {
     });
 
     it('boundary: get_companion_context_should_generate_overdue_ready_hint', 0, () => {
+      // Arrange // Act // Assert
       const pending = createEventBC(303, 'overdue_ready', 1);
       const nowTs = Date.now();
       pending.dynamic_start_time = nowTs - 10 * 60 * 1000;
@@ -614,6 +696,7 @@ export default function phase2BatchBCTest() {
     });
 
     it('invalid: get_real_active_event_should_return_null_when_pending_window_expired', 0, () => {
+      // Arrange // Act // Assert
       const pending = createEventBC(304, 'expired_pending', 1);
       pending.dynamic_end_time = Date.now() - 1;
       const host = new FakeCompanionHostBC();

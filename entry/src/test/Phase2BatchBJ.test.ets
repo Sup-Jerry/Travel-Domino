@@ -26,7 +26,7 @@ export default function phase2BatchBJTest() {
     it('invalid: plan_settings_actions_should_not_contain_unknown_entries', 0, () => {
       // Arrange
       // Act
-      const actions = getPlanSettingsActions();
+      const actions = getPlanSettingsActions().map((action) => String(action));
       // Assert
       expect(actions.indexOf('delete') >= 0).assertFalse();
     });
@@ -49,7 +49,7 @@ export default function phase2BatchBJTest() {
       expect(supported).assertFalse();
     });
 
-    it('invalid: plan_settings_supported_should_reject_whitespace_padded_action', 0, () => {
+    it('conflict: plan_settings_supported_should_reject_whitespace_padded_action', 0, () => {
       // Arrange
       const action = ' share ';
       // Act

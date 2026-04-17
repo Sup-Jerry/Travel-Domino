@@ -179,10 +179,10 @@ export default function phase2BatchBMTest() {
       const skipped = getHistoryTimelineFilterLabelValue('skipped');
       const abnormal = getHistoryTimelineFilterLabelValue('abnormal');
       // Assert
-      expect(all).assertEqual('全部');
-      expect(completed).assertEqual('只看完成');
-      expect(skipped).assertEqual('只看跳过');
-      expect(abnormal).assertEqual('只看异常');
+      expect(all).assertEqual('\u5168\u90e8');
+      expect(completed).assertEqual('\u53ea\u770b\u5b8c\u6210');
+      expect(skipped).assertEqual('\u53ea\u770b\u8df3\u8fc7');
+      expect(abnormal).assertEqual('\u53ea\u770b\u5f02\u5e38');
     });
 
     it('combined: history_page_should_filter_timeline_items_by_filter_and_state', 0, () => {
@@ -210,11 +210,11 @@ export default function phase2BatchBMTest() {
     it('boundary: history_page_should_resolve_skip_reason_from_note', 0, () => {
       // Arrange
       // Act
-      const timeout = getHistoryTimelineSkipReasonByNote('  因为时间不足，赶下个点  ');
-      const manual = getHistoryTimelineSkipReasonByNote('用户主动取消');
+      const timeout = getHistoryTimelineSkipReasonByNote('  \u56e0\u4e3a\u65f6\u95f4\u4e0d\u8db3\uff0c\u8d76\u4e0b\u4e2a\u70b9  ');
+      const manual = getHistoryTimelineSkipReasonByNote('\u7528\u6237\u4e3b\u52a8\u53d6\u6d88');
       // Assert
-      expect(timeout).assertEqual('时间不足');
-      expect(manual).assertEqual('手动跳过');
+      expect(timeout).assertEqual('\u65f6\u95f4\u4e0d\u8db3');
+      expect(manual).assertEqual('\u624b\u52a8\u8df3\u8fc7');
     });
 
     it('normal: execution_weather_should_map_refresh_and_expand_labels', 0, () => {
@@ -225,34 +225,34 @@ export default function phase2BatchBMTest() {
       const expanded = getExecutionWeatherExpandToggleText(true);
       const collapsed = getExecutionWeatherExpandToggleText(false);
       // Assert
-      expect(loading).assertEqual('刷新中...');
-      expect(idle).assertEqual('刷新');
-      expect(expanded).assertEqual('收起');
-      expect(collapsed).assertEqual('展开');
+      expect(loading).assertEqual('\u5237\u65b0\u4e2d...');
+      expect(idle).assertEqual('\u5237\u65b0');
+      expect(expanded).assertEqual('\u6536\u8d77');
+      expect(collapsed).assertEqual('\u5c55\u5f00');
     });
 
     it('boundary: execution_weather_should_resolve_collapsed_hint_with_fallback', 0, () => {
       // Arrange
       // Act
-      const withHint = getExecutionWeatherCollapsedHintText('将于 15:00 下雨');
+      const withHint = getExecutionWeatherCollapsedHintText('\u5c06\u4e8e 15:00 \u4e0b\u96e8');
       const fallback = getExecutionWeatherCollapsedHintText('   ');
       // Assert
-      expect(withHint).assertEqual('将于 15:00 下雨');
-      expect(fallback).assertEqual('天气建议已收起，请用上方“展开”查看');
+      expect(withHint).assertEqual('\u5c06\u4e8e 15:00 \u4e0b\u96e8');
+      expect(fallback).assertEqual('\u5929\u6c14\u5efa\u8bae\u5df2\u6536\u8d77\uff0c\u8bf7\u7528\u4e0a\u65b9\u201c\u5c55\u5f00\u201d\u67e5\u770b');
     });
 
     it('normal: execution_weather_should_build_current_and_next_node_text', 0, () => {
       // Arrange
       // Act
-      const current = getExecutionWeatherCurrentNodeText('上海 晴 25℃');
+      const current = getExecutionWeatherCurrentNodeText('\u4e0a\u6d77 \u6674 25\u2103');
       const currentFallback = getExecutionWeatherCurrentNodeText('   ');
-      const next = getExecutionWeatherNextNodeText('苏州 阵雨 19℃');
+      const next = getExecutionWeatherNextNodeText('\u82cf\u5dde \u9635\u96e8 19\u2103');
       const nextFallback = getExecutionWeatherNextNodeText('');
       // Assert
-      expect(current).assertEqual('当前位置：上海 晴 25℃');
-      expect(currentFallback).assertEqual('当前位置：天气未知');
-      expect(next).assertEqual('下一节点：苏州 阵雨 19℃');
-      expect(nextFallback).assertEqual('下一节点：天气未知');
+      expect(current).assertEqual('\u5f53\u524d\u4f4d\u7f6e\uff1a\u4e0a\u6d77 \u6674 25\u2103');
+      expect(currentFallback).assertEqual('\u5f53\u524d\u4f4d\u7f6e\uff1a\u5929\u6c14\u672a\u77e5');
+      expect(next).assertEqual('\u4e0b\u4e00\u8282\u70b9\uff1a\u82cf\u5dde \u9635\u96e8 19\u2103');
+      expect(nextFallback).assertEqual('\u4e0b\u4e00\u8282\u70b9\uff1a\u5929\u6c14\u672a\u77e5');
     });
 
     it('normal: execution_weather_should_show_score_only_when_non_negative', 0, () => {
@@ -270,11 +270,11 @@ export default function phase2BatchBMTest() {
     it('normal: execution_weather_should_show_hint_collab_and_applied_when_non_blank', 0, () => {
       // Arrange
       // Act
-      const hintShow = shouldShowExecutionWeatherHint('注意防风');
+      const hintShow = shouldShowExecutionWeatherHint('\u6ce8\u610f\u9632\u98ce');
       const hintHide = shouldShowExecutionWeatherHint('   ');
-      const collabShow = shouldShowExecutionWeatherCollabSummary('跨城联动');
+      const collabShow = shouldShowExecutionWeatherCollabSummary('\u8de8\u57ce\u8054\u52a8');
       const collabHide = shouldShowExecutionWeatherCollabSummary('');
-      const appliedShow = shouldShowExecutionWeatherAppliedSummary('已后移 20 分钟');
+      const appliedShow = shouldShowExecutionWeatherAppliedSummary('\u5df2\u540e\u79fb 20 \u5206\u949f');
       const appliedHide = shouldShowExecutionWeatherAppliedSummary('   ');
       // Assert
       expect(hintShow).assertTrue();
@@ -321,11 +321,11 @@ export default function phase2BatchBMTest() {
     it('normal: timeline_section_should_build_filter_summary_with_visible_count', 0, () => {
       // Arrange
       // Act
-      const summaryWithZero = getCompanionTimelineFilterSummary('全部', 0, 0);
-      const summaryWithCount = getCompanionTimelineFilterSummary('仅未完成', 2, 5);
+      const summaryWithZero = getCompanionTimelineFilterSummary('\u5168\u90e8', 0, 0);
+      const summaryWithCount = getCompanionTimelineFilterSummary('\u4ec5\u672a\u5b8c\u6210', 2, 5);
       // Assert
-      expect(summaryWithZero).assertEqual('筛选 全部  0/1');
-      expect(summaryWithCount).assertEqual('筛选 仅未完成  2/5');
+      expect(summaryWithZero).assertEqual('\u7b5b\u9009 \u5168\u90e8  0/1');
+      expect(summaryWithCount).assertEqual('\u7b5b\u9009 \u4ec5\u672a\u5b8c\u6210  2/5');
     });
 
     it('boundary: timeline_section_should_show_empty_state_only_when_count_is_zero', 0, () => {
@@ -338,6 +338,33 @@ export default function phase2BatchBMTest() {
       expect(zero).assertTrue();
       expect(positive).assertFalse();
       expect(negative).assertFalse();
+    });
+
+    it('invalid: companion_control_should_fallback_to_minus_one_for_null_event', 0, () => {
+      // Arrange
+      const event = null;
+      // Act
+      const eventId = getCompanionControlCurrentEventId(event);
+      // Assert
+      expect(eventId).assertEqual(-1);
+    });
+
+    it('conflict: focused_card_should_prioritize_paused_active_state_when_focus_ids_match', 0, () => {
+      // Arrange
+      const currentState = 'DONE';
+      // Act
+      const mode = resolveCompanionFocusedActionMode(currentState, 'PAUSED', 9, 9);
+      // Assert
+      expect(mode).assertEqual('PAUSED_ACTIVE');
+    });
+
+    it('regression: timeline_summary_should_keep_minimum_total_count_of_one', 0, () => {
+      // Arrange
+      const label = '??';
+      // Act
+      const summary = getCompanionTimelineFilterSummary(label, 0, 0);
+      // Assert
+      expect(summary).assertEqual('\u7b5b\u9009 ??  0/1');
     });
   });
 }

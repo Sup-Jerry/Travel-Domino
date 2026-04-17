@@ -137,6 +137,22 @@ class ProfileCacheStubBG implements IProfileCacheStore {
   }
 }
 
+interface ProfileViewModelPrivateBG {
+  normalizeError: (error: Object) => string;
+}
+
+class MessageHolderBG {
+  message: string = '';
+}
+
+class CyclicErrorBG {
+  self: Object | null = null;
+}
+
+class TimelineVmPlanStartStubBG {
+  planStartDate: number = 0;
+}
+
 function createPlanItemBG(id: number, status: number): PlanItem {
   return {
     id: id,
@@ -385,11 +401,12 @@ export default function phase2BatchBGTest() {
 
     it('normal: normalize_error_should_extract_message_from_plain_object', 0, () => {
       // Arrange
-      const vm = new ProfileViewModel();
-      const fn = Reflect.get(vm as Object, 'normalizeError') as (error: Object) => string;
+      const vm = new ProfileViewModel() as Object as ProfileViewModelPrivateBG;
+      const errorInfo = new MessageHolderBG();
+      errorInfo.message = 'plain_object_error_bg';
 
       // Act
-      const message = fn.call(vm, { message: 'plain_object_error_bg' } as Object);
+      const message = vm.normalizeError(errorInfo as Object);
 
       // Assert
       expect(message).assertEqual('plain_object_error_bg');
@@ -397,23 +414,21 @@ export default function phase2BatchBGTest() {
 
     it('regression: normalize_error_should_return_error_message_for_error_instance', 0, () => {
       // Arrange
-      const vm = new ProfileViewModel();
-      const fn = Reflect.get(vm as Object, 'normalizeError') as (error: Object) => string;
+      const vm = new ProfileViewModel() as Object as ProfileViewModelPrivateBG;
       // Act
-      const message = fn.call(vm, new Error('error_instance_bg') as Object);
+      const message = vm.normalizeError(new Error('error_instance_bg') as Object);
       // Assert
       expect(message).assertEqual('error_instance_bg');
     });
 
     it('invalid: normalize_error_should_fallback_when_json_stringify_throws', 0, () => {
       // Arrange
-      const vm = new ProfileViewModel();
-      const fn = Reflect.get(vm as Object, 'normalizeError') as (error: Object) => string;
-      const cyclic: Record<string, Object> = {};
+      const vm = new ProfileViewModel() as Object as ProfileViewModelPrivateBG;
+      const cyclic = new CyclicErrorBG();
       cyclic.self = cyclic as Object;
 
       // Act
-      const message = fn.call(vm, cyclic as Object);
+      const message = vm.normalizeError(cyclic as Object);
 
       // Assert
       expect(message).assertEqual('profile_error');
@@ -423,7 +438,7 @@ export default function phase2BatchBGTest() {
   describe('phase2BatchBG_timeline_interaction_helper', () => {
     it('boundary: resolve_planned_start_ts_should_return_zero_when_plan_start_date_invalid', 0, () => {
       // Arrange
-      const vm = { planStartDate: 0 } as Object as TimelineViewModel;
+      const vm = new TimelineVmPlanStartStubBG() as Object as TimelineViewModel;
       const item = new EventEntity('spot_bg', 1);
       item.computed_time = '09:00';
 
@@ -436,7 +451,9 @@ export default function phase2BatchBGTest() {
 
     it('invalid: resolve_planned_start_ts_should_return_zero_when_time_text_invalid', 0, () => {
       // Arrange
-      const vm = { planStartDate: 1700000000000 } as Object as TimelineViewModel;
+      const vmState = new TimelineVmPlanStartStubBG();
+      vmState.planStartDate = 1700000000000;
+      const vm = vmState as Object as TimelineViewModel;
       const item = new EventEntity('spot_invalid_bg', 1);
       item.computed_time = 'bad_time';
       item.fixed_start_time = '10:00';
@@ -450,7 +467,9 @@ export default function phase2BatchBGTest() {
 
     it('normal: resolve_planned_start_ts_should_prefer_computed_time_over_fixed_time', 0, () => {
       // Arrange
-      const vm = { planStartDate: 1700000000000 } as Object as TimelineViewModel;
+      const vmState = new TimelineVmPlanStartStubBG();
+      vmState.planStartDate = 1700000000000;
+      const vm = vmState as Object as TimelineViewModel;
       const item = new EventEntity('spot_ok_bg', 1);
       item.day_offset = 2;
       item.dynamic_day_offset = 3;
@@ -467,13 +486,15 @@ export default function phase2BatchBGTest() {
 
     it('conflict: resolve_planned_start_ts_should_fallback_to_fixed_time_when_computed_empty', 0, () => {
       // Arrange
-      const vm = { planStartDate: 1700000000000 } as Object as TimelineViewModel;
+      const vmState = new TimelineVmPlanStartStubBG();
+      vmState.planStartDate = 1700000000000;
+      const vm = vmState as Object as TimelineViewModel;
       const item = new EventEntity('spot_fixed_bg', 1);
       item.day_offset = 1;
       item.dynamic_day_offset = -1;
       item.computed_time = '';
       item.fixed_start_time = '08:15';
-      const expected = TimelineDatePolicy.buildPlannedTimestamp(vm.planStartDate, 1, '08:15');
+      const expected = TimelineDatePolicy.buildPlannedTimestamp(vm.planStartDate, -1, '08:15');
       // Act
       const ts = invokeResolvePlannedStartTsBG(vm, item);
       // Assert

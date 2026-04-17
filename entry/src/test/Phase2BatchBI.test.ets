@@ -70,7 +70,7 @@ function buildTimelineEventBI(id: number, name: string): EventEntity {
 
 export default function phase2BatchBITest() {
   describe('phase2BatchBITest', () => {
-    it('normal: index_timeline_action_helper_confirm_delete_should_refresh_before_and_after_successful_delete', 0, async (done: Function) => {
+    it('combined: index_timeline_action_helper_confirm_delete_should_refresh_before_and_after_successful_delete', 0, async (done: Function) => {
       // Arrange
       const uiContext = new DialogUiContextMockBI();
       const vm = new TimelineDeleteVmMockBI(false);
@@ -94,7 +94,7 @@ export default function phase2BatchBITest() {
       done();
     });
 
-    it('boundary: index_timeline_action_helper_confirm_delete_should_keep_vm_unchanged_when_primary_button_clicked', 0, () => {
+    it('regression: index_timeline_action_helper_confirm_delete_should_keep_vm_unchanged_when_primary_button_clicked', 0, () => {
       // Arrange
       const uiContext = new DialogUiContextMockBI();
       const vm = new TimelineDeleteVmMockBI(false);
@@ -114,7 +114,7 @@ export default function phase2BatchBITest() {
       expect(vm.refreshCount).assertEqual(0);
     });
 
-    it('invalid: index_timeline_action_helper_confirm_delete_should_only_refresh_once_when_delete_not_completed', 0, async (done: Function) => {
+    it('conflict: index_timeline_action_helper_confirm_delete_should_only_refresh_once_when_delete_not_completed', 0, async (done: Function) => {
       // Arrange
       const uiContext = new DialogUiContextMockBI();
       const vm = new TimelineDeleteVmMockBI(true);
@@ -133,6 +133,42 @@ export default function phase2BatchBITest() {
       expect(vm.hardDeleteItemId).assertEqual(103);
       expect(vm.refreshCount).assertEqual(1);
       done();
+    });
+    it('normal: build_timeline_event_should_preserve_id_and_name', 0, () => {
+      // Arrange
+      const id = 104;
+      const name = 'normal_case';
+      // Act
+      const event = buildTimelineEventBI(id, name);
+      // Assert
+      expect(event.id).assertEqual(104);
+      expect(event.name).assertEqual('normal_case');
+    });
+    it('boundary: dialog_ui_context_should_store_last_options_on_single_show', 0, () => {
+      // Arrange
+      const uiContext = new DialogUiContextMockBI();
+      const options = {
+        title: 'boundary',
+        message: 'case',
+        autoCancel: true,
+        primaryButton: { value: 'cancel', action: (): void => {} },
+        secondaryButton: { value: 'ok', action: (): void => {} }
+      } as AlertDialogOptionsLikeBI;
+      // Act
+      uiContext.showAlertDialog(options);
+      // Assert
+      expect(uiContext.showCount).assertEqual(1);
+      expect(uiContext.lastOptions?.title || '').assertEqual('boundary');
+    });
+    it('invalid: timeline_delete_vm_should_record_item_id_for_direct_delete_call', 0, async () => {
+      // Arrange
+      const vm = new TimelineDeleteVmMockBI(false);
+      const event = buildTimelineEventBI(0, '');
+      // Act
+      await vm.hardDelete(event);
+      // Assert
+      expect(vm.hardDeleteCount).assertEqual(1);
+      expect(vm.hardDeleteItemId).assertEqual(0);
     });
   });
 }

@@ -153,26 +153,26 @@ class ConflictVmMockBH {
     affectedItems: []
   };
 
-  buildAdvanceAdjustContext(_index: number): Object {
-    return {
-      candidates: [{ id: 1 }]
-    };
+  buildAdvanceAdjustContext(_index: number): AdvanceAdjustContextBH {
+    const context = new AdvanceAdjustContextBH();
+    context.candidates = [new CandidateOptionBH()];
+    return context;
   }
 
-  async applyAdvanceAdjust(_index: number, _ids: Set<number>, _nextStartTime: string): Promise<Object> {
-    return {
-      success: true,
-      appliedCount: 1,
-      appliedShiftMinutes: 20,
-      remainingGapMinutes: 0,
-      message: ''
-    };
+  async applyAdvanceAdjust(_index: number, _ids: Set<number>, _nextStartTime: string): Promise<AdvanceAdjustResultBH> {
+    const result = new AdvanceAdjustResultBH();
+    result.success = true;
+    result.appliedCount = 1;
+    result.appliedShiftMinutes = 20;
+    result.remainingGapMinutes = 0;
+    result.message = '';
+    return result;
   }
 
-  buildCompressionSelectionContext(_index: number, _targetTime: string): Object {
-    return {
-      neededGapMinutes: 10
-    };
+  buildCompressionSelectionContext(_index: number, _targetTime: string): CompressionSelectionContextBH {
+    const context = new CompressionSelectionContextBH();
+    context.neededGapMinutes = 10;
+    return context;
   }
 
   calculateCompressionPlanBySelection(
@@ -192,12 +192,12 @@ class ConflictVmMockBH {
     };
   }
 
-  previewPlanDateShift(_date: number): Object {
-    return {
-      hasRigidConflict: true,
-      conflictItemId: 1,
-      gapMinutes: 17
-    };
+  previewPlanDateShift(_date: number): PlanDateShiftPreviewBH {
+    const preview = new PlanDateShiftPreviewBH();
+    preview.hasRigidConflict = true;
+    preview.conflictItemId = 1;
+    preview.gapMinutes = 17;
+    return preview;
   }
 
   async updateEventInfo(
@@ -219,6 +219,46 @@ class ConflictVmMockBH {
   async updatePlanDate(dateMs: number): Promise<void> {
     this.lastUpdatedPlanDate = dateMs;
   }
+}
+
+class CandidateOptionBH {
+  id: number = 1;
+}
+
+class AdvanceAdjustContextBH {
+  candidates: CandidateOptionBH[] = [];
+}
+
+class AdvanceAdjustResultBH {
+  success: boolean = false;
+  appliedCount: number = 0;
+  appliedShiftMinutes: number = 0;
+  remainingGapMinutes: number = 0;
+  message: string = '';
+}
+
+class CompressionSelectionContextBH {
+  neededGapMinutes: number = 0;
+}
+
+class PlanDateShiftPreviewBH {
+  hasRigidConflict: boolean = false;
+  conflictItemId: number = 0;
+  gapMinutes: number = 0;
+}
+
+class UiParamsBH {
+  planId: number = 0;
+  autoStartFromReminder: boolean = false;
+  reminderEventId: number = 0;
+}
+
+function createUiParamsBH(planId: number, autoStartFromReminder: boolean = false, reminderEventId: number = 0): UiParamsBH {
+  const params = new UiParamsBH();
+  params.planId = planId;
+  params.autoStartFromReminder = autoStartFromReminder;
+  params.reminderEventId = reminderEventId;
+  return params;
 }
 
 class SettingsFlowDepsErrorMockBH implements IndexSettingsFlowDeps {
@@ -446,7 +486,7 @@ export default function phase2BatchBHTest() {
       expect(blockedCount).assertEqual(0);
     });
 
-    it('normal: open_conflict_menu_should_route_compress_and_smart_to_compress_dialog', 0, () => {
+    it('conflict: open_conflict_menu_should_route_compress_and_smart_to_compress_dialog', 0, () => {
       // Arrange
       const hooks = new ConflictDialogHooksBH();
       hooks.installConflict();
@@ -572,7 +612,7 @@ export default function phase2BatchBHTest() {
 
       // Act
       IndexLifecycleHelper.handleAboutToAppear({
-        uiContext: new UiContextMockBH({ planId: 66 }) as Object as UIContext,
+        uiContext: new UiContextMockBH(createUiParamsBH(66) as Object) as Object as UIContext,
         vm: vm as Object as TimelineViewModel,
         onSetCurrentPlanId: (_planId: number) => {},
         onSetManualWeatherRefresh: (_value: boolean) => {},
@@ -605,7 +645,7 @@ export default function phase2BatchBHTest() {
       done();
     });
 
-    it('boundary: handle_about_to_appear_should_not_enter_companion_mode_when_reminder_id_invalid_and_force_disabled', 0, async (done: Function) => {
+    it('regression: handle_about_to_appear_should_not_enter_companion_mode_when_reminder_id_invalid_and_force_disabled', 0, async (done: Function) => {
       // Arrange
       const vm = new LifecycleVmMockBH();
       let companionCount = 0;
@@ -613,7 +653,7 @@ export default function phase2BatchBHTest() {
 
       // Act
       IndexLifecycleHelper.handleAboutToAppear({
-        uiContext: new UiContextMockBH({ planId: 67, autoStartFromReminder: true, reminderEventId: 0 }) as Object as UIContext,
+        uiContext: new UiContextMockBH(createUiParamsBH(67, true, 0) as Object) as Object as UIContext,
         vm: vm as Object as TimelineViewModel,
         onSetCurrentPlanId: (_planId: number) => {},
         onSetManualWeatherRefresh: (_value: boolean) => {},
