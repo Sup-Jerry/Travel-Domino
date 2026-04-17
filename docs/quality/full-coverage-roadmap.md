@@ -195,3 +195,22 @@
    - `searchAllPlansPaged`: branches `2/2` (covered)
    - `purgeOldTrash`: branches `1/3` (still pending deep-branch path)
 5. Zero-hit function files: `1` (`entry/src/main/ets/model/interface/IMapService.ets`).
+
+## 14. Progress Snapshot (2026-04-17, Batch AN-BB)
+1. Phase 2 completed batches: `A-BB` (codex-prompts-phase2b.md fully executed, 15 batches).
+2. Latest quality gates:
+   - `scripts/ci/validate-unit-test-cases.ps1`: passed (248 files checked)
+   - `scripts/ci/unit-all.ps1`: passed (BUILD SUCCESSFUL)
+3. Latest `entry` coverage (`entry/.test/default/outputs/test/reports/coverageReport.json`):
+   - Overall: `Functions 25%`, `Branches 55.7%`, `Lines 51%`
+4. Zero-hit function files: `1` (`entry/src/main/ets/model/interface/IMapService.ets`, interface declaration — excluded).
+5. Next plan: `docs/quality/codex-prompts-phase2c.md` (Batch BC-BN, 4 rounds × 3 parallel).
+
+## 13. Progress Snapshot (2026-04-16, Batch AE-AM)
+1. Phase 2 completed batches: `A-AM` (codex parallel plan fully executed).
+2. Latest quality gates:
+   - `scripts/ci/validate-unit-test-cases.ps1`: passed (233 files checked)
+   - `scripts/ci/unit-all.ps1`: passed (BUILD SUCCESSFUL)
+3. Latest `entry` coverage (`entry/.test/default/outputs/test/reports/coverageReport.json`):
+   - Overall: `Functions 20.8%`, `Branches 44.2%`, `Lines 40.1%`
+4. Zero-hit function files: `1` (`entry/src/main/ets/model/interface/IMapService.ets`, interface declaration — excluded).

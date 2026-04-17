@@ -267,7 +267,11 @@ powershell -ExecutionPolicy Bypass -File scripts/ci/unit-all.ps1
 
 ```
 把以下 import 行追加到 entry/src/test/List.test.ets：
-[粘贴 AJ / AL / AM 三个窗口输出的 import 行]
+[import phase2BatchAJTest from './Phase2BatchAJ.test';
+import phase2BatchALTest from './Phase2BatchAL.test';
+import phase2BatchAMTest from './Phase2BatchAM.test';
+
+]
 
 追加完成后运行最终验收：
 powershell -ExecutionPolicy Bypass -File scripts/ci/validate-unit-test-cases.ps1
