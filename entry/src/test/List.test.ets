@@ -212,6 +212,21 @@ import phase2BatchAFTest from './Phase2BatchAF.test';
 import phase2BatchAJTest from './Phase2BatchAJ.test';
 import phase2BatchALTest from './Phase2BatchAL.test';
 import phase2BatchAMTest from './Phase2BatchAM.test';
+import phase2BatchATTest from './Phase2BatchAT.test';
+import phase2BatchAUTest from './Phase2BatchAU.test';
+import phase2BatchAVTest from './Phase2BatchAV.test';
+import phase2BatchAWTest from './Phase2BatchAW.test';
+import phase2BatchANTest from './Phase2BatchAN.test';
+import phase2BatchAOTest from './Phase2BatchAO.test';
+import phase2BatchAPTest from './Phase2BatchAP.test';
+import phase2BatchAQTest from './Phase2BatchAQ.test';
+import phase2BatchARTest from './Phase2BatchAR.test';
+import phase2BatchASTest from './Phase2BatchAS.test';
+import phase2BatchAXTest from './Phase2BatchAX.test';
+import phase2BatchAYTest from './Phase2BatchAY.test';
+import phase2BatchAZTest from './Phase2BatchAZ.test';
+import phase2BatchBATest from './Phase2BatchBA.test';
+import phase2BatchBBTest from './Phase2BatchBB.test';
 
 const registeredSuiteNames: string[] = [
   'LocalUnit',
@@ -426,7 +441,22 @@ const registeredSuiteNames: string[] = [
   'Phase2BatchAF',
   'Phase2BatchAJ',
   'Phase2BatchAL',
-  'Phase2BatchAM'
+  'Phase2BatchAM',
+  'Phase2BatchAT',
+  'Phase2BatchAU',
+  'Phase2BatchAV',
+  'Phase2BatchAW',
+  'Phase2BatchAN',
+  'Phase2BatchAO',
+  'Phase2BatchAP',
+  'Phase2BatchAQ',
+  'Phase2BatchAR',
+  'Phase2BatchAS',
+  'Phase2BatchAX',
+  'Phase2BatchAY',
+  'Phase2BatchAZ',
+  'Phase2BatchBA',
+  'Phase2BatchBB'
 ];
 
 function containsSuite(name: string): boolean {
@@ -664,6 +694,21 @@ export default function testsuite() {
   phase2BatchAJTest();
   phase2BatchALTest();
   phase2BatchAMTest();
+  phase2BatchATTest();
+  phase2BatchAUTest();
+  phase2BatchAVTest();
+  phase2BatchAWTest();
+  phase2BatchANTest();
+  phase2BatchAOTest();
+  phase2BatchAPTest();
+  phase2BatchAQTest();
+  phase2BatchARTest();
+  phase2BatchASTest();
+  phase2BatchAXTest();
+  phase2BatchAYTest();
+  phase2BatchAZTest();
+  phase2BatchBATest();
+  phase2BatchBBTest();
 
   describe('listTest', () => {
     it('normal: list_should_keep_core_test_modules_registered', 0, () => {

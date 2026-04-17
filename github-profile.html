@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>杨再鑫 · GitHub Profile</title>
+<style>
+/* ============================================================
+   DESIGN TOKENS — 修改这里调整整体风格
+   ============================================================ */
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --border: #21262d;
+  --text-primary: #e6edf3;
+  --text-muted: #7d8590;
+  --accent: #3fb950;          /* GitHub green */
+  --accent-dim: #196c2e;
+  --accent-bright: #56d364;
+  --cell-empty: #161b22;
+  --cell-l1: #0e4429;
+  --cell-l2: #006d32;
+  --cell-l3: #26a641;
+  --cell-l4: #39d353;
+  --flag-color: #f85149;
+  --cursor-color: #58a6ff;
+  --progress-bg: #21262d;
+  --progress-fill: #3fb950;
+  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --radius: 6px;
+  --transition: 0.15s ease;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+}
+
+/* ============================================================
+   MAIN PANEL
+   ============================================================ */
+.panel {
+  width: 100%;
+  max-width: 860px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* panel header bar */
+.panel-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+.dot { width: 12px; height: 12px; border-radius: 50%; }
+.dot-r { background: #ff5f57; }
+.dot-y { background: #febc2e; }
+.dot-g { background: #28c840; }
+.panel-title {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+
+/* ============================================================
+   TOP SECTION — Typewriter
+   ============================================================ */
+.top-section {
+  padding: 48px 40px 36px;
+  min-height: 140px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border-bottom: 1px solid var(--border);
+}
+
+.typewriter-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 20px;
+}
+
+.typewriter-line {
+  font-size: clamp(22px, 4vw, 32px);
+  font-weight: 500;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  min-height: 1.4em;
+  font-family: var(--font-sans);
+}
+
+.cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--accent);
+  margin-left: 3px;
+  vertical-align: text-bottom;
+  animation: blink 1.1s step-end infinite;
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* ============================================================
+   BOTTOM SECTION — Minesweeper
+   ============================================================ */
+.bottom-section {
+  padding: 28px 40px 36px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.section-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.mine-stats {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+/* progress bar */
+.progress-wrap {
+  margin-bottom: 18px;
+}
+.progress-track {
+  height: 3px;
+  background: var(--progress-bg);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--progress-fill);
+  border-radius: 2px;
+  width: 0%;
+  transition: width 0.4s ease;
+}
+.progress-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* canvas wrapper */
+.canvas-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+canvas {
+  display: block;
+  margin: 0 auto;
+  image-rendering: pixelated;
+}
+
+/* status line */
+.status-line {
+  margin-top: 14px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  min-height: 16px;
+}
+.status-line span { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="panel">
+  <!-- window chrome -->
+  <div class="panel-bar">
+    <div class="dot dot-r"></div>
+    <div class="dot dot-y"></div>
+    <div class="dot dot-g"></div>
+    <span class="panel-title">yangzaixin · profile</span>
+  </div>
+
+  <!-- top: typewriter -->
+  <div class="top-section">
+    <div class="typewriter-label">// console.log</div>
+    <div class="typewriter-line" id="tw-line">
+      <span id="tw-text"></span><span class="cursor" id="tw-cursor"></span>
+    </div>
+  </div>
+
+  <!-- bottom: minesweeper -->
+  <div class="bottom-section">
+    <div class="section-header">
+      <span class="section-label">// contributions · minesweeper</span>
+      <span class="mine-stats" id="mine-stats">⚑ 0 / 0</span>
+    </div>
+
+    <div class="progress-wrap">
+      <div class="progress-track">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+      <div class="progress-meta">
+        <span id="progress-label">exploring...</span>
+        <span id="progress-pct">0%</span>
+      </div>
+    </div>
+
+    <div class="canvas-wrap">
+      <canvas id="mine-canvas"></canvas>
+    </div>
+
+    <div class="status-line" id="status-line">&gt; initializing board...</div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   CONFIG — 更新打卡图时只需修改这里
+   ============================================================
+   要替换新的 GitHub 打卡图，有两种方式：
+   1. 替换图片：把新图片放到同目录，修改 CONTRIBUTION_SOURCE.imagePath
+   2. 替换数据：直接修改 CONTRIBUTION_SOURCE.grid（53列×7行，0-4表示强度）
+   ============================================================ */
+const CONFIG = {
+  // 打字机文字列表
+  phrases: ['一切靠积累', '不断升级操作系统', '你好，杨再鑫'],
+  typeSpeed: 90,       // ms/字
+  deleteSpeed: 45,     // ms/字（退格）
+  pauseAfterType: 1800,// 打完后停顿 ms
+  pauseAfterDelete: 400,// 删完后停顿 ms
+
+  // 扫雷棋盘尺寸（对应 GitHub contribution graph: 53周 × 7天）
+  COLS: 53,
+  ROWS: 7,
+  CELL: 11,   // 格子像素大小
+  GAP: 3,     // 格子间距
+
+  // 动画节奏 (ms)
+  CURSOR_MOVE_SPEED: 180,
+  CLICK_PAUSE: 320,
+  EXPAND_INTERVAL: 28,
+  FLAG_PAUSE: 500,
+  PHASE_PAUSE: 900,
+  RESTART_DELAY: 3200,
+};
+
+/* ============================================================
+   CONTRIBUTION SOURCE — 数据输入层
+   将来替换打卡图只需修改此对象
+   ============================================================ */
+const CONTRIBUTION_SOURCE = {
+  // 方式1：图片路径（当前未使用图像解析，保留接口）
+  imagePath: './picture.png',
+
+  // 方式2：直接提供网格数据（0=无,1-4=强度）
+  // 53列(周) × 7行(天)，null 表示使用内置生成逻辑
+  grid: null,
+};
+
+/* ============================================================
+   CONTRIBUTION GRID 解析/重建层
+   ============================================================ */
+function buildContributionGrid(cols, rows) {
+  // 若外部提供了 grid 数据，直接使用
+  if (CONTRIBUTION_SOURCE.grid) return CONTRIBUTION_SOURCE.grid;
+
+  // 否则生成一个视觉上接近真实 GitHub 贡献图的网格
+  // 规律：近期活跃度高，早期稀疏，周末略少
+  const grid = [];
+  for (let c = 0; c < cols; c++) {
+    const col = [];
+    const recency = c / cols; // 0=最早, 1=最近
+    for (let r = 0; r < rows; r++) {
+      const isWeekend = r === 0 || r === 6;
+      const base = recency * 0.7 + Math.random() * 0.3;
+      const weekendPenalty = isWeekend ? 0.4 : 1;
+      const v = base * weekendPenalty;
+      let level = 0;
+      if (v > 0.75) level = 4;
+      else if (v > 0.55) level = 3;
+      else if (v > 0.35) level = 2;
+      else if (v > 0.18) level = 1;
+      col.push(level);
+    }
+    grid.push(col);
+  }
+  // 最近8周活跃度拉满
+  for (let c = cols - 8; c < cols; c++) {
+    for (let r = 0; r < rows; r++) {
+      if (Math.random() > 0.25) grid[c][r] = Math.floor(Math.random() * 2) + 3;
+    }
+  }
+  return grid;
+}
+
+/* ============================================================
+   TYPEWRITER 层
+   ============================================================ */
+(function initTypewriter() {
+  const el = document.getElementById('tw-text');
+  const phrases = CONFIG.phrases;
+  let pi = 0, ci = 0, deleting = false;
+
+  function tick() {
+    const phrase = phrases[pi];
+    if (!deleting) {
+      el.textContent = phrase.slice(0, ci + 1);
+      ci++;
+      if (ci === phrase.length) {
+        deleting = true;
+        setTimeout(tick, CONFIG.pauseAfterType);
+        return;
+      }
+      setTimeout(tick, CONFIG.typeSpeed);
+    } else {
+      el.textContent = phrase.slice(0, ci - 1);
+      ci--;
+      if (ci === 0) {
+        deleting = false;
+        pi = (pi + 1) % phrases.length;
+        setTimeout(tick, CONFIG.pauseAfterDelete);
+        return;
+      }
+      setTimeout(tick, CONFIG.deleteSpeed);
+    }
+  }
+  setTimeout(tick, 600);
+})();
+
+/* ============================================================
+   MINESWEEPER 状态机层
+   ============================================================ */
+const COLS = CONFIG.COLS, ROWS = CONFIG.ROWS;
+const CELL = CONFIG.CELL, GAP = CONFIG.GAP;
+const STEP = CELL + GAP;
+
+// 颜色映射
+const LEVEL_COLORS = ['#161b22', '#0e4429', '#006d32', '#26a641', '#39d353'];
+const NUMBER_COLORS = ['', '#58a6ff', '#3fb950', '#f85149', '#d2a8ff', '#ffa657', '#76e3ea', '#e6edf3', '#7d8590'];
+
+// 棋盘状态
+let contribGrid = buildContributionGrid(COLS, ROWS);
+
+// 扫雷棋盘：基于贡献图强度决定地雷分布
+// 强度0-1的格子有更高概率是地雷（低活跃=危险区）
+function buildMineBoard() {
+  const mines = [];
+  for (let c = 0; c < COLS; c++) {
+    mines.push([]);
+    for (let r = 0; r < ROWS; r++) {
+      const level = contribGrid[c][r];
+      // 低强度格子更可能是地雷
+      const mineProb = level === 0 ? 0.45 : level === 1 ? 0.25 : level === 2 ? 0.1 : 0.03;
+      mines[c].push(Math.random() < mineProb);
+    }
+  }
+  return mines;
+}
+
+function countAdjacentMines(mines, c, r) {
+  let n = 0;
+  for (let dc = -1; dc <= 1; dc++)
+    for (let dr = -1; dr <= 1; dr++) {
+      const nc = c + dc, nr = r + dr;
+      if (nc >= 0 && nc < COLS && nr >= 0 && nr < ROWS && mines[nc][nr]) n++;
+    }
+  return n;
+}
+
+// 洪水填充展开安全区
+function floodReveal(mines, numbers, revealed, c, r, toReveal) {
+  if (c < 0 || c >= COLS || r < 0 || r >= ROWS) return;
+  if (revealed[c][r] || mines[c][r]) return;
+  revealed[c][r] = true;
+  toReveal.push([c, r]);
+  if (numbers[c][r] === 0) {
+    for (let dc = -1; dc <= 1; dc++)
+      for (let dr = -1; dr <= 1; dr++)
+        if (dc !== 0 || dr !== 0)
+          floodReveal(mines, numbers, revealed, c + dc, r + dr, toReveal);
+  }
+}
+
+/* ============================================================
+   固定脚本驱动的扫雷演示
+   ============================================================ */
+function buildDemoScript(mines, numbers) {
+  // 选取若干"探索起点"：从贡献图高强度区域开始
+  const safeStarts = [];
+  for (let c = 5; c < COLS; c += 7) {
+    for (let r = 0; r < ROWS; r++) {
+      if (!mines[c][r] && numbers[c][r] === 0) safeStarts.push([c, r]);
+    }
+  }
+  // 选取若干"插旗点"：已知地雷
+  const flagTargets = [];
+  for (let c = 2; c < COLS; c += 9) {
+    for (let r = 0; r < ROWS; r++) {
+      if (mines[c][r] && flagTargets.length < 18) flagTargets.push([c, r]);
+    }
+  }
+  // 选取若干"数字格点击"：有数字的安全格
+  const numberClicks = [];
+  for (let c = 3; c < COLS; c += 6) {
+    for (let r = 0; r < ROWS; r++) {
+      if (!mines[c][r] && numbers[c][r] > 0 && numberClicks.length < 20) numberClicks.push([c, r]);
+    }
+  }
+
+  const script = [];
+  // Phase 1: 从几个安全区展开
+  const usedStarts = safeStarts.slice(0, 6);
+  usedStarts.forEach(([c, r]) => script.push({ type: 'reveal', c, r }));
+  // Phase 2: 插旗
+  flagTargets.slice(0, 10).forEach(([c, r]) => script.push({ type: 'flag', c, r }));
+  // Phase 3: 点击数字格
+  numberClicks.slice(0, 12).forEach(([c, r]) => script.push({ type: 'reveal', c, r }));
+  // Phase 4: 再展开几个区域
+  usedStarts.slice(0, 3).forEach(([c, r]) => {
+    const nc = Math.min(c + 4, COLS - 1);
+    script.push({ type: 'reveal', c: nc, r });
+  });
+  // Phase 5: 更多插旗
+  flagTargets.slice(10).forEach(([c, r]) => script.push({ type: 'flag', c, r }));
+
+  return script;
+}
+
+/* ============================================================
+   CANVAS 渲染层
+   ============================================================ */
+const canvas = document.getElementById('mine-canvas');
+const ctx = canvas.getContext('2d');
+const W = COLS * STEP - GAP;
+const H = ROWS * STEP - GAP;
+canvas.width = W;
+canvas.height = H;
+
+// 渲染状态
+let mines, numbers, revealed, flagged;
+let cursorX = 0, cursorY = 0; // canvas 坐标
+let targetCursorC = 0, targetCursorR = 0;
+let cursorAnimFrame = null;
+
+function initBoard() {
+  mines = buildMineBoard();
+  numbers = [];
+  revealed = [];
+  flagged = [];
+  for (let c = 0; c < COLS; c++) {
+    numbers.push([]);
+    revealed.push([]);
+    flagged.push([]);
+    for (let r = 0; r < ROWS; r++) {
+      numbers[c].push(countAdjacentMines(mines, c, r));
+      revealed[c].push(false);
+      flagged[c].push(false);
+    }
+  }
+}
+
+function cellX(c) { return c * STEP; }
+function cellY(r) { return r * STEP; }
+
+function drawCell(c, r) {
+  const x = cellX(c), y = cellY(r);
+  const level = contribGrid[c][r];
+
+  if (revealed[c][r]) {
+    // 已翻开：显示贡献色 + 数字
+    ctx.fillStyle = LEVEL_COLORS[level];
+    ctx.fillRect(x, y, CELL, CELL);
+    if (!mines[c][r] && numbers[c][r] > 0) {
+      ctx.fillStyle = NUMBER_COLORS[numbers[c][r]] || '#e6edf3';
+      ctx.font = `bold ${CELL - 3}px 'SF Mono', monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(numbers[c][r], x + CELL / 2, y + CELL / 2 + 0.5);
+    }
+  } else if (flagged[c][r]) {
+    // 插旗
+    ctx.fillStyle = '#21262d';
+    ctx.fillRect(x, y, CELL, CELL);
+    ctx.fillStyle = '#f85149';
+    ctx.font = `${CELL - 2}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('⚑', x + CELL / 2, y + CELL / 2 + 0.5);
+  } else {
+    // 未翻开：暗色格
+    ctx.fillStyle = '#21262d';
+    ctx.fillRect(x, y, CELL, CELL);
+    // 微妙的贡献色提示
+    if (level > 0) {
+      ctx.fillStyle = LEVEL_COLORS[level] + '44';
+      ctx.fillRect(x, y, CELL, CELL);
+    }
+  }
+}
+
+function drawCursor() {
+  const x = cursorX, y = cursorY;
+  ctx.strokeStyle = '#58a6ff';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(x - 0.5, y - 0.5, CELL + 1, CELL + 1);
+}
+
+function render() {
+  ctx.clearRect(0, 0, W, H);
+  for (let c = 0; c < COLS; c++)
+    for (let r = 0; r < ROWS; r++)
+      drawCell(c, r);
+  drawCursor();
+}
+
+/* ============================================================
+   进度条同步层
+   ============================================================ */
+let totalSafe = 0;
+let revealedCount = 0;
+let flaggedCount = 0;
+let totalMines = 0;
+
+function updateProgress() {
+  const pct = totalSafe > 0 ? Math.min(100, Math.round((revealedCount / totalSafe) * 100)) : 0;
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-pct').textContent = pct + '%';
+  document.getElementById('mine-stats').textContent = `⚑ ${flaggedCount} / ${totalMines}`;
+}
+
+function setStatus(html) {
+  document.getElementById('status-line').innerHTML = '&gt; ' + html;
+}
+
+function setProgressLabel(txt) {
+  document.getElementById('progress-label').textContent = txt;
+}
+
+/* ============================================================
+   动画驱动器
+   ============================================================ */
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function animateCursorTo(tc, tr, done) {
+  const tx = cellX(tc), ty = cellY(tr);
+  const startX = cursorX, startY = cursorY;
+  const dist = Math.sqrt((tx - startX) ** 2 + (ty - startY) ** 2);
+  const duration = Math.max(80, Math.min(dist * 1.2, CONFIG.CURSOR_MOVE_SPEED * 2));
+  const start = performance.now();
+
+  function step(now) {
+    const t = Math.min((now - start) / duration, 1);
+    const ease = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+    cursorX = lerp(startX, tx, ease);
+    cursorY = lerp(startY, ty, ease);
+    render();
+    if (t < 1) requestAnimationFrame(step);
+    else { cursorX = tx; cursorY = ty; done && done(); }
+  }
+  requestAnimationFrame(step);
+}
+
+function doReveal(c, r, onDone) {
+  if (revealed[c][r] || flagged[c][r] || mines[c][r]) { onDone(); return; }
+  const toReveal = [];
+  const tempRevealed = revealed.map(col => [...col]);
+  floodReveal(mines, numbers, tempRevealed, c, r, toReveal);
+
+  // 逐步展开
+  let i = 0;
+  function expandNext() {
+    if (i >= toReveal.length) { onDone(); return; }
+    const [rc, rr] = toReveal[i++];
+    revealed[rc][rr] = true;
+    revealedCount++;
+    updateProgress();
+    render();
+    setTimeout(expandNext, CONFIG.EXPAND_INTERVAL);
+  }
+  expandNext();
+}
+
+function doFlag(c, r, onDone) {
+  if (!flagged[c][r] && !revealed[c][r]) {
+    flagged[c][r] = true;
+    flaggedCount++;
+    updateProgress();
+    render();
+  }
+  setTimeout(onDone, CONFIG.FLAG_PAUSE);
+}
+
+/* ============================================================
+   主演示循环
+   ============================================================ */
+function runDemo() {
+  initBoard();
+
+  // 统计
+  totalSafe = 0; totalMines = 0; revealedCount = 0; flaggedCount = 0;
+  for (let c = 0; c < COLS; c++)
+    for (let r = 0; r < ROWS; r++) {
+      if (mines[c][r]) totalMines++; else totalSafe++;
+    }
+
+  // 重置 cursor 到左上
+  cursorX = cellX(0); cursorY = cellY(0);
+  render();
+  updateProgress();
+  setProgressLabel('exploring...');
+  setStatus('board initialized · <span>' + totalMines + ' mines</span> detected');
+
+  const script = buildDemoScript(mines, numbers);
+  let si = 0;
+
+  function nextStep() {
+    if (si >= script.length) {
+      // 演示完成
+      setProgressLabel('round complete');
+      setStatus('<span>✓ sweep complete</span> · restarting...');
+      setTimeout(runDemo, CONFIG.RESTART_DELAY);
+      return;
+    }
+    const step = script[si++];
+    const { type, c, r } = step;
+
+    animateCursorTo(c, r, () => {
+      if (type === 'flag') {
+        setStatus('flagging mine at <span>[' + c + ',' + r + ']</span>');
+        doFlag(c, r, nextStep);
+      } else {
+        setStatus('revealing <span>[' + c + ',' + r + ']</span>');
+        setTimeout(() => doReveal(c, r, () => {
+          setTimeout(nextStep, CONFIG.CLICK_PAUSE);
+        }), 80);
+      }
+    });
+  }
+
+  setTimeout(nextStep, CONFIG.PHASE_PAUSE);
+}
+
+// 启动
+window.addEventListener('load', () => {
+  setTimeout(runDemo, 800);
+});
+
+/*
+ * ============================================================
+ * 后续如何替换新的 GitHub 打卡图
+ * ============================================================
+ * 方式一（推荐）：直接替换图片文件
+ *   把新截图命名为 picture.png 放到同目录，刷新页面即可。
+ *   （当前版本使用程序生成网格，若要接入真实图片解析，
+ *    在 buildContributionGrid() 中调用 parseContributionImage()）
+ *
+ * 方式二：手动提供网格数据
+ *   修改 CONTRIBUTION_SOURCE.grid，格式为：
+ *   二维数组 [53列][7行]，每格值 0-4（0=无贡献，4=最高）
+ *   例：CONTRIBUTION_SOURCE.grid = myGridData;
+ *
+ * 方式三：调整生成参数
+ *   修改 buildContributionGrid() 函数中的概率参数，
+ *   使生成的网格更接近你的真实贡献分布。
+ * ============================================================
+ */
+</script>
+</body>
+</html>
