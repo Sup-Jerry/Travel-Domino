@@ -35,6 +35,125 @@ import {
   ExecutionSuggestionApplyResult
 } from '../main/ets/domain/timeline/services/TimelineAiService';
 
+interface PlanDatePreviewResultBO {
+  hasRigidConflict: boolean;
+  conflictItemId: number;
+  conflictItemName: string;
+  gapMinutes: number;
+  conflictMsg: string;
+}
+
+interface StartConflictInfoBO {
+  eventId: number;
+  planId: number;
+  name: string;
+  actualStartTime: number;
+}
+
+interface ReflowHintPayloadBO {
+  type: string;
+  minutesDelta: number;
+  message: string;
+  updatedAt: number;
+}
+
+interface AdvanceAdjustContextBO {
+  targetIndex: number;
+  targetId: number;
+  targetDayOffset: number;
+  candidates: number[];
+}
+
+interface ApplyAdvanceResultBO {
+  success: boolean;
+  appliedCount: number;
+  appliedShiftMinutes: number;
+  remainingGapMinutes: number;
+  message: string;
+}
+
+interface CompressionSelectionContextBO {
+  targetIndex: number;
+  targetTime: string;
+  neededGapMinutes: number;
+  naturalArrivalMinutes: number;
+  chainStartIndex: number;
+  candidates: number[];
+}
+
+interface HistorySummaryBO {
+  planName: string;
+  completedCount: number;
+  skippedCount: number;
+  activeCount: number;
+}
+
+interface CompanionActionsBO {
+  canStart: boolean;
+  canPause: boolean;
+  canResume: boolean;
+  canEnd: boolean;
+  canSkip: boolean;
+  canNavigate: boolean;
+  canViewDetail: boolean;
+}
+
+interface CompanionContextBO {
+  runtimeState: string;
+  currentEvent: EventEntity | null;
+  nextEvent: EventEntity | null;
+  hint: ReflowHint | null;
+  actions: CompanionActionsBO;
+}
+
+interface PlanStatusPayloadBO {
+  status: PlanStatus;
+}
+
+interface EvaluationInputBO {
+  ok: boolean;
+}
+
+interface PlanExecutionActionResultBO {
+  success: boolean;
+  toStatus: PlanStatus;
+}
+
+interface PlanStateMachineEventBO {
+}
+
+interface PlanStageViewModelBO {
+  canPause: boolean;
+  canResume: boolean;
+}
+
+interface CompanionPlanStateMachineBO {
+  getPlanStageViewModel: (planId: string) => PlanStageViewModelBO;
+}
+
+interface CompressionPlanDraftBO {
+  action: string;
+  gapMinutes: number;
+  targetIndex: number;
+  targetTime: string;
+  selectedIds: number[];
+}
+
+class EmptyPlanStateMachineEventBO implements PlanStateMachineEventBO {
+}
+
+class RuntimeStateContextBO {
+  runtimeState: string;
+
+  constructor(runtimeState: string) {
+    this.runtimeState = runtimeState;
+  }
+}
+
+interface AppStorageLikeBO {
+  setOrCreate: (key: string, value: boolean | string | number | Object) => void;
+}
+
 class StaticPatchBO {
   private readonly target: Object;
   private readonly key: string;
@@ -139,7 +258,7 @@ class PlanStateDelegateBO {
   pauseResult: boolean = true;
   resumeResult: boolean = true;
   isConflict: boolean = true;
-  previewResult: Object = {
+  previewResult: PlanDatePreviewResultBO = {
     hasRigidConflict: false,
     conflictItemId: 0,
     conflictItemName: '',
@@ -189,7 +308,7 @@ class PlanStateDelegateBO {
     return this.resumeResult;
   }
 
-  previewPlanDateShift(timestamp: number): Object {
+  previewPlanDateShift(timestamp: number): PlanDatePreviewResultBO {
     this.previewCalls += 1;
     this.lastUpdatePlanDate = timestamp;
     return this.previewResult;
@@ -695,7 +814,7 @@ class ExecutionServiceDelegateBO {
   activeEvent: EventEntity | null = null;
   reopenResult: boolean = true;
   updateActualResult: boolean = true;
-  conflictInfo: Object | null = { eventId: 1, planId: 2, name: 'conflict_bo', actualStartTime: 3 };
+  conflictInfo: StartConflictInfoBO | null = { eventId: 1, planId: 2, name: 'conflict_bo', actualStartTime: 3 };
   throwMethod: string = '';
 
   findCurrentActiveEvent(): EventEntity | null {
@@ -751,7 +870,7 @@ class ExecutionServiceDelegateBO {
     return this.updateActualResult;
   }
 
-  async getStartConflictInfo(_excludeEventId: number): Promise<Object | null> {
+  async getStartConflictInfo(_excludeEventId: number): Promise<StartConflictInfoBO | null> {
     this.conflictInfoCalls += 1;
     if (this.throwMethod === 'getStartConflictInfo') {
       throw new Error('start_conflict_fail_bo');
@@ -764,7 +883,7 @@ class ExecutionCoordinatorDelegateBO {
   orderedSchedule: EventEntity[] = [];
   orderedIndex: number = 1;
   nextEvent: EventEntity | null = null;
-  hint: Object = {
+  hint: ReflowHintPayloadBO = {
     type: 'reflow',
     minutesDelta: 5,
     message: 'hint_bo',
@@ -790,7 +909,7 @@ class ExecutionCoordinatorDelegateBO {
     _afterTs: number,
     _targetName: string,
     _nextName: string
-  ): Object {
+  ): ReflowHintPayloadBO {
     return this.hint;
   }
 
@@ -802,15 +921,15 @@ class ExecutionCoordinatorDelegateBO {
 class CompressionCoordinatorDelegateBO {
   naturalArrival: number = 333;
   delayPlan: CompressionPlan = createCompressionPlanBO('NO_ACTION');
-  advanceContext: Object | null = { targetIndex: 1, targetId: 2, targetDayOffset: 0, candidates: [] };
-  applyAdvanceResult: Object = {
+  advanceContext: AdvanceAdjustContextBO | null = { targetIndex: 1, targetId: 2, targetDayOffset: 0, candidates: [] };
+  applyAdvanceResult: ApplyAdvanceResultBO = {
     success: true,
     appliedCount: 1,
     appliedShiftMinutes: 10,
     remainingGapMinutes: 0,
     message: 'advance_bo'
   };
-  selectionContext: Object | null = {
+  selectionContext: CompressionSelectionContextBO | null = {
     targetIndex: 1,
     targetTime: '10:00',
     neededGapMinutes: 10,
@@ -830,7 +949,7 @@ class CompressionCoordinatorDelegateBO {
     return this.delayPlan;
   }
 
-  buildAdvanceAdjustContext(_targetIndex: number): Object | null {
+  buildAdvanceAdjustContext(_targetIndex: number): AdvanceAdjustContextBO | null {
     return this.advanceContext;
   }
 
@@ -839,7 +958,7 @@ class CompressionCoordinatorDelegateBO {
     _selectedIds: Set<number>,
     _targetStartTime: string,
     _forcedGapMinutes?: number
-  ): Promise<Object> {
+  ): Promise<ApplyAdvanceResultBO> {
     if (this.throwMethod === 'applyAdvanceAdjust') {
       throw new Error('apply_advance_fail_bo');
     }
@@ -850,7 +969,7 @@ class CompressionCoordinatorDelegateBO {
     _targetIndex: number,
     _targetTime: string,
     _forcedGapMinutes?: number
-  ): Object | null {
+  ): CompressionSelectionContextBO | null {
     return this.selectionContext;
   }
 
@@ -873,15 +992,10 @@ class CompressionCoordinatorDelegateBO {
 }
 
 class HistoryManagerDelegateBO {
-  summary: Object = {
-    planName: 'history_bo',
-    completedCount: 1,
-    skippedCount: 0,
-    activeCount: 0
-  };
+  summary: HistorySummaryBO = createHistorySummaryBO('history_bo', 1, 0, 0);
   items: Object[] = [];
 
-  getCurrentPlanHistorySummary(): Object {
+  getCurrentPlanHistorySummary(): HistorySummaryBO {
     return this.summary;
   }
 
@@ -891,24 +1005,10 @@ class HistoryManagerDelegateBO {
 }
 
 class CompanionManagerDelegateBO {
-  context: Object = {
-    runtimeState: 'READY',
-    currentEvent: null,
-    nextEvent: null,
-    hint: null,
-    actions: {
-      canStart: true,
-      canPause: false,
-      canResume: false,
-      canEnd: false,
-      canSkip: true,
-      canNavigate: true,
-      canViewDetail: true
-    }
-  };
+  context: CompanionContextBO = createCompanionContextBO('READY', null);
   activeEvent: EventEntity | null = null;
 
-  getCompanionContext(_nowTs: number = Date.now()): Object {
+  getCompanionContext(_nowTs: number = Date.now()): CompanionContextBO {
     return this.context;
   }
 
@@ -1015,23 +1115,24 @@ class PlanStateMachineBO {
     allowManualBypass: true,
     forceRefreshOnEnter: true
   };
-  pauseResult: Object = { success: true, toStatus: PlanStatus.PAUSED };
-  resumeResult: Object = { success: true, toStatus: PlanStatus.IN_PROGRESS };
-  private planListener: ((event: Object) => void) | null = null;
-  private locationListener: ((event: Object) => void) | null = null;
+  pauseResult: PlanExecutionActionResultBO = { success: true, toStatus: PlanStatus.PAUSED };
+  resumeResult: PlanExecutionActionResultBO = { success: true, toStatus: PlanStatus.IN_PROGRESS };
+  private planListener: ((event: PlanStateMachineEventBO) => void) | null = null;
+  private locationListener: ((event: PlanStateMachineEventBO) => void) | null = null;
 
-  getPlanStatus(_planId: string): Object {
-    return { status: this.status };
+  getPlanStatus(_planId: string): PlanStatusPayloadBO {
+    const payload: PlanStatusPayloadBO = { status: this.status };
+    return payload;
   }
 
-  subscribePlanTransition(_planId: string, listener: (event: Object) => void): () => void {
+  subscribePlanTransition(_planId: string, listener: (event: PlanStateMachineEventBO) => void): () => void {
     this.planListener = listener;
     return (): void => {
       this.planListener = null;
     };
   }
 
-  subscribeLocationChange(_planId: string, listener: (event: Object) => void): () => void {
+  subscribeLocationChange(_planId: string, listener: (event: PlanStateMachineEventBO) => void): () => void {
     this.locationListener = listener;
     return (): void => {
       this.locationListener = null;
@@ -1042,11 +1143,12 @@ class PlanStateMachineBO {
     this.updateContextCalls += 1;
   }
 
-  buildEvaluationInput(_planId: string, _events: EventEntity[], _now: number): Object {
-    return { ok: true };
+  buildEvaluationInput(_planId: string, _events: EventEntity[], _now: number): EvaluationInputBO {
+    const input: EvaluationInputBO = { ok: true };
+    return input;
   }
 
-  evaluateAndApply(_input: Object): void {
+  evaluateAndApply(_input: EvaluationInputBO): void {
     this.refreshEvaluationCalls += 1;
   }
 
@@ -1058,11 +1160,11 @@ class PlanStateMachineBO {
     this.markRecoveryCalls.push(`${ok ? 'ok' : 'fail'}:${reason}`);
   }
 
-  pauseExecution(_planId: string): Object {
+  pauseExecution(_planId: string): PlanExecutionActionResultBO {
     return this.pauseResult;
   }
 
-  resumeExecution(_planId: string): Object {
+  resumeExecution(_planId: string): PlanExecutionActionResultBO {
     return this.resumeResult;
   }
 
@@ -1076,7 +1178,7 @@ class PlanStateMachineBO {
 
   emitLocation(): void {
     if (this.locationListener) {
-      this.locationListener({});
+      this.locationListener(new EmptyPlanStateMachineEventBO());
     }
   }
 }
@@ -1097,12 +1199,14 @@ class PlanStateHostBO {
   executionWeatherAppliedSummary: string = '';
   executionWeatherLevel: 'INFO' | 'NOTICE' | 'WARNING' = 'INFO';
   weatherFacade: WeatherFacade = new WeatherFacade();
-  planStateMachine: Object;
+  planStateMachine: PlanStateMachineBO;
   refreshWeatherCalls: number = 0;
   resolveStage: WeatherStageType = 'READY';
+  private readonly machine: PlanStateMachineBO;
 
-  constructor(private readonly machine: PlanStateMachineBO = new PlanStateMachineBO()) {
-    this.planStateMachine = machine as Object;
+  constructor(machine: PlanStateMachineBO = new PlanStateMachineBO()) {
+    this.machine = machine;
+    this.planStateMachine = machine;
     Reflect.set(this.weatherFacade as Object, 'resolveSchedulePolicy', (_stage: WeatherStageType): WeatherSchedulePolicy => {
       return this.machine.policyResult;
     });
@@ -1129,7 +1233,7 @@ class PlanStateHostBO {
   }
 
   getCompanionContext(_nowTs?: number): Object {
-    return { runtimeState: 'READY' };
+    return new RuntimeStateContextBO('READY') as Object;
   }
 
   recalculateFromIndex(_startIndex: number): void {
@@ -1322,33 +1426,82 @@ function createSoftReplanResultBO(success: boolean, code: string): SoftReplanApp
   };
 }
 
-function createCompressionPlanBO(action: string): CompressionPlan {
+function createHistorySummaryBO(
+  planName: string,
+  completedCount: number,
+  skippedCount: number,
+  activeCount: number
+): HistorySummaryBO {
   return {
+    planName: planName,
+    completedCount: completedCount,
+    skippedCount: skippedCount,
+    activeCount: activeCount
+  };
+}
+
+function createCompanionActionsBO(
+  canStart: boolean,
+  canPause: boolean,
+  canResume: boolean
+): CompanionActionsBO {
+  return {
+    canStart: canStart,
+    canPause: canPause,
+    canResume: canResume,
+    canEnd: false,
+    canSkip: true,
+    canNavigate: true,
+    canViewDetail: true
+  };
+}
+
+function createCompanionContextBO(runtimeState: string, currentEvent: EventEntity | null): CompanionContextBO {
+  return {
+    runtimeState: runtimeState,
+    currentEvent: currentEvent,
+    nextEvent: null,
+    hint: null,
+    actions: createCompanionActionsBO(true, false, false)
+  };
+}
+
+function createCompanionPlanStateMachineBO(canPause: boolean, canResume: boolean): CompanionPlanStateMachineBO {
+  return {
+    getPlanStageViewModel: (_planId: string): PlanStageViewModelBO => ({
+      canPause: canPause,
+      canResume: canResume
+    })
+  };
+}
+
+function createCompressionPlanBO(action: string): CompressionPlan {
+  const plan: CompressionPlanDraftBO = {
     action: action,
     gapMinutes: 0,
     targetIndex: 0,
     targetTime: '10:00',
     selectedIds: []
-  } as Object as CompressionPlan;
+  };
+  return plan as Object as CompressionPlan;
 }
 
 function ensureAppStorageBO(): void {
   if (!Reflect.has(globalThis as Object, 'AppStorage')) {
-    Reflect.set(globalThis as Object, 'AppStorage', {
+    const appStorageLike: AppStorageLikeBO = {
       setOrCreate: (_key: string, _value: boolean | string | number | Object): void => {
         return;
       }
-    });
+    };
+    Reflect.set(globalThis as Object, 'AppStorage', appStorageLike);
   }
 }
 
 class CompanionHostBO implements ITimelineCompanionHost {
   planId: number = 77;
   latestReflowHint: ReflowHint | null = null;
-  planStateMachine: {
-    getPlanStageViewModel: (planId: string) => { canPause: boolean; canResume: boolean }
-  } = {
-    getPlanStageViewModel: (_planId: string): { canPause: boolean; canResume: boolean } => ({
+  planStateMachine: CompanionPlanStateMachineBO = {
+    getPlanStageViewModel: (_planId: string): PlanStageViewModelBO => ({
       canPause: false,
       canResume: false
     })
@@ -1526,8 +1679,8 @@ export default function phase2BatchBOTest() {
       bundle.executionService.activeEvent = active;
       bundle.executionService.reopenResult = true;
       bundle.executionCoordinator.orderedSchedule = [active];
-      bundle.history.summary = { planName: 'history_bo', completedCount: 3, skippedCount: 1, activeCount: 0 };
-      bundle.companion.context = { runtimeState: 'READY', currentEvent: active };
+      bundle.history.summary = createHistorySummaryBO('history_bo', 3, 1, 0);
+      bundle.companion.context = createCompanionContextBO('READY', active);
       // Act
       const found = bundle.vm.findCurrentActiveEvent();
       await bundle.vm.skipEvent(active);
@@ -1643,7 +1796,7 @@ export default function phase2BatchBOTest() {
       // Act
       let message = '';
       try {
-        await manager.moveToBacklog({} as Object as TravelPlanItem);
+        await manager.moveToBacklog(new EventEntity() as Object as TravelPlanItem);
       } catch (error) {
         message = error instanceof Error ? error.message : '';
       }
@@ -1661,9 +1814,7 @@ export default function phase2BatchBOTest() {
       const host = new CompanionHostBO();
       host.schedule = [active, next];
       host.nextById.set(701, next);
-      host.planStateMachine = {
-        getPlanStageViewModel: (_planId: string): Object => ({ canPause: false, canResume: true })
-      };
+      host.planStateMachine = createCompanionPlanStateMachineBO(false, true);
       const manager = new TimelineCompanionManager(host);
       // Act
       const context = manager.getCompanionContext(Date.now());
