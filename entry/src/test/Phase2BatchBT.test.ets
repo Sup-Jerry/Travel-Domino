@@ -27,6 +27,15 @@ function getDialogMethodBT<T>(dialogCtor: Object, name: string): T {
   return Reflect.get(prototype, name) as T;
 }
 
+function invokeDialogMethodBT<THost, TResult, TArgs extends (Object | number | string | boolean)[]>(
+  method: (this: THost, ...args: TArgs) => TResult,
+  host: THost,
+  ...args: TArgs
+): TResult {
+  const bound = method.bind(host) as (...boundArgs: TArgs) => TResult;
+  return bound(...args);
+}
+
 function buildStrategyBT(
   density: DensityLevel = DensityLevel.MEDIUM,
   pace: PaceLevel = PaceLevel.BALANCED,
@@ -131,9 +140,14 @@ class GapVmMockBT {
   }
 }
 
+interface GapPreviewBT {
+  timeRange: string;
+  addStr: string;
+}
+
 const gapRefreshGapsBT = getDialogMethodBT<(this: GapDialogHostBT) => void>(GapResolutionDialog as Object, 'refreshGaps');
 const gapSelectGapBT = getDialogMethodBT<(this: GapDialogHostBT, item: EventEntity) => void>(GapResolutionDialog as Object, 'selectGap');
-const gapGetPreviewBT = getDialogMethodBT<(this: GapDialogHostBT, item: EventEntity) => { timeRange: string; addStr: string }>(
+const gapGetPreviewBT = getDialogMethodBT<(this: GapDialogHostBT, item: EventEntity) => GapPreviewBT>(
   GapResolutionDialog as Object,
   'getPreview'
 );
@@ -161,35 +175,35 @@ class GapDialogHostBT {
   candidates: EventEntity[] = [];
 
   refreshGaps(): void {
-    gapRefreshGapsBT.call(this);
+    invokeDialogMethodBT(gapRefreshGapsBT, this);
   }
 
   selectGap(item: EventEntity): void {
-    gapSelectGapBT.call(this, item);
+    invokeDialogMethodBT(gapSelectGapBT, this, item);
   }
 
-  getPreview(item: EventEntity): { timeRange: string; addStr: string } {
-    return gapGetPreviewBT.call(this, item);
+  getPreview(item: EventEntity): GapPreviewBT {
+    return invokeDialogMethodBT(gapGetPreviewBT, this, item);
   }
 
   getTierColor(min: number): string {
-    return gapGetTierColorBT.call(this, min);
+    return invokeDialogMethodBT(gapGetTierColorBT, this, min);
   }
 
   getTierLabel(min: number): string {
-    return gapGetTierLabelBT.call(this, min);
+    return invokeDialogMethodBT(gapGetTierLabelBT, this, min);
   }
 
   hasPositiveAllocation(distributionMap: Map<number, number>): boolean {
-    return gapHasPositiveAllocationBT.call(this, distributionMap);
+    return invokeDialogMethodBT(gapHasPositiveAllocationBT, this, distributionMap);
   }
 
   getAllocatableCandidates(): EventEntity[] {
-    return gapGetAllocatableCandidatesBT.call(this);
+    return invokeDialogMethodBT(gapGetAllocatableCandidatesBT, this);
   }
 
   isCandidateAllocatable(item: EventEntity): boolean {
-    return gapIsCandidateAllocatableBT.call(this, item);
+    return invokeDialogMethodBT(gapIsCandidateAllocatableBT, this, item);
   }
 }
 
@@ -212,15 +226,15 @@ class AiInputDialogHostBT {
   customStrategy: ComposableStrategy = buildStrategyBT();
 
   aboutToAppear(): void {
-    aiAboutToAppearBT.call(this);
+    invokeDialogMethodBT(aiAboutToAppearBT, this);
   }
 
   async loadRecommendation(): Promise<void> {
-    await aiLoadRecommendationBT.call(this);
+    await invokeDialogMethodBT(aiLoadRecommendationBT, this);
   }
 
   getLoadingText(): string {
-    return aiGetLoadingTextBT.call(this);
+    return invokeDialogMethodBT(aiGetLoadingTextBT, this);
   }
 }
 
@@ -272,35 +286,35 @@ class AddItemDialogHostBT {
   effectiveTheme: string = 'light';
 
   aboutToAppear(): void {
-    addAboutToAppearBT.call(this);
+    invokeDialogMethodBT(addAboutToAppearBT, this);
   }
 
   calculateDuration(): void {
-    addCalculateDurationBT.call(this);
+    invokeDialogMethodBT(addCalculateDurationBT, this);
   }
 
   recalculateEndTime(): void {
-    addRecalculateEndTimeBT.call(this);
+    invokeDialogMethodBT(addRecalculateEndTimeBT, this);
   }
 
   formatTime(date: Date): string {
-    return addFormatTimeBT.call(this, date);
+    return invokeDialogMethodBT(addFormatTimeBT, this, date);
   }
 
   applyTimeString(target: Date, timeText: string): Date {
-    return addApplyTimeStringBT.call(this, target, timeText);
+    return invokeDialogMethodBT(addApplyTimeStringBT, this, target, timeText);
   }
 
   isValidCoordinate(lat: number, lng: number): boolean {
-    return addIsValidCoordinateBT.call(this, lat, lng);
+    return invokeDialogMethodBT(addIsValidCoordinateBT, this, lat, lng);
   }
 
   scopedStorageKey(base: string): string {
-    return addScopedStorageKeyBT.call(this, base);
+    return invokeDialogMethodBT(addScopedStorageKeyBT, this, base);
   }
 
   canUseMapPicker(): boolean {
-    return addCanUseMapPickerBT.call(this);
+    return invokeDialogMethodBT(addCanUseMapPickerBT, this);
   }
 }
 
@@ -406,39 +420,39 @@ class ConflictCompressDialogHostBT {
   previewPlan: CompressionPlanBT | null = null;
 
   aboutToAppear(): void {
-    conflictAboutToAppearBT.call(this);
+    invokeDialogMethodBT(conflictAboutToAppearBT, this);
   }
 
   refreshPreview(): void {
-    conflictRefreshPreviewBT.call(this);
+    invokeDialogMethodBT(conflictRefreshPreviewBT, this);
   }
 
   getSelectableCandidates(): CompressionCandidateBT[] {
-    return conflictGetSelectableCandidatesBT.call(this);
+    return invokeDialogMethodBT(conflictGetSelectableCandidatesBT, this);
   }
 
   isAllSelected(): boolean {
-    return conflictIsAllSelectedBT.call(this);
+    return invokeDialogMethodBT(conflictIsAllSelectedBT, this);
   }
 
   toggleSelectAll(next: boolean): void {
-    conflictToggleSelectAllBT.call(this, next);
+    invokeDialogMethodBT(conflictToggleSelectAllBT, this, next);
   }
 
   toggleOne(candidate: CompressionCandidateBT, checked: boolean): void {
-    conflictToggleOneBT.call(this, candidate, checked);
+    invokeDialogMethodBT(conflictToggleOneBT, this, candidate, checked);
   }
 
   getPreviewNewDuration(candidate: CompressionCandidateBT): number {
-    return conflictGetPreviewNewDurationBT.call(this, candidate);
+    return invokeDialogMethodBT(conflictGetPreviewNewDurationBT, this, candidate);
   }
 
   getPreviewReduced(candidate: CompressionCandidateBT): number {
-    return conflictGetPreviewReducedBT.call(this, candidate);
+    return invokeDialogMethodBT(conflictGetPreviewReducedBT, this, candidate);
   }
 
   getRemainingGap(): number {
-    return conflictGetRemainingGapBT.call(this);
+    return invokeDialogMethodBT(conflictGetRemainingGapBT, this);
   }
 }
 
@@ -457,7 +471,7 @@ class PlanSettingsDialogHostBT {
   };
 
   aboutToAppear(): void {
-    planSettingsAboutToAppearBT.call(this);
+    invokeDialogMethodBT(planSettingsAboutToAppearBT, this);
   }
 }
 
