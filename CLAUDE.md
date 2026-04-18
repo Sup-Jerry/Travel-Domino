@@ -11,21 +11,26 @@
 - Prefer type safety and explicit error handling.
 - Never expose secrets/tokens/credentials in output.
 
-## Skills available for this repo (6 local skills)
+## Skills available for this repo (5 local skills, canonical trigger set)
 When user explicitly names a skill, or task clearly matches its description, use that skill workflow.
 
 1. travel-domino-dev
    Path: `E:\Travel\skills\travel-domino-dev\SKILL.md`
-2. skill-evolution-manager
-   Path: `E:\Travel\skills\skill-evolution-manager\SKILL.md`
-3. skill-manager
-   Path: `E:\Travel\skills\skill-manager\SKILL.md`
-4. app-size-pruner
+2. skills-workbench
+   Path: `E:\Travel\skills\skills-workbench\SKILL.md`
+3. app-size-pruner
    Path: `E:\Travel\skills\app-size-pruner\SKILL.md`
-5. bat
+4. bat
    Path: `E:\Travel\skills\bat\SKILL.md`
-6. github-to-skills
-   Path: `E:\Travel\skills\github-to-skills\SKILL.md`
+5. unit-test-case-generator
+   Path: `E:\Travel\skills\unit-test-case-generator\SKILL.md`
+
+## Archived local skills (not top-level trigger targets)
+- `E:\Travel\docs\skills-archive\github-to-skills\`
+- `E:\Travel\docs\skills-archive\large-file-split-migration\`
+- `E:\Travel\docs\skills-archive\high-bar-project-scoring\`
+- `E:\Travel\docs\skills-archive\skill-manager\`
+- `E:\Travel\docs\skills-archive\skill-evolution-manager\`
 
 ## Skill usage rules
 - Trigger: use named skill(s) first; if unnamed, select by semantic match.
@@ -44,14 +49,12 @@ Since AWS Code cannot invoke skills via Skill tool, use Read tool to load and fo
    - Any code modification task (bug fix, feature, refactor, UI change)
    - Follow Pre-Code Alignment Gate strictly before coding
 
-2. **skill-evolution-manager** - MUST read `E:\Travel\skills\skill-evolution-manager\SKILL.md` when:
+2. **skills-workbench** - MUST read `E:\Travel\skills\skills-workbench\SKILL.md` when:
    - User requests retrospective/review ("复盘", "总结", "回顾")
-   - After completing complex multi-step tasks
-
-3. **skill-manager** - Read `E:\Travel\skills\skill-manager\SKILL.md` when:
    - User asks to manage/update/list skills
+   - After completing complex multi-step tasks and needing evolution persistence
 
-4. **app-size-pruner** - Read `E:\Travel\skills\app-size-pruner\SKILL.md` when:
+3. **app-size-pruner** - Read `E:\Travel\skills\app-size-pruner\SKILL.md` when:
    - User asks to optimize app size or analyze HAP size
 
 **Execution**: After reading skill file, strictly follow all rules and workflows defined within.

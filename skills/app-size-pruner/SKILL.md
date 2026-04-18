@@ -40,7 +40,7 @@ description: Clean oversized application workspaces by scanning removable large 
 
 ## User-Learned Best Practices & Constraints
 
-> **Auto-Generated Section**: This section is maintained by `skill-evolution-manager`. Do not edit manually.
+> **Auto-Generated Section**: This section is maintained by `skills-workbench`. Do not edit manually.
 
 ### User Preferences
 - When user asks to clean project, run preview first and explicitly explain MinSizeMB threshold impact before apply.
