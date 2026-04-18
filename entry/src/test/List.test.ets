@@ -239,6 +239,18 @@ import phase2BatchBKTest from './Phase2BatchBK.test';
 import phase2BatchBLTest from './Phase2BatchBL.test';
 import phase2BatchBMTest from './Phase2BatchBM.test';
 import phase2BatchBNTest from './Phase2BatchBN.test';
+import phase2BatchBOTest from './Phase2BatchBO.test';
+import phase2BatchBPTest from './Phase2BatchBP.test';
+import phase2BatchBQTest from './Phase2BatchBQ.test';
+import phase2BatchBRTest from './Phase2BatchBR.test';
+import phase2BatchBSTest from './Phase2BatchBS.test';
+import phase2BatchBTTest from './Phase2BatchBT.test';
+import phase2BatchBUTest from './Phase2BatchBU.test';
+import phase2BatchBVTest from './Phase2BatchBV.test';
+import phase2BatchBWTest from './Phase2BatchBW.test';
+import phase2BatchBXTest from './Phase2BatchBX.test';
+import phase2BatchBYTest from './Phase2BatchBY.test';
+import phase2BatchBZTest from './Phase2BatchBZ.test';
 
 const registeredSuiteNames: string[] = [
   'LocalUnit',
@@ -480,7 +492,19 @@ const registeredSuiteNames: string[] = [
   'Phase2BatchBK',
   'Phase2BatchBL',
   'Phase2BatchBM',
-  'Phase2BatchBN'
+  'Phase2BatchBN',
+  'Phase2BatchBO',
+  'Phase2BatchBP',
+  'Phase2BatchBQ',
+  'Phase2BatchBR',
+  'Phase2BatchBS',
+  'Phase2BatchBT',
+  'Phase2BatchBU',
+  'Phase2BatchBV',
+  'Phase2BatchBW',
+  'Phase2BatchBX',
+  'Phase2BatchBY',
+  'Phase2BatchBZ'
 ];
 
 function containsSuite(name: string): boolean {
@@ -745,6 +769,18 @@ export default function testsuite() {
   phase2BatchBLTest();
   phase2BatchBMTest();
   phase2BatchBNTest();
+  phase2BatchBOTest();
+  phase2BatchBPTest();
+  phase2BatchBQTest();
+  phase2BatchBRTest();
+  phase2BatchBSTest();
+  phase2BatchBTTest();
+  phase2BatchBUTest();
+  phase2BatchBVTest();
+  phase2BatchBWTest();
+  phase2BatchBXTest();
+  phase2BatchBYTest();
+  phase2BatchBZTest();
 
   describe('listTest', () => {
     it('normal: list_should_keep_core_test_modules_registered', 0, () => {
