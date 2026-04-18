@@ -451,13 +451,89 @@ class CircularCarrierBR {
   }
 }
 
+class ApplicationContextStubBR {
+  public readonly label: string;
+
+  constructor(label: string) {
+    this.label = label;
+  }
+}
+
+class ContextStubBR {
+  public readonly cacheDir: string;
+
+  constructor(cacheDir: string) {
+    this.cacheDir = cacheDir;
+  }
+
+  public getApplicationContext(): Object {
+    return new ApplicationContextStubBR(`${this.cacheDir}_app`) as Object;
+  }
+}
+
+class PixelMapStubBR {
+  public readonly kind: string = 'pixel_map_br';
+}
+
+class ImageSourceStubBR {
+  public async createPixelMap(): Promise<Object> {
+    return new PixelMapStubBR() as Object;
+  }
+}
+
+class ImagePackerStubBR {
+  public async packToData(_pixelMap: Object, _options: Object): Promise<ArrayBuffer> {
+    return new Uint8Array([1, 2, 3]).buffer;
+  }
+}
+
+class FileDescriptorStubBR {
+  public readonly fd: number;
+
+  constructor(fd: number) {
+    this.fd = fd;
+  }
+}
+
+class AmapLiveItemBR {
+  public adcode: string = '';
+  public weather: string = '';
+  public temperature: string = '';
+  public humidity: string = '';
+  public windpower: string = '';
+  public reporttime: string = '';
+}
+
+class AmapLiveResponseBR {
+  public lives: AmapLiveItemBR[] = [];
+}
+
+class AmapForecastCastBR {
+  public dayweather: string = '';
+  public daytemp: string = '';
+  public nighttemp: string = '';
+}
+
+class AmapForecastItemBR {
+  public adcode: string = '';
+  public casts: AmapForecastCastBR[] = [];
+}
+
+class AmapForecastResponseBR {
+  public lives: AmapLiveItemBR[] = [];
+  public forecasts: AmapForecastItemBR[] = [];
+}
+
+class ZoneStubBR {
+  public readonly zoneName: string;
+
+  constructor(zoneName: string) {
+    this.zoneName = zoneName;
+  }
+}
+
 function createContextBR(cacheDir: string = 'cache_br'): common.Context {
-  return {
-    cacheDir: cacheDir,
-    getApplicationContext: (): Object => {
-      return { label: `${cacheDir}_app` };
-    }
-  } as common.Context;
+  return new ContextStubBR(cacheDir) as common.Context;
 }
 
 function cloneAvatarProfileBR(source: AvatarProfile): AvatarProfile {
@@ -604,23 +680,15 @@ export default function phase2BatchBRTest() {
       let closeFd = 0;
       dateHooks.setNow(5555);
       Reflect.set(Reflect.get(globalThis, 'image') as Object, 'createImageSource', (_srcUri: string): Object => {
-        return {
-          createPixelMap: async (): Promise<Object> => {
-            return { kind: 'pixel_map_br' };
-          }
-        };
+        return new ImageSourceStubBR() as Object;
       });
       Reflect.set(Reflect.get(globalThis, 'image') as Object, 'createImagePacker', (): Object => {
-        return {
-          packToData: async (_pixelMap: Object, _options: Object): Promise<ArrayBuffer> => {
-            return new Uint8Array([1, 2, 3]).buffer;
-          }
-        };
+        return new ImagePackerStubBR() as Object;
       });
       Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'accessSync', (_path: string): boolean => true);
       Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'openSync', (path: string, _mode: number): Object => {
         openedPath = path;
-        return { fd: 88 };
+        return new FileDescriptorStubBR(88) as Object;
       });
       Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'writeSync', (_fd: number, _content: ArrayBuffer): void => {
         writeCount += 1;
@@ -706,29 +774,28 @@ export default function phase2BatchBRTest() {
       // Arrange
       const service = new AmapWeatherService();
       const privateApi = service as Object as AmapWeatherServicePrivateBR;
-      const liveResponse = {
-        lives: [{
-          adcode: '310000',
-          weather: ' SUNNY ',
-          temperature: '28',
-          humidity: '72',
-          windpower: '4',
-          reporttime: '2026-04-17 09:00:00'
-        }]
-      };
-      const forecastResponse = {
-        lives: [{
-          weather: '   '
-        }],
-        forecasts: [{
-          adcode: '320100',
-          casts: [{
-            dayweather: 'RAIN',
-            daytemp: '30',
-            nighttemp: '20'
-          }]
-        }]
-      };
+      const liveEntry = new AmapLiveItemBR();
+      liveEntry.adcode = '310000';
+      liveEntry.weather = ' SUNNY ';
+      liveEntry.temperature = '28';
+      liveEntry.humidity = '72';
+      liveEntry.windpower = '4';
+      liveEntry.reporttime = '2026-04-17 09:00:00';
+      const liveResponse = new AmapLiveResponseBR();
+      liveResponse.lives = [liveEntry];
+
+      const fallbackLive = new AmapLiveItemBR();
+      fallbackLive.weather = '   ';
+      const forecastCast = new AmapForecastCastBR();
+      forecastCast.dayweather = 'RAIN';
+      forecastCast.daytemp = '30';
+      forecastCast.nighttemp = '20';
+      const forecastItem = new AmapForecastItemBR();
+      forecastItem.adcode = '320100';
+      forecastItem.casts = [forecastCast];
+      const forecastResponse = new AmapForecastResponseBR();
+      forecastResponse.lives = [fallbackLive];
+      forecastResponse.forecasts = [forecastItem];
       // Act
       const liveInfo = privateApi.mapResponseToInfo(liveResponse as Object);
       const forecastInfo = privateApi.mapResponseToInfo(forecastResponse as Object);
@@ -841,19 +908,24 @@ export default function phase2BatchBRTest() {
     it('normal: user_profile_ensure_cloud_db_zone_should_reuse_inflight_open_promise', 0, async () => {
       // Arrange
       const repo = new UserProfileRepositoryImpl() as Object as UserProfileRepositoryPrivateBR;
-      const zone = { zoneName: 'zone_br' };
+      const zone = new ZoneStubBR('zone_br');
       let callCount = 0;
-      let resolveZone: ((value: Object) => void) | null = null;
+      let hasResolveZone = false;
+      let resolveZone: (value: Object) => void = (_value: Object): void => {
+      };
       Reflect.set(repo as Object, 'openCloudDbZoneInternal', (): Promise<Object> => {
         callCount += 1;
         return new Promise<Object>((resolve) => {
+          hasResolveZone = true;
           resolveZone = resolve;
         });
       });
       // Act
       const firstPromise = repo.ensureCloudDbZone();
       const secondPromise = repo.ensureCloudDbZone();
-      resolveZone?.(zone as Object);
+      if (hasResolveZone) {
+        resolveZone(zone as Object);
+      }
       const resolved = await Promise.all([firstPromise, secondPromise]);
       // Assert
       expect(callCount).assertEqual(1);
