@@ -70,7 +70,7 @@ export default function phase2BatchBUTest() {
       const actualEnd = new Date(2026, 3, 17, 10, 30, 0, 0).getTime();
 
       // Act
-      const themeColor = resolveEventItemThemeColor(0, 0, '茶馆', 'dark', '#123456');
+      const themeColor = resolveEventItemThemeColor(0, 0, '鑼堕', 'dark', '#123456');
       const startText = resolveEventItemStartTimeDisplay('', '08:40');
       const planRange = resolveEventItemPlanRange('', '08:40', 90);
       const forecastRange = resolveEventItemForecastRange(0, 0, planRange);
@@ -102,7 +102,7 @@ export default function phase2BatchBUTest() {
       const dynamicEnd = new Date(2026, 3, 17, 15, 45, 0, 0).getTime();
 
       // Act
-      const themeColor = resolveEventItemThemeColor(0, 0, '未知地点', 'light', '#2468AC');
+      const themeColor = resolveEventItemThemeColor(0, 0, '鏈煡鍦扮偣', 'light', '#2468AC');
       const planRange = resolveEventItemPlanRange('', '', 45);
       const forecastRange = resolveEventItemForecastRange(dynamicStart, dynamicEnd, planRange);
       const actualRange = resolveEventItemActualRangeMeta(0, 0, dynamicStart, dynamicEnd, 45, planRange);
@@ -119,23 +119,23 @@ export default function phase2BatchBUTest() {
       expect(stateLabel).assertEqual('SKIPPED');
     });
 
-    it('normal: companion_logic_helpers_should_prioritize_active_focus_and_trim_search_keyword', 0, () => {
+    it('regression: companion_logic_helpers_should_prioritize_active_focus_and_trim_search_keyword', 0, () => {
       // Arrange
-      const pending = buildCompanionEventBU(1, '故宫', '北京东城', 0, EventEntity.STATE_PENDING);
-      const active = buildCompanionEventBU(2, '景山公园', '北京东城', Date.now(), EventEntity.STATE_PENDING);
-      const completed = buildCompanionEventBU(3, '后海', '北京西城', 0, EventEntity.STATE_COMPLETED);
+      const pending = buildCompanionEventBU(1, '鏁呭', '鍖椾含涓滃煄', 0, EventEntity.STATE_PENDING);
+      const active = buildCompanionEventBU(2, '鏅北鍏洯', '鍖椾含涓滃煄', Date.now(), EventEntity.STATE_PENDING);
+      const completed = buildCompanionEventBU(3, '鍚庢捣', '鍖椾含瑗垮煄', 0, EventEntity.STATE_COMPLETED);
       const schedule = [pending, active, completed];
       const searchMap = new Map<number, string>();
-      searchMap.set(1, '故宫|北京东城');
-      searchMap.set(2, '景山公园|北京东城');
-      searchMap.set(3, '后海|北京西城');
+      searchMap.set(1, '鏁呭|鍖椾含涓滃煄');
+      searchMap.set(2, '鏅北鍏洯|鍖椾含涓滃煄');
+      searchMap.set(3, '鍚庢捣|鍖椾含瑗垮煄');
       const visibleIndexById = new Map<number, number>();
       visibleIndexById.set(2, 0);
       visibleIndexById.set(3, 1);
 
       // Act
       const focusId = resolveCompanionDefaultFocusId(schedule, 1, 3);
-      const results = resolveCompanionSearchResults(schedule, '  东城 ', searchMap);
+      const results = resolveCompanionSearchResults(schedule, '  涓滃煄 ', searchMap);
       const visibleFocusId = resolveCompanionVisibleFocusId([active, completed], 2);
       const focusPosition = resolveCompanionVisibleFocusPosition(3, visibleIndexById);
       const backAction = resolveCompanionBackAction(false, false, false, 'control');
@@ -150,11 +150,11 @@ export default function phase2BatchBUTest() {
       expect(backAction).assertEqual('control_to_immersive');
     });
 
-    it('boundary: companion_logic_helpers_should_limit_blank_search_and_fallback_focus_to_first_visible', 0, () => {
+    it('invalid: companion_logic_helpers_should_limit_blank_search_and_fallback_focus_to_first_visible', 0, () => {
       // Arrange
       const schedule: EventEntity[] = [];
       for (let i = 0; i < 24; i++) {
-        schedule.push(buildCompanionEventBU(i + 1, `地点${i + 1}`, `地址${i + 1}`, 0, EventEntity.STATE_PENDING));
+        schedule.push(buildCompanionEventBU(i + 1, `鍦扮偣${i + 1}`, `鍦板潃${i + 1}`, 0, EventEntity.STATE_PENDING));
       }
 
       // Act
@@ -172,7 +172,7 @@ export default function phase2BatchBUTest() {
       expect(backAction).assertEqual('close_overlay');
     });
 
-    it('normal: plan_backlog_settings_and_bottom_nav_view_states_should_keep_multi_field_outputs_stable', 0, () => {
+    it('combined: plan_backlog_settings_and_bottom_nav_view_states_should_keep_multi_field_outputs_stable', 0, () => {
       // Arrange
       const item = buildPlanItemBU({
         computedStartTime: '04-17 09:00',
@@ -188,7 +188,7 @@ export default function phase2BatchBUTest() {
       const backlogState = resolveBacklogViewState(true, 0);
       const switchState = resolveSettingSwitchRenderState(true);
       const selectState = resolveSettingSelectRenderState('');
-      const headerState = resolveSettingsSubPageHeaderState('高级设置');
+      const headerState = resolveSettingsSubPageHeaderState('楂樼骇璁剧疆');
       const tapPlan = resolveBottomNavTapPlan(currentTab, 'archive', false);
       const navigateAction = resolveBottomNavNavigateAction(currentTab, 'archive');
       const pressedTab = resolveBottomNavPressedTab('archive', true);
@@ -198,17 +198,17 @@ export default function phase2BatchBUTest() {
       expect(planState.startText).assertEqual('04-17 09:00');
       expect(planState.endText).assertEqual('--:--');
       expect(planState.showConflictFixButton).assertTrue();
-      expect(planState.conflictText).assertEqual('时间冲突');
+      expect(planState.conflictText).assertEqual('鏃堕棿鍐茬獊');
       expect(backlogState.expandSymbol).assertEqual('\u25BC');
       expect(backlogState.showEmptyState).assertTrue();
       expect(backlogState.showMoveAllButton).assertFalse();
       expect(switchState.showLoading).assertTrue();
       expect(switchState.showToggle).assertFalse();
-      expect(switchState.loadingText).assertEqual('加载中...');
+      expect(switchState.loadingText).assertEqual('鍔犺浇涓?..');
       expect(selectState.valueText).assertEqual('');
       expect(selectState.trailingText).assertEqual('>');
-      expect(headerState.backLabel).assertEqual('返回');
-      expect(headerState.title).assertEqual('高级设置');
+      expect(headerState.backLabel).assertEqual('杩斿洖');
+      expect(headerState.title).assertEqual('楂樼骇璁剧疆');
       expect(tapPlan.shouldNavigate).assertTrue();
       expect(tapPlan.nextTransitionTab).assertEqual('archive');
       expect(tapPlan.nextNavLocked).assertTrue();
@@ -217,7 +217,7 @@ export default function phase2BatchBUTest() {
       expect(pressedTab).assertEqual('archive');
     });
 
-    it('boundary: plan_backlog_settings_and_bottom_nav_view_states_should_keep_fallbacks_when_noop_or_locked', 0, () => {
+    it('conflict: plan_backlog_settings_and_bottom_nav_view_states_should_keep_fallbacks_when_noop_or_locked', 0, () => {
       // Arrange
       const item = buildPlanItemBU({
         computedStartTime: '',
@@ -231,7 +231,7 @@ export default function phase2BatchBUTest() {
       const planState = resolvePlanItemDisplayState(item);
       const backlogState = resolveBacklogViewState(false, 3);
       const switchState = resolveSettingSwitchRenderState(false);
-      const selectState = resolveSettingSelectRenderState('自动');
+      const selectState = resolveSettingSelectRenderState('鑷姩');
       const headerState = resolveSettingsSubPageHeaderState('');
       const sameTabPlan = resolveBottomNavTapPlan(currentTab, 'trash', false);
       const lockedPlan = resolveBottomNavTapPlan(currentTab, 'archive', true);
@@ -252,8 +252,8 @@ export default function phase2BatchBUTest() {
       expect(switchState.showLoading).assertFalse();
       expect(switchState.showToggle).assertTrue();
       expect(switchState.loadingText).assertEqual('');
-      expect(selectState.valueText).assertEqual('自动');
-      expect(headerState.backLabel).assertEqual('返回');
+      expect(selectState.valueText).assertEqual('鑷姩');
+      expect(headerState.backLabel).assertEqual('杩斿洖');
       expect(sameTabPlan.shouldNavigate).assertFalse();
       expect(sameTabPlan.nextNavLocked).assertFalse();
       expect(lockedPlan.shouldNavigate).assertFalse();
@@ -265,3 +265,4 @@ export default function phase2BatchBUTest() {
     });
   });
 }
+
