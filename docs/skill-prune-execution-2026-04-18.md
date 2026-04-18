@@ -246,3 +246,29 @@ Post-check:
 - Purpose:
   - map original audit priorities (P0/P1/P2) to completion status
   - separate "completed" vs "optional follow-up" items
+
+## 12) User-requested deletion + usage counter rollout
+
+Executed:
+
+- Offlined these active global skills by archive:
+  - `develop-web-game`
+  - `speech`
+  - `transcribe`
+  - `sora`
+  - `yt-dlp`
+- Archive location:
+  - `C:/Users/Reaper/.codex/skills-archive-disabled/20260418_135300/`
+- Added unified usage counter script:
+  - `C:/Users/Reaper/.codex/scripts/skill_usage_counter.py`
+- Added counter instructions to all active skills except:
+  - `app-size-pruner`
+  - `skills-workbench`
+  - `travel-domino-dev`
+  - `unit-test-case-generator`
+
+Verification:
+
+- Cross-scope active skill docs: `total=34`, `unique=34`, `dups=0`
+- Counter-tagged active skills: `30`
+- Global active top-level skill directories: `21`

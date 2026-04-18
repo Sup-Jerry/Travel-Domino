@@ -10,6 +10,9 @@ dependencies:
   - bat
 ---
 
+> Usage counter: before doing any other work for this skill, run `python C:\Users\Reaper\.codex\scripts\skill_usage_counter.py --skill bat`.
+
+
 # bat Skill
 
 This skill wraps [bat](https://github.com/sharkdp/bat), a `cat` replacement with syntax highlighting, Git decorations, paging, and theme support.
