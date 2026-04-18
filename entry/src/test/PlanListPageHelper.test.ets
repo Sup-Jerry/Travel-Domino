@@ -1,11 +1,13 @@
 import { describe, it, expect } from '@ohos/hypium';
 import { TravelPlanItem } from '../main/ets/model/interface/IStandardEvent';
 import {
+  buildPlanListShareEventItems,
   canPlanListRepromptPermission,
   resolvePlanListShareCategory,
   resolvePlanListShareEndTime,
   resolvePlanListShareIcon,
-  resolvePlanListShareStartTime
+  resolvePlanListShareStartTime,
+  sortPlanListShareEvents
 } from '../main/ets/pages/PlanListPage';
 
 function buildShareEvent(): TravelPlanItem {
@@ -82,6 +84,100 @@ export default function planListPageHelperTest() {
       const end = resolvePlanListShareEndTime(event, 90);
       // Assert
       expect(end).assertEqual('--:--');
+    });
+  });
+
+  describe('unit_test_case_generator_autofill_PlanListPageHelperBranches', () => {
+    it('normal: plan_list_share_events_should_sort_by_day_offset_then_sort_order', 0, () => {
+      // Arrange
+      const first = buildShareEvent();
+      first.name = 'first';
+      first.dayOffset = 2;
+      first.sortOrder = 1;
+      const second = buildShareEvent();
+      second.name = 'second';
+      second.dayOffset = 1;
+      second.sortOrder = 5;
+      const third = buildShareEvent();
+      third.name = 'third';
+      third.dayOffset = 1;
+      third.sortOrder = 1;
+      // Act
+      const sorted = sortPlanListShareEvents([first, second, third]);
+      // Assert
+      expect(sorted[0].name).assertEqual('third');
+      expect(sorted[1].name).assertEqual('second');
+      expect(sorted[2].name).assertEqual('first');
+    });
+
+    it('boundary: plan_list_share_item_should_floor_duration_to_single_decimal_hour', 0, () => {
+      // Arrange
+      const event = buildShareEvent();
+      event.duration = 66;
+      // Act
+      const items = buildPlanListShareEventItems([event]);
+      // Assert
+      expect(items[0].duration).assertEqual(1.1);
+    });
+
+    it('invalid: plan_list_share_item_should_fallback_name_and_location_when_blank', 0, () => {
+      // Arrange
+      const event = buildShareEvent();
+      event.name = '  ';
+      event.address = ' ';
+      event.duration = 0;
+      // Act
+      const items = buildPlanListShareEventItems([event]);
+      // Assert
+      expect(items[0].name).assertEqual('未命名地点');
+      expect(items[0].location).assertEqual('待补充地点');
+      expect(items[0].duration).assertEqual(0.5);
+    });
+
+    it('conflict: plan_list_share_icon_should_still_prefer_star_when_anchor_and_priority_conflict', 0, () => {
+      // Arrange
+      const event = buildShareEvent();
+      event.priority = 1;
+      event.lockStatus = 1;
+      event.type = 'ANCHOR';
+      // Act
+      const items = buildPlanListShareEventItems([event]);
+      // Assert
+      expect(items[0].icon).assertEqual('⭐');
+    });
+
+    it('regression: td-20260418-plan_list_share_item_should_clamp_negative_day_offset_to_zero', 0, () => {
+      // Arrange
+      const event = buildShareEvent();
+      event.dayOffset = -9;
+      // Act
+      const items = buildPlanListShareEventItems([event]);
+      // Assert
+      expect(items[0].dayOffset).assertEqual(0);
+    });
+
+    it('combined: plan_list_share_items_should_apply_sort_and_time_resolution_together', 0, () => {
+      // Arrange
+      const early = buildShareEvent();
+      early.name = 'early';
+      early.dayOffset = 0;
+      early.sortOrder = 1;
+      early.fixedStartTime = '08:00';
+      early.duration = 30;
+      const late = buildShareEvent();
+      late.name = 'late';
+      late.dayOffset = 0;
+      late.sortOrder = 2;
+      late.fixedStartTime = '09:30';
+      late.duration = 90;
+      // Act
+      const items = buildPlanListShareEventItems([late, early]);
+      // Assert
+      expect(items[0].name).assertEqual('early');
+      expect(items[0].startTime).assertEqual('08:00');
+      expect(items[0].endTime).assertEqual('08:30');
+      expect(items[1].name).assertEqual('late');
+      expect(items[1].endTime).assertEqual('11:00');
     });
   });
 }

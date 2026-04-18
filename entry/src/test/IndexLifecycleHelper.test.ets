@@ -55,6 +55,7 @@ class LifecycleVmMock {
   public autoRefreshPlanning: boolean = true;
   public executionWeatherStage: boolean = true;
   public shouldRejectLoad: boolean = false;
+  public rejectReason: string | null = null;
 
   setHasUnsavedPostponeStorageKey(key: string): void {
     this.unsavedKey = key;
@@ -62,6 +63,9 @@ class LifecycleVmMock {
 
   loadData(planId: number): Promise<void> {
     this.loadPlanId = planId;
+    if (this.rejectReason !== null) {
+      return Promise.reject(new Error(this.rejectReason));
+    }
     if (this.shouldRejectLoad) {
       return Promise.reject(new Error('load_failed'));
     }
@@ -336,6 +340,106 @@ export default function indexLifecycleHelperTest() {
       expect(unbindPlanStateCount).assertEqual(1);
       expect(clearDraftCount).assertEqual(1);
       expect(timerValue).assertEqual(-1);
+    });
+
+    it('normal: handle_about_to_appear_should_enable_companion_mode_when_forced', 0, async (done: Function) => {
+      // Arrange
+      const vm = new LifecycleVmMock();
+      const routeParams = new RouteParamsMock();
+      routeParams.planId = 15;
+      routeParams.forceCompanionMode = true;
+      let companionModeCount = 0;
+      let tryStartCount = 0;
+
+      // Act
+      IndexLifecycleHelper.handleAboutToAppear({
+        uiContext: new UiContextMock(routeParams) as Object as UIContext,
+        vm: vm as Object as TimelineViewModel,
+        onSetCurrentPlanId: (_planId: number) => {},
+        onSetManualWeatherRefresh: (_value: boolean) => {},
+        onRefreshUnsavedFlag: () => {},
+        onSetPlanTitle: (_title: string) => {},
+        onBindReminderSubscriptions: () => {},
+        onSetStrategyMode: (_mode: number) => {},
+        onLoadStrategyExplanation: () => {},
+        onSetCompanionMode: (_value: boolean) => {
+          companionModeCount += 1;
+        },
+        onTryStartEvent: async (_eventId: number) => {
+          tryStartCount += 1;
+          return true;
+        },
+        onStartArrivalReminderEngine: () => {},
+        onStartStrategyAdaptationCheck: () => {},
+        onInitBacklogExpandedState: async (_planId: number, _isNewPlan: boolean) => {},
+        onLoadDataError: (_reason: string) => {}
+      });
+      await new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => {
+        setTimeout(() => resolve(), 30);
+      });
+
+      // Assert
+      expect(companionModeCount).assertEqual(1);
+      expect(tryStartCount).assertEqual(0);
+      done();
+    });
+
+    it('invalid: handle_about_to_appear_should_report_unknown_error_when_message_empty', 0, async (done: Function) => {
+      // Arrange
+      const vm = new LifecycleVmMock();
+      vm.rejectReason = '';
+      const routeParams = new RouteParamsMock();
+      routeParams.planId = 16;
+      let errorReason = '';
+
+      // Act
+      IndexLifecycleHelper.handleAboutToAppear({
+        uiContext: new UiContextMock(routeParams) as Object as UIContext,
+        vm: vm as Object as TimelineViewModel,
+        onSetCurrentPlanId: (_planId: number) => {},
+        onSetManualWeatherRefresh: (_value: boolean) => {},
+        onRefreshUnsavedFlag: () => {},
+        onSetPlanTitle: (_title: string) => {},
+        onBindReminderSubscriptions: () => {},
+        onSetStrategyMode: (_mode: number) => {},
+        onLoadStrategyExplanation: () => {},
+        onSetCompanionMode: (_value: boolean) => {},
+        onTryStartEvent: async (_eventId: number) => true,
+        onStartArrivalReminderEngine: () => {},
+        onStartStrategyAdaptationCheck: () => {},
+        onInitBacklogExpandedState: async (_planId: number, _isNewPlan: boolean) => {},
+        onLoadDataError: (reason: string) => {
+          errorReason = reason;
+        }
+      });
+      await new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => {
+        setTimeout(() => resolve(), 30);
+      });
+
+      // Assert
+      expect(errorReason).assertEqual('unknown_error');
+      done();
+    });
+
+    it('boundary: handle_about_to_disappear_should_keep_timer_when_already_unset', 0, () => {
+      // Arrange
+      let timerValue = 123;
+
+      // Act
+      IndexLifecycleHelper.handleAboutToDisappear({
+        strategyAdaptationCheckTimer: -1,
+        onUnbindReminderSubscriptions: () => {},
+        onStopArrivalEngine: () => {},
+        onStopExecutionWeatherScheduler: () => {},
+        onUnbindPlanState: () => {},
+        onClearDialogDraftStorage: () => {},
+        onSetStrategyAdaptationCheckTimer: (timer: number) => {
+          timerValue = timer;
+        }
+      });
+
+      // Assert
+      expect(timerValue).assertEqual(123);
     });
   });
 }

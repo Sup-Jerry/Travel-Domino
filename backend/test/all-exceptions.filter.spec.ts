@@ -3,10 +3,11 @@ import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter
 
 function buildHost(response: {
   status: (code: number) => { json: (body: unknown) => void };
-}): ArgumentsHost {
+}, request: { method?: string; url?: string } = { method: 'GET', url: '/test' }): ArgumentsHost {
   return {
     switchToHttp: () => ({
-      getResponse: () => response
+      getResponse: () => response,
+      getRequest: () => request
     })
   } as unknown as ArgumentsHost;
 }

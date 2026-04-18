@@ -99,4 +99,69 @@ export default function addItemDialogHelperTest() {
       expect(disabled).assertFalse();
     });
   });
+
+  describe('unit_test_case_generator_autofill_AddItemDialogHelperBranches', () => {
+    it('normal: add_item_mode_should_keep_schedule_mode_for_existing_schedule_item', 0, () => {
+      // Arrange
+      const initName = 'Morning Walk';
+      const initIsSchedule = true;
+      // Act
+      const mode = resolveAddItemMode(initName, initIsSchedule);
+      // Assert
+      expect(mode).assertEqual(1);
+    });
+
+    it('boundary: add_item_duration_should_fallback_to_60_when_init_and_default_are_non_positive', 0, () => {
+      // Arrange
+      const initDuration = -10;
+      const defaultDuration = 0;
+      // Act
+      const duration = resolveAddItemDuration(initDuration, defaultDuration);
+      // Assert
+      expect(duration).assertEqual(60);
+    });
+
+    it('invalid: add_item_coordinate_should_reject_infinite_latitude', 0, () => {
+      // Arrange
+      const lat = Number.POSITIVE_INFINITY;
+      const lng = 120;
+      // Act
+      const valid = isAddItemCoordinateValid(lat, lng);
+      // Assert
+      expect(valid).assertFalse();
+    });
+
+    it('conflict: add_item_scoped_storage_key_should_not_append_suffix_for_negative_scope', 0, () => {
+      // Arrange
+      const base = 'pickedLocationStr';
+      // Act
+      const key = resolveAddItemScopedStorageKey(base, -5);
+      // Assert
+      expect(key).assertEqual(base);
+    });
+
+    it('regression: td-20260418-add_item_coordinate_should_accept_boundary_lat_lng', 0, () => {
+      // Arrange
+      const lat = 90;
+      const lng = -180;
+      // Act
+      const valid = isAddItemCoordinateValid(lat, lng);
+      // Assert
+      expect(valid).assertTrue();
+    });
+
+    it('combined: add_item_mode_duration_and_storage_should_follow_default_new_item_path', 0, () => {
+      // Arrange
+      const initName = ' ';
+      const initIsSchedule = false;
+      // Act
+      const mode = resolveAddItemMode(initName, initIsSchedule);
+      const duration = resolveAddItemDuration(0, 30);
+      const key = resolveAddItemScopedStorageKey('k', 3);
+      // Assert
+      expect(mode).assertEqual(1);
+      expect(duration).assertEqual(30);
+      expect(key).assertEqual('k_3');
+    });
+  });
 }

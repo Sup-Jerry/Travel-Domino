@@ -3,7 +3,10 @@ import {
   buildMapPickerCoordinateFallbackAddress,
   formatMapPickerDistance,
   isMapPickerAddressResolving,
-  isMapPickerCoordinateValid
+  isMapPickerCoordinateValid,
+  resolveMapPickerCenterHint,
+  resolveMapPickerSelectionAddress,
+  resolveMapPickerStorageKey
 } from '../main/ets/pages/MapPickerPage';
 
 export default function mapPickerPageHelperTest() {
@@ -66,6 +69,72 @@ export default function mapPickerPageHelperTest() {
       // Assert
       expect(resolving).assertTrue();
       expect(distanceText).assertEqual('');
+    });
+  });
+
+  describe('unit_test_case_generator_autofill_MapPickerPageHelperBranches', () => {
+    it('normal: map_picker_center_hint_should_include_query_name_for_geocode_source', 0, () => {
+      // Arrange
+      const centerSource = 'geocode';
+      const queryName = 'West Lake';
+      // Act
+      const hint = resolveMapPickerCenterHint(centerSource, queryName);
+      // Assert
+      expect(hint.indexOf(queryName) >= 0).assertTrue();
+    });
+
+    it('boundary: map_picker_storage_key_should_floor_positive_plan_id', 0, () => {
+      // Arrange
+      const planId = 7.9;
+      // Act
+      const key = resolveMapPickerStorageKey(planId);
+      // Assert
+      expect(key).assertEqual('pickedLocationStr_7');
+    });
+
+    it('invalid: map_picker_selection_address_should_fallback_for_unknown_coordinate_tag', 0, () => {
+      // Arrange
+      const currentAddress = '未知坐标点';
+      const lat = 30.12345;
+      const lng = 120.54321;
+      // Act
+      const resolved = resolveMapPickerSelectionAddress(currentAddress, lat, lng);
+      // Assert
+      expect(resolved).assertEqual(buildMapPickerCoordinateFallbackAddress(lat, lng));
+    });
+
+    it('conflict: map_picker_center_hint_should_prefer_existing_source_over_default', 0, () => {
+      // Arrange
+      const existingHint = resolveMapPickerCenterHint('existing', '');
+      const defaultHint = resolveMapPickerCenterHint('current', '');
+      // Act
+      const areSame = existingHint === defaultHint;
+      // Assert
+      expect(areSame).assertFalse();
+    });
+
+    it('regression: td-20260418-map_picker_storage_key_should_use_base_key_for_non_positive_plan_id', 0, () => {
+      // Arrange
+      const planId = 0;
+      // Act
+      const key = resolveMapPickerStorageKey(planId);
+      // Assert
+      expect(key).assertEqual('pickedLocationStr');
+    });
+
+    it('combined: map_picker_hint_and_selection_should_handle_blank_inputs_together', 0, () => {
+      // Arrange
+      const centerSource = '';
+      const queryName = '';
+      const currentAddress = ' ';
+      const lat = 31.2;
+      const lng = 121.5;
+      // Act
+      const hint = resolveMapPickerCenterHint(centerSource, queryName);
+      const resolved = resolveMapPickerSelectionAddress(currentAddress, lat, lng);
+      // Assert
+      expect(hint.length > 0).assertTrue();
+      expect(resolved).assertEqual(buildMapPickerCoordinateFallbackAddress(lat, lng));
     });
   });
 }
