@@ -10,6 +10,7 @@ import {
 } from '../main/ets/domain/timeline/services/TimelineDistributionService';
 import {
   AiReplanApplyDecision,
+  AiReplanUndoToken,
   AiReplanPreviewResult,
   ITimelineAiHost,
   TimelineAiService
@@ -69,6 +70,47 @@ class StaticHooksBP {
   }
 }
 
+class PlanStatusSnapshotBP {
+  status: PlanStatus;
+
+  constructor(status: PlanStatus) {
+    this.status = status;
+  }
+}
+
+class AiReplanUndoTokenBP implements AiReplanUndoToken {
+  createdAt: number = Date.now();
+  events: TravelPlanItem[] = [];
+  strategyMode: number = 0;
+  strategyDensity: number = 1;
+  strategyPace: number = 1;
+  strategyPreference: number = 0;
+  strategyEnergy: number = 1;
+  lastAiPrompt: string = '';
+  lastStrategyExplanation: string = '';
+}
+
+class WeatherPlanStateTransitionRequestBP {
+  planId: string = '';
+  reason: string = '';
+  currentNodeId?: string;
+  preserveCompletedNodes: boolean = false;
+  preserveStartedWindow: boolean = false;
+  useWeatherConstraint: boolean = false;
+}
+
+class WeatherPlanStateGateResultBP {
+  success: boolean = true;
+  reasonCode?: string;
+  startFromEventId?: number;
+}
+
+class WeatherPlanStateMachineBP {
+  requestSoftReplan(_args: WeatherPlanStateTransitionRequestBP): WeatherPlanStateGateResultBP {
+    return new WeatherPlanStateGateResultBP();
+  }
+}
+
 function createItemBP(id: number, name: string): TravelPlanItem {
   return {
     id: id,
@@ -108,8 +150,8 @@ class ExecutionPlanStateMachineBP {
     this.status = PlanStatus.COMPLETED;
   }
 
-  getPlanStatus(_planId: string): { status: PlanStatus } {
-    return { status: this.status };
+  getPlanStatus(_planId: string): PlanStatusSnapshotBP {
+    return new PlanStatusSnapshotBP(this.status);
   }
 }
 
@@ -366,19 +408,9 @@ class SpyTimelineAiServiceBP extends TimelineAiService {
     };
   }
 
-  async applyReplanPreview(_preview: AiReplanPreviewResult, decision: AiReplanApplyDecision) {
+  async applyReplanPreview(_preview: AiReplanPreviewResult, decision: AiReplanApplyDecision): Promise<AiReplanUndoToken> {
     this.applyCalls.push(decision);
-    return {
-      createdAt: Date.now(),
-      events: [],
-      strategyMode: 0,
-      strategyDensity: 1,
-      strategyPace: 1,
-      strategyPreference: 0,
-      strategyEnergy: 1,
-      lastAiPrompt: '',
-      lastStrategyExplanation: ''
-    };
+    return new AiReplanUndoTokenBP();
   }
 }
 
@@ -494,11 +526,7 @@ class WeatherHostBP implements ITimelineWeatherHost {
     return;
   }
 
-  planStateMachine = {
-    requestSoftReplan: (_args: Object): { success: boolean; reasonCode?: string; startFromEventId?: number } => {
-      return { success: true };
-    }
-  };
+  planStateMachine: WeatherPlanStateMachineBP = new WeatherPlanStateMachineBP();
 
   recalculateFromEventId(_eventId: number): void {
     return;
@@ -721,7 +749,7 @@ export default function phase2BatchBPTest() {
       let message = '';
 
       try {
-        await service.restoreFromUndoToken(undefined as unknown as never);
+        await service.restoreFromUndoToken(null as never);
       } catch (error) {
         message = (error as Error).message;
       }
@@ -763,7 +791,7 @@ export default function phase2BatchBPTest() {
       // Assert
       const hooks = new StaticHooksBP(AiService, ['generateItineraryWithStrategy']);
       hooks.set('generateItineraryWithStrategy', (_request: Object): Promise<AiRawItem[]> => {
-        throw 'bp_non_error_throwable';
+        throw new Error('bp_non_error_throwable');
       });
 
       const host = new AiHostBP();
