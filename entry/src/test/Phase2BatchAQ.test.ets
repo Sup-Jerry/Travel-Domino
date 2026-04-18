@@ -223,6 +223,36 @@ class FakeGeoFenceForEachListAQ {
   }
 }
 
+class FakeGeoFenceSizeNumberListAQ {
+  size: number;
+  private readonly items: FakeGeoFenceAQ[];
+
+  constructor(items: FakeGeoFenceAQ[]) {
+    this.items = items;
+    this.size = items.length + 1;
+  }
+
+  public get(index: number): FakeGeoFenceAQ | undefined {
+    return this.items[index];
+  }
+}
+
+class FakeGeoFenceSizeFunctionOnlyListAQ {
+  private readonly rawSize: number;
+
+  constructor(rawSize: number) {
+    this.rawSize = rawSize;
+  }
+
+  public size(): number {
+    return this.rawSize;
+  }
+}
+
+class FakeGeoFencePlainObjectAQ {
+  marker: string = 'no_iterable';
+}
+
 class FakeLocationManagerAQ {
   startCalls: number = 0;
   stopCalls: number = 0;
@@ -1445,6 +1475,9 @@ export default function phase2BatchAQTest() {
       const fixedTs = dayBase.getTime() + 10 * 60 * 60 * 1000 + 30 * 60 * 1000;
       const listByLength = new FakeGeoFenceListAQ([new FakeGeoFenceAQ('1:1', GeoFence.STATUS_IN)]);
       const listByForEach = new FakeGeoFenceForEachListAQ([new FakeGeoFenceAQ('1:2', 0)]);
+      const listBySizeNumber = new FakeGeoFenceSizeNumberListAQ([new FakeGeoFenceAQ('1:3', GeoFence.STATUS_IN)]);
+      const listBySizeFunctionOnly = new FakeGeoFenceSizeFunctionOnlyListAQ(2);
+      const listPlainObj = new FakeGeoFencePlainObjectAQ();
       // Act
       const customId = enginePrivate.makeCustomId(event);
       const parsedValid = enginePrivate.parseEventId(customId);
@@ -1456,6 +1489,9 @@ export default function phase2BatchAQTest() {
       const fromLength = enginePrivate.toGeoFenceArray(listByLength as Object);
       const fromForEach = enginePrivate.toGeoFenceArray(listByForEach as Object);
       const fromUndefined = enginePrivate.toGeoFenceArray(undefined);
+      const fromSizeNumber = enginePrivate.toGeoFenceArray(listBySizeNumber as Object);
+      const fromSizeFunctionOnly = enginePrivate.toGeoFenceArray(listBySizeFunctionOnly as Object);
+      const fromPlainObject = enginePrivate.toGeoFenceArray(listPlainObj as Object);
       // Assert
       expect(customId).assertEqual('66:8401');
       expect(parsedValid).assertEqual(8401);
@@ -1466,6 +1502,9 @@ export default function phase2BatchAQTest() {
       expect(fromLength.length).assertEqual(1);
       expect(fromForEach.length).assertEqual(1);
       expect(fromUndefined.length).assertEqual(0);
+      expect(fromSizeNumber.length).assertEqual(1);
+      expect(fromSizeFunctionOnly.length).assertEqual(0);
+      expect(fromPlainObject.length).assertEqual(0);
     });
 
     it('normal: arrival_ensure_storage_defaults_should_call_store_and_live_bridge_once', 0, () => {
