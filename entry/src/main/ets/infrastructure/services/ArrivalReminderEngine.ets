@@ -22,6 +22,7 @@ import { ArrivalReminderStore } from '../../common/utils/arrival/ArrivalReminder
 import { TimelineExecutionState } from '../../domain/policy/TimelineExecutionState';
 import { TimelineDatePolicy } from '../../domain/policy/TimelineDatePolicy';
 import { NotificationGateway } from '../adapters/NotificationGateway';
+import { GeoFenceListLike } from './ArrivalReminderDeclarations';
 
 const TAG = 'ArrivalReminderEngine';
 
@@ -34,13 +35,6 @@ export interface ArrivalReminderPayload {
   placeName: string;
   distanceMeters: number;
   triggerAt: number;
-}
-
-interface GeoFenceListLike {
-  length?: number;
-  size?: number | (() => number);
-  get?: (index: number) => GeoFence | undefined;
-  forEach?: (callback: (value: GeoFence) => void) => void;
 }
 
 interface CandidateScore {
@@ -560,13 +554,21 @@ export class ArrivalReminderEngine {
     ArrivalLiveActivityBridge.init();
   }
 
+  private createGeoFenceClient(context: Context): GeoFenceClient {
+    return new GeoFenceClient(context);
+  }
+
+  private createLocationManager(context: Context): AMapLocationManagerImpl {
+    return new AMapLocationManagerImpl(context);
+  }
+
   private ensureClients(): boolean {
     if (!this.context) {
       return false;
     }
     if (!this.geoFenceClient) {
       try {
-        this.geoFenceClient = new GeoFenceClient(this.context);
+        this.geoFenceClient = this.createGeoFenceClient(this.context);
         this.geoFenceClient.setActivateAction(GeoFenceClient.GEOFENCE_IN);
         this.geoFenceListener = {
           onGeoFenceCreateFinished: (_list, errorCode: number, customId: string) => {
@@ -582,7 +584,7 @@ export class ArrivalReminderEngine {
 
     if (!this.locationManager) {
       try {
-        this.locationManager = new AMapLocationManagerImpl(this.context);
+        this.locationManager = this.createLocationManager(this.context);
         const option: AMapLocationOption = {
           priority: geoLocationManager.LocationRequestPriority.ACCURACY,
           scenario: geoLocationManager.LocationRequestScenario.NAVIGATION,

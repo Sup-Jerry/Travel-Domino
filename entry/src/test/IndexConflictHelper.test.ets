@@ -128,6 +128,7 @@ class AdvanceDialogVmMock {
   public result: AdvanceResultMock = new AdvanceResultMock();
   public applyCalls: number = 0;
   public events: EventEntity[] = [];
+  public shouldReject: boolean = false;
 
   buildAdvanceAdjustContext(_index: number): AdvanceContextMock | null {
     return this.context;
@@ -135,6 +136,9 @@ class AdvanceDialogVmMock {
 
   applyAdvanceAdjust(_index: number, _selectedIds: Set<number>, _nextStartTime: string): Promise<AdvanceResultMock> {
     this.applyCalls += 1;
+    if (this.shouldReject) {
+      return Promise.reject(new Error('apply_error'));
+    }
     return Promise.resolve(this.result);
   }
 }
@@ -603,6 +607,195 @@ export default function indexConflictHelperTest() {
       // Assert
       expect(controller === null).assertTrue();
       expect(toastCount).assertEqual(1);
+    });
+
+    it('conflict: open_advance_adjust_dialog_should_open_conflict_menu_when_remaining_gap_exists', 0, async (done: Function) => {
+      // Arrange
+      const vm = new AdvanceDialogVmMock();
+      const context = new AdvanceContextMock();
+      context.candidates = [1];
+      vm.context = context;
+      vm.result.success = true;
+      vm.result.appliedShiftMinutes = 5;
+      vm.result.remainingGapMinutes = 12;
+      const event = buildConflictEvent(34);
+      const controllerMock = new OpenCounterControllerMock();
+      let openConflictCount = 0;
+      const originAdvance = Reflect.get(IndexDialogManager as Object, 'createAdvanceAdjustController') as Object;
+      Reflect.set(IndexDialogManager as Object, 'createAdvanceAdjustController', (callbacks: Object): Object => {
+        const callbackMap = callbacks as Record<string, Function>;
+        void callbackMap['onConfirm']([1], '10:00');
+        return controllerMock as Object;
+      });
+
+      // Act
+      IndexConflictHelper.openAdvanceAdjustDialog(
+        vm as Object as TimelineViewModel,
+        0,
+        event,
+        '09:20',
+        (_t?: string) => {},
+        (_msg: string) => {},
+        () => {},
+        (_gap: number) => {
+          openConflictCount += 1;
+        }
+      );
+      await new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => setTimeout(() => resolve(), 40));
+      Reflect.set(IndexDialogManager as Object, 'createAdvanceAdjustController', originAdvance);
+
+      // Assert
+      expect(controllerMock.openCount).assertEqual(1);
+      expect(vm.applyCalls).assertEqual(1);
+      expect(openConflictCount).assertEqual(1);
+      done();
+    });
+
+    it('regression: open_advance_adjust_dialog_should_show_failure_when_apply_throws', 0, async (done: Function) => {
+      // Arrange
+      const vm = new AdvanceDialogVmMock();
+      const context = new AdvanceContextMock();
+      context.candidates = [1];
+      vm.context = context;
+      vm.shouldReject = true;
+      const event = buildConflictEvent(35);
+      const controllerMock = new OpenCounterControllerMock();
+      let toastCount = 0;
+      const originAdvance = Reflect.get(IndexDialogManager as Object, 'createAdvanceAdjustController') as Object;
+      Reflect.set(IndexDialogManager as Object, 'createAdvanceAdjustController', (callbacks: Object): Object => {
+        const callbackMap = callbacks as Record<string, Function>;
+        void callbackMap['onConfirm']([1], '10:20');
+        return controllerMock as Object;
+      });
+
+      // Act
+      IndexConflictHelper.openAdvanceAdjustDialog(
+        vm as Object as TimelineViewModel,
+        0,
+        event,
+        '09:30',
+        (_t?: string) => {},
+        (_msg: string) => {
+          toastCount += 1;
+        },
+        () => {},
+        (_gap: number) => {}
+      );
+      await new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => setTimeout(() => resolve(), 40));
+      Reflect.set(IndexDialogManager as Object, 'createAdvanceAdjustController', originAdvance);
+
+      // Assert
+      expect(controllerMock.openCount).assertEqual(1);
+      expect(vm.applyCalls).assertEqual(1);
+      expect(toastCount).assertEqual(1);
+      done();
+    });
+
+    it('normal: open_compress_selection_dialog_should_trigger_cancel_callback', 0, async (done: Function) => {
+      // Arrange
+      const vm = new CompressDialogVmMock();
+      const context = new CompressContextMock();
+      context.neededGapMinutes = 8;
+      vm.context = context;
+      vm.plan = { status: 'COMPRESS_CONFIRM', msg: '', affectedItems: [] };
+      const event = buildConflictEvent(36);
+      const controllerMock = new OpenCounterControllerMock();
+      const originCompress = Reflect.get(IndexDialogManager as Object, 'createConflictCompressController') as Object;
+      Reflect.set(IndexDialogManager as Object, 'createConflictCompressController', (callbacks: Object): Object => {
+        const callbackMap = callbacks as Record<string, Function>;
+        callbackMap['onCancel']();
+        return controllerMock as Object;
+      });
+
+      // Act
+      IndexConflictHelper.openCompressSelectionDialog(
+        vm as Object as TimelineViewModel,
+        0,
+        event,
+        '12:20',
+        (_t?: string) => {},
+        () => {},
+        (_msg: string) => {},
+        () => {},
+        () => {}
+      );
+      await new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => setTimeout(() => resolve(), 30));
+      Reflect.set(IndexDialogManager as Object, 'createConflictCompressController', originCompress);
+
+      // Assert
+      expect(controllerMock.openCount).assertEqual(1);
+      done();
+    });
+
+    it('combined: open_compress_selection_dialog_should_cover_overload_and_reopen_preview_paths', 0, async (done: Function) => {
+      // Arrange
+      const vm = new CompressDialogVmMock();
+      const context = new CompressContextMock();
+      context.neededGapMinutes = 10;
+      vm.context = context;
+      vm.plan = { status: 'COMPRESS_CONFIRM', msg: '', affectedItems: [] };
+      const event = buildConflictEvent(37);
+      let compressFactoryCalls = 0;
+      let blockedCalls = 0;
+      let previewCalls = 0;
+      let phase: 'OVERLOAD' | 'PREVIEW' = 'OVERLOAD';
+      const originCompress = Reflect.get(IndexDialogManager as Object, 'createConflictCompressController') as Object;
+      Reflect.set(IndexDialogManager as Object, 'createConflictCompressController', (callbacks: Object): Object => {
+        compressFactoryCalls += 1;
+        const callbackMap = callbacks as Record<string, Function>;
+        if (phase === 'OVERLOAD') {
+          vm.plan = { status: 'OVERLOAD', msg: '', affectedItems: [] };
+          void callbackMap['onConfirm']([1], 'RATIO');
+        } else if (compressFactoryCalls === 1) {
+          vm.plan = { status: 'COMPRESS_CONFIRM', msg: '', affectedItems: [] };
+          callbackMap['onConfirm']([1], 'RATIO');
+        }
+        return new OpenCounterControllerMock() as Object;
+      });
+
+      // Act
+      IndexConflictHelper.openCompressSelectionDialog(
+        vm as Object as TimelineViewModel,
+        0,
+        event,
+        '13:00',
+        (_t?: string) => {},
+        () => {},
+        (_msg: string) => {},
+        (_indexVal: number, _itemVal: EventEntity, _targetTimeVal: string, _plan: CompressionPlan, _saveFn: (t?: string) => void, backFn: () => void) => {
+          previewCalls += 1;
+          backFn();
+        },
+        (_indexVal: number, _itemVal: EventEntity, _targetTimeVal: string, _plan: CompressionPlan, _ids: number[], _mode: 'RATIO' | 'FIXED' | 'EQUAL', _saveFn: (t?: string) => void, _backFn: () => void) => {
+          blockedCalls += 1;
+        }
+      );
+      await new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => setTimeout(() => resolve(), 40));
+
+      phase = 'PREVIEW';
+      compressFactoryCalls = 0;
+      IndexConflictHelper.openCompressSelectionDialog(
+        vm as Object as TimelineViewModel,
+        0,
+        event,
+        '13:20',
+        (_t?: string) => {},
+        () => {},
+        (_msg: string) => {},
+        (_indexVal: number, _itemVal: EventEntity, _targetTimeVal: string, _plan: CompressionPlan, _saveFn: (t?: string) => void, backFn: () => void) => {
+          previewCalls += 1;
+          backFn();
+        },
+        () => {}
+      );
+      await new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => setTimeout(() => resolve(), 40));
+      Reflect.set(IndexDialogManager as Object, 'createConflictCompressController', originCompress);
+
+      // Assert
+      expect(blockedCalls).assertEqual(1);
+      expect(previewCalls >= 1).assertTrue();
+      expect(compressFactoryCalls >= 2).assertTrue();
+      done();
     });
   });
 }
