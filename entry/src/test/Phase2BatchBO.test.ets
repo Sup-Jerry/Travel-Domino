@@ -22,6 +22,7 @@ import { EventRepositoryImpl } from '../main/ets/infrastructure/persistence/Even
 import { EventEntity } from '../main/ets/model/entity/EventEntity';
 import { TravelPlanItem } from '../main/ets/model/interface/IStandardEvent';
 import { CompressionPlan, TimelineViewModel } from '../main/ets/viewmodel/TimelineViewModel';
+import { ReflowHint } from '../main/ets/viewmodel/types/TimelineTypes';
 import { PlanEventsSnapshot } from '../main/ets/viewmodel/internal/PlanPersistenceFacade';
 import { ScheduleOrchestrator } from '../main/ets/viewmodel/internal/ScheduleOrchestrator';
 import { ITimelineCompanionHost, TimelineCompanionManager } from '../main/ets/viewmodel/managers/TimelineCompanionManager';
@@ -1301,12 +1302,23 @@ function createUndoTokenBO(): AiReplanUndoToken {
 function createSoftReplanResultBO(success: boolean, code: string): SoftReplanApplyResult {
   return {
     success: success,
-    mode: 'SHIFT_CHAIN',
+    rolledBack: false,
+    errorCode: success ? '' : 'REPLAN_INVALID',
     reasonCode: code,
-    touchedCount: success ? 1 : 0,
-    affectedStartIndex: success ? 0 : -1,
-    requestedSuggestionId: 'sg_bo',
-    trigger: 'MANUAL'
+    startFromEventId: success ? 1 : undefined,
+    preview: {
+      suggestionId: 'sg_bo',
+      actionType: 'REORDER',
+      changedOrder: success,
+      changedDurations: false,
+      skippedNodeIds: [],
+      affectedNodeIds: ['1'],
+      reasonCode: code,
+      startFromEventId: success ? 1 : undefined,
+      changeSummary: [],
+      summary: success ? 'ok' : 'failed',
+      riskDelta: 0
+    }
   };
 }
 
@@ -1332,9 +1344,14 @@ function ensureAppStorageBO(): void {
 
 class CompanionHostBO implements ITimelineCompanionHost {
   planId: number = 77;
-  latestReflowHint: Object | null = null;
-  planStateMachine: Object = {
-    getPlanStageViewModel: (_planId: string): Object => ({ canPause: false, canResume: false })
+  latestReflowHint: ReflowHint | null = null;
+  planStateMachine: {
+    getPlanStageViewModel: (planId: string) => { canPause: boolean; canResume: boolean }
+  } = {
+    getPlanStageViewModel: (_planId: string): { canPause: boolean; canResume: boolean } => ({
+      canPause: false,
+      canResume: false
+    })
   };
   schedule: EventEntity[] = [];
   nextById: Map<number, EventEntity> = new Map<number, EventEntity>();
@@ -1508,8 +1525,8 @@ export default function phase2BatchBOTest() {
       const active = createEventBO(51, 'active_bo', 1);
       bundle.executionService.activeEvent = active;
       bundle.executionService.reopenResult = true;
-      bundle.executionCoordinator.schedule = [active];
-      bundle.history.summary = { totalSessions: 3, completedSessions: 2, skippedSessions: 1, averageDelayMinutes: 5 };
+      bundle.executionCoordinator.orderedSchedule = [active];
+      bundle.history.summary = { planName: 'history_bo', completedCount: 3, skippedCount: 1, activeCount: 0 };
       bundle.companion.context = { runtimeState: 'READY', currentEvent: active };
       // Act
       const found = bundle.vm.findCurrentActiveEvent();
@@ -1525,7 +1542,7 @@ export default function phase2BatchBOTest() {
       expect(bundle.executionService.skipCalls).assertEqual(1);
       expect(bundle.executionService.calculateCalls).assertEqual(1);
       expect(natural).assertEqual(333);
-      expect(summary.totalSessions).assertEqual(3);
+      expect(summary.completedCount).assertEqual(3);
       expect(companion.runtimeState).assertEqual('READY');
     });
   });
@@ -1556,7 +1573,7 @@ export default function phase2BatchBOTest() {
       // Arrange
       const machine = new PlanStateMachineBO();
       const host = new PlanStateHostBO(machine);
-      host.resolveStage = 'COMPLETED';
+      host.resolveStage = 'CONFIRMED';
       const manager = new TimelinePlanStateManager(host as Object as ITimelinePlanStateHost);
       // Act
       manager.bindPlanState(8);
