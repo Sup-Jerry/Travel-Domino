@@ -5,11 +5,15 @@ export function resolveIndexBacklogSectionMaxHeight(): string {
   return '30%';
 }
 
+export function getDefaultIndexBacklogSectionDividerColor(): string {
+  return '#E7EDF5';
+}
+
 @Component
 export struct IndexBacklogSection {
   @Prop items: TravelPlanItem[] = [];
   @Prop isExpanded: boolean = false;
-  @Prop dividerColor: string = '#E7EDF5';
+  @Prop dividerColor: string = getDefaultIndexBacklogSectionDividerColor();
 
   onToggleExpand: () => void = () => {};
   onMoveToSchedule: (item: TravelPlanItem) => void = () => {};

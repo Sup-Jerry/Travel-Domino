@@ -1,0 +1,4 @@
+﻿interface:
+  display_name: "Large File Split"
+  short_description: "Split huge files safely with migration checklists"
+  default_prompt: "Use $large-file-split-migration to split this thousand-line file into 3-8 responsibility modules with staged migration and equivalence verification."

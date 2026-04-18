@@ -18,6 +18,22 @@ export function getBacklogBadgeText(itemCount: number): string {
   return `${itemCount}`;
 }
 
+export interface BacklogViewState {
+  expandSymbol: string;
+  badgeText: string;
+  showMoveAllButton: boolean;
+  showEmptyState: boolean;
+}
+
+export function resolveBacklogViewState(isExpanded: boolean, itemCount: number): BacklogViewState {
+  return {
+    expandSymbol: getBacklogExpandSymbol(isExpanded),
+    badgeText: getBacklogBadgeText(itemCount),
+    showMoveAllButton: shouldShowBacklogMoveAllButton(itemCount),
+    showEmptyState: shouldShowBacklogEmptyState(isExpanded, itemCount)
+  };
+}
+
 @Component
 export struct BacklogView {
   @Prop items: TravelPlanItem[];
@@ -36,12 +52,16 @@ export struct BacklogView {
     return ThemeCenter.getPalette(this.effectiveTheme);
   }
 
+  private getViewState(): BacklogViewState {
+    return resolveBacklogViewState(this.isExpanded, this.items.length);
+  }
+
   build() {
     Column() {
       // 标题栏
       Row() {
         Row() {
-          Text(getBacklogExpandSymbol(this.isExpanded))
+          Text(this.getViewState().expandSymbol)
             .fontSize(12)
             .fontColor(this.getPalette().textTertiary)
             .margin({ right: 8 })
@@ -53,7 +73,7 @@ export struct BacklogView {
 
           Blank()
 
-          Text(getBacklogBadgeText(this.items.length))
+          Text(this.getViewState().badgeText)
             .fontSize(12)
             .fontColor(this.getPalette().textSecondary)
             .backgroundColor(this.getPalette().cardBgSoft)
@@ -67,7 +87,7 @@ export struct BacklogView {
           });
         })
 
-        if (shouldShowBacklogMoveAllButton(this.items.length)) {
+        if (this.getViewState().showMoveAllButton) {
           Button('一键加入日程')
             .height(30)
             .fontSize(11)
@@ -85,7 +105,7 @@ export struct BacklogView {
       .padding({ bottom: this.isExpanded ? 12 : 0 })
 
       if (this.isExpanded) {
-        if (shouldShowBacklogEmptyState(this.isExpanded, this.items.length)) {
+        if (this.getViewState().showEmptyState) {
           Column() {
             Text('空空如也')
               .fontSize(13)

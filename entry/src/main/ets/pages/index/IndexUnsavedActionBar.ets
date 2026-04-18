@@ -6,6 +6,16 @@ export interface IndexUnsavedActionTheme {
   cardBg: string;
 }
 
+export function getDefaultIndexUnsavedActionTheme(): IndexUnsavedActionTheme {
+  return {
+    textPrimary: '#1F2937',
+    textSecondary: '#5B6B82',
+    divider: '#E7EDF5',
+    primary: '#2F7DFF',
+    cardBg: '#FFFFFF'
+  };
+}
+
 export function shouldShowIndexUnsavedActionBar(isVisible: boolean): boolean {
   return isVisible;
 }
@@ -14,13 +24,7 @@ export function shouldShowIndexUnsavedActionBar(isVisible: boolean): boolean {
 export struct IndexUnsavedActionBar {
   @Prop isVisible: boolean = false;
   @Prop marginBottom: number = 96;
-  @Prop theme: IndexUnsavedActionTheme = {
-    textPrimary: '#1F2937',
-    textSecondary: '#5B6B82',
-    divider: '#E7EDF5',
-    primary: '#2F7DFF',
-    cardBg: '#FFFFFF'
-  };
+  @Prop theme: IndexUnsavedActionTheme = getDefaultIndexUnsavedActionTheme();
 
   onUndo: () => void = () => {};
   onSave: () => void = () => {};

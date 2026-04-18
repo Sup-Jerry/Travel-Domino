@@ -1,0 +1,4 @@
+interface:
+  display_name: "High Bar Scoring"
+  short_description: "Score projects with strict evidence-first gates and hard caps."
+  default_prompt: "Use this skill to evaluate a codebase with high-threshold scoring, explicit deductions, and cap rules."

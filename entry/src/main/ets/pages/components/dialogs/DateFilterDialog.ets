@@ -2,8 +2,34 @@
 
 export type DateFilterDialogAction = 'show_all' | 'select_date' | 'select_range';
 
+export interface DateFilterDialogOption {
+  action: DateFilterDialogAction;
+  title: string;
+  description: string;
+}
+
+export function getDateFilterDialogOptions(): DateFilterDialogOption[] {
+  return [
+    {
+      action: 'show_all',
+      title: '显示全部行程',
+      description: '展开所有日期的完整时间轴'
+    },
+    {
+      action: 'select_date',
+      title: '选择具体日期',
+      description: '专注某一天的游玩计划'
+    },
+    {
+      action: 'select_range',
+      title: '选择日期范围',
+      description: '查看比如 26号 到 29号 之间的行程'
+    }
+  ];
+}
+
 export function getDateFilterDialogActions(): DateFilterDialogAction[] {
-  return ['show_all', 'select_date', 'select_range'];
+  return getDateFilterDialogOptions().map((item: DateFilterDialogOption) => item.action);
 }
 
 export function isDateFilterDialogActionSupported(action: string): boolean {

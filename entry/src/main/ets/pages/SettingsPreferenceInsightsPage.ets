@@ -12,7 +12,7 @@ export interface ModeFrequencyView {
   modeLeisure: number;
 }
 
-interface ModeBarItem {
+export interface ModeBarItem {
   label: string;
   count: number;
   color: string;
@@ -89,6 +89,110 @@ export function resolveSettingsPreferenceConsistencyRateText(match: number, mism
   }
   const percent = Math.round((match * 1000) / total) / 10;
   return `${percent}%`;
+}
+
+export function resolveSettingsPreferenceWeatherLevelText(value: number): string {
+  if (value <= 0) {
+    return '低';
+  }
+  if (value >= 2) {
+    return '高';
+  }
+  return '中';
+}
+
+export function resolveSettingsPreferenceDensityText(value: number): string {
+  const level = clampSettingsPreferenceInt(value, 0, 2);
+  if (level === 0) {
+    return '低';
+  }
+  if (level === 2) {
+    return '高';
+  }
+  return '中';
+}
+
+export function resolveSettingsPreferencePaceText(value: number): string {
+  const level = clampSettingsPreferenceInt(value, 0, 2);
+  if (level === 0) {
+    return '松弛';
+  }
+  if (level === 2) {
+    return '紧凑';
+  }
+  return '平衡';
+}
+
+export function resolveSettingsPreferencePreferenceText(value: number): string {
+  const level = clampSettingsPreferenceInt(value, 0, 4);
+  if (level === 1) {
+    return '景点';
+  }
+  if (level === 2) {
+    return '美食';
+  }
+  if (level === 3) {
+    return '文化';
+  }
+  if (level === 4) {
+    return '夜景';
+  }
+  return '均衡';
+}
+
+export function resolveSettingsPreferenceEnergyText(value: number): string {
+  const level = clampSettingsPreferenceInt(value, 0, 2);
+  if (level === 0) {
+    return '轻松';
+  }
+  if (level === 2) {
+    return '充沛';
+  }
+  return '中等';
+}
+
+export function resolveSettingsPreferenceStrategySummary(profile: UserStrategyProfile): string {
+  if (profile.sampleCount < RECOMMEND_SAMPLE_THRESHOLD && profile.manualOverrideEnabled !== true) {
+    return '样本不足，继续使用 AI 后会形成更稳定画像';
+  }
+  return `${resolveSettingsPreferenceDensityText(profile.avgDensity)}密度 · ${resolveSettingsPreferencePaceText(profile.avgPace)}节奏 · ` +
+    `${resolveSettingsPreferencePreferenceText(profile.avgPreference)}偏好 · ${resolveSettingsPreferenceEnergyText(profile.avgEnergy)}体力`;
+}
+
+export function resolveSettingsPreferenceDominantModeText(freq: ModeFrequencyView, sampleCount: number): string {
+  if (sampleCount <= 0) {
+    return '暂无';
+  }
+  let maxMode: string = '默认';
+  let maxCount = freq.modeDefault;
+  if (freq.modeSoldier > maxCount) {
+    maxMode = '特种兵';
+    maxCount = freq.modeSoldier;
+  }
+  if (freq.modeLeisure > maxCount) {
+    maxMode = '休闲';
+    maxCount = freq.modeLeisure;
+  }
+  if (freq.modeCustom > maxCount) {
+    maxMode = '自定义';
+  }
+  return maxMode;
+}
+
+export function buildSettingsPreferenceModeUsageItems(freq: ModeFrequencyView): ModeBarItem[] {
+  return [
+    { label: '默认', count: freq.modeDefault, color: '#5B8FF9' },
+    { label: '特种兵', count: freq.modeSoldier, color: '#F6903D' },
+    { label: '休闲', count: freq.modeLeisure, color: '#5AD8A6' },
+    { label: '自定义', count: freq.modeCustom, color: '#9270CA' }
+  ];
+}
+
+export function normalizeSettingsPreferenceCount(raw: number): number {
+  if (!Number.isFinite(raw) || raw <= 0) {
+    return 0;
+  }
+  return Math.floor(raw);
 }
 
 @Entry
@@ -242,101 +346,35 @@ struct SettingsPreferenceInsightsPage {
   }
 
   private getWeatherLevelText(value: number): string {
-    if (value <= 0) {
-      return '低';
-    }
-    if (value >= 2) {
-      return '高';
-    }
-    return '中';
+    return resolveSettingsPreferenceWeatherLevelText(value);
   }
 
   private getDensityText(value: number): string {
-    const level = this.clampInt(value, 0, 2);
-    if (level === 0) {
-      return '低';
-    }
-    if (level === 2) {
-      return '高';
-    }
-    return '中';
+    return resolveSettingsPreferenceDensityText(value);
   }
 
   private getPaceText(value: number): string {
-    const level = this.clampInt(value, 0, 2);
-    if (level === 0) {
-      return '松弛';
-    }
-    if (level === 2) {
-      return '紧凑';
-    }
-    return '平衡';
+    return resolveSettingsPreferencePaceText(value);
   }
 
   private getPreferenceText(value: number): string {
-    const level = this.clampInt(value, 0, 4);
-    if (level === 1) {
-      return '景点';
-    }
-    if (level === 2) {
-      return '美食';
-    }
-    if (level === 3) {
-      return '文化';
-    }
-    if (level === 4) {
-      return '夜景';
-    }
-    return '均衡';
+    return resolveSettingsPreferencePreferenceText(value);
   }
 
   private getEnergyText(value: number): string {
-    const level = this.clampInt(value, 0, 2);
-    if (level === 0) {
-      return '轻松';
-    }
-    if (level === 2) {
-      return '充沛';
-    }
-    return '中等';
+    return resolveSettingsPreferenceEnergyText(value);
   }
 
   private getStrategySummary(): string {
-    if (this.profile.sampleCount < RECOMMEND_SAMPLE_THRESHOLD && this.profile.manualOverrideEnabled !== true) {
-      return '样本不足，继续使用 AI 后会形成更稳定画像';
-    }
-    return `${this.getDensityText(this.profile.avgDensity)}密度 · ${this.getPaceText(this.profile.avgPace)}节奏 · ` +
-      `${this.getPreferenceText(this.profile.avgPreference)}偏好 · ${this.getEnergyText(this.profile.avgEnergy)}体力`;
+    return resolveSettingsPreferenceStrategySummary(this.profile);
   }
 
   private getDominantModeText(): string {
-    const freq = this.modeFrequency;
-    let maxMode: string = '默认';
-    let maxCount = freq.modeDefault;
-    if (freq.modeSoldier > maxCount) {
-      maxMode = '特种兵';
-      maxCount = freq.modeSoldier;
-    }
-    if (freq.modeLeisure > maxCount) {
-      maxMode = '休闲';
-      maxCount = freq.modeLeisure;
-    }
-    if (freq.modeCustom > maxCount) {
-      maxMode = '自定义';
-    }
-    if (this.profile.sampleCount <= 0) {
-      return '暂无';
-    }
-    return maxMode;
+    return resolveSettingsPreferenceDominantModeText(this.modeFrequency, this.profile.sampleCount);
   }
 
   private getModeUsageItems(): ModeBarItem[] {
-    return [
-      { label: '默认', count: this.modeFrequency.modeDefault, color: '#5B8FF9' },
-      { label: '特种兵', count: this.modeFrequency.modeSoldier, color: '#F6903D' },
-      { label: '休闲', count: this.modeFrequency.modeLeisure, color: '#5AD8A6' },
-      { label: '自定义', count: this.modeFrequency.modeCustom, color: '#9270CA' }
-    ];
+    return buildSettingsPreferenceModeUsageItems(this.modeFrequency);
   }
 
   private getModeTotalCount(): number {
@@ -359,19 +397,11 @@ struct SettingsPreferenceInsightsPage {
   }
 
   private getMatchCount(): number {
-    const raw = Number(this.profile.consistencyMatchCount || 0);
-    if (!Number.isFinite(raw) || raw <= 0) {
-      return 0;
-    }
-    return Math.floor(raw);
+    return normalizeSettingsPreferenceCount(Number(this.profile.consistencyMatchCount || 0));
   }
 
   private getMismatchCount(): number {
-    const raw = Number(this.profile.consistencyMismatchCount || 0);
-    if (!Number.isFinite(raw) || raw <= 0) {
-      return 0;
-    }
-    return Math.floor(raw);
+    return normalizeSettingsPreferenceCount(Number(this.profile.consistencyMismatchCount || 0));
   }
 
   private getConsistencyRateText(): string {

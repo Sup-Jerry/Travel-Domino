@@ -13,6 +13,32 @@ export function canPlanItemShowConflictFixButton(isConflict: boolean, suggestedS
   return !!isConflict && (suggestedShiftMinutes || 0) > 0;
 }
 
+export interface PlanItemDisplayState {
+  showCrossDayLabel: boolean;
+  startText: string;
+  endText: string;
+  showConflict: boolean;
+  conflictText: string;
+  showConflictFixButton: boolean;
+  fixButtonMinutes: number;
+}
+
+export function resolvePlanItemDisplayState(item: TravelPlanItem): PlanItemDisplayState {
+  const rawStartTime = item.computedStartTime || '';
+  const showCrossDayLabel = shouldPlanItemShowCrossDayLabel(rawStartTime);
+  const fixButtonMinutes = item.suggestedShiftMinutes || 0;
+  const showConflict = !!item.isConflict;
+  return {
+    showCrossDayLabel: showCrossDayLabel,
+    startText: showCrossDayLabel ? rawStartTime : resolvePlanItemTimeText(rawStartTime),
+    endText: resolvePlanItemTimeText(item.computedEndTime || ''),
+    showConflict: showConflict,
+    conflictText: item.conflictMsg || '时间冲突',
+    showConflictFixButton: canPlanItemShowConflictFixButton(showConflict, fixButtonMinutes),
+    fixButtonMinutes: fixButtonMinutes
+  };
+}
+
 @Component
 export struct PlanItemView {
   @ObjectLink item: TravelPlanItem;
@@ -25,19 +51,23 @@ export struct PlanItemView {
   // [新增] 修复冲突回调
   onFixConflict: (shiftMinutes: number) => void = () => {};
 
+  private getDisplayState(): PlanItemDisplayState {
+    return resolvePlanItemDisplayState(this.item);
+  }
+
   build() {
     Row() {
       // 1. 左侧：时间轴
       Column() {
-        if (shouldPlanItemShowCrossDayLabel(this.item.computedStartTime || '')) {
+        if (this.getDisplayState().showCrossDayLabel) {
           // 跨天显示日期 (简易版样式)
-          Text(this.item.computedStartTime).fontSize(10).fontColor('#666666')
+          Text(this.getDisplayState().startText).fontSize(10).fontColor('#666666')
         } else {
-          Text(resolvePlanItemTimeText(this.item.computedStartTime || '')).fontSize(14).fontWeight(FontWeight.Bold)
+          Text(this.getDisplayState().startText).fontSize(14).fontWeight(FontWeight.Bold)
         }
         // 连接线 (这里简化显示，实际可以用 Line 组件)
         Text('|').fontSize(10).fontColor('#CCCCCC').margin({ top: 2, bottom: 2 })
-        Text(resolvePlanItemTimeText(this.item.computedEndTime || '')).fontSize(12).fontColor('#999999')
+        Text(this.getDisplayState().endText).fontSize(12).fontColor('#999999')
       }
       .width(50)
       .alignItems(HorizontalAlign.End)
@@ -72,24 +102,24 @@ export struct PlanItemView {
         }
 
         // --- 🚨 [核心新增] 冲突报警区域 ---
-        if (this.item.isConflict) {
+        if (this.getDisplayState().showConflict) {
           Column() {
             // 红色警告文案
-            Text(`⚠️ ${this.item.conflictMsg || '时间冲突'}`)
+            Text(`⚠️ ${this.getDisplayState().conflictText}`)
               .fontSize(12)
               .fontColor(Color.Red)
               .margin({ bottom: 4 })
 
             // 修复按钮 (仅当有建议时间时显示)
-            if (canPlanItemShowConflictFixButton(this.item.isConflict, this.item.suggestedShiftMinutes || 0)) {
-              Button(`一键推迟 ${this.item.suggestedShiftMinutes} 分钟`)
+            if (this.getDisplayState().showConflictFixButton) {
+              Button(`一键推迟 ${this.getDisplayState().fixButtonMinutes} 分钟`)
                 .fontSize(12)
                 .height(28)
                 .backgroundColor('#FF5252') // 警示红
                 .fontColor(Color.White)
                 .onClick(() => {
                   // 触发修复
-                  this.onFixConflict(this.item.suggestedShiftMinutes || 0);
+                  this.onFixConflict(this.getDisplayState().fixButtonMinutes);
                 })
             }
           }

@@ -50,6 +50,27 @@ export function shouldPlanSearchLoadMore(
   return loaded && !searching && !loadingMore && hasMore;
 }
 
+export function isPlanSearchCacheFresh(cachedAt: number, now: number, ttlMs: number): boolean {
+  if (!Number.isFinite(cachedAt) || !Number.isFinite(now) || !Number.isFinite(ttlMs)) {
+    return false;
+  }
+  if (cachedAt < 0 || now < cachedAt) {
+    return false;
+  }
+  return now - cachedAt <= ttlMs;
+}
+
+export function resolvePlanSearchResultText(searching: boolean, loadingMore: boolean, resultCount: number): string {
+  const safeCount = Number.isFinite(resultCount) && resultCount > 0 ? Math.floor(resultCount) : 0;
+  if (searching) {
+    return '搜索中...';
+  }
+  if (loadingMore) {
+    return `结果 ${safeCount} 条（加载更多中）`;
+  }
+  return `结果 ${safeCount} 条`;
+}
+
 @Entry
 @Component
 struct PlanSearchPage {
@@ -107,7 +128,7 @@ struct PlanSearchPage {
     const keyword = normalizePlanSearchKeyword(rawKeyword);
     const cacheKey = resolvePlanSearchCacheKey(keyword);
     const cached = this.searchCache.get(cacheKey);
-    if (cached && Date.now() - cached.ts <= this.searchCacheTtlMs) {
+    if (cached && isPlanSearchCacheFresh(cached.ts, Date.now(), this.searchCacheTtlMs)) {
       this.resultList = [...cached.list];
       this.currentKeyword = keyword;
       this.currentOffset = cached.offset;
@@ -229,15 +250,15 @@ struct PlanSearchPage {
         });
 
       if (this.searching) {
-        Text('搜索中...')
+        Text(resolvePlanSearchResultText(true, false, this.resultList.length))
           .fontSize(12)
           .fontColor(this.getThemePalette().textSecondary);
       } else if (this.loadingMore) {
-        Text(`结果 ${this.resultList.length} 条（加载更多中）`)
+        Text(resolvePlanSearchResultText(false, true, this.resultList.length))
           .fontSize(12)
           .fontColor(this.getThemePalette().textSecondary);
       } else {
-        Text(`结果 ${this.resultList.length} 条`) 
+        Text(resolvePlanSearchResultText(false, false, this.resultList.length))
           .fontSize(12)
           .fontColor(this.getThemePalette().textSecondary);
       }

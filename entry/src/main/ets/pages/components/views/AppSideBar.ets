@@ -21,8 +21,14 @@ export function shouldAppSideBarNavigate(current: AppNavKey, target: AppNavKey):
   return current !== target;
 }
 
-class RouterUrlOptions {
+export class AppSideBarRouteOptions {
   url: string = '';
+}
+
+export function createAppSideBarRouteOptions(url: string): AppSideBarRouteOptions {
+  const options = new AppSideBarRouteOptions();
+  options.url = url;
+  return options;
 }
 
 @Component
@@ -35,10 +41,8 @@ export struct AppSideBar {
     return ThemeCenter.getPalette(this.effectiveTheme);
   }
 
-  private createRouteOptions(url: string): RouterUrlOptions {
-    const options: RouterUrlOptions = new RouterUrlOptions();
-    options.url = url;
-    return options;
+  private createRouteOptions(url: string): AppSideBarRouteOptions {
+    return createAppSideBarRouteOptions(url);
   }
 
   private async safeReplaceUrl(url: string): Promise<void> {

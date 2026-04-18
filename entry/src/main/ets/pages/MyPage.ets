@@ -14,6 +14,11 @@ const DEFAULT_USER_NAME = '游客用户';
 const MY_PAGE_USERNAME_PATTERN: RegExp = /^[\u4E00-\u9FFFa-zA-Z0-9_ ]+$/;
 const MY_PAGE_LIGHT_HINT_DEDUP_MS = 12000;
 
+export interface MyPageLightHintPayload {
+  key: string;
+  message: string;
+}
+
 export function resolveMyPageAgreementRequiredToast(): string {
   return '请先勾选《用户协议》和《隐私政策》';
 }
@@ -45,6 +50,38 @@ export function shouldMyPageEmitLightHint(
     return false;
   }
   return !(lastLightHintKey === safeKey && (now - lastLightHintAt) < dedupMs);
+}
+
+export function resolveMyPageProfileBootstrapHint(
+  accountId: string,
+  state: ProfileViewState
+): MyPageLightHintPayload | null {
+  const safeAccountId = String(accountId || '').trim() || 'guest_local';
+  if (state === 'offline') {
+    return {
+      key: `profile_offline:${safeAccountId}`,
+      message: '当前为离线缓存资料'
+    };
+  }
+  if (state === 'error') {
+    return {
+      key: `profile_cloud_fail:${safeAccountId}`,
+      message: '云端同步失败，请稍后重试'
+    };
+  }
+  return null;
+}
+
+export function resolveMyPageAvatarUpdateToast(uploadState: string): string {
+  return String(uploadState || '').trim() === 'SYNCED' ? '头像已更新并同步' : '头像已更新（本地）';
+}
+
+export function resolveMyPageAvatarSyncPendingHint(currentUserId: string): MyPageLightHintPayload {
+  const safeUserId = String(currentUserId || '').trim() || 'guest_local';
+  return {
+    key: `avatar_cloud_sync_pending:${safeUserId}`,
+    message: '云端同步失败或延迟，稍后将自动重试'
+  };
 }
 
 @Entry
@@ -187,14 +224,10 @@ struct MyPage {
       this.avatarDisplayUri = this.avatarService.resolveDisplayUri(profile);
       this.currentRemoteAvatarUrl = profile.cloudUrl;
       this.useDefaultAvatar = false;
-      if (profile.uploadState === 'SYNCED') {
-        this.toast('头像已更新并同步');
-      } else {
-        this.toast('头像已更新（本地）');
-        this.toastLightHintOnce(
-          `avatar_cloud_sync_pending:${this.currentUserId}`,
-          '云端同步失败或延迟，稍后将自动重试'
-        );
+      this.toast(resolveMyPageAvatarUpdateToast(profile.uploadState));
+      if (profile.uploadState !== 'SYNCED') {
+        const hint = resolveMyPageAvatarSyncPendingHint(this.currentUserId);
+        this.toastLightHintOnce(hint.key, hint.message);
       }
     } catch (_error) {
       this.toast('头像选择失败，请稍后重试');
@@ -204,13 +237,9 @@ struct MyPage {
   }
 
   private showProfileBootstrapHint(accountId: string, state: ProfileViewState): void {
-    const safeAccountId = String(accountId || '').trim() || 'guest_local';
-    if (state === 'offline') {
-      this.toastLightHintOnce(`profile_offline:${safeAccountId}`, '当前为离线缓存资料');
-      return;
-    }
-    if (state === 'error') {
-      this.toastLightHintOnce(`profile_cloud_fail:${safeAccountId}`, '云端同步失败，请稍后重试');
+    const hint = resolveMyPageProfileBootstrapHint(accountId, state);
+    if (hint) {
+      this.toastLightHintOnce(hint.key, hint.message);
     }
   }
 

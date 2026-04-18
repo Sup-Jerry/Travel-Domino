@@ -10,7 +10,11 @@ export function shouldShowSuggestionSummary(summaryText: string): boolean {
 }
 
 export function getSuggestionApplyButtonLabel(): string {
-  return '????';
+  return '应用修改';
+}
+
+export function getSuggestionBackButtonLabel(): string {
+  return '上一步';
 }
 
 @CustomDialog
@@ -77,7 +81,7 @@ export struct SuggestionDialog {
       // 按钮组 (返回 | 放弃 | 确认)
       Row() {
         // 1. 返回按钮 (回到三选一)
-        Button('上一步')
+        Button(getSuggestionBackButtonLabel())
           .type(ButtonType.Normal)
           .backgroundColor($r('app.color.accent_primary'))
           .fontColor(Color.White)
@@ -96,7 +100,7 @@ export struct SuggestionDialog {
         Blank().width(12)
 
         // 2. 确认按钮
-        Button('应用修改')
+        Button(getSuggestionApplyButtonLabel())
           .type(ButtonType.Normal)
           .backgroundColor($r('app.color.accent_primary'))
           .fontColor(Color.White)

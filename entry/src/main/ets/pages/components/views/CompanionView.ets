@@ -69,6 +69,91 @@ export function resolveCompanionBackLevel(
   }
   return companionSubMode === 'control' ? 'control' : 'immersive';
 }
+
+export function resolveCompanionBackAction(
+  showHistoryPage: boolean,
+  showSearchPage: boolean,
+  showFilterPage: boolean,
+  companionSubMode: CompanionSubMode
+): 'close_overlay' | 'control_to_immersive' | 'exit' {
+  if (isCompanionOverlayVisible(showHistoryPage, showSearchPage, showFilterPage)) {
+    return 'close_overlay';
+  }
+  return companionSubMode === 'control' ? 'control_to_immersive' : 'exit';
+}
+
+export function resolveCompanionSearchResults(
+  source: EventEntity[],
+  keyword: string,
+  searchTextById?: Map<number, string>
+): EventEntity[] {
+  const normalizedKeyword = keyword.trim().toLowerCase();
+  if (normalizedKeyword.length === 0) {
+    return source.slice(0, 20);
+  }
+  return source.filter((event: EventEntity) => {
+    const fallbackText = `${event.name}|${event.address || ''}`.toLowerCase();
+    const searchable = searchTextById ? (searchTextById.get(event.id) ?? fallbackText) : fallbackText;
+    return searchable.includes(normalizedKeyword);
+  });
+}
+
+export function resolveCompanionDefaultFocusId(
+  schedule: EventEntity[],
+  currentEventId: number,
+  nextEventId: number
+): number {
+  if (schedule.length === 0) {
+    return -1;
+  }
+
+  let activeId: number = -1;
+  let pendingId: number = -1;
+  for (let i = 0; i < schedule.length; i++) {
+    const event = schedule[i];
+    if (activeId <= 0 && TimelineExecutionState.isActive(event)) {
+      activeId = event.id;
+    }
+    if (pendingId <= 0 && TimelineExecutionState.isStartable(event)) {
+      pendingId = event.id;
+    }
+    if (activeId > 0 && pendingId > 0) {
+      break;
+    }
+  }
+
+  if (activeId > 0) {
+    return activeId;
+  }
+  if (currentEventId > 0 && schedule.some((event: EventEntity) => event.id === currentEventId)) {
+    return currentEventId;
+  }
+  if (nextEventId > 0 && schedule.some((event: EventEntity) => event.id === nextEventId)) {
+    return nextEventId;
+  }
+  if (pendingId > 0) {
+    return pendingId;
+  }
+  return schedule[0].id;
+}
+
+export function resolveCompanionVisibleFocusId(visibleEvents: EventEntity[], focusedEventId: number): number {
+  if (visibleEvents.length === 0) {
+    return -1;
+  }
+  if (visibleEvents.some((event: EventEntity) => event.id === focusedEventId)) {
+    return focusedEventId;
+  }
+  return visibleEvents[0].id;
+}
+
+export function resolveCompanionVisibleFocusPosition(
+  focusedEventId: number,
+  visibleIndexById: Map<number, number>
+): number {
+  const index = visibleIndexById.get(focusedEventId);
+  return index !== undefined ? index + 1 : 0;
+}
 @Component
 export struct CompanionView {
   @Link vm: TimelineViewModel;
@@ -390,18 +475,16 @@ export struct CompanionView {
 
   private getVisibleFocusPosition(): number {
     this.ensureScheduleCacheUpToDate();
-    const index = this.cachedVisibleIndexById.get(this.focusedEventId);
-    return index !== undefined ? index + 1 : 0;
+    return resolveCompanionVisibleFocusPosition(this.focusedEventId, this.cachedVisibleIndexById);
   }
 
   private ensureFocusVisible(): void {
     const visible = this.getVisibleScheduledEvents();
-    if (visible.length === 0) {
+    const nextFocusId = resolveCompanionVisibleFocusId(visible, this.focusedEventId);
+    if (nextFocusId <= 0 || nextFocusId === this.focusedEventId) {
       return;
     }
-    if (!visible.some((event: EventEntity) => event.id === this.focusedEventId)) {
-      this.applyFocusById(visible[0].id, 'tap');
-    }
+    this.applyFocusById(nextFocusId, 'tap');
   }
 
   private openFilterPage(): void {
@@ -423,16 +506,11 @@ export struct CompanionView {
   }
 
   private refreshSearchResults(): void {
-    const keyword = this.searchKeyword.trim().toLowerCase();
-    const source = this.getScheduledEvents();
-    if (keyword.length === 0) {
-      this.searchResults = source.slice(0, 20);
-      return;
-    }
-    this.searchResults = source.filter((event: EventEntity) => {
-      const searchable = this.cachedSearchTextById.get(event.id) ?? `${event.name}|${event.address || ''}`.toLowerCase();
-      return searchable.includes(keyword);
-    });
+    this.searchResults = resolveCompanionSearchResults(
+      this.getScheduledEvents(),
+      this.searchKeyword,
+      this.cachedSearchTextById
+    );
   }
 
   private openSearchPage(): void {
@@ -468,44 +546,11 @@ export struct CompanionView {
   }
 
   private pickDefaultFocusId(): number {
-    const schedule = this.getScheduledEvents();
-    if (schedule.length === 0) {
-      return -1;
-    }
-
-    let activeId: number = -1;
-    let pendingId: number = -1;
-    for (let i = 0; i < schedule.length; i++) {
-      const event = schedule[i];
-      if (activeId <= 0 && TimelineExecutionState.isActive(event)) {
-        activeId = event.id;
-      }
-      if (pendingId <= 0 && TimelineExecutionState.isStartable(event)) {
-        pendingId = event.id;
-      }
-      if (activeId > 0 && pendingId > 0) {
-        break;
-      }
-    }
-
-    if (activeId > 0) {
-      return activeId;
-    }
-
-    const currentEvent = this.context.currentEvent;
-    if (currentEvent !== null && schedule.some(e => e.id === currentEvent.id)) {
-      return currentEvent.id;
-    }
-
-    const nextEvent = this.context.nextEvent;
-    if (nextEvent !== null && schedule.some(e => e.id === nextEvent.id)) {
-      return nextEvent.id;
-    }
-
-    if (pendingId > 0) {
-      return pendingId;
-    }
-    return schedule[0].id;
+    return resolveCompanionDefaultFocusId(
+      this.getScheduledEvents(),
+      this.context.currentEvent ? this.context.currentEvent.id : -1,
+      this.context.nextEvent ? this.context.nextEvent.id : -1
+    );
   }
 
   private ensureFocusReady(): void {
@@ -900,7 +945,13 @@ export struct CompanionView {
   }
 
   private handleCompanionBackNavigation(): boolean {
-    if (isCompanionOverlayVisible(this.showHistoryPage, this.showSearchPage, this.showFilterPage)) {
+    const action = resolveCompanionBackAction(
+      this.showHistoryPage,
+      this.showSearchPage,
+      this.showFilterPage,
+      this.companionSubMode
+    );
+    if (action === 'close_overlay') {
       this.showHistoryPage = false;
       this.showSearchPage = false;
       this.showFilterPage = false;
@@ -912,7 +963,7 @@ export struct CompanionView {
       hilog.info(0x0000, 'CompanionView', '[COMPANION][back_hierarchy] close_overlay');
       return true;
     }
-    if (this.companionSubMode === 'control') {
+    if (action === 'control_to_immersive') {
       this.enterImmersiveMode();
       this.safeShowToast('已返回沉浸模式');
       hilog.info(0x0000, 'CompanionView', '[COMPANION][back_hierarchy] control_to_immersive');

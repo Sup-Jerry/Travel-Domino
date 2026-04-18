@@ -165,7 +165,7 @@ description: 用于 Travel Domino（HarmonyOS 行程规划项目）的定向开�
 
 ## User-Learned Best Practices & Constraints
 
-> **Auto-Generated Section**: This section is maintained by `skill-evolution-manager`. Do not edit manually.
+> **Auto-Generated Section**: This section is maintained by `skills-workbench`. Do not edit manually.
 
 ### User Preferences
 - Retrospective output should follow: issues-root causes-improvements-next constraints.

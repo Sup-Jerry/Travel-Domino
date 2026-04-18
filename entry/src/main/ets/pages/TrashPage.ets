@@ -185,6 +185,10 @@ struct TrashPage {
   }
 }
 
+export function createTrashPageForTest(): Object {
+  return new TrashPage(undefined, new LocalStorage()) as Object;
+}
+
 
 
 
