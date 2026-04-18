@@ -66,26 +66,26 @@ class CapturedDialogOptionsBS {
   offsetDy: number = 0;
 
   constructor(options: Object) {
-    const alignment = Reflect.get(options as Object, 'alignment');
+    const alignment: Object | null | undefined = Reflect.get(options as Object, 'alignment') as Object | null | undefined;
     this.alignmentLabel = alignment !== null && alignment !== undefined ? String(alignment) : '';
 
-    const autoCancel = Reflect.get(options as Object, 'autoCancel');
+    const autoCancel: Object | null | undefined = Reflect.get(options as Object, 'autoCancel') as Object | null | undefined;
     if (typeof autoCancel === 'boolean') {
       this.autoCancel = autoCancel;
     }
 
-    const customStyle = Reflect.get(options as Object, 'customStyle');
+    const customStyle: Object | null | undefined = Reflect.get(options as Object, 'customStyle') as Object | null | undefined;
     if (typeof customStyle === 'boolean') {
       this.customStyle = customStyle;
     }
 
-    const builder = Reflect.get(options as Object, 'builder');
+    const builder: Object | null | undefined = Reflect.get(options as Object, 'builder') as Object | null | undefined;
     this.hasBuilder = builder !== null && builder !== undefined;
 
-    const offset = Reflect.get(options as Object, 'offset');
+    const offset: Object | null | undefined = Reflect.get(options as Object, 'offset') as Object | null | undefined;
     if (offset !== null && offset !== undefined) {
       this.hasOffset = true;
-      const dy = Reflect.get(offset as Object, 'dy');
+      const dy: Object | null | undefined = Reflect.get(offset as Object, 'dy') as Object | null | undefined;
       if (typeof dy === 'number') {
         this.offsetDy = dy;
       }
