@@ -225,3 +225,15 @@
 4. Zero-hit function files: `1` (`entry/src/main/ets/model/interface/IMapService.ets`, interface declaration - excluded).
 5. Notes:
    - `Phase2BatchBC` - `Phase2BatchBN` are now wired into `entry/src/test/List.test.ets`.
+
+## 16. Progress Snapshot (2026-04-18, Batch BO-BZ)
+1. Phase 2 completed batches: `A-BZ`（`BO-BZ` 已完成并接入）。
+2. Latest quality gates:
+   - `scripts/ci/validate-unit-test-cases.ps1`: passed（272 files checked）
+   - `scripts/ci/unit-all.ps1`: passed（BUILD SUCCESSFUL）
+3. Latest `entry` coverage (`entry/.test/default/outputs/test/reports/coverageReport.json`):
+   - Overall: `Functions 28.9%`, `Branches 60.2%`, `Lines 54.8%`
+4. Zero-hit function files: `1`（`entry/src/main/ets/model/interface/IMapService.ets`, interface declaration - excluded）。
+5. Notes:
+   - `Phase2BatchBO` - `Phase2BatchBZ` 已在 `entry/src/test/List.test.ets` 注册。
+   - `Phase2BatchBV.test.ets` 已补齐 `invalid/conflict/regression/combined` 分类与回归用例门禁。
