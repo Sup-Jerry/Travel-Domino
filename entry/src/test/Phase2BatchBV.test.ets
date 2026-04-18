@@ -262,6 +262,24 @@ export default function phase2BatchBVTest() {
       // Assert
       expect(reason).assertEqual('时间不足');
     });
+
+    it('invalid: skip_reason_should_fallback_to_manual_when_note_is_blank', 0, () => {
+      // Arrange
+      const note = '   ';
+      // Act
+      const reason = getHistoryTimelineSkipReasonByNote(note);
+      // Assert
+      expect(reason).assertEqual('手动跳过');
+    });
+
+    it('conflict: history_visibility_should_keep_completed_filter_priority_when_skip_marked_abnormal', 0, () => {
+      // Arrange
+      const filter = 'completed';
+      // Act
+      const visible = isHistoryTimelineItemVisibleByFilter(filter, 'SKIP', true);
+      // Assert
+      expect(visible).assertFalse();
+    });
   });
 
   describe('phase2BatchBVTest_timeline_exports', () => {
@@ -300,6 +318,26 @@ export default function phase2BatchBVTest() {
       // Act
       const showEmpty = shouldShowCompanionTimelineEmptyState(count);
       // Assert
+      expect(showEmpty).assertTrue();
+    });
+
+    it('regression: visible_count_should_stay_one_for_negative_count_to_avoid_summary_underflow', 0, () => {
+      // Arrange
+      const count = -3;
+      // Act
+      const visibleCount = getCompanionTimelineVisibleCount(count);
+      // Assert
+      expect(visibleCount).assertEqual(1);
+    });
+
+    it('combined: timeline_summary_and_empty_state_should_be_consistent_at_zero_count', 0, () => {
+      // Arrange
+      const filterLabel = '全部';
+      // Act
+      const summary = getCompanionTimelineFilterSummary(filterLabel, 0, 0);
+      const showEmpty = shouldShowCompanionTimelineEmptyState(0);
+      // Assert
+      expect(summary.indexOf('0/1') >= 0).assertTrue();
       expect(showEmpty).assertTrue();
     });
   });
