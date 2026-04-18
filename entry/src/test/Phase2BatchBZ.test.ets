@@ -534,7 +534,7 @@ export default function phase2BatchBZTest() {
 
         // Assert
         expect(visible).assertTrue();
-        expect(label).assertEqual('缁撴潫');
+        expect(label).assertEqual('结束');
         expect(enabled).assertTrue();
         expect(nextStation.indexOf('09:30') >= 0).assertTrue();
       });
@@ -748,7 +748,7 @@ export default function phase2BatchBZTest() {
         await sleepBZ(0);
 
         // Assert
-        expect(remainingText.indexOf('灏忔椂') >= 0).assertTrue();
+        expect(remainingText.indexOf('小时') >= 0).assertTrue();
         expect(uiContext.showCount).assertEqual(1);
         expect(service.hardDeletedPlanIds[0]).assertEqual(23);
         expect(refreshCalls).assertEqual(1);
@@ -765,7 +765,7 @@ export default function phase2BatchBZTest() {
 
         // Assert
         expect(diff).assertEqual(3_598_000);
-        expect(text.indexOf('灏忔椂') >= 0).assertTrue();
+        expect(text.indexOf('小时') >= 0).assertTrue();
       });
     });
 

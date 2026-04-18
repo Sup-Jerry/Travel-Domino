@@ -98,24 +98,28 @@ class AvatarApiOptionsMockBQ implements AvatarUploadApiOptions {
   shouldEncodeThrow: boolean = false;
   remoteUrl: string = 'https://example.com/bq.jpg';
 
-  getAccessToken(): string {
+  getAccessToken = (): string => {
     return this.token;
-  }
+  };
 
-  encodeFileToDataUrl(_fileUriText: string, _mimeType: string): string {
+  encodeFileToDataUrl = (_fileUriText: string, _mimeType: string): string => {
     if (this.shouldEncodeThrow) {
       throw new Error('encode_failed_bq');
     }
     return 'data:image/jpeg;base64,AA==';
-  }
+  };
 
-  async updateAvatar(_accessToken: string, _imageDataUrl: string, _mimeType: string): Promise<AuthApiResponse<UpdateAvatarResult>> {
+  updateAvatar = async (
+    _accessToken: string,
+    _imageDataUrl: string,
+    _mimeType: string
+  ): Promise<AuthApiResponse<UpdateAvatarResult>> => {
     const data = new UpdateAvatarResult();
     data.avatarUrl = this.remoteUrl;
     const response = new AuthApiResponse<UpdateAvatarResult>(data);
     response.code = this.responseCode;
     return response;
-  }
+  };
 }
 
 class AmapPoiNodeMockBQ implements AmapPoiSearchNode {
@@ -300,6 +304,37 @@ export default function phase2BatchBQTest() {
       // Assert
       expect(String(result.status)).assertEqual('LOCAL_ONLY');
       expect(String(result.errorCode || '')).assertEqual('NO_SESSION');
+    });
+
+    it('regression: avatar_upload_should_keep_no_session_when_token_resolver_returns_empty', 0, async () => {
+      // Arrange
+      const options = new AvatarApiOptionsMockBQ();
+      options.token = '';
+      const api = new AvatarUploadApi(options);
+
+      // Act
+      const result = await api.uploadAvatar(createAvatarInputBQ());
+
+      // Assert
+      expect(String(result.status)).assertEqual('LOCAL_ONLY');
+      expect(String(result.errorCode || '')).assertEqual('NO_SESSION');
+      expect(String(result.remoteUrl || '')).assertEqual('');
+    });
+
+    it('conflict: avatar_upload_should_prefer_gateway_error_over_remote_url_on_non_zero_code', 0, async () => {
+      // Arrange
+      const options = new AvatarApiOptionsMockBQ();
+      options.responseCode = 409;
+      options.remoteUrl = 'https://example.com/should-not-use.jpg';
+      const api = new AvatarUploadApi(options);
+
+      // Act
+      const result = await api.uploadAvatar(createAvatarInputBQ());
+
+      // Assert
+      expect(String(result.status)).assertEqual('LOCAL_ONLY');
+      expect(String(result.errorCode || '')).assertEqual('409');
+      expect(String(result.remoteUrl || '')).assertEqual('');
     });
   });
 

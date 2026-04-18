@@ -46,6 +46,7 @@ import { ComposableStrategy } from '../main/ets/domain/strategy/TravelStrategyDi
 import { UserBehaviorTracker } from '../main/ets/domain/strategy/UserBehaviorTracker';
 import { AdaptationPrompt } from '../main/ets/domain/strategy/StrategyAdaptationEngine';
 import { AiService, AiRawItem } from '../main/ets/infrastructure/services/AiService';
+import { EventRepositoryImpl } from '../main/ets/infrastructure/persistence/EventRepositoryImpl';
 import { TimelineDatePolicy } from '../main/ets/domain/policy/TimelineDatePolicy';
 
 class StaticHooksBP {
@@ -631,7 +632,7 @@ export default function phase2BatchBPTest() {
 
       new TimelineExecutionService(host).calculateRealtimeSchedule();
 
-      expect(first.forecast_start_time.indexOf('+2澶?')).assertEqual(0);
+      expect(first.forecast_start_time.indexOf('+2天')).assertEqual(0);
     });
 
     it('boundary: distribution_service_should_filter_gaps_by_threshold_and_same_day', 0, () => {
@@ -692,7 +693,21 @@ export default function phase2BatchBPTest() {
       map.set(31, -5);
       map.set(32, 3);
 
-      await new TimelineDistributionService(host).applyDistribution(map);
+      const hooks = new StaticHooksBP(EventRepositoryImpl as Object, ['updateSingleField']);
+      hooks.set('updateSingleField', async (
+        _id: number,
+        _column: string,
+        _value: Object,
+        _planIdHint?: number
+      ): Promise<void> => {
+        return;
+      });
+
+      try {
+        await new TimelineDistributionService(host).applyDistribution(map);
+      } finally {
+        hooks.restore();
+      }
 
       expect(a.duration).assertEqual(60);
       expect(b.duration).assertEqual(240);
