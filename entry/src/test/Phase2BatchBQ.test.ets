@@ -334,7 +334,7 @@ export default function phase2BatchBQTest() {
       hooks.restoreAll();
     });
 
-    it('invalid: session_manager_should_propagate_persisted_clear_failure', 0, async () => {
+    it('conflict: session_manager_should_propagate_persisted_clear_failure', 0, async () => {
       // Arrange
       const hooks = new HooksBQ();
       hooks.keep(Object(AuthSessionStore), 'clearSessionPersisted');
@@ -546,7 +546,7 @@ export default function phase2BatchBQTest() {
       hooks.restoreAll();
     });
 
-    it('boundary: amap_private_should_cover_fallback_merge_and_generic_list', 0, async () => {
+    it('regression: amap_private_should_cover_fallback_merge_and_generic_list', 0, async () => {
       // Arrange
       const hooks = new HooksBQ();
       hooks.keep(Object(AmapService), 'searchPoiByWebApi');
@@ -598,3 +598,4 @@ export default function phase2BatchBQTest() {
     });
   });
 }
+
