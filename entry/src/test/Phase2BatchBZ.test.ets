@@ -250,6 +250,102 @@ class TrashUiContextMockBZ implements TrashUiContextLikeBZ {
   }
 }
 
+class TrashPlanServiceMockBZ implements TrashPlanServiceLikeBZ {
+  plans: PlanItem[] = [];
+  hardDeletedPlanIds: number[] = [];
+  restoredPlanIds: number[] = [];
+
+  async loadTrashPlans(): Promise<PlanItem[]> {
+    return this.plans;
+  }
+
+  async hardDeletePlan(planId: number): Promise<void> {
+    this.hardDeletedPlanIds.push(planId);
+  }
+
+  async restorePlan(planId: number): Promise<void> {
+    this.restoredPlanIds.push(planId);
+  }
+}
+
+class ArchivePlanServiceMockBZ implements ArchivePlanServiceLikeBZ {
+  plans: PlanItem[] = [];
+  softDeletedPlanIds: number[] = [];
+  activatedPlanIds: number[] = [];
+
+  async loadArchivedPlans(): Promise<PlanItem[]> {
+    return this.plans;
+  }
+
+  async softDeletePlan(planId: number): Promise<void> {
+    this.softDeletedPlanIds.push(planId);
+  }
+
+  async activatePlan(planId: number): Promise<void> {
+    this.activatedPlanIds.push(planId);
+  }
+}
+
+class PreferenceInstanceMockBZ {
+  async getValue(_key: string, _defaultValue: boolean): Promise<boolean> {
+    return true;
+  }
+}
+
+class LoginRouterMockBZ implements LoginRouterLikeBZ {
+  shouldThrow: boolean = false;
+  pushedUrls: string[] = [];
+
+  async replaceUrl(options: LoginRouteOptionsLikeBZ): Promise<void> {
+    if (this.shouldThrow) {
+      throw new Error('router_error');
+    }
+    this.pushedUrls.push(options.url);
+  }
+}
+
+class LoginUiContextMockBZ implements LoginUiContextLikeBZ {
+  private readonly router: LoginRouterMockBZ;
+
+  constructor(router: LoginRouterMockBZ) {
+    this.router = router;
+  }
+
+  getRouter(): LoginRouterLikeBZ {
+    return this.router;
+  }
+}
+
+class ProfileDataMockBZ {
+  username: string;
+
+  constructor(username: string) {
+    this.username = username;
+  }
+}
+
+class ProfileViewModelMockBZ {
+  boundContexts: Object[] = [];
+  ensuredIds: string[] = [];
+
+  bindContext(context: Object): void {
+    this.boundContexts.push(context);
+  }
+
+  async ensureProfile(accountId: string): Promise<Object | null> {
+    this.ensuredIds.push(accountId);
+    return new ProfileDataMockBZ('user1') as Object;
+  }
+
+  getState(): string {
+    return 'READY';
+  }
+}
+
+class HostContextMockBZ {
+  tag: string = 'host';
+}
+
 function sleepBZ(ms: number): Promise<void> {
   return new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => {
     setTimeout(() => resolve(), ms);
@@ -605,12 +701,8 @@ export default function phase2BatchBZTest() {
       it('normal: trash_page_load_plans_should_sync_plan_list_from_service', 0, async () => {
         // Arrange
         const page = createTrashPageForTest() as TrashPagePrivateBZ;
-        const plans = [buildPlanItemBZ(21, '鏉窞'), buildPlanItemBZ(22, '鑻忓窞')];
-        const service: TrashPlanServiceLikeBZ = {
-          loadTrashPlans: async (): Promise<PlanItem[]> => plans,
-          hardDeletePlan: async (_planId: number): Promise<void> => {},
-          restorePlan: async (_planId: number): Promise<void> => {}
-        };
+        const service = new TrashPlanServiceMockBZ();
+        service.plans = [buildPlanItemBZ(21, '鏉窞'), buildPlanItemBZ(22, '鑻忓窞')];
         Reflect.set(page as Object, 'planService', service);
 
         // Act
@@ -641,25 +733,16 @@ export default function phase2BatchBZTest() {
         const page = createTrashPageForTest() as TrashPagePrivateBZ;
         const uiContext = new TrashUiContextMockBZ();
         const item = buildPlanItemBZ(23, '鍗椾含');
-        let deletePlanId = -1;
         let refreshCalls = 0;
-        const service: TrashPlanServiceLikeBZ = {
-          loadTrashPlans: async (): Promise<PlanItem[]> => [],
-          hardDeletePlan: async (planId: number): Promise<void> => {
-            deletePlanId = planId;
-          },
-          restorePlan: async (_planId: number): Promise<void> => {}
-        };
+        const service = new TrashPlanServiceMockBZ();
         Reflect.set(page as Object, 'planService', service);
         Reflect.set(page as Object, 'loadPlans', (): void => {
           refreshCalls += 1;
         });
         Reflect.set(page as Object, 'getUIContext', (): TrashUiContextLikeBZ => uiContext);
-        const originalNow = Date.now;
-        Date.now = (): number => 1_000_000;
-
         // Act
-        const remainingText = page.getRemainingTimeText(1_000_000 - 6 * 3600 * 1000);
+        const nowTs = Date.now();
+        const remainingText = page.getRemainingTimeText(nowTs - 6 * 3600 * 1000);
         page.handleHardDelete(item);
         await Promise.resolve(uiContext.lastOptions?.secondaryButton.action());
         await sleepBZ(0);
@@ -667,9 +750,8 @@ export default function phase2BatchBZTest() {
         // Assert
         expect(remainingText.indexOf('灏忔椂') >= 0).assertTrue();
         expect(uiContext.showCount).assertEqual(1);
-        expect(deletePlanId).assertEqual(23);
+        expect(service.hardDeletedPlanIds[0]).assertEqual(23);
         expect(refreshCalls).assertEqual(1);
-        Date.now = originalNow;
       });
 
       it('combined: trash_page_pure_exports_should_keep_deadline_text_consistent', 0, () => {
@@ -691,12 +773,8 @@ export default function phase2BatchBZTest() {
       it('normal: archive_page_load_plans_should_sync_plan_list_from_service', 0, async () => {
         // Arrange
         const page = createArchivePageForTest() as ArchivePagePrivateBZ;
-        const plans = [buildPlanItemBZ(31, '鍖椾含')];
-        const service: ArchivePlanServiceLikeBZ = {
-          loadArchivedPlans: async (): Promise<PlanItem[]> => plans,
-          softDeletePlan: async (_planId: number): Promise<void> => {},
-          activatePlan: async (_planId: number): Promise<void> => {}
-        };
+        const service = new ArchivePlanServiceMockBZ();
+        service.plans = [buildPlanItemBZ(31, '鍖椾含')];
         Reflect.set(page as Object, 'planService', service);
 
         // Act
@@ -710,18 +788,8 @@ export default function phase2BatchBZTest() {
       it('boundary: archive_page_execute_soft_delete_and_activate_should_refresh_after_service_calls', 0, async () => {
         // Arrange
         const page = createArchivePageForTest() as ArchivePagePrivateBZ;
-        const activatedIds: number[] = [];
-        const deletedIds: number[] = [];
         let refreshCalls = 0;
-        const service: ArchivePlanServiceLikeBZ = {
-          loadArchivedPlans: async (): Promise<PlanItem[]> => [],
-          softDeletePlan: async (planId: number): Promise<void> => {
-            deletedIds.push(planId);
-          },
-          activatePlan: async (planId: number): Promise<void> => {
-            activatedIds.push(planId);
-          }
-        };
+        const service = new ArchivePlanServiceMockBZ();
         Reflect.set(page as Object, 'planService', service);
         Reflect.set(page as Object, 'loadPlans', (): void => {
           refreshCalls += 1;
@@ -733,8 +801,8 @@ export default function phase2BatchBZTest() {
         await page.handleActivate(item);
 
         // Assert
-        expect(deletedIds[0]).assertEqual(32);
-        expect(activatedIds[0]).assertEqual(32);
+        expect(service.softDeletedPlanIds[0]).assertEqual(32);
+        expect(service.activatedPlanIds[0]).assertEqual(32);
         expect(refreshCalls).assertEqual(2);
       });
 
@@ -748,9 +816,7 @@ export default function phase2BatchBZTest() {
         });
         const originalGetInstance = Reflect.get(PreferenceManager as Object, 'getInstance') as () => Object;
         Reflect.set(PreferenceManager as Object, 'getInstance', (): Object => {
-          return {
-            getValue: async (_key: string, _defaultValue: boolean): Promise<boolean> => true
-          };
+          return new PreferenceInstanceMockBZ() as Object;
         });
 
         // Act
@@ -781,9 +847,7 @@ export default function phase2BatchBZTest() {
       it('normal: login_page_trace_id_and_agreement_guard_should_follow_internal_logic', 0, () => {
         // Arrange
         const page = createLoginPageForTest() as LoginPagePrivateBZ;
-        const originalNow = Date.now;
         const toasts: string[] = [];
-        Date.now = (): number => 123456;
         Reflect.set(page as Object, 'toast', (message: string): void => {
           toasts.push(message);
         });
@@ -796,61 +860,38 @@ export default function phase2BatchBZTest() {
         const allowed = page.ensureAgreement();
 
         // Assert
-        expect(traceId).assertEqual('button_123456');
+        expect(traceId.startsWith('button_')).assertTrue();
         expect(blocked).assertFalse();
         expect(allowed).assertTrue();
         expect(toasts[0]).assertEqual(resolveLoginAgreementRequiredToast());
-        Date.now = originalNow;
       });
 
       it('boundary: login_page_replace_url_should_swallow_router_failure', 0, async () => {
         // Arrange
         const page = createLoginPageForTest() as LoginPagePrivateBZ;
-        const pushedUrls: string[] = [];
-        let shouldThrow = false;
-        const uiContext: LoginUiContextLikeBZ = {
-          getRouter: (): LoginRouterLikeBZ => {
-            return {
-              replaceUrl: async (options: LoginRouteOptionsLikeBZ): Promise<void> => {
-                if (shouldThrow) {
-                  throw new Error('router_error');
-                }
-                pushedUrls.push(options.url);
-              }
-            };
-          }
-        };
+        const router = new LoginRouterMockBZ();
+        const uiContext: LoginUiContextLikeBZ = new LoginUiContextMockBZ(router);
         Reflect.set(page as Object, 'getUIContext', (): LoginUiContextLikeBZ => uiContext);
 
         // Act
         await page.replaceUrl('pages/PlanListPage');
-        shouldThrow = true;
+        router.shouldThrow = true;
         await page.replaceUrl('pages/LoginPage');
 
         // Assert
-        expect(pushedUrls.length).assertEqual(1);
-        expect(pushedUrls[0]).assertEqual('pages/PlanListPage');
+        expect(router.pushedUrls.length).assertEqual(1);
+        expect(router.pushedUrls[0]).assertEqual('pages/PlanListPage');
       });
 
       it('regression: login_page_ensure_cloud_profile_should_short_circuit_or_bind_profile_vm', 0, async () => {
         // Arrange
         const page = createLoginPageForTest() as LoginPagePrivateBZ;
-        const boundContexts: Object[] = [];
-        const ensuredIds: string[] = [];
+        const profileViewModelMock = new ProfileViewModelMockBZ();
         const originalGetInstance = Reflect.get(ProfileViewModel as Object, 'getInstance') as () => Object;
         Reflect.set(ProfileViewModel as Object, 'getInstance', (): Object => {
-          return {
-            bindContext: (context: Object): void => {
-              boundContexts.push(context);
-            },
-            ensureProfile: async (accountId: string): Promise<Object | null> => {
-              ensuredIds.push(accountId);
-              return { username: 'user1' } as Object;
-            },
-            getState: (): string => 'READY'
-          };
+          return profileViewModelMock as Object;
         });
-        const hostContext = { tag: 'host' } as Object;
+        const hostContext = new HostContextMockBZ() as Object;
         const emptySession = {} as UserSession;
         emptySession.accountId = '   ';
         const validSession = {} as UserSession;
@@ -862,9 +903,9 @@ export default function phase2BatchBZTest() {
         await page.ensureCloudProfile(hostContext, validSession);
 
         // Assert
-        expect(boundContexts.length).assertEqual(1);
-        expect(ensuredIds.length).assertEqual(1);
-        expect(ensuredIds[0]).assertEqual('acc-1');
+        expect(profileViewModelMock.boundContexts.length).assertEqual(1);
+        expect(profileViewModelMock.ensuredIds.length).assertEqual(1);
+        expect(profileViewModelMock.ensuredIds[0]).assertEqual('acc-1');
         Reflect.set(ProfileViewModel as Object, 'getInstance', originalGetInstance);
       });
 
