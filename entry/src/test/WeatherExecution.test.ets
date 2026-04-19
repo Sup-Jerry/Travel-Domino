@@ -33,6 +33,22 @@ export default function weatherExecutionTest() {
       expect(stage).assertEqual('CONFIRMED');
     });
 
+    it('boundary: weather_stage_should_resolve_planning_when_events_exist_but_none_scheduled', 0, () => {
+      // Arrange
+      const draft = new EventEntity();
+      draft.status = 0;
+      draft.completion_status = EventEntity.STATE_PENDING;
+      draft.actual_start_time = 0;
+      const done = new EventEntity();
+      done.status = 2;
+      done.completion_status = EventEntity.STATE_COMPLETED;
+      done.actual_start_time = Date.now();
+      // Act
+      const stage = WeatherStagePolicy.resolveDetailedStage(undefined, [draft, done]);
+      // Assert
+      expect(stage).assertEqual('PLANNING');
+    });
+
     it('normal: execution_suggestion_should_emit_warning_on_low_score', 0, () => {
       // Arrange
       // Act

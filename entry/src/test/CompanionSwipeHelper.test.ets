@@ -30,6 +30,21 @@ export default function companionSwipeHelperTest() {
       expect(update.peakDistance).assertEqual(500);
     });
 
+    it('boundary: swipe_update_should_keep_peak_when_current_peak_is_greater_than_drag_distance', 0, () => {
+      // Arrange
+      const offsetY = -40;
+      const currentPeak = 120;
+      const nowTs = 3500;
+
+      // Act
+      const update = getCompanionSwipeUpdate(offsetY, currentPeak, nowTs);
+
+      // Assert
+      expect(update.peakDistance).assertEqual(currentPeak);
+      expect(update.lastTs).assertEqual(nowTs);
+      expect(update.dragOffsetY).assertEqual(-15.2);
+    });
+
     it('invalid: swipe_update_should_reset_drag_offset_when_offset_is_non_negative', 0, () => {
       // Arrange
       const offsetY = 24;

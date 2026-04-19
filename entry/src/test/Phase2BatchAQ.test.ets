@@ -57,6 +57,7 @@ interface LocationListenerProbeAQ {
 
 interface ArrivalReminderEnginePrivateAQ {
   buildPlanCandidateCache(plan: PlanItem, events: Object[], now: number): PlanCandidateCacheAQ;
+  prunePlanCandidateCache(activePlanIds: Set<number>): void;
   applyDirtyPlansToActiveSnapshot(activePlanIds: Set<number>, dirtyPlanIds: Set<number>): Promise<void>;
   ensureStorageDefaults(): void;
   ensureClients(): boolean;
@@ -70,6 +71,7 @@ interface ArrivalReminderEnginePrivateAQ {
   hasActiveEvent(): boolean;
   pickBestCandidate(candidateIds: number[], location: FakeAmapLocationAQ, now: number): EventEntity | null;
   fireReminder(event: EventEntity, location: FakeAmapLocationAQ, reason: string): void;
+  publishLiveActivityState(eventId: number, status: string): void;
   ensureReminderConsistency(): void;
   makeCustomId(event: EventEntity): string;
   parseEventId(customId: string): number;
@@ -220,6 +222,13 @@ class FakeGeoFenceForEachListAQ {
     for (let i = 0; i < this.items.length; i++) {
       callback(this.items[i]);
     }
+  }
+}
+
+class FakeGeoFenceForEachMixedListAQ {
+  public forEach(callback: (value: FakeGeoFenceAQ | undefined) => void): void {
+    callback(undefined);
+    callback(new FakeGeoFenceAQ('1:4', GeoFence.STATUS_IN));
   }
 }
 
@@ -599,6 +608,14 @@ export default function phase2BatchAQTest() {
       expect(outOfRange).assertEqual(false);
     });
 
+    it('invalid: arrival_location_sample_should_reject_non_finite_coordinate', 0, () => {
+      // Arrange
+      // Act
+      const nanCoordinate = ArrivalReminderEngine.isLocationSampleAccepted(Number.NaN, 121.47, 1, 1, 400, 20);
+      // Assert
+      expect(nanCoordinate).assertEqual(false);
+    });
+
     it('normal: arrival_cooldown_should_allow_after_window', 0, () => {
       // Arrange
       const now = 1000;
@@ -930,6 +947,129 @@ export default function phase2BatchAQTest() {
       expect(geoFenceClient.removeCount).assertEqual(0);
     });
 
+    it('boundary: arrival_refresh_fences_should_return_early_when_client_missing_or_refreshing', 0, async () => {
+      // Arrange
+      const engine = resetArrivalEngineAQ();
+      const geoFenceClient = new FakeGeoFenceClientAQ();
+      Reflect.set(engine as Object, 'geoFenceClient', geoFenceClient as Object);
+      Reflect.set(engine as Object, 'isRefreshingCandidates', true);
+      // Act
+      await engine.refreshFencesNow('manual');
+      Reflect.set(engine as Object, 'isRefreshingCandidates', false);
+      Reflect.set(engine as Object, 'geoFenceClient', null);
+      await engine.refreshFencesNow('manual');
+      // Assert
+      expect((Reflect.get(engine as Object, 'isRefreshingCandidates') as boolean)).assertEqual(false);
+    });
+
+    it('boundary: arrival_refresh_fences_should_mark_full_resync_and_rebuild_when_only_inactive_plans', 0, async () => {
+      // Arrange
+      const engine = resetArrivalEngineAQ();
+      const hooks = new RepoHooksAQ();
+      const geoFenceClient = new FakeGeoFenceClientAQ();
+      Reflect.set(engine as Object, 'geoFenceClient', geoFenceClient as Object);
+      const staleFences = Reflect.get(engine as Object, 'fenceIdSnapshot') as Set<string>;
+      staleFences.clear();
+      staleFences.add('legacy:1');
+      hooks.setPlanConsumeDirtyPlanIds((): number[] => []);
+      hooks.setEventConsumeDirtyPlanIds((): number[] => []);
+      hooks.setPlanGetPlanList(async (): Promise<PlanItem[]> => {
+        const archived = createPlanItemAQ(301);
+        archived.status = 2;
+        return [archived];
+      });
+      hooks.setPlanGetPlanById(async (_planId: number): Promise<PlanItem | undefined> => undefined);
+      hooks.setEventGetAllEvents(async (_planId: number): Promise<Object[]> => []);
+      // Act
+      await engine.refreshFencesNow('start');
+      hooks.restore();
+      // Assert
+      expect((Reflect.get(engine as Object, 'lastFullResyncTs') as number) > 0).assertTrue();
+      expect(geoFenceClient.removeCount).assertEqual(1);
+      expect((Reflect.get(engine as Object, 'monitoredEvents') as EventEntity[]).length).assertEqual(0);
+    });
+
+    it('boundary: arrival_refresh_fences_should_rebuild_when_fence_snapshot_size_equal_but_ids_changed', 0, async () => {
+      // Arrange
+      const engine = resetArrivalEngineAQ();
+      const hooks = new RepoHooksAQ();
+      const geoFenceClient = new FakeGeoFenceClientAQ();
+      const plan = createPlanItemAQ(401);
+      const event = createEventAQ(4001, 31.23, 121.47, 'rebuilt');
+      event.fixed_start_time = '';
+      event.dynamic_start_time = Date.now() + 60_000;
+      Reflect.set(engine as Object, 'geoFenceClient', geoFenceClient as Object);
+      const oldFenceIds = Reflect.get(engine as Object, 'fenceIdSnapshot') as Set<string>;
+      oldFenceIds.clear();
+      oldFenceIds.add('stale:4001');
+      hooks.setPlanConsumeDirtyPlanIds((): number[] => []);
+      hooks.setEventConsumeDirtyPlanIds((): number[] => []);
+      hooks.setPlanGetPlanList(async (): Promise<PlanItem[]> => [plan]);
+      hooks.setPlanGetPlanById(async (_planId: number): Promise<PlanItem | undefined> => plan);
+      hooks.setEventGetAllEvents(async (_planId: number): Promise<Object[]> => [event]);
+      // Act
+      await engine.refreshFencesNow('start');
+      hooks.restore();
+      // Assert
+      expect(geoFenceClient.removeCount).assertEqual(1);
+    });
+
+    it('boundary: arrival_refresh_fences_should_tolerate_missing_plan_rows_and_missing_plan_cache', 0, async () => {
+      // Arrange
+      const engine = resetArrivalEngineAQ();
+      const hooks = new RepoHooksAQ();
+      const geoFenceClient = new FakeGeoFenceClientAQ();
+      Reflect.set(engine as Object, 'geoFenceClient', geoFenceClient as Object);
+      Reflect.set(engine as Object, 'lastFullResyncTs', Date.now());
+      Reflect.set(engine as Object, 'activePlanSnapshot', new Set<number>([501]));
+      (Reflect.get(engine as Object, 'planCandidateCache') as Map<number, Object>).clear();
+      hooks.setPlanConsumeDirtyPlanIds((): number[] => []);
+      hooks.setEventConsumeDirtyPlanIds((): number[] => []);
+      hooks.setPlanGetPlanList(async (): Promise<PlanItem[]> => []);
+      hooks.setPlanGetPlanById(async (_planId: number): Promise<PlanItem | undefined> => undefined);
+      hooks.setEventGetAllEvents(async (_planId: number): Promise<Object[]> => []);
+      // Act
+      await engine.refreshFencesNow('manual');
+      hooks.restore();
+      // Assert
+      expect((Reflect.get(engine as Object, 'monitoredEvents') as EventEntity[]).length).assertEqual(0);
+      expect((Reflect.get(engine as Object, 'eventPlanIdMap') as Map<number, number>).size).assertEqual(0);
+    });
+
+    it('boundary: arrival_refresh_fences_should_detect_same_size_but_different_fence_id_snapshot', 0, async () => {
+      // Arrange
+      const engine = resetArrivalEngineAQ();
+      const hooks = new RepoHooksAQ();
+      const geoFenceClient = new FakeGeoFenceClientAQ();
+      const plan = createPlanItemAQ(551);
+      const event = createEventAQ(5501, 31.23, 121.47, 'snapshot_diff');
+      Reflect.set(engine as Object, 'geoFenceClient', geoFenceClient as Object);
+      const oldFenceIds = Reflect.get(engine as Object, 'fenceIdSnapshot') as Set<string>;
+      oldFenceIds.clear();
+      oldFenceIds.add('legacy_same_size');
+      hooks.setPlanConsumeDirtyPlanIds((): number[] => []);
+      hooks.setEventConsumeDirtyPlanIds((): number[] => []);
+      hooks.setPlanGetPlanList(async (): Promise<PlanItem[]> => [plan]);
+      hooks.setPlanGetPlanById(async (_planId: number): Promise<PlanItem | undefined> => plan);
+      hooks.setEventGetAllEvents(async (_planId: number): Promise<Object[]> => [event]);
+      Reflect.set(engine as Object, 'buildPlanCandidateCache', (_plan: PlanItem, _events: Object[], _now: number): PlanCandidateCacheAQ => {
+        return {
+          scheduleCount: 1,
+          pendingCount: 1,
+          activeCount: 0,
+          withCoordinateCount: 1,
+          eligibleCount: 1,
+          candidates: [event],
+          timeDeltaByEventId: new Map<number, number>([[event.id, 60_000]])
+        };
+      });
+      // Act
+      await engine.refreshFencesNow('start');
+      hooks.restore();
+      // Assert
+      expect(geoFenceClient.removeCount).assertEqual(1);
+    });
+
     it('invalid: arrival_refresh_fences_should_clear_monitored_state_when_scan_throws', 0, async () => {
       // Arrange
       const engine = resetArrivalEngineAQ();
@@ -1092,6 +1232,52 @@ export default function phase2BatchAQTest() {
       expect(cache.timeDeltaByEventId.get(startableEligible.id) ?? -1).assertEqual(1_200);
     });
 
+    it('boundary: arrival_build_plan_candidate_cache_should_count_unscheduled_events_without_schedule_increment', 0, () => {
+      // Arrange
+      const engine = resetArrivalEngineAQ();
+      const enginePrivate = engine as Object as ArrivalReminderEnginePrivateAQ;
+      const plan = createPlanItemAQ(78);
+      const scheduledEvent = createEventAQ(7801, 31.2304, 121.4737, 'scheduled');
+      const unscheduledEvent = createEventAQ(7802, 31.2404, 121.4837, 'unscheduled');
+      unscheduledEvent.status = 0;
+      Reflect.set(engine as Object, 'getTimeDeltaByCurrentWindow', (_event: EventEntity): number => 600);
+      const rawEvents: Object[] = [scheduledEvent.toInterface() as Object, unscheduledEvent.toInterface() as Object];
+      // Act
+      const cache = enginePrivate.buildPlanCandidateCache(plan, rawEvents, Date.now());
+      // Assert
+      expect(cache.scheduleCount).assertEqual(1);
+      expect(cache.pendingCount).assertEqual(1);
+      expect(cache.activeCount).assertEqual(0);
+      expect(cache.withCoordinateCount).assertEqual(1);
+      expect(cache.eligibleCount).assertEqual(1);
+      expect(cache.candidates.length).assertEqual(1);
+      expect(cache.candidates[0].id).assertEqual(scheduledEvent.id);
+    });
+
+    it('boundary: arrival_prune_plan_candidate_cache_should_remove_only_inactive_plan_entries', 0, () => {
+      // Arrange
+      const engine = resetArrivalEngineAQ();
+      const enginePrivate = engine as Object as ArrivalReminderEnginePrivateAQ;
+      const cacheMap = Reflect.get(engine as Object, 'planCandidateCache') as Map<number, Object>;
+      cacheMap.clear();
+      const planCacheEntry1Obj: PollutedMapServiceAQ = { marker: 'keep_1' };
+      const planCacheEntry1: Object = planCacheEntry1Obj as Object;
+      const planCacheEntry2Obj: PollutedMapServiceAQ = { marker: 'drop_2' };
+      const planCacheEntry2: Object = planCacheEntry2Obj as Object;
+      const planCacheEntry3Obj: PollutedMapServiceAQ = { marker: 'keep_3' };
+      const planCacheEntry3: Object = planCacheEntry3Obj as Object;
+      cacheMap.set(1, planCacheEntry1);
+      cacheMap.set(2, planCacheEntry2);
+      cacheMap.set(3, planCacheEntry3);
+      // Act
+      enginePrivate.prunePlanCandidateCache(new Set<number>([1, 3]));
+      // Assert
+      expect(cacheMap.has(1)).assertEqual(true);
+      expect(cacheMap.has(2)).assertEqual(false);
+      expect(cacheMap.has(3)).assertEqual(true);
+      expect(cacheMap.size).assertEqual(2);
+    });
+
     it('boundary: arrival_get_eligible_events_should_filter_with_time_window_and_runtime_flag', 0, () => {
       // Arrange
       const engine = resetArrivalEngineAQ();
@@ -1146,6 +1332,24 @@ export default function phase2BatchAQTest() {
       expect(picked === null).assertTrue();
     });
 
+    it('boundary: arrival_pick_best_candidate_should_skip_missing_or_ineligible_candidates', 0, () => {
+      // Arrange
+      const engine = resetArrivalEngineAQ();
+      const enginePrivate = engine as Object as ArrivalReminderEnginePrivateAQ;
+      const ineligible = createEventAQ(7902, 31.21, 121.41, 'ineligible');
+      Reflect.set(engine as Object, 'monitoredEvents', [ineligible]);
+      const timeDeltaMap = Reflect.get(engine as Object, 'eventTimeDeltaMap') as Map<number, number>;
+      timeDeltaMap.clear();
+      timeDeltaMap.set(ineligible.id, 8 * 60 * 60 * 1000);
+      const location = new FakeAmapLocationAQ();
+      location.latitude = 31.20;
+      location.longitude = 121.40;
+      // Act
+      const picked = enginePrivate.pickBestCandidate([999001, ineligible.id], location, Date.now());
+      // Assert
+      expect(picked === null).assertTrue();
+    });
+
     it('conflict: arrival_pick_best_candidate_should_prioritize_time_delta_then_order_then_distance', 0, () => {
       // Arrange
       const engine = resetArrivalEngineAQ();
@@ -1180,6 +1384,33 @@ export default function phase2BatchAQTest() {
       const picked = enginePrivate.pickBestCandidate([e1.id, e2.id, e3.id], location, Date.now());
       // Assert
       expect((picked?.id ?? 0)).assertEqual(e3.id);
+    });
+
+    it('boundary: arrival_pick_best_candidate_should_fallback_to_distance_when_time_delta_and_order_equal', 0, () => {
+      // Arrange
+      const engine = resetArrivalEngineAQ();
+      const enginePrivate = engine as Object as ArrivalReminderEnginePrivateAQ;
+      const near = createEventAQ(8004, 31.21, 121.41, 'near');
+      const far = createEventAQ(8005, 31.25, 121.45, 'far');
+      Reflect.set(engine as Object, 'monitoredEvents', [near, far]);
+      const orderMap = Reflect.get(engine as Object, 'eventOrderMap') as Map<number, number>;
+      const timeDeltaMap = Reflect.get(engine as Object, 'eventTimeDeltaMap') as Map<number, number>;
+      orderMap.clear();
+      timeDeltaMap.clear();
+      orderMap.set(near.id, 2);
+      orderMap.set(far.id, 2);
+      timeDeltaMap.set(near.id, 120);
+      timeDeltaMap.set(far.id, 120);
+      Reflect.set(engine as Object, 'measureDistanceMeters', (_lat1: number, _lng1: number, lat2: number, _lng2: number): number => {
+        return lat2 === near.latitude ? 20 : 200;
+      });
+      const location = new FakeAmapLocationAQ();
+      location.latitude = 31.20;
+      location.longitude = 121.40;
+      // Act
+      const picked = enginePrivate.pickBestCandidate([far.id, near.id], location, Date.now());
+      // Assert
+      expect((picked?.id ?? 0)).assertEqual(near.id);
     });
 
     it('regression: arrival_fire_reminder_should_write_payload_and_publish_notification', 0, () => {
@@ -1265,6 +1496,83 @@ export default function phase2BatchAQTest() {
       expect(enginePrivate.isEligibleEvent(target, 30_000)).assertEqual(false);
     });
 
+    it('boundary: arrival_ensure_reminder_consistency_should_return_when_no_reminder_event', 0, () => {
+      // Arrange
+      const engine = resetArrivalEngineAQ();
+      const enginePrivate = engine as Object as ArrivalReminderEnginePrivateAQ;
+      Reflect.set(engine as Object, 'lastReminderEventId', -1);
+      let endedCalls = 0;
+      Reflect.set(engine as Object, 'publishLiveActivityState', (_eventId: number, status: string): void => {
+        if (status === 'ENDED') {
+          endedCalls += 1;
+        }
+      });
+      // Act
+      enginePrivate.ensureReminderConsistency();
+      // Assert
+      expect(endedCalls).assertEqual(0);
+      expect((Reflect.get(engine as Object, 'lastReminderEventId') as number)).assertEqual(-1);
+    });
+
+    it('boundary: arrival_ensure_reminder_consistency_should_keep_reminder_when_event_still_eligible', 0, () => {
+      // Arrange
+      const engine = resetArrivalEngineAQ();
+      const enginePrivate = engine as Object as ArrivalReminderEnginePrivateAQ;
+      const target = createEventAQ(8451, 31.23, 121.47, 'eligible');
+      Reflect.set(engine as Object, 'monitoredEvents', [target]);
+      Reflect.set(engine as Object, 'lastReminderEventId', target.id);
+      const timeDeltaMap = Reflect.get(engine as Object, 'eventTimeDeltaMap') as Map<number, number>;
+      timeDeltaMap.clear();
+      timeDeltaMap.set(target.id, 60_000);
+      let endedCalls = 0;
+      Reflect.set(engine as Object, 'publishLiveActivityState', (_eventId: number, status: string): void => {
+        if (status === 'ENDED') {
+          endedCalls += 1;
+        }
+      });
+      // Act
+      enginePrivate.ensureReminderConsistency();
+      // Assert
+      expect(endedCalls).assertEqual(0);
+      expect((Reflect.get(engine as Object, 'lastReminderEventId') as number)).assertEqual(target.id);
+    });
+
+    it('boundary: arrival_publish_live_activity_state_should_end_and_update_with_existing_event_name', 0, () => {
+      // Arrange
+      const engine = resetArrivalEngineAQ();
+      const target = createEventAQ(8461, 31.23, 121.47, 'West Lake');
+      Reflect.set(engine as Object, 'monitoredEvents', [target]);
+      const eventPlanIdMap = Reflect.get(engine as Object, 'eventPlanIdMap') as Map<number, number>;
+      eventPlanIdMap.clear();
+      eventPlanIdMap.set(target.id, 321);
+      const startOrigin = Reflect.get(Object(ArrivalLiveActivityBridge), 'start') as Object;
+      const endOrigin = Reflect.get(Object(ArrivalLiveActivityBridge), 'end') as Object;
+      const updateOrigin = Reflect.get(Object(ArrivalLiveActivityBridge), 'update') as Object;
+      let endedEventId = 0;
+      let updatedEventId = 0;
+      Reflect.set(Object(ArrivalLiveActivityBridge), 'start', (_planId: number, _eventId: number, _placeName: string): void => {});
+      Reflect.set(Object(ArrivalLiveActivityBridge), 'end', (_planId: number, eventId: number, placeName: string): void => {
+        if (placeName === 'West Lake') {
+          endedEventId = eventId;
+        }
+      });
+      Reflect.set(Object(ArrivalLiveActivityBridge), 'update', (_planId: number, eventId: number, placeName: string, _status: string): void => {
+        if (placeName === 'West Lake') {
+          updatedEventId = eventId;
+        }
+      });
+      const enginePrivate = engine as Object as ArrivalReminderEnginePrivateAQ;
+      // Act
+      enginePrivate.publishLiveActivityState(target.id, 'ENDED');
+      enginePrivate.publishLiveActivityState(target.id, 'ARRIVING');
+      Reflect.set(Object(ArrivalLiveActivityBridge), 'start', startOrigin);
+      Reflect.set(Object(ArrivalLiveActivityBridge), 'end', endOrigin);
+      Reflect.set(Object(ArrivalLiveActivityBridge), 'update', updateOrigin);
+      // Assert
+      expect(endedEventId).assertEqual(target.id);
+      expect(updatedEventId).assertEqual(target.id);
+    });
+
     it('normal: arrival_apply_dirty_plans_should_merge_active_and_drop_inactive_plan_ids', 0, async (done: Function) => {
       // Arrange
       const engine = resetArrivalEngineAQ();
@@ -1293,6 +1601,21 @@ export default function phase2BatchAQTest() {
       done();
     });
 
+    it('boundary: arrival_apply_dirty_plans_should_return_immediately_when_dirty_set_empty', 0, async (done: Function) => {
+      // Arrange
+      const engine = resetArrivalEngineAQ();
+      const enginePrivate = engine as Object as ArrivalReminderEnginePrivateAQ;
+      const active = new Set<number>([1, 2]);
+      const dirty = new Set<number>();
+      // Act
+      await enginePrivate.applyDirtyPlansToActiveSnapshot(active, dirty);
+      // Assert
+      expect(active.size).assertEqual(2);
+      expect(active.has(1)).assertTrue();
+      expect(active.has(2)).assertTrue();
+      done();
+    });
+
     it('boundary: arrival_collect_ready_candidate_ids_should_track_enter_and_drop_stale_ids', 0, () => {
       // Arrange
       const engine = resetArrivalEngineAQ();
@@ -1313,6 +1636,31 @@ export default function phase2BatchAQTest() {
       expect(ready[0]).assertEqual(100);
       expect(enterMap.has('10:100')).assertTrue();
       expect(enterMap.has('10:200')).assertFalse();
+    });
+
+    it('boundary: arrival_collect_ready_candidate_ids_should_skip_short_dwell_and_invalid_event_id', 0, () => {
+      // Arrange
+      const engine = resetArrivalEngineAQ();
+      const enginePrivate = engine as Object as ArrivalReminderEnginePrivateAQ;
+      const client = new FakeGeoFenceClientAQ();
+      client.fenceList = [
+        new FakeGeoFenceAQ('12:310', GeoFence.STATUS_IN),
+        new FakeGeoFenceAQ('12:bad', GeoFence.STATUS_IN),
+        new FakeGeoFenceAQ('12:311', GeoFence.STATUS_IN)
+      ];
+      Reflect.set(engine as Object, 'geoFenceClient', client as Object);
+      Reflect.set(engine as Object, 'dwellWindowMs', 1_000);
+      const enterMap = Reflect.get(engine as Object, 'geoFenceEnterTs') as Map<string, number>;
+      enterMap.clear();
+      enterMap.set('12:310', Date.now() - 2_000);
+      enterMap.set('12:bad', Date.now() - 2_000);
+      enterMap.set('12:311', Date.now());
+      // Act
+      const ready = enginePrivate.collectReadyCandidateIds();
+      // Assert
+      expect(ready.length).assertEqual(1);
+      expect(ready[0]).assertEqual(310);
+      expect(enterMap.has('12:311')).assertTrue();
     });
 
     it('invalid: arrival_collect_direct_ready_candidate_ids_should_prune_stale_direct_entries', 0, () => {
@@ -1341,6 +1689,29 @@ export default function phase2BatchAQTest() {
       expect(directMap.has(9999)).assertFalse();
     });
 
+    it('boundary: arrival_collect_direct_ready_candidate_ids_should_keep_existing_enter_without_ready_when_dwell_not_met', 0, () => {
+      // Arrange
+      const engine = resetArrivalEngineAQ();
+      const enginePrivate = engine as Object as ArrivalReminderEnginePrivateAQ;
+      const nearEvent = createEventAQ(8311, 31.2304, 121.4737, 'near');
+      Reflect.set(engine as Object, 'monitoredEvents', [nearEvent]);
+      Reflect.set(engine as Object, 'dwellWindowMs', 1_000);
+      const timeDeltaMap = Reflect.get(engine as Object, 'eventTimeDeltaMap') as Map<number, number>;
+      timeDeltaMap.clear();
+      timeDeltaMap.set(nearEvent.id, 2_000);
+      const directMap = Reflect.get(engine as Object, 'directEnterTs') as Map<number, number>;
+      directMap.clear();
+      directMap.set(nearEvent.id, Date.now());
+      const location = new FakeAmapLocationAQ();
+      location.latitude = 31.2304;
+      location.longitude = 121.4737;
+      // Act
+      const ready = enginePrivate.collectDirectReadyCandidateIds(location);
+      // Assert
+      expect(ready.length).assertEqual(0);
+      expect(directMap.has(nearEvent.id)).assertTrue();
+    });
+
     it('conflict: arrival_on_location_changed_should_drop_invalid_sample_and_keep_pending_candidates_unchanged', 0, () => {
       // Arrange
       const engine = resetArrivalEngineAQ();
@@ -1361,6 +1732,96 @@ export default function phase2BatchAQTest() {
       expect(client.checkCalls).assertEqual(0);
       expect((Reflect.get(engine as Object, 'lastLocation') as Object | null) === null).assertTrue();
       expect(pending.has(77)).assertTrue();
+    });
+
+    it('boundary: arrival_on_location_changed_should_return_early_when_geofence_client_missing', 0, () => {
+      // Arrange
+      const engine = resetArrivalEngineAQ();
+      const enginePrivate = engine as Object as ArrivalReminderEnginePrivateAQ;
+      Reflect.set(engine as Object, 'geoFenceClient', null);
+      const pending = Reflect.get(engine as Object, 'pendingCandidateIds') as Set<number>;
+      pending.clear();
+      pending.add(99);
+      const sample = new FakeAmapLocationAQ();
+      sample.latitude = 31.20;
+      sample.longitude = 121.40;
+      sample.accuracy = 10;
+      sample.speed = 2;
+      // Act
+      enginePrivate.onLocationChanged(sample);
+      // Assert
+      expect((Reflect.get(engine as Object, 'lastLocation') as Object | null) === null).assertTrue();
+      expect(pending.has(99)).assertTrue();
+    });
+
+    it('boundary: arrival_on_location_changed_should_skip_periodic_refresh_when_interval_not_elapsed', 0, () => {
+      // Arrange
+      const engine = resetArrivalEngineAQ();
+      const enginePrivate = engine as Object as ArrivalReminderEnginePrivateAQ;
+      const client = new FakeGeoFenceClientAQ();
+      Reflect.set(engine as Object, 'geoFenceClient', client as Object);
+      Reflect.set(engine as Object, 'lastRefreshTs', Date.now());
+      let refreshReason = '';
+      let ensured = false;
+      Reflect.set(engine as Object, 'refreshFencesNow', async (reason: string): Promise<void> => {
+        refreshReason = reason;
+      });
+      Reflect.set(engine as Object, 'ensureReminderConsistency', (): void => {
+        ensured = true;
+      });
+      Reflect.set(engine as Object, 'collectReadyCandidateIds', (): number[] => [9101]);
+      Reflect.set(engine as Object, 'collectDirectReadyCandidateIds', (_loc: FakeAmapLocationAQ): number[] => []);
+      Reflect.set(engine as Object, 'scheduleCandidateEvaluation', (_reason: string): void => {});
+      const sample = new FakeAmapLocationAQ();
+      sample.latitude = 31.2304;
+      sample.longitude = 121.4737;
+      sample.accuracy = 20;
+      sample.speed = 2;
+      // Act
+      enginePrivate.onLocationChanged(sample);
+      // Assert
+      expect(client.checkCalls).assertEqual(1);
+      expect(refreshReason).assertEqual('');
+      expect(ensured).assertFalse();
+    });
+
+    it('boundary: arrival_on_location_changed_should_return_when_no_ready_candidates_collected', 0, () => {
+      // Arrange
+      const engine = resetArrivalEngineAQ();
+      const enginePrivate = engine as Object as ArrivalReminderEnginePrivateAQ;
+      const client = new FakeGeoFenceClientAQ();
+      Reflect.set(engine as Object, 'geoFenceClient', client as Object);
+      Reflect.set(engine as Object, 'lastRefreshTs', Date.now());
+      const pending = Reflect.get(engine as Object, 'pendingCandidateIds') as Set<number>;
+      pending.clear();
+      let scheduledReason = '';
+      Reflect.set(engine as Object, 'collectReadyCandidateIds', (): number[] => []);
+      Reflect.set(engine as Object, 'collectDirectReadyCandidateIds', (_loc: FakeAmapLocationAQ): number[] => []);
+      Reflect.set(engine as Object, 'scheduleCandidateEvaluation', (reason: string): void => {
+        scheduledReason = reason;
+      });
+      const sample = new FakeAmapLocationAQ();
+      sample.latitude = 31.2304;
+      sample.longitude = 121.4737;
+      sample.accuracy = 20;
+      sample.speed = 2;
+      // Act
+      enginePrivate.onLocationChanged(sample);
+      // Assert
+      expect(client.checkCalls).assertEqual(1);
+      expect(pending.size).assertEqual(0);
+      expect(scheduledReason).assertEqual('');
+    });
+
+    it('boundary: arrival_collect_ready_candidate_ids_should_return_empty_when_geofence_client_missing', 0, () => {
+      // Arrange
+      const engine = resetArrivalEngineAQ();
+      const enginePrivate = engine as Object as ArrivalReminderEnginePrivateAQ;
+      Reflect.set(engine as Object, 'geoFenceClient', null);
+      // Act
+      const ready = enginePrivate.collectReadyCandidateIds();
+      // Assert
+      expect(ready.length).assertEqual(0);
     });
 
     it('regression: arrival_on_location_changed_should_refresh_and_schedule_when_candidates_ready', 0, async (done: Function) => {
@@ -1461,6 +1922,54 @@ export default function phase2BatchAQTest() {
       expect(pending.size).assertEqual(0);
     });
 
+    it('boundary: arrival_evaluate_candidates_should_return_early_on_guard_clauses', 0, () => {
+      // Arrange
+      const engine = resetArrivalEngineAQ();
+      const enginePrivate = engine as Object as ArrivalReminderEnginePrivateAQ;
+      const pending = Reflect.get(engine as Object, 'pendingCandidateIds') as Set<number>;
+      let fireCount = 0;
+      Reflect.set(engine as Object, 'fireReminder', (_event: EventEntity, _loc: FakeAmapLocationAQ, _reason: string): void => {
+        fireCount += 1;
+      });
+      // Act
+      pending.clear();
+      pending.add(2001);
+      Reflect.set(engine as Object, 'lastLocation', null);
+      enginePrivate.evaluateCandidates('guard_no_location');
+      // Assert
+      expect(pending.size).assertEqual(0);
+      // Act
+      const location = new FakeAmapLocationAQ();
+      location.latitude = 31.22;
+      location.longitude = 121.41;
+      Reflect.set(engine as Object, 'lastLocation', location as Object);
+      Reflect.set(engine as Object, 'reminderLockUntilTs', Date.now() + 60_000);
+      pending.add(2002);
+      enginePrivate.evaluateCandidates('guard_lock');
+      // Assert
+      expect(pending.size).assertEqual(0);
+      // Act
+      Reflect.set(engine as Object, 'reminderLockUntilTs', 0);
+      Reflect.set(engine as Object, 'hasActiveEvent', (): boolean => true);
+      pending.add(2003);
+      enginePrivate.evaluateCandidates('guard_active');
+      // Assert
+      expect(pending.size).assertEqual(0);
+      // Act
+      Reflect.set(engine as Object, 'hasActiveEvent', (): boolean => false);
+      pending.clear();
+      enginePrivate.evaluateCandidates('guard_empty_candidates');
+      // Assert
+      expect(pending.size).assertEqual(0);
+      // Act
+      pending.add(2004);
+      Reflect.set(engine as Object, 'pickBestCandidate', (_ids: number[], _loc: FakeAmapLocationAQ, _now: number): EventEntity | null => null);
+      enginePrivate.evaluateCandidates('guard_no_selected');
+      // Assert
+      expect(pending.size).assertEqual(0);
+      expect(fireCount).assertEqual(0);
+    });
+
     it('boundary: arrival_private_helpers_should_cover_custom_id_time_delta_and_geofence_array_paths', 0, () => {
       // Arrange
       const engine = resetArrivalEngineAQ();
@@ -1475,9 +1984,13 @@ export default function phase2BatchAQTest() {
       const fixedTs = dayBase.getTime() + 10 * 60 * 60 * 1000 + 30 * 60 * 1000;
       const listByLength = new FakeGeoFenceListAQ([new FakeGeoFenceAQ('1:1', GeoFence.STATUS_IN)]);
       const listByForEach = new FakeGeoFenceForEachListAQ([new FakeGeoFenceAQ('1:2', 0)]);
+      const listByForEachMixed = new FakeGeoFenceForEachMixedListAQ();
       const listBySizeNumber = new FakeGeoFenceSizeNumberListAQ([new FakeGeoFenceAQ('1:3', GeoFence.STATUS_IN)]);
       const listBySizeFunctionOnly = new FakeGeoFenceSizeFunctionOnlyListAQ(2);
       const listPlainObj = new FakeGeoFencePlainObjectAQ();
+      const isValidCoordinate = Reflect.get(engine as Object, 'isValidCoordinate') as (latitude: number, longitude: number) => boolean;
+      const isPlanActiveForReminder = Reflect.get(engine as Object, 'isPlanActiveForReminder') as (plan: PlanItem | undefined) => boolean;
+      const isSamePlanSet = Reflect.get(engine as Object, 'isSamePlanSet') as (nextSet: Set<number>, prevSet: Set<number>) => boolean;
       // Act
       const customId = enginePrivate.makeCustomId(event);
       const parsedValid = enginePrivate.parseEventId(customId);
@@ -1485,26 +1998,64 @@ export default function phase2BatchAQTest() {
       const deltaFixed = enginePrivate.getTimeDeltaByCurrentWindow(event, startDate, fixedTs + 600_000);
       event.fixed_start_time = 'bad';
       const deltaWindow = enginePrivate.getTimeDeltaByCurrentWindow(event, startDate, dayBase.getTime() + 2_000);
+      const deltaBeforeWindow = enginePrivate.getTimeDeltaByCurrentWindow(event, startDate, dayBase.getTime() - 5_000);
+      const deltaAfterWindow = enginePrivate.getTimeDeltaByCurrentWindow(
+        event,
+        startDate,
+        dayBase.getTime() + 24 * 60 * 60 * 1000 + 5_000
+      );
+      event.fixed_start_time = '25:99';
+      const deltaInvalidClock = enginePrivate.getTimeDeltaByCurrentWindow(event, startDate, dayBase.getTime() + 1_000);
+      event.fixed_start_time = '';
+      const deltaNoFixed = enginePrivate.getTimeDeltaByCurrentWindow(event, startDate, dayBase.getTime() + 1_000);
       const deltaNoStart = enginePrivate.getTimeDeltaByCurrentWindow(event, 0, Date.now());
       const fromLength = enginePrivate.toGeoFenceArray(listByLength as Object);
       const fromForEach = enginePrivate.toGeoFenceArray(listByForEach as Object);
+      const fromForEachMixed = enginePrivate.toGeoFenceArray(listByForEachMixed as Object);
       const fromUndefined = enginePrivate.toGeoFenceArray(undefined);
       const fromSizeNumber = enginePrivate.toGeoFenceArray(listBySizeNumber as Object);
       const fromSizeFunctionOnly = enginePrivate.toGeoFenceArray(listBySizeFunctionOnly as Object);
       const fromPlainObject = enginePrivate.toGeoFenceArray(listPlainObj as Object);
+      const validCoordinate = isValidCoordinate(31.20, 121.40);
+      const nanCoordinate = isValidCoordinate(Number.NaN, 121.40);
+      const infiniteCoordinate = isValidCoordinate(31.20, Number.POSITIVE_INFINITY);
+      const outOfRangeCoordinate = isValidCoordinate(95, 200);
+      const activeWhenMissing = isPlanActiveForReminder(undefined);
+      const activeWhenDeleted = isPlanActiveForReminder({ id: 10001, delFlag: 1 } as PlanItem);
+      const activeWhenArchived = isPlanActiveForReminder({ id: 10002, status: 2 } as PlanItem);
+      const activeWhenNormal = isPlanActiveForReminder({ id: 10003, delFlag: 0, status: 1 } as PlanItem);
+      const samePlanSetMatched = isSamePlanSet(new Set<number>([1, 2]), new Set<number>([2, 1]));
+      const samePlanSetElementDiff = isSamePlanSet(new Set<number>([1, 2]), new Set<number>([1, 3]));
+      const samePlanSetSizeDiff = isSamePlanSet(new Set<number>([1, 2]), new Set<number>([1]));
       // Assert
       expect(customId).assertEqual('66:8401');
       expect(parsedValid).assertEqual(8401);
       expect(parsedInvalid).assertEqual(-1);
       expect(deltaFixed).assertEqual(600_000);
       expect(deltaWindow).assertEqual(0);
+      expect(deltaBeforeWindow).assertEqual(5_000);
+      expect(deltaAfterWindow).assertEqual(5_001);
+      expect(deltaInvalidClock).assertEqual(0);
+      expect(deltaNoFixed).assertEqual(0);
       expect(deltaNoStart).assertEqual(0);
       expect(fromLength.length).assertEqual(1);
       expect(fromForEach.length).assertEqual(1);
+      expect(fromForEachMixed.length).assertEqual(1);
       expect(fromUndefined.length).assertEqual(0);
       expect(fromSizeNumber.length).assertEqual(1);
       expect(fromSizeFunctionOnly.length).assertEqual(0);
       expect(fromPlainObject.length).assertEqual(0);
+      expect(validCoordinate).assertEqual(true);
+      expect(nanCoordinate).assertEqual(false);
+      expect(infiniteCoordinate).assertEqual(false);
+      expect(outOfRangeCoordinate).assertEqual(false);
+      expect(activeWhenMissing).assertEqual(false);
+      expect(activeWhenDeleted).assertEqual(false);
+      expect(activeWhenArchived).assertEqual(false);
+      expect(activeWhenNormal).assertEqual(true);
+      expect(samePlanSetMatched).assertEqual(true);
+      expect(samePlanSetElementDiff).assertEqual(false);
+      expect(samePlanSetSizeDiff).assertEqual(false);
     });
 
     it('normal: arrival_ensure_storage_defaults_should_call_store_and_live_bridge_once', 0, () => {

@@ -88,6 +88,19 @@ export default function phase2BatchBFTest() {
       expect(message).assertEqual('qr_content_empty');
     });
 
+    it('boundary: qrcode_generate_should_not_treat_trimmed_non_empty_payload_as_empty', 0, async () => {
+      // Arrange
+      let message = '';
+      // Act
+      try {
+        await QRCodeService.generateQRCode('  qr-bf  ', 64);
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
+      }
+      // Assert
+      expect(message === 'qr_content_empty').assertFalse();
+    });
+
     it('conflict: weather_reminder_terminal_status_should_distinguish_terminal_and_active_states', 0, () => {
       // Arrange
       const coordinator = WeatherReminderCoordinator.getInstance() as Object as WeatherReminderCoordinatorPrivateBF;

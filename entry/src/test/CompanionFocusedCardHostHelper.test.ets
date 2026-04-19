@@ -1,10 +1,62 @@
 ﻿import { describe, it, expect } from '@ohos/hypium';
+import { ThemeCenter } from '../main/ets/common/utils/ThemeCenter';
 import {
+  CompanionFocusedCardHost,
   resolveCompanionFocusedActionMode,
   shouldRenderFocusedSwitchCards,
   shouldShowFocusedPlannedRange
 } from '../main/ets/pages/components/views/companion/CompanionFocusedCardHost';
 import { EventEntity } from '../main/ets/model/entity/EventEntity';
+
+type CompanionFocusedCardPhaseTest = 'stable' | 'outgoing' | 'incoming';
+
+interface CompanionFocusedCardHostPaletteTest {
+  textPrimary: Object;
+  companionCardBg: Object;
+  primary: Object;
+}
+
+interface CompanionFocusedCardHostParamsTest {
+  canRenderSwitchCards?: boolean;
+  outgoingEvent?: EventEntity | null;
+  incomingEvent?: EventEntity | null;
+  stableEvent?: EventEntity | null;
+  runtimeState?: string;
+  currentEventId?: number;
+}
+
+interface CompanionFocusedCardHostPrivateTest {
+  canRenderSwitchCards: boolean;
+  outgoingEvent: EventEntity | null;
+  incomingEvent: EventEntity | null;
+  stableEvent: EventEntity | null;
+  runtimeState: string;
+  currentEventId: number;
+  effectiveTheme: string;
+  getEventStateLabel: (event: EventEntity) => string;
+  getStateTagTextColor: (event: EventEntity) => Object;
+  getStateTagBackgroundColor: (event: EventEntity) => Object;
+  getStateBorderColor: (event: EventEntity) => Object;
+  getMainCardTimeText: (event: EventEntity) => string;
+  getPlannedRange: (event: EventEntity) => string;
+  getEventState: (event: EventEntity) => string;
+  canStartFocused: (event: EventEntity) => boolean;
+  canEndFocused: (event: EventEntity) => boolean;
+  getCardTranslateX: (phase: CompanionFocusedCardPhaseTest) => number;
+  getCardOpacity: (phase: CompanionFocusedCardPhaseTest) => number;
+  getCardScale: (phase: CompanionFocusedCardPhaseTest) => number;
+  onNavigate: (event: EventEntity) => void;
+  onStart: (event: EventEntity) => void;
+  onSkip: (event: EventEntity) => void;
+  onEnd: (event: EventEntity) => void;
+  onReopen: (event: EventEntity) => void;
+  onAdjust: (event: EventEntity) => void;
+  onSkipDisabledTap: () => void;
+  onEnterImmersive: () => void;
+  setInitiallyProvidedValue(params: CompanionFocusedCardHostParamsTest): void;
+  updateStateVars(params: CompanionFocusedCardHostParamsTest): void;
+  getThemePalette(): CompanionFocusedCardHostPaletteTest;
+}
 
 function buildEvent(id: number): EventEntity {
   const event = new EventEntity();
@@ -84,6 +136,93 @@ export default function companionFocusedCardHostHelperTest() {
       expect(pendingMode).assertEqual('PENDING');
       expect(activeMode).assertEqual('ACTIVE');
       expect(renderable).assertTrue();
+    });
+
+    it('combined: focused_card_host_instance_should_sync_props_and_keep_default_actions_stable', 0, () => {
+      // Arrange
+      const page = new CompanionFocusedCardHost(undefined, {} as LocalStorage) as Object as CompanionFocusedCardHostPrivateTest;
+      const outgoing = buildEvent(21);
+      const incoming = buildEvent(22);
+      const stable = buildEvent(23);
+      const nextStable = buildEvent(24);
+
+      // Act
+      const label = page.getEventStateLabel(outgoing);
+      const tagTextColor = page.getStateTagTextColor(outgoing);
+      const tagBgColor = page.getStateTagBackgroundColor(outgoing);
+      const borderColor = page.getStateBorderColor(outgoing);
+      const timeText = page.getMainCardTimeText(outgoing);
+      const plannedRange = page.getPlannedRange(outgoing);
+      const state = page.getEventState(outgoing);
+      const canStart = page.canStartFocused(outgoing);
+      const canEnd = page.canEndFocused(outgoing);
+      const translate = page.getCardTranslateX('incoming');
+      const opacity = page.getCardOpacity('incoming');
+      const scale = page.getCardScale('incoming');
+      page.onNavigate(outgoing);
+      page.onStart(outgoing);
+      page.onSkip(outgoing);
+      page.onEnd(outgoing);
+      page.onReopen(outgoing);
+      page.onAdjust(outgoing);
+      page.onSkipDisabledTap();
+      page.onEnterImmersive();
+      const initParams: CompanionFocusedCardHostParamsTest = {
+        canRenderSwitchCards: true,
+        outgoingEvent: outgoing,
+        incomingEvent: incoming,
+        stableEvent: stable,
+        runtimeState: 'READY',
+        currentEventId: outgoing.id
+      };
+      const nextParams: CompanionFocusedCardHostParamsTest = {
+        canRenderSwitchCards: false,
+        outgoingEvent: stable,
+        incomingEvent: null,
+        stableEvent: nextStable,
+        runtimeState: 'PAUSED',
+        currentEventId: nextStable.id
+      };
+      page.setInitiallyProvidedValue(initParams);
+      page.updateStateVars(initParams);
+      const initCanRenderSwitchCards = page.canRenderSwitchCards;
+      const initOutgoingId = page.outgoingEvent?.id ?? -1;
+      const initIncomingId = page.incomingEvent?.id ?? -1;
+      const initStableId = page.stableEvent?.id ?? -1;
+      const initRuntimeState = page.runtimeState;
+      const initCurrentEventId = page.currentEventId;
+      page.updateStateVars(nextParams);
+      page.effectiveTheme = 'dark';
+      const palette = page.getThemePalette();
+
+      // Assert
+      expect(label).assertEqual('--');
+      expect(tagTextColor).assertEqual('#666');
+      expect(tagBgColor).assertEqual('#F5F5F5');
+      expect(borderColor).assertEqual('#DDD');
+      expect(timeText).assertEqual('--:--');
+      expect(plannedRange).assertEqual('--');
+      expect(state).assertEqual('PENDING');
+      expect(canStart).assertFalse();
+      expect(canEnd).assertFalse();
+      expect(translate).assertEqual(0);
+      expect(opacity).assertEqual(1);
+      expect(scale).assertEqual(1);
+      expect(initCanRenderSwitchCards).assertTrue();
+      expect(initOutgoingId).assertEqual(outgoing.id);
+      expect(initIncomingId).assertEqual(incoming.id);
+      expect(initStableId).assertEqual(stable.id);
+      expect(initRuntimeState).assertEqual('READY');
+      expect(initCurrentEventId).assertEqual(outgoing.id);
+      expect(page.canRenderSwitchCards).assertFalse();
+      expect(page.outgoingEvent?.id).assertEqual(stable.id);
+      expect(page.incomingEvent).assertNull();
+      expect(page.stableEvent?.id).assertEqual(nextStable.id);
+      expect(page.runtimeState).assertEqual('PAUSED');
+      expect(page.currentEventId).assertEqual(nextStable.id);
+      expect(palette.textPrimary).assertEqual(ThemeCenter.getPalette('dark').textPrimary);
+      expect(palette.companionCardBg).assertEqual(ThemeCenter.getPalette('dark').companionCardBg);
+      expect(palette.primary).assertEqual(ThemeCenter.getPalette('dark').primary);
     });
   });
 }

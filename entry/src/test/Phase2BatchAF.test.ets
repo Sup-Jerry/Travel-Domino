@@ -481,6 +481,27 @@ export default function phase2BatchAFTest() {
       expect(shownFlag).assertEqual(0);
     });
 
+    it('boundary: notification_bridge_handle_transition_should_keep_payload_for_unhandled_non_terminal_status', 0, () => {
+      // Arrange
+      const planIdNum = 407;
+      resetReminderStorage(planIdNum);
+      const bridge = new NotificationBridge();
+      bridge.handlePlanTransitionNotification(createTransitionEvent(`${planIdNum}`, PlanStatus.READY, 'seed_ready', 8101));
+      const before = WeatherReminderStore.readPayload(planIdNum);
+      // Act
+      bridge.handlePlanTransitionNotification(createTransitionEvent(`${planIdNum}`, PlanStatus.DRAFT, 'back_to_draft', 8102));
+      const after = WeatherReminderStore.readPayload(planIdNum);
+      // Assert
+      expect(before === null).assertFalse();
+      expect(after === null).assertFalse();
+      if (!before || !after) {
+        return;
+      }
+      expect(before.suggestionId).assertEqual('state_ready');
+      expect(after.suggestionId).assertEqual('state_ready');
+      expect(after.createdAt).assertEqual(8101);
+    });
+
     it('normal: weather_refresh_planner_on_status_entered_should_schedule_next_run', 0, () => {
       // Arrange
       const planner = new PlanWeatherRefreshPlanner();

@@ -845,6 +845,23 @@ export default function phase2BatchASTest() {
       expect(helper.getRdbStore() === null).assertTrue();
     });
 
+    it('invalid: rdb_helper_init_should_reject_when_callback_returns_null_store_without_error', 0, async () => {
+      // Arrange
+      const hooks = new RdbHooksAS();
+      const helper = resetRdbHelperStoreAS();
+      hooks.setGetRdbStore((_context: Object, _config: Object, callback: (err: Object | null, store: Object | null) => void) => {
+        callback(null, null);
+      });
+      // Act
+      const message = await captureAsyncErrorAS(async () => {
+        await helper.init({} as common.Context);
+      });
+      hooks.restore();
+      // Assert
+      expect(message).assertEqual('RdbStore is null after getRdbStore callback');
+      expect(helper.getRdbStore() === null).assertTrue();
+    });
+
     it('conflict: rdb_helper_init_should_reject_when_non_recoverable_sql_fails', 0, async () => {
       // Arrange
       const hooks = new RdbHooksAS();

@@ -347,6 +347,28 @@ export default function phase2BatchBWTest() {
         expect(next.leisureMin).assertEqual(2);
         expect(next.leisureMax).assertEqual(3);
       });
+
+      it('boundary: ai_poi_range_config_should_keep_original_order_when_min_not_greater_than_max', 0, () => {
+        // Arrange
+        const current = buildAiPoiRangeConfig();
+        const inputs = buildAiPoiInputState({
+          defaultMinInput: '4',
+          defaultMaxInput: '6',
+          soldierMinInput: '5',
+          soldierMaxInput: '8',
+          leisureMinInput: '3',
+          leisureMaxInput: '5'
+        });
+        // Act
+        const next = buildSettingsGeneralAiPoiRangeConfig(inputs, current);
+        // Assert
+        expect(next.defaultMin).assertEqual(4);
+        expect(next.defaultMax).assertEqual(6);
+        expect(next.soldierMin).assertEqual(5);
+        expect(next.soldierMax).assertEqual(8);
+        expect(next.leisureMin).assertEqual(3);
+        expect(next.leisureMax).assertEqual(5);
+      });
     });
 
     describe('phase2_batch_bw_settings_preference_insights_page_pure_logic', () => {

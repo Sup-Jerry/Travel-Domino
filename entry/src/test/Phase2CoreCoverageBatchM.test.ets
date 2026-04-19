@@ -23,6 +23,8 @@ class SessionManagerMockForM {
   saveCalls: number = 0;
   savePersistedCalls: number = 0;
   guestChosenCalls: number = 0;
+  savePersistedError: string = '';
+  guestChosenError: string = '';
 
   load(): UserSession | null { return this.session; }
   save(session: UserSession): void { this.session = session; this.saveCalls += 1; }
@@ -35,8 +37,20 @@ class SessionManagerMockForM {
   markSilentLoginBlockedAfterLogout(): void { this.memBlockCalls += 1; this.memoryBlocked = true; }
   clearSilentLoginBlockedAfterLogout(): void { this.memClearCalls += 1; this.memoryBlocked = false; }
   async clearSilentLoginBlockedAfterLogoutPersisted(_context: Object): Promise<void> { this.appClearCalls += 1; return; }
-  async saveSessionPersisted(_context: Object, _session: UserSession): Promise<void> { this.savePersistedCalls += 1; return; }
-  async markGuestChosen(_context: Object): Promise<void> { this.guestChosenCalls += 1; return; }
+  async saveSessionPersisted(_context: Object, _session: UserSession): Promise<void> {
+    this.savePersistedCalls += 1;
+    if (this.savePersistedError.length > 0) {
+      throw new Error(this.savePersistedError);
+    }
+    return;
+  }
+  async markGuestChosen(_context: Object): Promise<void> {
+    this.guestChosenCalls += 1;
+    if (this.guestChosenError.length > 0) {
+      throw new Error(this.guestChosenError);
+    }
+    return;
+  }
 }
 
 class ProviderMockForM {
@@ -295,6 +309,30 @@ export default function phase2CoreCoverageBatchMTest() {
       expect(result.success).assertTrue();
       expect(result.data !== null).assertTrue();
       expect(result.data!.isGuest).assertTrue();
+      expect(bundle.session.guestChosenCalls).assertEqual(1);
+      hooks.restore();
+    });
+
+    it('regression: explicit_guest_login_should_keep_success_when_persisted_steps_throw', 0, async () => {
+      // Arrange
+      const bundle = createBundleForM();
+      const hooks = new HooksForM();
+      const ctx = new AppContextForM();
+      bundle.facade.bindContext(ctx as never);
+      bundle.session.savePersistedError = 'persist_guest_failed_m';
+      bundle.session.guestChosenError = 'mark_guest_failed_m';
+      hooks.setCreateGuest(async (_device: DeviceInfo): Promise<AuthApiResponse<AuthLoginResult>> => {
+        throw new Error('guest_gateway_exception_force_m');
+      });
+      // Act
+      const result = await bundle.facade.explicitGuestLogin();
+      // Assert
+      expect(result.success).assertTrue();
+      expect(result.data !== null).assertTrue();
+      expect(result.data!.isGuest).assertTrue();
+      expect(result.data!.loginMethod).assertEqual('GUEST_OFFLINE');
+      expect(bundle.session.saveCalls > 0).assertTrue();
+      expect(bundle.session.savePersistedCalls).assertEqual(1);
       expect(bundle.session.guestChosenCalls).assertEqual(1);
       hooks.restore();
     });

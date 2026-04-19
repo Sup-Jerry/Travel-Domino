@@ -235,5 +235,40 @@ export default function companionViewHelperTest() {
       expect(focused).assertEqual(51);
       expect(visibleFocused).assertEqual(51);
     });
+
+    it('boundary: companion_visible_focus_should_return_negative_one_when_visible_list_empty', 0, () => {
+      // Arrange
+      const visibleEvents: EventEntity[] = [];
+      // Act
+      const visibleFocusId = resolveCompanionVisibleFocusId(visibleEvents, 88);
+      // Assert
+      expect(visibleFocusId).assertEqual(-1);
+    });
+
+    it('conflict: companion_default_focus_should_use_next_event_when_current_event_missing', 0, () => {
+      // Arrange
+      const first = buildCompanionEvent(61, 'first');
+      first.completion_status = EventEntity.STATE_COMPLETED;
+      const next = buildCompanionEvent(62, 'next');
+      next.completion_status = EventEntity.STATE_COMPLETED;
+      const schedule = [first, next];
+      // Act
+      const focused = resolveCompanionDefaultFocusId(schedule, 999, 62);
+      // Assert
+      expect(focused).assertEqual(62);
+    });
+
+    it('regression: td-20260419-companion_default_focus_should_fallback_to_first_when_no_candidate_matches', 0, () => {
+      // Arrange
+      const first = buildCompanionEvent(71, 'first');
+      first.completion_status = EventEntity.STATE_COMPLETED;
+      const second = buildCompanionEvent(72, 'second');
+      second.completion_status = EventEntity.STATE_COMPLETED;
+      const schedule = [first, second];
+      // Act
+      const focused = resolveCompanionDefaultFocusId(schedule, -1, -1);
+      // Assert
+      expect(focused).assertEqual(71);
+    });
   });
 }

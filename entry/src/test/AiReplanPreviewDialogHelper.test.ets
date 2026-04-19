@@ -33,6 +33,15 @@ export default function aiReplanPreviewDialogHelperTest() {
       expect(label).assertEqual('景点');
     });
 
+    it('boundary: ai_replan_should_map_hotel_item_type_label', 0, () => {
+      // Arrange
+      const itemType = 2;
+      // Act
+      const label = getAiReplanItemTypeLabel(itemType);
+      // Assert
+      expect(label).assertEqual('住宿');
+    });
+
     it('conflict: ai_replan_should_distinguish_special_and_leisure_modes', 0, () => {
       // Arrange
       const specialMode = 1;

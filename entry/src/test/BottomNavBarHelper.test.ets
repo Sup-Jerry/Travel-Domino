@@ -1,12 +1,139 @@
 import { describe, it, expect } from '@ohos/hypium';
+import { ThemeCenter } from '../main/ets/common/utils/ThemeCenter';
 import {
   AppNavTab,
+  CompanionBottomActionBar,
+  GlobalBottomNavBar,
   getBottomNavTargetRoute,
   isBottomNavTabPressed,
   isBottomNavVisualActive,
+  PlanBottomActionBar,
+  resolveBottomNavNavigateAction,
+  resolveBottomNavPressedTab,
+  resolveBottomNavTapPlan,
   resolveBottomNavVisualTab,
   shouldBottomNavTapNavigate
 } from '../main/ets/pages/components/views/BottomNavBar';
+
+interface BottomNavPaletteTest {
+  textPrimary?: Object;
+  textSecondary?: Object;
+  textTertiary?: Object;
+  primary?: Object;
+  cardBg?: Object;
+  divider?: Object;
+  companionBg?: Object;
+  border?: Object;
+}
+
+interface BottomNavRouteOptionsTest {
+  url: string;
+}
+
+interface GlobalBottomNavRouterTest {
+  replaceUrl(options: BottomNavRouteOptionsTest): Promise<void>;
+}
+
+interface GlobalBottomNavUIContextTest {
+  animateTo(options: Object, action: () => void): void;
+  getRouter(): GlobalBottomNavRouterTest;
+}
+
+class GlobalBottomNavRouterImplTest implements GlobalBottomNavRouterTest {
+  private urls: string[];
+
+  constructor(urls: string[]) {
+    this.urls = urls;
+  }
+
+  async replaceUrl(options: BottomNavRouteOptionsTest): Promise<void> {
+    this.urls.push(options.url);
+  }
+}
+
+class GlobalBottomNavUIContextImplTest implements GlobalBottomNavUIContextTest {
+  private router: GlobalBottomNavRouterTest;
+
+  constructor(router: GlobalBottomNavRouterTest) {
+    this.router = router;
+  }
+
+  animateTo(_options: Object, action: () => void): void {
+    action();
+  }
+
+  getRouter(): GlobalBottomNavRouterTest {
+    return this.router;
+  }
+}
+
+interface GlobalBottomNavBarParamsTest {
+  currentTab?: AppNavTab;
+  showCenterFab?: boolean;
+  onCenterFabTap?: () => void;
+  onSearchTap?: () => Promise<void>;
+}
+
+interface GlobalBottomNavBarPrivateTest {
+  currentTab: AppNavTab;
+  showCenterFab: boolean;
+  effectiveTheme: string;
+  pressedTab: AppNavTab | '';
+  transitionTab: AppNavTab | '';
+  navLocked: boolean;
+  fabPressed: boolean;
+  onCenterFabTap: () => void;
+  onSearchTap: () => Promise<void>;
+  setInitiallyProvidedValue(params: GlobalBottomNavBarParamsTest): void;
+  updateStateVars(params: GlobalBottomNavBarParamsTest): void;
+  getPalette(): BottomNavPaletteTest;
+  createRouteOptions(url: string): BottomNavRouteOptionsTest;
+  isVisualActive(tab: AppNavTab): boolean;
+  isTabPressed(tab: AppNavTab): boolean;
+  getUIContext: () => GlobalBottomNavUIContextTest;
+  safeReplaceUrl(options: BottomNavRouteOptionsTest, routeLabel: string): Promise<void>;
+  navigateTo(tab: AppNavTab): Promise<void>;
+  setTabPressed(tab: AppNavTab, pressed: boolean): void;
+  handleTabTap(tab: AppNavTab): void;
+}
+
+interface PlanBottomActionBarParamsTest {
+  onFilter?: () => void;
+  onAi?: () => void;
+  onAdd?: () => void;
+  aiEnabled?: boolean;
+  addEnabled?: boolean;
+}
+
+interface PlanBottomActionBarPrivateTest {
+  aiEnabled: boolean;
+  addEnabled: boolean;
+  effectiveTheme: string;
+  onFilter: () => void;
+  onAi: () => void;
+  onAdd: () => void;
+  setInitiallyProvidedValue(params: PlanBottomActionBarParamsTest): void;
+  updateStateVars(params: PlanBottomActionBarParamsTest): void;
+  getPalette(): BottomNavPaletteTest;
+}
+
+interface CompanionBottomActionBarParamsTest {
+  onHistory?: () => void;
+  onImmersive?: () => void;
+  onSearch?: () => void;
+  onFilter?: () => void;
+}
+
+interface CompanionBottomActionBarPrivateTest {
+  effectiveTheme: string;
+  onHistory: () => void;
+  onImmersive: () => void;
+  onSearch: () => void;
+  onFilter: () => void;
+  setInitiallyProvidedValue(params: CompanionBottomActionBarParamsTest): void;
+  updateStateVars(params: CompanionBottomActionBarParamsTest): void;
+  getPalette(): BottomNavPaletteTest;
+}
 
 export default function bottomNavBarHelperTest() {
   describe('unit_test_case_generator_autofill_BottomNavBarHelper', () => {
@@ -98,6 +225,196 @@ export default function bottomNavBarHelperTest() {
       // Assert
       expect(pressed).assertTrue();
       expect(notPressed).assertFalse();
+    });
+
+    it('combined: bottom_nav_action_resolution_should_cover_noop_search_route_and_press_states', 0, () => {
+      // Arrange
+      const current: AppNavTab = 'home';
+
+      // Act
+      const noopAction = resolveBottomNavNavigateAction(current, 'home');
+      const searchAction = resolveBottomNavNavigateAction(current, 'search');
+      const routeAction = resolveBottomNavNavigateAction(current, 'archive');
+      const sameTabPlan = resolveBottomNavTapPlan(current, 'home', false);
+      const lockedPlan = resolveBottomNavTapPlan(current, 'archive', true);
+      const freePlan = resolveBottomNavTapPlan(current, 'archive', false);
+      const pressed = resolveBottomNavPressedTab('archive', true);
+      const released = resolveBottomNavPressedTab('archive', false);
+
+      // Assert
+      expect(noopAction.kind).assertEqual('noop');
+      expect(searchAction.kind).assertEqual('search');
+      expect(searchAction.route).assertEqual('pages/PlanSearchPage');
+      expect(routeAction.kind).assertEqual('route');
+      expect(routeAction.route).assertEqual('pages/ArchivePage');
+      expect(sameTabPlan.shouldNavigate).assertFalse();
+      expect(lockedPlan.shouldNavigate).assertFalse();
+      expect(lockedPlan.nextNavLocked).assertTrue();
+      expect(freePlan.shouldNavigate).assertTrue();
+      expect(freePlan.nextTransitionTab).assertEqual('archive');
+      expect(pressed).assertEqual('archive');
+      expect(released).assertEqual('');
+    });
+
+    it('combined: plan_bottom_action_bar_instance_should_sync_callbacks_state_and_palette', 0, () => {
+      // Arrange
+      const page = new PlanBottomActionBar(undefined, {} as LocalStorage) as Object as PlanBottomActionBarPrivateTest;
+      let filterCount = 0;
+      let aiCount = 0;
+      let addCount = 0;
+      const initParams: PlanBottomActionBarParamsTest = {
+        onFilter: () => { filterCount += 1; },
+        onAi: () => { aiCount += 1; },
+        onAdd: () => { addCount += 1; },
+        aiEnabled: false,
+        addEnabled: true
+      };
+      const nextParams: PlanBottomActionBarParamsTest = {
+        aiEnabled: true,
+        addEnabled: false
+      };
+      page.setInitiallyProvidedValue(initParams);
+      page.updateStateVars(initParams);
+
+      // Act
+      const initAiEnabled = page.aiEnabled;
+      const initAddEnabled = page.addEnabled;
+      page.onFilter();
+      page.onAi();
+      page.onAdd();
+      page.updateStateVars(nextParams);
+      page.effectiveTheme = 'dark';
+      const palette = page.getPalette();
+
+      // Assert
+      expect(filterCount).assertEqual(1);
+      expect(aiCount).assertEqual(1);
+      expect(addCount).assertEqual(1);
+      expect(initAiEnabled).assertFalse();
+      expect(initAddEnabled).assertTrue();
+      expect(page.aiEnabled).assertTrue();
+      expect(page.addEnabled).assertFalse();
+      expect(palette.cardBg).assertEqual(ThemeCenter.getPalette('dark').cardBg);
+      expect(palette.divider).assertEqual(ThemeCenter.getPalette('dark').divider);
+      expect(palette.textPrimary).assertEqual(ThemeCenter.getPalette('dark').textPrimary);
+    });
+
+    it('combined: companion_bottom_action_bar_instance_should_keep_initial_callbacks_when_update_state_is_noop', 0, () => {
+      // Arrange
+      const page = new CompanionBottomActionBar(undefined, {} as LocalStorage) as Object as CompanionBottomActionBarPrivateTest;
+      let historyCount = 0;
+      let immersiveCount = 0;
+      let searchCount = 0;
+      let filterCount = 0;
+      const initParams: CompanionBottomActionBarParamsTest = {
+        onHistory: () => { historyCount += 1; },
+        onImmersive: () => { immersiveCount += 1; },
+        onSearch: () => { searchCount += 1; },
+        onFilter: () => { filterCount += 1; }
+      };
+      const nextParams: CompanionBottomActionBarParamsTest = {
+        onHistory: () => { historyCount += 10; }
+      };
+      page.setInitiallyProvidedValue(initParams);
+      page.updateStateVars(initParams);
+
+      // Act
+      page.onHistory();
+      page.onImmersive();
+      page.onSearch();
+      page.onFilter();
+      page.updateStateVars(nextParams);
+      page.onHistory();
+      page.effectiveTheme = 'dark';
+      const palette = page.getPalette();
+
+      // Assert
+      expect(historyCount).assertEqual(2);
+      expect(immersiveCount).assertEqual(1);
+      expect(searchCount).assertEqual(1);
+      expect(filterCount).assertEqual(1);
+      expect(palette.companionBg).assertEqual(ThemeCenter.getPalette('dark').companionBg);
+      expect(palette.border).assertEqual(ThemeCenter.getPalette('dark').border);
+      expect(palette.textSecondary).assertEqual(ThemeCenter.getPalette('dark').textSecondary);
+    });
+
+    it('combined: global_bottom_nav_bar_instance_should_sync_visual_state_palette_and_callbacks', 0, async () => {
+      // Arrange
+      const page = new GlobalBottomNavBar(undefined, {} as LocalStorage) as Object as GlobalBottomNavBarPrivateTest;
+      let fabCount = 0;
+      let searchCount = 0;
+      const routedUrls: string[] = [];
+      const initParams: GlobalBottomNavBarParamsTest = {
+        currentTab: 'home',
+        showCenterFab: true,
+        onCenterFabTap: () => { fabCount += 1; },
+        onSearchTap: async () => { searchCount += 1; }
+      };
+      const nextParams: GlobalBottomNavBarParamsTest = {
+        currentTab: 'profile',
+        showCenterFab: false
+      };
+      const fakeRouter = new GlobalBottomNavRouterImplTest(routedUrls);
+      const fakeUiContext = new GlobalBottomNavUIContextImplTest(fakeRouter);
+
+      // Act
+      page.getUIContext = (): GlobalBottomNavUIContextTest => fakeUiContext;
+      page.setInitiallyProvidedValue(initParams);
+      page.updateStateVars(initParams);
+      const initCurrentTab = page.currentTab;
+      const initShowCenterFab = page.showCenterFab;
+      page.transitionTab = 'archive';
+      page.pressedTab = 'search';
+      page.navLocked = true;
+      page.fabPressed = true;
+      page.effectiveTheme = 'dark';
+      const archiveActive = page.isVisualActive('archive');
+      const homeActive = page.isVisualActive('home');
+      const searchPressed = page.isTabPressed('search');
+      const homePressed = page.isTabPressed('home');
+      const routeOptions = page.createRouteOptions('pages/PlanListPage');
+      page.currentTab = initCurrentTab;
+      page.showCenterFab = initShowCenterFab;
+      await page.safeReplaceUrl(routeOptions, 'pages/PlanListPage');
+      page.setTabPressed('archive', true);
+      const archivePressed = page.isTabPressed('archive');
+      page.setTabPressed('archive', false);
+      const archiveReleased = page.isTabPressed('archive');
+      page.onCenterFabTap();
+      await page.onSearchTap();
+      await page.navigateTo('archive');
+      await page.navigateTo('search');
+      page.handleTabTap('archive');
+      await new Promise<void>((resolve: () => void): void => {
+        setTimeout((): void => {
+          resolve();
+        }, 360);
+      });
+      page.updateStateVars(nextParams);
+      const palette = page.getPalette();
+
+      // Assert
+      expect(initCurrentTab).assertEqual('home');
+      expect(initShowCenterFab).assertTrue();
+      expect(archiveActive).assertTrue();
+      expect(homeActive).assertFalse();
+      expect(searchPressed).assertTrue();
+      expect(homePressed).assertFalse();
+      expect(archivePressed).assertTrue();
+      expect(archiveReleased).assertFalse();
+      expect(routeOptions.url).assertEqual('pages/PlanListPage');
+      expect(routedUrls[0]).assertEqual('pages/PlanListPage');
+      expect(routedUrls.includes('pages/ArchivePage')).assertTrue();
+      expect(fabCount).assertEqual(1);
+      expect(searchCount).assertEqual(2);
+      expect(page.currentTab).assertEqual('profile');
+      expect(page.showCenterFab).assertFalse();
+      expect(page.transitionTab).assertEqual('');
+      expect(page.navLocked).assertTrue();
+      expect(page.fabPressed).assertTrue();
+      expect(palette.cardBg).assertEqual(ThemeCenter.getPalette('dark').cardBg);
+      expect(palette.primary).assertEqual(ThemeCenter.getPalette('dark').primary);
+      expect(palette.textSecondary).assertEqual(ThemeCenter.getPalette('dark').textSecondary);
     });
   });
 }

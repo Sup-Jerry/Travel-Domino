@@ -1,9 +1,65 @@
 ﻿import { describe, it, expect } from '@ohos/hypium';
 import {
+  CompanionOverlayPages,
   shouldShowCompanionFilterOverlay,
   shouldShowCompanionHistoryOverlay,
   shouldShowCompanionSearchOverlay
 } from '../main/ets/pages/components/views/companion/CompanionOverlayPages';
+import { EventEntity } from '../main/ets/model/entity/EventEntity';
+
+interface CompanionOverlayPagesParamsTest {
+  showHistoryPage?: boolean;
+  historyTimelineSummary?: Object | null;
+  historyTimelineItems?: Object[];
+  historyTimelineFilter?: string;
+  historyViewMode?: string;
+  historySummary?: Object | null;
+  vm?: Object | null;
+  selectedHistoryTimelineItem?: Object | null;
+  showSearchPage?: boolean;
+  searchKeyword?: string;
+  searchResults?: EventEntity[];
+  showFilterPage?: boolean;
+  companionFilterState?: string;
+  safeTopInset?: number;
+  safeBottomInset?: number;
+}
+
+interface CompanionOverlayPagesPrivateTest {
+  showHistoryPage: boolean;
+  historyTimelineItems: Object[];
+  historyTimelineFilter: string;
+  historyViewMode: string;
+  vm: Object | null;
+  selectedHistoryTimelineItem: Object | null;
+  showSearchPage: boolean;
+  searchKeyword: string;
+  searchResults: EventEntity[];
+  showFilterPage: boolean;
+  companionFilterState: string;
+  safeTopInset: number;
+  safeBottomInset: number;
+  onHistoryClose: () => void;
+  onHistoryBack: () => void;
+  onHistoryFilterChange: (filter: string) => void;
+  onHistoryItemClick: (item: Object) => void;
+  onSearchClose: () => void;
+  onSearch: (keyword: string) => void;
+  onSearchResultClick: (item: EventEntity) => void;
+  onFilterClose: () => void;
+  onFilterSelect: (state: string) => void;
+  setInitiallyProvidedValue(params: CompanionOverlayPagesParamsTest): void;
+  updateStateVars(params: CompanionOverlayPagesParamsTest): void;
+}
+
+function createOverlayEvent(id: number): EventEntity {
+  const event = new EventEntity();
+  event.id = id;
+  event.name = `event_${id}`;
+  return event;
+}
+
+class OverlayPlaceholderTest {}
 
 export default function companionOverlayPagesHelperTest() {
   describe('unit_test_case_generator_autofill_CompanionOverlayPagesHelper', () => {
@@ -81,5 +137,65 @@ export default function companionOverlayPagesHelperTest() {
       // Assert
       expect(result).assertTrue();
     });
+
+    it('combined: overlay_instance_should_sync_props_and_keep_default_callbacks_stable', 0, () => {
+      // Arrange
+      const page = new CompanionOverlayPages(undefined, {} as LocalStorage) as Object as CompanionOverlayPagesPrivateTest;
+      const initParams: CompanionOverlayPagesParamsTest = {
+        showHistoryPage: true,
+        historyTimelineItems: [new OverlayPlaceholderTest() as Object],
+        historyTimelineFilter: 'all',
+        historyViewMode: 'timeline',
+        vm: null,
+        showSearchPage: true,
+        searchKeyword: 'museum',
+        searchResults: [createOverlayEvent(1)],
+        showFilterPage: true,
+        companionFilterState: 'ACTIVE',
+        safeTopInset: 4,
+        safeBottomInset: 6
+      };
+      const nextParams: CompanionOverlayPagesParamsTest = {
+        showHistoryPage: false,
+        historyTimelineItems: [new OverlayPlaceholderTest() as Object, new OverlayPlaceholderTest() as Object],
+        historyTimelineFilter: 'completed',
+        historyViewMode: 'summary',
+        selectedHistoryTimelineItem: new OverlayPlaceholderTest() as Object,
+        showSearchPage: false,
+        searchKeyword: 'station',
+        searchResults: [createOverlayEvent(2), createOverlayEvent(3)],
+        showFilterPage: false,
+        companionFilterState: 'SKIPPED',
+        safeTopInset: 14,
+        safeBottomInset: 16
+      };
+
+      // Act
+      page.onHistoryClose();
+      page.onHistoryBack();
+      page.onHistoryFilterChange('all');
+      page.onHistoryItemClick(new OverlayPlaceholderTest() as Object);
+      page.onSearchClose();
+      page.onSearch('keyword');
+      page.onSearchResultClick(createOverlayEvent(9));
+      page.onFilterClose();
+      page.onFilterSelect('ALL');
+      page.setInitiallyProvidedValue(initParams);
+      page.updateStateVars(nextParams);
+
+      // Assert
+      expect(page.showHistoryPage).assertFalse();
+      expect(page.historyTimelineItems.length).assertEqual(2);
+      expect(page.historyTimelineFilter).assertEqual('completed');
+      expect(page.historyViewMode).assertEqual('summary');
+      expect(page.showSearchPage).assertFalse();
+      expect(page.searchKeyword).assertEqual('station');
+      expect(page.searchResults.length).assertEqual(2);
+      expect(page.showFilterPage).assertFalse();
+      expect(page.companionFilterState).assertEqual('SKIPPED');
+      expect(page.safeTopInset).assertEqual(14);
+      expect(page.safeBottomInset).assertEqual(16);
+    });
   });
 }
+

@@ -1,5 +1,29 @@
 ﻿import { describe, it, expect } from '@ohos/hypium';
-import { getCompanionControlTopBarPaddingTop } from '../main/ets/pages/components/views/companion/CompanionControlTopBar';
+import { ThemeCenter } from '../main/ets/common/utils/ThemeCenter';
+import {
+  CompanionControlTopBar,
+  getCompanionControlTopBarPaddingTop
+} from '../main/ets/pages/components/views/companion/CompanionControlTopBar';
+
+interface CompanionControlTopBarThemePaletteTest {
+  textPrimary: Object;
+  textSecondary: Object;
+}
+
+interface CompanionControlTopBarParamsTest {
+  safeTopInset?: number;
+  runtimeDescription?: string;
+}
+
+interface CompanionControlTopBarPrivateTest {
+  safeTopInset: number;
+  runtimeDescription: string;
+  effectiveTheme: string;
+  onExit: () => void;
+  setInitiallyProvidedValue(params: CompanionControlTopBarParamsTest): void;
+  updateStateVars(params: CompanionControlTopBarParamsTest): void;
+  getThemePalette(): CompanionControlTopBarThemePaletteTest;
+}
 
 export default function companionControlTopBarHelperTest() {
   describe('unit_test_case_generator_autofill_CompanionControlTopBarHelper', () => {
@@ -72,6 +96,30 @@ export default function companionControlTopBarHelperTest() {
       expect(outputs[0]).assertEqual(10);
       expect(outputs[1]).assertEqual(18);
       expect(outputs[2]).assertEqual(26);
+    });
+
+    it('combined: topbar_instance_should_sync_props_and_theme_palette_without_runtime_build', 0, () => {
+      // Arrange
+      const page = new CompanionControlTopBar(undefined, {} as LocalStorage) as Object as CompanionControlTopBarPrivateTest;
+
+      // Act
+      page.onExit();
+      page.setInitiallyProvidedValue({
+        safeTopInset: 8,
+        runtimeDescription: 'ready'
+      });
+      page.updateStateVars({
+        safeTopInset: 18,
+        runtimeDescription: 'paused'
+      });
+      page.effectiveTheme = 'dark';
+      const palette = page.getThemePalette();
+
+      // Assert
+      expect(page.safeTopInset).assertEqual(18);
+      expect(page.runtimeDescription).assertEqual('paused');
+      expect(palette.textPrimary).assertEqual(ThemeCenter.getPalette('dark').textPrimary);
+      expect(palette.textSecondary).assertEqual(ThemeCenter.getPalette('dark').textSecondary);
     });
   });
 }

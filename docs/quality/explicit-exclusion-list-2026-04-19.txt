@@ -1,0 +1,20 @@
+﻿Travel Domino 显式排除清单（全覆盖封板）
+日期：2026-04-19
+维护范围：entry/src/main/ets/** 与 backend/src/**
+规则：仅记录经评审确认的“结构性不可达”或“不可执行声明类文件”；禁止隐式排除。
+
+[EX-2026-04-19-001]
+文件：entry/src/main/ets/infrastructure/services/ArrivalReminderEngine.ets
+位置：line 284
+类型：Branch (false side)
+状态：显式排除（结构性不可达）
+原因：该分支位于 refreshFencesNow 的 if (refreshPlanIds.length > 0) 内部，refreshPlanIds 由 activePlanIdsForLoop 迭代推导；当 refreshPlanIds.length > 0 成立时，activePlanIds.length 必然 > 0，因此 line 284 的 false side 在当前实现下不可达。
+证据：覆盖率快照仅剩此单侧分支（Branches 187/188），其余分支已双侧命中。
+处置：保留当前实现，不为覆盖率强行注入非业务路径；后续若重构 refreshFencesNow 的数据流，再撤销该排除并补测。
+责任人：Codex + 项目维护者
+
+[EX-DECL-001]
+文件：entry/src/main/ets/model/interface/IMapService.ets
+类型：声明类文件（接口）
+状态：显式排除
+原因：接口声明无可执行业务路径。

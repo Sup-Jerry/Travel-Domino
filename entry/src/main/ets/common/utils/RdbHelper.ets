@@ -140,6 +140,10 @@ export class RdbHelper {
             hilog.error(0x0000, TAG, `Failed to execute SQL. Message:${JSON.stringify(sqlErr)}`);
             reject(sqlErr);
           }
+        } else {
+          const nullStoreErr = new Error('RdbStore is null after getRdbStore callback');
+          hilog.error(0x0000, TAG, nullStoreErr.message);
+          reject(nullStoreErr);
         }
       });
     });

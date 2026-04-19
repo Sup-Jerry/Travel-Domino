@@ -1,5 +1,7 @@
 import { describe, it, expect } from '@ohos/hypium';
+import { ThemeCenter } from '../main/ets/common/utils/ThemeCenter';
 import {
+  EventItemView,
   formatEventItemCommuteTime,
   formatEventItemTimestamp,
   getEventItemTravelModeIcon,
@@ -11,6 +13,108 @@ import {
   resolveEventItemThemeColor
 } from '../main/ets/pages/components/views/EventItemView';
 import { EventEntity } from '../main/ets/model/entity/EventEntity';
+
+interface EventItemTimeRangeMetaTest {
+  text: string;
+  isEstimated: boolean;
+}
+
+interface EventItemPaletteTest {
+  primary: Object;
+  danger: Object;
+  warning: Object;
+  divider: Object;
+  cardBg: Object;
+  cardBgSoft: Object;
+}
+
+interface EventItemViewParamsTest {
+  event?: EventEntity;
+  index?: number;
+  totalCount?: number;
+  showTravelIndicator?: boolean;
+  isCompanionMode?: boolean;
+  companionCurrentEventId?: number;
+  showWeather?: boolean;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  onMainContentClick?: () => void;
+  onTimeClick?: () => void;
+  onCommuteChange?: (minutes: number) => void;
+  onEditClick?: () => void;
+  onTravelModeChange?: (mode: number) => void;
+  onManualTravelInput?: (minutes: number) => void;
+  onConflictAction?: (item: EventEntity, strategy: string, gapMinutes: number) => void;
+}
+
+interface EventItemViewPrivateTest {
+  event: EventEntity;
+  index: number;
+  totalCount: number;
+  showTravelIndicator: boolean;
+  isCompanionMode: boolean;
+  companionCurrentEventId: number;
+  showWeather: boolean;
+  isReasonPopupShow: boolean;
+  tempCommuteVal: string;
+  isManualInputPopupShow: boolean;
+  planningTimeDisplayMode: number;
+  companionTimeDisplayMode: number;
+  effectiveTheme: string;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onMainContentClick: () => void;
+  onTimeClick: () => void;
+  onCommuteChange: (minutes: number) => void;
+  onEditClick: () => void;
+  onTravelModeChange: (mode: number) => void;
+  onManualTravelInput: (minutes: number) => void;
+  onConflictAction: (item: EventEntity, strategy: string, gapMinutes: number) => void;
+  setInitiallyProvidedValue(params: EventItemViewParamsTest): void;
+  updateStateVars(params: EventItemViewParamsTest): void;
+  getPalette(): EventItemPaletteTest;
+  getTravelModeIcon(mode: number): string;
+  getDisplayTime(isStart: boolean): string;
+  getCurrentDisplayMode(): number;
+  switchDisplayMode(): void;
+  getThemeColor(name: string): string;
+  getStartTimeDisplay(): string;
+  getEndTimeDisplay(): string;
+  formatCommuteTime(minutes: number): string;
+  formatTs(ts: number): string;
+  getPlanRange(): string;
+  getForecastRange(): string;
+  getActualRangeMeta(): EventItemTimeRangeMetaTest;
+  getActualMainColor(): Object;
+  getCompanionOpacity(): number;
+  getCompanionStateLabel(): string;
+  getCompanionCardBackground(): Object;
+  getCompanionBorderColor(): Object;
+  getConflictGapMinutes(): number;
+}
+
+function buildEventItemTestEvent(id: number): EventEntity {
+  const event = new EventEntity();
+  event.id = id;
+  event.name = id === 1 ? '餐厅A' : '酒店B';
+  event.type = id === 1 ? 0 : 3;
+  event.source = id === 1 ? 1 : 0;
+  event.duration = id === 1 ? 90 : 60;
+  event.computed_time = id === 1 ? '09:00' : '11:00';
+  event.fixed_start_time = id === 1 ? '09:05' : '11:05';
+  event.actual_start_time = id === 1 ? 0 : new Date(2026, 3, 19, 11, 5, 0, 0).getTime();
+  event.actual_end_time = id === 1 ? 0 : new Date(2026, 3, 19, 12, 5, 0, 0).getTime();
+  event.forecast_start_time = id === 1 ? '09:10' : '11:10';
+  event.forecast_end_time = id === 1 ? '10:40' : '12:10';
+  event.dynamic_start_time = id === 1 ? new Date(2026, 3, 19, 9, 15, 0, 0).getTime() : 0;
+  event.dynamic_end_time = id === 1 ? new Date(2026, 3, 19, 10, 45, 0, 0).getTime() : 0;
+  event.is_forecast_conflict = id === 1;
+  event.completion_status = id === 1 ? EventEntity.STATE_PENDING : EventEntity.STATE_SKIPPED;
+  event.gap_minutes = id === 1 ? 20 : 0;
+  event.conflict_msg = id === 1 ? '冲突 20 分钟' : '';
+  event.lock_status = 0;
+  return event;
+}
 
 export default function eventItemViewHelperTest() {
   describe('unit_test_case_generator_autofill_EventItemViewHelper', () => {
@@ -154,6 +258,152 @@ export default function eventItemViewHelperTest() {
       // Assert
       expect(opacity).assertEqual(0.45);
       expect(label).assertEqual('COMPLETED');
+    });
+
+    it('combined: event_item_view_instance_should_cover_private_time_palette_and_companion_state_helpers', 0, () => {
+      // Arrange
+      const page = new EventItemView(undefined, {} as LocalStorage) as Object as EventItemViewPrivateTest;
+      const initialEvent = buildEventItemTestEvent(1);
+      const nextEvent = buildEventItemTestEvent(2);
+      let callCount = 0;
+      let lastMinutes = -1;
+      let lastMode = -1;
+      const initParams: EventItemViewParamsTest = {
+        event: initialEvent,
+        index: 0,
+        totalCount: 3,
+        showTravelIndicator: true,
+        isCompanionMode: true,
+        companionCurrentEventId: 1,
+        showWeather: false,
+        onMoveUp: () => { callCount += 1; },
+        onMoveDown: () => { callCount += 1; },
+        onMainContentClick: () => { callCount += 1; },
+        onTimeClick: () => { callCount += 1; },
+        onCommuteChange: (minutes: number) => {
+          lastMinutes = minutes;
+          callCount += 1;
+        },
+        onEditClick: () => { callCount += 1; },
+        onTravelModeChange: (mode: number) => {
+          lastMode = mode;
+          callCount += 1;
+        },
+        onManualTravelInput: (minutes: number) => {
+          lastMinutes = minutes;
+          callCount += 1;
+        },
+        onConflictAction: (_item: EventEntity, _strategy: string, gapMinutes: number) => {
+          lastMinutes = gapMinutes;
+          callCount += 1;
+        }
+      };
+      const nextParams: EventItemViewParamsTest = {
+        event: nextEvent,
+        index: 1,
+        totalCount: 5,
+        showTravelIndicator: false,
+        isCompanionMode: true,
+        companionCurrentEventId: 99,
+        showWeather: true
+      };
+
+      // Act
+      page.onMoveUp();
+      page.onMoveDown();
+      page.onMainContentClick();
+      page.onTimeClick();
+      page.onCommuteChange(5);
+      page.onEditClick();
+      page.onTravelModeChange(2);
+      page.onManualTravelInput(10);
+      page.onConflictAction(initialEvent, 'smart', 15);
+      page.isReasonPopupShow = true;
+      page.tempCommuteVal = '18';
+      page.isManualInputPopupShow = true;
+      page.effectiveTheme = 'dark';
+      const darkPalette = page.getPalette();
+      const defaultMode = page.getCurrentDisplayMode();
+      page.setInitiallyProvidedValue(initParams);
+      page.updateStateVars(initParams);
+      const startPlan = page.getDisplayTime(true);
+      page.switchDisplayMode();
+      const displayMode = page.getCurrentDisplayMode();
+      const startActual = page.getDisplayTime(true);
+      const endActual = page.getDisplayTime(false);
+      const walkIcon = page.getTravelModeIcon(4);
+      const themeColor = page.getThemeColor('餐厅A');
+      const startText = page.getStartTimeDisplay();
+      const endText = page.getEndTimeDisplay();
+      const commuteText = page.formatCommuteTime(95);
+      const formattedTs = page.formatTs(initialEvent.dynamic_start_time);
+      const planRange = page.getPlanRange();
+      const forecastRange = page.getForecastRange();
+      const actualMeta = page.getActualRangeMeta();
+      const actualMainColor = page.getActualMainColor();
+      const companionOpacity = page.getCompanionOpacity();
+      const companionLabel = page.getCompanionStateLabel();
+      const companionBg = page.getCompanionCardBackground();
+      const companionBorder = page.getCompanionBorderColor();
+      const gapMinutes = page.getConflictGapMinutes();
+      page.onMoveUp();
+      page.onMoveDown();
+      page.onMainContentClick();
+      page.onTimeClick();
+      page.onCommuteChange(22);
+      page.onEditClick();
+      page.onTravelModeChange(3);
+      page.onManualTravelInput(26);
+      page.onConflictAction(initialEvent, 'delay', gapMinutes);
+      page.updateStateVars(nextParams);
+      const nextActualMeta = page.getActualRangeMeta();
+      const nextOpacity = page.getCompanionOpacity();
+      const nextLabel = page.getCompanionStateLabel();
+      const nextBg = page.getCompanionCardBackground();
+      const nextBorder = page.getCompanionBorderColor();
+
+      // Assert
+      expect(defaultMode).assertEqual(0);
+      expect(darkPalette.primary).assertEqual(ThemeCenter.getPalette('dark').primary);
+      expect(page.isReasonPopupShow).assertTrue();
+      expect(page.tempCommuteVal).assertEqual('18');
+      expect(page.isManualInputPopupShow).assertTrue();
+      expect(startPlan).assertEqual('09:00');
+      expect(displayMode).assertEqual(1);
+      expect(startActual).assertEqual('未记录');
+      expect(endActual).assertEqual('10:40');
+      expect(walkIcon).assertEqual('🚶');
+      expect(themeColor).assertEqual('#57C6B7');
+      expect(startText).assertEqual('09:00');
+      expect(endText).assertEqual('10:30');
+      expect(commuteText).assertEqual('1h 35m');
+      expect(formattedTs).assertEqual('09:15');
+      expect(planRange).assertEqual('09:00-10:30');
+      expect(forecastRange).assertEqual('09:15-10:45');
+      expect(actualMeta.text).assertEqual('09:15-10:45');
+      expect(actualMeta.isEstimated).assertTrue();
+      expect(actualMainColor).assertEqual(ThemeCenter.getPalette('dark').danger);
+      expect(companionOpacity).assertEqual(1);
+      expect(companionLabel).assertEqual('READY');
+      expect(companionBg).assertEqual(ThemeCenter.getPalette('dark').cardBgSoft);
+      expect(companionBorder).assertEqual(ThemeCenter.getPalette('dark').primary);
+      expect(gapMinutes).assertEqual(20);
+      expect(callCount).assertEqual(9);
+      expect(lastMode).assertEqual(3);
+      expect(lastMinutes).assertEqual(20);
+      expect(page.event.id).assertEqual(2);
+      expect(page.index).assertEqual(1);
+      expect(page.totalCount).assertEqual(5);
+      expect(page.showTravelIndicator).assertFalse();
+      expect(page.isCompanionMode).assertTrue();
+      expect(page.companionCurrentEventId).assertEqual(99);
+      expect(page.showWeather).assertTrue();
+      expect(nextActualMeta.text).assertEqual('11:05-12:05');
+      expect(nextActualMeta.isEstimated).assertFalse();
+      expect(nextOpacity).assertEqual(0.3);
+      expect(nextLabel).assertEqual('SKIPPED');
+      expect(nextBg).assertEqual(ThemeCenter.getPalette('dark').cardBg);
+      expect(nextBorder).assertEqual(ThemeCenter.getPalette('dark').warning);
     });
   });
 }

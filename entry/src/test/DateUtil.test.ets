@@ -30,6 +30,20 @@ export default function dateUtilTest() {
       expect(actual).assertFalse();
     });
 
+    it('boundary: is_valid_time_string_should_reject_malformed_extracted_time_parts', 0, () => {
+      // Arrange
+      const originExtract = Reflect.get(DateUtil, 'extractPureTime') as (value: string) => string;
+      Reflect.set(DateUtil, 'extractPureTime', (_value: string): string => '09:30:10');
+      // Act
+      const invalidParts = DateUtil.isValidTimeString('ignored');
+      Reflect.set(DateUtil, 'extractPureTime', (_value: string): string => 'ab:cd');
+      const nanParts = DateUtil.isValidTimeString('ignored');
+      Reflect.set(DateUtil, 'extractPureTime', originExtract);
+      // Assert
+      expect(invalidParts).assertFalse();
+      expect(nanParts).assertFalse();
+    });
+
     it('conflict: calculate_end_time_should_reject_invalid_day_shift_time', 0, () => {
       // Arrange
       const startTime = '次日 99:99';
@@ -56,6 +70,32 @@ export default function dateUtilTest() {
       const actual = DateUtil.calculateEndTime(startTime, durationMinutes);
       // Assert
       expect(actual).assertEqual('10:30');
+    });
+
+    it('combined: date_util_should_return_fallback_values_for_empty_inputs', 0, () => {
+      // Arrange
+      const empty = '';
+      // Act
+      const dayShift = DateUtil.getDayShift(empty);
+      const minutes = DateUtil.timeToMinutes(empty);
+      const planDate = DateUtil.formatPlanDate(undefined);
+      const localDate = DateUtil.formatLocalDate(undefined);
+      // Assert
+      expect(dayShift).assertEqual(0);
+      expect(minutes).assertEqual(0);
+      expect(planDate).assertEqual('待定');
+      expect(localDate).assertEqual('--');
+    });
+
+    it('invalid: time_to_minutes_should_return_zero_when_extracted_time_is_nan', 0, () => {
+      // Arrange
+      const originExtract = Reflect.get(DateUtil, 'extractPureTime') as (value: string) => string;
+      Reflect.set(DateUtil, 'extractPureTime', (_value: string): string => 'ab:cd');
+      // Act
+      const minutes = DateUtil.timeToMinutes('ignored');
+      Reflect.set(DateUtil, 'extractPureTime', originExtract);
+      // Assert
+      expect(minutes).assertEqual(0);
     });
   });
 }

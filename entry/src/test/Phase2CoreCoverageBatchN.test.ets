@@ -326,7 +326,7 @@ export default function phase2CoreCoverageBatchNTest() {
       hooks.restore();
     });
 
-    it('combined: auth_facade_guest_fallback_should_cover_session_empty_offline_success_and_exception_offline_null_paths', 0, async () => {
+    it('combined: auth_facade_guest_fallback_should_cover_session_empty_offline_success_and_exception_force_local_success', 0, async () => {
       // Arrange
       const bundle = createBundleForN();
       const hooks = new HooksForN();
@@ -346,13 +346,14 @@ export default function phase2CoreCoverageBatchNTest() {
       expect(fallbackOnSessionEmpty.success).assertTrue();
       expect(fallbackOnSessionEmpty.data !== null).assertTrue();
       expect(fallbackOnSessionEmpty.data!.loginMethod).assertEqual('GUEST_OFFLINE');
-      expect(failureOnException.success).assertFalse();
-      expect(failureOnException.message).assertEqual('guest_gateway_throw_n');
-      expect(failureOnException.status).assertEqual(LoginStatus.LOGIN_FAILED);
+      expect(failureOnException.success).assertTrue();
+      expect(failureOnException.data !== null).assertTrue();
+      expect(failureOnException.data!.isGuest).assertTrue();
+      expect(failureOnException.data!.loginMethod).assertEqual('GUEST_HARD_FALLBACK');
       hooks.restore();
     });
 
-    it('conflict: auth_facade_guest_fallback_should_fail_when_session_empty_and_offline_fallback_disabled', 0, async () => {
+    it('conflict: auth_facade_guest_fallback_should_force_local_success_when_session_empty_and_offline_fallback_disabled', 0, async () => {
       // Arrange
       const bundle = createBundleForN();
       const hooks = new HooksForN();
@@ -365,9 +366,11 @@ export default function phase2CoreCoverageBatchNTest() {
       // Act
       const result = await bundle.facade.explicitGuestLogin();
       // Assert
-      expect(result.success).assertFalse();
-      expect(result.message).assertEqual('guest_session_empty');
-      expect(result.status).assertEqual(LoginStatus.LOGIN_FAILED);
+      expect(result.success).assertTrue();
+      expect(result.data !== null).assertTrue();
+      expect(result.data!.isGuest).assertTrue();
+      expect(result.data!.loginMethod).assertEqual('GUEST_HARD_FALLBACK');
+      expect(result.status).assertEqual(LoginStatus.AUTHENTICATED);
       hooks.restore();
     });
 

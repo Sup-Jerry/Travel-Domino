@@ -1,5 +1,6 @@
 import { describe, it, expect } from '@ohos/hypium';
 import {
+  toggleAdvanceAdjustSelection,
   advanceAdjustMinutesToTime,
   advanceAdjustTimeToMinutes,
   resolveAdvanceAdjustDefaultStartTime
@@ -61,6 +62,34 @@ export default function advanceAdjustDialogHelperTest() {
       const target = advanceAdjustMinutesToTime(minutes);
       // Assert
       expect(target).assertEqual(source);
+    });
+
+    it('boundary: advance_adjust_should_pad_single_digit_minute_when_formatting_time', 0, () => {
+      // Arrange
+      const minutes = 125;
+      // Act
+      const time = advanceAdjustMinutesToTime(minutes);
+      // Assert
+      expect(time).assertEqual('02:05');
+    });
+
+    it('invalid: advance_adjust_should_return_zero_when_time_part_is_not_finite_number', 0, () => {
+      // Arrange
+      const time = '08:ab';
+      // Act
+      const minutes = advanceAdjustTimeToMinutes(time);
+      // Assert
+      expect(minutes).assertEqual(0);
+    });
+
+    it('combined: advance_adjust_selection_should_add_target_id_when_checked', 0, () => {
+      // Arrange
+      const selectedIds = new Set<number>();
+      // Act
+      const nextSelectedIds = toggleAdvanceAdjustSelection(selectedIds, 7, true);
+      // Assert
+      expect(nextSelectedIds.has(7)).assertTrue();
+      expect(nextSelectedIds.size).assertEqual(1);
     });
   });
 }

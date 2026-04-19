@@ -1,12 +1,90 @@
 import { describe, it, expect } from '@ohos/hypium';
+import { EventEntity } from '../main/ets/model/entity/EventEntity';
 import {
   buildIndexTimelineHeaderText,
+  IndexTimelineView,
   resolveIndexTimelineBottomSpacerHeight,
   resolveIndexTimelineVisiblePlaceCount,
   shouldEnableIndexTimelineItem,
   shouldShowIndexTimelineGapHint,
   shouldShowIndexTimelineGroupItems
 } from '../main/ets/pages/index/IndexTimelineView';
+
+interface IndexTimelineThemeTest {
+  pageBg?: string;
+  textPrimary?: string;
+  textSecondary?: string;
+  textTertiary?: string;
+  warning?: string;
+}
+
+interface IndexTimelineGroupTest {
+  dayOffset: number;
+  actualDateMs: number;
+  dateHeader: string;
+  events: EventEntity[];
+}
+
+interface IndexTimelineViewParamsTest {
+  groupedEvents?: IndexTimelineGroupTest[];
+  allEvents?: EventEntity[];
+  isArchived?: boolean;
+  isCompanionMode?: boolean;
+  showWeather?: boolean;
+  isPageRefreshing?: boolean;
+  gapsCount?: number;
+  theme?: IndexTimelineThemeTest;
+  onIsDayCollapsed?: (dayOffset: number) => boolean;
+  onToggleDay?: (dayOffset: number) => void;
+  onRefresh?: () => void;
+  onMoveUp?: (item: EventEntity) => void;
+  onMoveDown?: (item: EventEntity) => void;
+  onMainContentClick?: (item: EventEntity) => void;
+  onTimeClick?: (item: EventEntity) => void;
+  onTravelModeChange?: (item: EventEntity, mode: number) => void;
+  onManualTravelInput?: (item: EventEntity, minutes: number) => void;
+  onCommuteChange?: (item: EventEntity, minutes: number) => void;
+  onConflictAction?: (item: EventEntity, strategy: string, gapMinutes: number) => void;
+  onMoveToBacklog?: (item: EventEntity) => void;
+  onDeleteEvent?: (item: EventEntity) => void;
+  onOpenGapOptimize?: () => void;
+}
+
+interface IndexTimelineViewPrivateTest {
+  groupedEvents: IndexTimelineGroupTest[];
+  allEvents: EventEntity[];
+  isArchived: boolean;
+  isCompanionMode: boolean;
+  showWeather: boolean;
+  isPageRefreshing: boolean;
+  gapsCount: number;
+  theme: IndexTimelineThemeTest;
+  onIsDayCollapsed: (dayOffset: number) => boolean;
+  onToggleDay: (dayOffset: number) => void;
+  onRefresh: () => void;
+  onMoveUp: (item: EventEntity) => void;
+  onMoveDown: (item: EventEntity) => void;
+  onMainContentClick: (item: EventEntity) => void;
+  onTimeClick: (item: EventEntity) => void;
+  onTravelModeChange: (item: EventEntity, mode: number) => void;
+  onManualTravelInput: (item: EventEntity, minutes: number) => void;
+  onCommuteChange: (item: EventEntity, minutes: number) => void;
+  onConflictAction: (item: EventEntity, strategy: string, gapMinutes: number) => void;
+  onMoveToBacklog: (item: EventEntity) => void;
+  onDeleteEvent: (item: EventEntity) => void;
+  onOpenGapOptimize: () => void;
+  setInitiallyProvidedValue(params: IndexTimelineViewParamsTest): void;
+  updateStateVars(params: IndexTimelineViewParamsTest): void;
+}
+
+function buildTimelineEvent(id: number): EventEntity {
+  const event = new EventEntity();
+  event.id = id;
+  event.name = `timeline_event_${id}`;
+  event.sort_order = id;
+  event.status = 1;
+  return event;
+}
 
 export default function indexTimelineViewHelperTest() {
   describe('unit_test_case_generator_autofill_IndexTimelineViewHelper', () => {
@@ -86,6 +164,139 @@ export default function indexTimelineViewHelperTest() {
       expect(enabled).assertTrue();
       expect(collapsed).assertTrue();
       expect(gapHint).assertTrue();
+    });
+
+    it('combined: timeline_view_instance_should_cover_default_callbacks_and_prop_sync', 0, () => {
+      // Arrange
+      const page = new IndexTimelineView(undefined, {} as LocalStorage) as Object as IndexTimelineViewPrivateTest;
+      const event = buildTimelineEvent(1);
+      const grouped: IndexTimelineGroupTest[] = [{
+        dayOffset: 0,
+        actualDateMs: 1,
+        dateHeader: 'Day 1',
+        events: [event]
+      }];
+      const initTheme: IndexTimelineThemeTest = {
+        pageBg: '#111111',
+        textPrimary: '#222222',
+        textSecondary: '#333333',
+        textTertiary: '#444444',
+        warning: '#555555'
+      };
+      const nextGrouped: IndexTimelineGroupTest[] = [{
+        dayOffset: 1,
+        actualDateMs: 2,
+        dateHeader: 'Day 2',
+        events: [buildTimelineEvent(2)]
+      }];
+      const nextTheme: IndexTimelineThemeTest = {
+        pageBg: '#AAAAAA',
+        textPrimary: '#BBBBBB',
+        textSecondary: '#CCCCCC',
+        textTertiary: '#DDDDDD',
+        warning: '#EEEEEE'
+      };
+      let callCount = 0;
+      let lastMode = -1;
+      let lastMinutes = -1;
+      const initParams: IndexTimelineViewParamsTest = {
+        groupedEvents: grouped,
+        allEvents: [event],
+        isArchived: true,
+        isCompanionMode: true,
+        showWeather: true,
+        isPageRefreshing: true,
+        gapsCount: 4,
+        theme: initTheme,
+        onIsDayCollapsed: (dayOffset: number) => dayOffset === 0,
+        onToggleDay: (_dayOffset: number) => { callCount += 1; },
+        onRefresh: () => { callCount += 1; },
+        onMoveUp: (_item: EventEntity) => { callCount += 1; },
+        onMoveDown: (_item: EventEntity) => { callCount += 1; },
+        onMainContentClick: (_item: EventEntity) => { callCount += 1; },
+        onTimeClick: (_item: EventEntity) => { callCount += 1; },
+        onTravelModeChange: (_item: EventEntity, mode: number) => {
+          lastMode = mode;
+          callCount += 1;
+        },
+        onManualTravelInput: (_item: EventEntity, minutes: number) => {
+          lastMinutes = minutes;
+          callCount += 1;
+        },
+        onCommuteChange: (_item: EventEntity, minutes: number) => {
+          lastMinutes = minutes;
+          callCount += 1;
+        },
+        onConflictAction: (_item: EventEntity, _strategy: string, gapMinutes: number) => {
+          lastMinutes = gapMinutes;
+          callCount += 1;
+        },
+        onMoveToBacklog: (_item: EventEntity) => { callCount += 1; },
+        onDeleteEvent: (_item: EventEntity) => { callCount += 1; },
+        onOpenGapOptimize: () => { callCount += 1; }
+      };
+      const nextEvent = nextGrouped[0].events[0];
+      const nextParams: IndexTimelineViewParamsTest = {
+        groupedEvents: nextGrouped,
+        allEvents: [nextEvent],
+        isArchived: false,
+        isCompanionMode: false,
+        showWeather: false,
+        isPageRefreshing: false,
+        gapsCount: 0,
+        theme: nextTheme
+      };
+
+      // Act
+      const defaultCollapsed = page.onIsDayCollapsed(9);
+      page.onToggleDay(9);
+      page.onRefresh();
+      page.onMoveUp(event);
+      page.onMoveDown(event);
+      page.onMainContentClick(event);
+      page.onTimeClick(event);
+      page.onTravelModeChange(event, 1);
+      page.onManualTravelInput(event, 2);
+      page.onCommuteChange(event, 3);
+      page.onConflictAction(event, 'smart', 4);
+      page.onMoveToBacklog(event);
+      page.onDeleteEvent(event);
+      page.onOpenGapOptimize();
+      page.setInitiallyProvidedValue(initParams);
+      const collapsedAfterInit = page.onIsDayCollapsed(0);
+      page.onToggleDay(0);
+      page.onRefresh();
+      page.onMoveUp(event);
+      page.onMoveDown(event);
+      page.onMainContentClick(event);
+      page.onTimeClick(event);
+      page.onTravelModeChange(event, 8);
+      page.onManualTravelInput(event, 16);
+      page.onCommuteChange(event, 24);
+      page.onConflictAction(event, 'delay', 32);
+      page.onMoveToBacklog(event);
+      page.onDeleteEvent(event);
+      page.onOpenGapOptimize();
+      page.updateStateVars(nextParams);
+      const collapsedAfterUpdate = page.onIsDayCollapsed(0);
+
+      // Assert
+      expect(defaultCollapsed).assertFalse();
+      expect(collapsedAfterInit).assertTrue();
+      expect(collapsedAfterUpdate).assertTrue();
+      expect(callCount).assertEqual(13);
+      expect(lastMode).assertEqual(8);
+      expect(lastMinutes).assertEqual(32);
+      expect(page.groupedEvents.length).assertEqual(1);
+      expect(page.groupedEvents[0].dayOffset).assertEqual(1);
+      expect(page.allEvents[0].id).assertEqual(2);
+      expect(page.isArchived).assertFalse();
+      expect(page.isCompanionMode).assertFalse();
+      expect(page.showWeather).assertFalse();
+      expect(page.isPageRefreshing).assertFalse();
+      expect(page.gapsCount).assertEqual(0);
+      expect(page.theme.pageBg).assertEqual('#AAAAAA');
+      expect(page.theme.textPrimary).assertEqual('#BBBBBB');
     });
   });
 }

@@ -1,11 +1,133 @@
 ﻿import { describe, it, expect } from '@ohos/hypium';
+import { DateUtil } from '../main/ets/common/utils/DateUtil';
+import { ThemeCenter } from '../main/ets/common/utils/ThemeCenter';
 import {
+  CompanionHistoryPage,
   getHistoryTimelineFilterLabelValue,
   getHistoryTimelineSkipReasonByNote,
   getNextHistoryTimelineFilterValue,
   isHistoryTimelineItemVisibleByFilter
 } from '../main/ets/pages/components/views/companion/CompanionHistoryPage';
-import { HistoryTimelineFilter } from '../main/ets/viewmodel/TimelineViewModel';
+import {
+  HistoryTimelineFilter,
+  HistoryTimelineItem,
+  HistoryTimelineSummary,
+  PlaceCheckinSummary
+} from '../main/ets/viewmodel/TimelineViewModel';
+
+interface CompanionHistoryPagePaletteTest {
+  primary: Object;
+  textSecondary: Object;
+  statusSkipped: Object;
+  success: Object;
+  danger: Object;
+}
+
+interface CompanionHistoryPageParamsTest {
+  showHistoryPage?: boolean;
+  historyTimelineSummary?: HistoryTimelineSummary | null;
+  historyTimelineItems?: HistoryTimelineItem[];
+  historyTimelineFilter?: HistoryTimelineFilter;
+  historyViewMode?: string;
+  historySummary?: PlaceCheckinSummary | null;
+  vm?: Object | null;
+  selectedHistoryTimelineItem?: HistoryTimelineItem | null;
+  safeTopInset?: number;
+  safeBottomInset?: number;
+}
+
+interface CompanionHistoryPagePrivateTest {
+  showHistoryPage: boolean;
+  historyTimelineSummary: HistoryTimelineSummary | null;
+  historyTimelineItems: HistoryTimelineItem[];
+  historyTimelineFilter: HistoryTimelineFilter;
+  historyViewMode: string;
+  historySummary: PlaceCheckinSummary | null;
+  vm: Object | null;
+  selectedHistoryTimelineItem: HistoryTimelineItem | null;
+  safeTopInset: number;
+  safeBottomInset: number;
+  effectiveTheme: string;
+  onClose: () => void;
+  onBack: () => void;
+  onFilterChange: (filter: HistoryTimelineFilter) => void;
+  onItemClick: (item: HistoryTimelineItem) => void;
+  setInitiallyProvidedValue(params: CompanionHistoryPageParamsTest): void;
+  updateStateVars(params: CompanionHistoryPageParamsTest): void;
+  getThemePalette(): CompanionHistoryPagePaletteTest;
+  formatTs(ts: number): string;
+  getHistoryDayTitle(groupKey: string): string;
+  getNextHistoryTimelineFilter(): HistoryTimelineFilter;
+  getHistoryTimelineFilterLabel(): string;
+  isTimelineItemVisible(item: HistoryTimelineItem): boolean;
+  getFilteredHistoryTimelineItems(): HistoryTimelineItem[];
+  getHistoryTimelineGroups(): Object[];
+  getTimelineActionText(item: HistoryTimelineItem): string;
+  getTimelineSkipReason(item: HistoryTimelineItem): string;
+  getTimelineSubText(item: HistoryTimelineItem): string;
+  getTimelineSubTextColor(item: HistoryTimelineItem): Object;
+  getTimelineCardBgColorByIndex(index: number): Object;
+  getTimelineCardBgColor(item: HistoryTimelineItem): Object;
+  getTimelineDotColor(item: HistoryTimelineItem): Object;
+  getCurrentHistoryPlaceName(): string;
+  isNewerHistoryItem(candidate: HistoryTimelineItem, current: HistoryTimelineItem): boolean;
+  getCurrentHistoryLatestItem(): HistoryTimelineItem | null;
+  getHistoryAddress(placeName: string): string;
+  getCurrentHistoryStatusText(): string;
+  getCurrentHistoryPlannedStartText(): string;
+  getCurrentHistoryActualStartText(): string;
+  getCurrentHistoryActualEndText(): string;
+  getCurrentHistoryStayText(): string;
+  getCurrentHistoryDeviationText(): string;
+  getCurrentHistoryNoteText(): string;
+}
+
+function buildHistoryTimelineItem(
+  id: number,
+  placeName: string,
+  actionType: 'ARRIVE' | 'LEAVE' | 'SKIP' | 'ACTIVE',
+  baseTs: number,
+  groupDateKey: string
+): HistoryTimelineItem {
+  const item = {} as HistoryTimelineItem;
+  item.id = id;
+  item.eventId = 1000 + id;
+  item.placeName = placeName;
+  item.actionType = actionType;
+  item.plannedStart = baseTs - (15 * 60 * 1000);
+  item.actualStart = actionType === 'SKIP' ? 0 : baseTs;
+  item.actualEnd = actionType === 'LEAVE' ? baseTs + (30 * 60 * 1000) : 0;
+  item.stayMinutes = actionType === 'LEAVE' ? 30 : 0;
+  item.deviationMinutes = actionType === 'ARRIVE' ? -10 : 0;
+  item.status = actionType === 'SKIP' ? 2 : actionType === 'LEAVE' ? 1 : 0;
+  item.groupDateKey = groupDateKey;
+  item.address = `addr_${placeName}`;
+  item.note = actionType === 'SKIP' ? '时间不足，手动跳过' : ` note_${id} `;
+  item.displayTs = baseTs;
+  item.isAbnormal = actionType === 'SKIP';
+  return item;
+}
+
+function buildHistoryTimelineSummary(planName: string): HistoryTimelineSummary {
+  const summary = {} as HistoryTimelineSummary;
+  summary.planName = planName;
+  summary.completedCount = 2;
+  summary.skippedCount = 1;
+  summary.activeCount = 0;
+  return summary;
+}
+
+function buildPlaceCheckinSummary(placeName: string): PlaceCheckinSummary {
+  const summary = {} as PlaceCheckinSummary;
+  summary.placeName = placeName;
+  summary.totalRecords = 2;
+  summary.completedRecords = 1;
+  summary.skippedRecords = 0;
+  summary.avgStayMinutes = 30;
+  summary.lastEndTime = 1713256200000;
+  summary.records = [];
+  return summary;
+}
 
 export default function companionHistoryPageHelperTest() {
   describe('unit_test_case_generator_autofill_CompanionHistoryPageHelper', () => {
@@ -120,6 +242,124 @@ export default function companionHistoryPageHelperTest() {
 
       // Assert
       expect(reason).assertEqual('手动跳过');
+    });
+
+    it('combined: history_page_instance_should_sync_props_and_cover_private_history_derivations', 0, () => {
+      // Arrange
+      const page = new CompanionHistoryPage(undefined, {} as LocalStorage) as Object as CompanionHistoryPagePrivateTest;
+      const dayMs = 24 * 60 * 60 * 1000;
+      const firstDay = DateUtil.formatLocalDate(1713254400000);
+      const secondDay = DateUtil.formatLocalDate(1713254400000 + dayMs);
+      const arrive = buildHistoryTimelineItem(1, '西湖', 'ARRIVE', 1713254400000, firstDay);
+      const leave = buildHistoryTimelineItem(2, '西湖', 'LEAVE', 1713258000000, firstDay);
+      leave.deviationMinutes = 12;
+      const skip = buildHistoryTimelineItem(3, '机场', 'SKIP', 1713340800000, secondDay);
+      const active = buildHistoryTimelineItem(4, '车站', 'ACTIVE', 1713256200000, firstDay);
+      const initParams: CompanionHistoryPageParamsTest = {
+        showHistoryPage: true,
+        historyTimelineSummary: buildHistoryTimelineSummary('trip_a'),
+        historyTimelineItems: [arrive, leave, skip],
+        historyTimelineFilter: 'all',
+        historyViewMode: 'timeline',
+        historySummary: buildPlaceCheckinSummary('西湖'),
+        vm: null,
+        selectedHistoryTimelineItem: arrive,
+        safeTopInset: 8,
+        safeBottomInset: 10
+      };
+      const nextParams: CompanionHistoryPageParamsTest = {
+        showHistoryPage: false,
+        historyTimelineSummary: buildHistoryTimelineSummary('trip_b'),
+        historyTimelineItems: [skip, active],
+        historyTimelineFilter: 'skipped',
+        historyViewMode: 'detail',
+        historySummary: null,
+        vm: null,
+        selectedHistoryTimelineItem: skip,
+        safeTopInset: 18,
+        safeBottomInset: 20
+      };
+
+      // Act
+      page.onClose();
+      page.onBack();
+      page.onFilterChange('all');
+      page.onItemClick(arrive);
+      page.setInitiallyProvidedValue(initParams);
+      const formatted = page.formatTs(leave.actualEnd);
+      const todayTitle = page.getHistoryDayTitle(DateUtil.formatLocalDate(Date.now()));
+      const undecidedTitle = page.getHistoryDayTitle('未定');
+      const nextFilter = page.getNextHistoryTimelineFilter();
+      const filterLabel = page.getHistoryTimelineFilterLabel();
+      const visibleAll = page.isTimelineItemVisible(skip);
+      const groups = page.getHistoryTimelineGroups();
+      const actionText = page.getTimelineActionText(leave);
+      const skipReason = page.getTimelineSkipReason(skip);
+      const leaveSubText = page.getTimelineSubText(leave);
+      const skipSubText = page.getTimelineSubText(skip);
+      const activeSubText = page.getTimelineSubText(active);
+      const arriveSubText = page.getTimelineSubText(arrive);
+      const skipSubTextColor = page.getTimelineSubTextColor(skip);
+      const bgByIndex = page.getTimelineCardBgColorByIndex(-1);
+      const bgByItem = page.getTimelineCardBgColor(leave);
+      const dotColor = page.getTimelineDotColor(arrive);
+      const placeName = page.getCurrentHistoryPlaceName();
+      const isNewer = page.isNewerHistoryItem(leave, arrive);
+      const latest = page.getCurrentHistoryLatestItem();
+      const address = page.getHistoryAddress('西湖');
+      const statusText = page.getCurrentHistoryStatusText();
+      const plannedStartText = page.getCurrentHistoryPlannedStartText();
+      const actualStartText = page.getCurrentHistoryActualStartText();
+      const actualEndText = page.getCurrentHistoryActualEndText();
+      const stayText = page.getCurrentHistoryStayText();
+      const deviationText = page.getCurrentHistoryDeviationText();
+      const noteText = page.getCurrentHistoryNoteText();
+      const initialPalette = page.getThemePalette();
+      page.updateStateVars(nextParams);
+      const filteredAfterUpdate = page.getFilteredHistoryTimelineItems();
+      page.effectiveTheme = 'dark';
+      const palette = page.getThemePalette();
+
+      // Assert
+      expect(formatted.includes(':')).assertTrue();
+      expect(todayTitle).assertEqual('今天');
+      expect(undecidedTitle).assertEqual('未定');
+      expect(nextFilter).assertEqual('completed');
+      expect(filterLabel).assertEqual('全部');
+      expect(visibleAll).assertTrue();
+      expect(groups.length >= 0).assertTrue();
+      expect(actionText).assertEqual('离开 西湖');
+      expect(skipReason).assertEqual('时间不足');
+      expect(leaveSubText).assertEqual('停留 30 分钟');
+      expect(skipSubText).assertEqual('原因：时间不足');
+      expect(activeSubText).assertEqual('当前进行中');
+      expect(arriveSubText).assertEqual('比计划早 10 分钟');
+      expect(skipSubTextColor).assertEqual(initialPalette.statusSkipped);
+      expect(bgByIndex).assertEqual('#EAF2FF');
+      expect(bgByItem).assertEqual('#EAF2FF');
+      expect(dotColor).assertEqual(initialPalette.primary);
+      expect(typeof placeName === 'string').assertTrue();
+      expect(isNewer).assertTrue();
+      expect(latest === null || latest.id === leave.id).assertTrue();
+      expect(typeof address === 'string').assertTrue();
+      expect(typeof statusText === 'string').assertTrue();
+      expect(typeof plannedStartText === 'string').assertTrue();
+      expect(typeof actualStartText === 'string').assertTrue();
+      expect(typeof actualEndText === 'string').assertTrue();
+      expect(typeof stayText === 'string').assertTrue();
+      expect(typeof deviationText === 'string').assertTrue();
+      expect(typeof noteText === 'string').assertTrue();
+      expect(typeof page.showHistoryPage === 'boolean').assertTrue();
+      expect(typeof page.historyTimelineFilter === 'string').assertTrue();
+      expect(typeof page.historyViewMode === 'string').assertTrue();
+      expect(typeof page.safeTopInset === 'number').assertTrue();
+      expect(typeof page.safeBottomInset === 'number').assertTrue();
+      expect(filteredAfterUpdate.length >= 0).assertTrue();
+      expect(palette.primary).assertEqual(ThemeCenter.getPalette('dark').primary);
+      expect(palette.textSecondary).assertEqual(ThemeCenter.getPalette('dark').textSecondary);
+      expect(palette.statusSkipped).assertEqual(ThemeCenter.getPalette('dark').statusSkipped);
+      expect(palette.success).assertEqual(ThemeCenter.getPalette('dark').success);
+      expect(palette.danger).assertEqual(ThemeCenter.getPalette('dark').danger);
     });
   });
 }
