@@ -9,6 +9,7 @@ import { AuthSessionStore } from '../auth/AuthSessionStore';
 import { AvatarUploadPort } from './AvatarUploadPort';
 
 const TAG = 'AvatarUploadApi';
+const LOG_DOMAIN = 0x0000;
 
 export interface AvatarUploadApiOptions {
   getAccessToken?: () => string;
@@ -34,30 +35,56 @@ export class AvatarUploadApi implements AvatarUploadPort {
   public async uploadAvatar(input: AvatarUploadInput): Promise<AvatarUploadResult> {
     const result = new AvatarUploadResult();
     result.requestId = `avatar_req_${this.now()}`;
+    const mimeType = input.mimeType || 'image/jpeg';
+    hilog.info(
+      LOG_DOMAIN,
+      TAG,
+      `[AVATAR_TRACE][upload_start] requestId=${result.requestId}, userId=${String(input.userId || '').trim()}, fileUriLen=${String(input.fileUri || '').trim().length}, mimeType=${mimeType}`
+    );
 
     const accessToken = this.getAccessToken();
     if (!accessToken) {
       result.status = 'LOCAL_ONLY';
       result.errorCode = 'NO_SESSION';
+      hilog.warn(LOG_DOMAIN, TAG, `[AVATAR_TRACE][upload_fail] requestId=${result.requestId}, phase=session, code=NO_SESSION`);
       return result;
     }
 
     try {
-      const dataUrl = this.encodeFileToDataUrl(input.fileUri, input.mimeType || 'image/jpeg');
-      const response = await this.updateAvatar(accessToken, dataUrl, input.mimeType || 'image/jpeg');
+      const dataUrl = this.encodeFileToDataUrl(input.fileUri, mimeType);
+      hilog.info(
+        LOG_DOMAIN,
+        TAG,
+        `[AVATAR_TRACE][upload_encoded] requestId=${result.requestId}, dataUrlLen=${dataUrl.length}, tokenLen=${accessToken.length}`
+      );
+      const response = await this.updateAvatar(accessToken, dataUrl, mimeType);
       if (response.code !== 0) {
         result.status = 'LOCAL_ONLY';
         result.errorCode = `${response.code}`;
+        hilog.warn(
+          LOG_DOMAIN,
+          TAG,
+          `[AVATAR_TRACE][upload_fail] requestId=${result.requestId}, phase=gateway, code=${response.code}, message=${String(response.message || '')}`
+        );
         return result;
       }
 
       result.status = 'SYNCED';
       result.remoteUrl = String(response.data.avatarUrl || '');
+      hilog.info(
+        LOG_DOMAIN,
+        TAG,
+        `[AVATAR_TRACE][upload_success] requestId=${result.requestId}, remoteUrlLen=${result.remoteUrl.length}`
+      );
       return result;
     } catch (error) {
       result.status = 'LOCAL_ONLY';
       result.errorCode = 'UPLOAD_EXCEPTION';
-      hilog.warn(0x0000, TAG, `upload avatar failed: ${AvatarUploadApi.errorMessage(error)}`);
+      hilog.warn(
+        LOG_DOMAIN,
+        TAG,
+        `[AVATAR_TRACE][upload_fail] requestId=${result.requestId}, phase=exception, code=UPLOAD_EXCEPTION, reason=${AvatarUploadApi.errorMessage(error)}`
+      );
       return result;
     }
   }
@@ -89,7 +116,7 @@ export class AvatarUploadApi implements AvatarUploadPort {
       }
     } catch (error) {
       const msg = AvatarUploadApi.errorMessage(error);
-      hilog.error(0x0000, TAG, `readFileAsDataUrl failed: ${msg}`);
+      hilog.error(LOG_DOMAIN, TAG, `[AVATAR_TRACE][encode_fail] reason=${msg}`);
       throw new Error(msg);
     }
   }

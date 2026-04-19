@@ -1,10 +1,55 @@
 ﻿import { describe, it, expect } from '@ohos/hypium';
+import { ThemeCenter } from '../main/ets/common/utils/ThemeCenter';
 import {
+  CompanionTimelineSection,
   getCompanionTimelineFilterSummary,
   getCompanionTimelineVisibleCount,
   isCompanionTimelineFocused,
   shouldShowCompanionTimelineEmptyState
 } from '../main/ets/pages/components/views/companion/CompanionTimelineSection';
+import { EventEntity } from '../main/ets/model/entity/EventEntity';
+
+interface CompanionTimelineSectionPaletteTest {
+  textPrimary: Object;
+  textSecondary: Object;
+  companionBg: Object;
+}
+
+interface CompanionTimelineSectionParamsTest {
+  focusedEventId?: number;
+  filterLabel?: string;
+  focusPosition?: number;
+  timelineCount?: number;
+  events?: EventEntity[];
+}
+
+interface CompanionTimelineSectionPrivateTest {
+  focusedEventId: number;
+  filterLabel: string;
+  focusPosition: number;
+  timelineCount: number;
+  events: EventEntity[];
+  effectiveTheme: string;
+  getStateDotColor: (event: EventEntity) => Object;
+  getEventStateLabel: (event: EventEntity) => string;
+  getStateTagTextColor: (event: EventEntity) => Object;
+  getStateTagBackgroundColor: (event: EventEntity) => Object;
+  getStateBorderColor: (event: EventEntity) => Object;
+  getTimelineSupplement: (event: EventEntity) => string;
+  onItemTap: (event: EventEntity, index: number) => void;
+  onScrollIndex: (start: number, end: number, center: number) => void;
+  onScrollStop: () => void;
+  setInitiallyProvidedValue(params: CompanionTimelineSectionParamsTest): void;
+  updateStateVars(params: CompanionTimelineSectionParamsTest): void;
+  getThemePalette(): CompanionTimelineSectionPaletteTest;
+}
+
+function buildTimelineEvent(id: number, name: string): EventEntity {
+  const event = new EventEntity();
+  event.id = id;
+  event.name = name;
+  return event;
+}
 
 export default function companionTimelineSectionHelperTest() {
   describe('unit_test_case_generator_autofill_CompanionTimelineSectionHelper', () => {
@@ -83,6 +128,57 @@ export default function companionTimelineSectionHelperTest() {
 
       // Assert
       expect(result).assertTrue();
+    });
+
+    it('combined: timeline_section_instance_should_sync_props_and_keep_default_render_helpers_stable', 0, () => {
+      // Arrange
+      const page = new CompanionTimelineSection(undefined, {} as LocalStorage) as Object as CompanionTimelineSectionPrivateTest;
+      const first = buildTimelineEvent(1, 'museum');
+      const second = buildTimelineEvent(2, 'station');
+      const third = buildTimelineEvent(3, 'airport');
+
+      // Act
+      const dotColor = page.getStateDotColor(first);
+      const stateLabel = page.getEventStateLabel(first);
+      const tagTextColor = page.getStateTagTextColor(first);
+      const tagBgColor = page.getStateTagBackgroundColor(first);
+      const borderColor = page.getStateBorderColor(first);
+      const supplement = page.getTimelineSupplement(first);
+      page.onItemTap(first, 0);
+      page.onScrollIndex(0, 1, 0);
+      page.onScrollStop();
+      page.setInitiallyProvidedValue({
+        focusedEventId: first.id,
+        filterLabel: '全部',
+        focusPosition: 1,
+        timelineCount: 2,
+        events: [first, second]
+      });
+      page.updateStateVars({
+        focusedEventId: third.id,
+        filterLabel: '跳过',
+        focusPosition: 2,
+        timelineCount: 1,
+        events: [third]
+      });
+      page.effectiveTheme = 'dark';
+      const palette = page.getThemePalette();
+
+      // Assert
+      expect(dotColor).assertEqual('#999');
+      expect(stateLabel).assertEqual('--');
+      expect(tagTextColor).assertEqual('#666');
+      expect(tagBgColor).assertEqual('#F5F5F5');
+      expect(borderColor).assertEqual('#DDD');
+      expect(supplement).assertEqual('--');
+      expect(page.focusedEventId).assertEqual(third.id);
+      expect(page.filterLabel).assertEqual('跳过');
+      expect(page.focusPosition).assertEqual(2);
+      expect(page.timelineCount).assertEqual(1);
+      expect(page.events.length).assertEqual(1);
+      expect(palette.textPrimary).assertEqual(ThemeCenter.getPalette('dark').textPrimary);
+      expect(palette.textSecondary).assertEqual(ThemeCenter.getPalette('dark').textSecondary);
+      expect(palette.companionBg).assertEqual(ThemeCenter.getPalette('dark').companionBg);
     });
   });
 }

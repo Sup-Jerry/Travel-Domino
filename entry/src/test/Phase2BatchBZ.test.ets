@@ -54,7 +54,7 @@ import {
   resolveTrashAutoPurgeDiffMs,
   resolveTrashRemainingTimeText
 } from '../main/ets/pages/TrashPage';
-import { UserSession } from '../main/ets/domain/auth/AuthTypes';
+import { AuthResult, HuaweiCredential, UserSession } from '../main/ets/domain/auth/AuthTypes';
 
 interface ThemePaletteLikeBZ {
   textPrimary: Object;
@@ -207,12 +207,16 @@ interface LoginPagePrivateBZ {
   ensureAgreement(): boolean;
   replaceUrl(url: string): Promise<void>;
   ensureCloudProfile(hostContext: Object, session: UserSession | null): Promise<void>;
+  loginWithHuaweiButton(credential: HuaweiCredential): Promise<void>;
+  loginWithHuaweiApiFallback(): Promise<void>;
+  loginAsGuest(): Promise<void>;
   toast(message: string): void;
   getUIContext(): LoginUiContextLikeBZ;
 }
 
 interface LoginUiContextLikeBZ {
   getRouter(): LoginRouterLikeBZ;
+  getHostContext(): Object;
 }
 
 interface LoginRouterLikeBZ {
@@ -312,13 +316,19 @@ class LoginRouterMockBZ implements LoginRouterLikeBZ {
 
 class LoginUiContextMockBZ implements LoginUiContextLikeBZ {
   private readonly router: LoginRouterMockBZ;
+  private readonly hostContext: Object;
 
-  constructor(router: LoginRouterMockBZ) {
+  constructor(router: LoginRouterMockBZ, hostContext: Object = new HostContextMockBZ() as Object) {
     this.router = router;
+    this.hostContext = hostContext;
   }
 
   getRouter(): LoginRouterLikeBZ {
     return this.router;
+  }
+
+  getHostContext(): Object {
+    return this.hostContext;
   }
 }
 
@@ -353,10 +363,65 @@ class HostContextMockBZ {
   tag: string = 'host';
 }
 
+class LoginButtonCallRecordBZ {
+  credential?: HuaweiCredential;
+  allowGuestFallback: boolean = true;
+}
+
+class LoginAuthFacadeMockBZ {
+  boundContexts: Object[] = [];
+  buttonCalls: LoginButtonCallRecordBZ[] = [];
+  guestCallCount: number = 0;
+  nextButtonResult: AuthResult<UserSession> = new AuthResult<UserSession>();
+  nextGuestResult: AuthResult<UserSession> = new AuthResult<UserSession>();
+  buttonError: Error | null = null;
+  guestError: Error | null = null;
+
+  bindContext(context: Object): void {
+    this.boundContexts.push(context);
+  }
+
+  async explicitLoginByButton(
+    credential?: HuaweiCredential,
+    allowGuestFallback: boolean = true
+  ): Promise<AuthResult<UserSession>> {
+    const call = new LoginButtonCallRecordBZ();
+    call.credential = credential;
+    call.allowGuestFallback = allowGuestFallback;
+    this.buttonCalls.push(call);
+    if (this.buttonError) {
+      throw this.buttonError;
+    }
+    return this.nextButtonResult;
+  }
+
+  async explicitGuestLogin(): Promise<AuthResult<UserSession>> {
+    this.guestCallCount += 1;
+    if (this.guestError) {
+      throw this.guestError;
+    }
+    return this.nextGuestResult;
+  }
+}
+
 function sleepBZ(ms: number): Promise<void> {
   return new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => {
     setTimeout(() => resolve(), ms);
   });
+}
+
+function buildUserSessionBZ(accountId: string): UserSession {
+  const session = new UserSession();
+  session.accountId = accountId;
+  return session;
+}
+
+function buildAuthResultBZ(success: boolean, session: UserSession | null, message: string = ''): AuthResult<UserSession> {
+  const result = new AuthResult<UserSession>();
+  result.success = success;
+  result.data = session;
+  result.message = message;
+  return result;
 }
 
 function buildEventBZ(id: number, name: string, state: 'PENDING' | 'ACTIVE' | 'SKIPPED' = 'PENDING'): EventEntity {
@@ -959,6 +1024,176 @@ export default function phase2BatchBZTest() {
         expect(profileViewModelMock.ensuredIds.length).assertEqual(1);
         expect(profileViewModelMock.ensuredIds[0]).assertEqual('acc-empty');
         Reflect.set(ProfileViewModel as Object, 'getInstance', originalGetInstance);
+      });
+
+      it('normal: login_page_huawei_button_should_bind_context_route_and_sync_profile_on_success', 0, async () => {
+        // Arrange
+        const page = createLoginPageForTest() as LoginPagePrivateBZ;
+        const router = new LoginRouterMockBZ();
+        const hostContext = new HostContextMockBZ() as Object;
+        const uiContext: LoginUiContextLikeBZ = new LoginUiContextMockBZ(router, hostContext);
+        const authFacade = new LoginAuthFacadeMockBZ();
+        const credential = new HuaweiCredential();
+        const ensuredIds: string[] = [];
+        const toasts: string[] = [];
+        credential.authorizationCode = 'auth';
+        credential.openId = 'openid';
+        credential.unionId = 'unionid';
+        authFacade.nextButtonResult = buildAuthResultBZ(true, buildUserSessionBZ('acc-login'));
+        page.agreementAccepted = true;
+        Reflect.set(page as Object, 'authFacade', authFacade as Object);
+        Reflect.set(page as Object, 'getUIContext', (): LoginUiContextLikeBZ => uiContext);
+        Reflect.set(page as Object, 'ensureCloudProfile', async (_context: Object, session: UserSession | null): Promise<void> => {
+          ensuredIds.push(String(session?.accountId || ''));
+        });
+        Reflect.set(page as Object, 'toast', (message: string): void => {
+          toasts.push(message);
+        });
+
+        // Act
+        await page.loginWithHuaweiButton(credential);
+
+        // Assert
+        expect(authFacade.boundContexts.length).assertEqual(1);
+        expect(authFacade.boundContexts[0]).assertEqual(hostContext);
+        expect(authFacade.buttonCalls.length).assertEqual(1);
+        expect(authFacade.buttonCalls[0].credential?.authorizationCode).assertEqual('auth');
+        expect(authFacade.buttonCalls[0].allowGuestFallback).assertFalse();
+        expect(ensuredIds.length).assertEqual(1);
+        expect(ensuredIds[0]).assertEqual('acc-login');
+        expect(router.pushedUrls.length).assertEqual(1);
+        expect(router.pushedUrls[0]).assertEqual('pages/PlanListPage');
+        expect(toasts.length).assertEqual(1);
+        expect(page.loading).assertFalse();
+      });
+
+      it('invalid: login_page_huawei_button_should_stop_before_facade_when_agreement_missing', 0, async () => {
+        // Arrange
+        const page = createLoginPageForTest() as LoginPagePrivateBZ;
+        const authFacade = new LoginAuthFacadeMockBZ();
+        const credential = new HuaweiCredential();
+        const toasts: string[] = [];
+        page.agreementAccepted = false;
+        Reflect.set(page as Object, 'authFacade', authFacade as Object);
+        Reflect.set(page as Object, 'toast', (message: string): void => {
+          toasts.push(message);
+        });
+
+        // Act
+        await page.loginWithHuaweiButton(credential);
+
+        // Assert
+        expect(authFacade.buttonCalls.length).assertEqual(0);
+        expect(toasts.length).assertEqual(1);
+        expect(toasts[0]).assertEqual(resolveLoginAgreementRequiredToast());
+        expect(page.loading).assertFalse();
+      });
+
+      it('conflict: login_page_huawei_button_should_toast_failure_and_skip_route_when_result_unsuccessful', 0, async () => {
+        // Arrange
+        const page = createLoginPageForTest() as LoginPagePrivateBZ;
+        const router = new LoginRouterMockBZ();
+        const hostContext = new HostContextMockBZ() as Object;
+        const uiContext: LoginUiContextLikeBZ = new LoginUiContextMockBZ(router, hostContext);
+        const authFacade = new LoginAuthFacadeMockBZ();
+        const credential = new HuaweiCredential();
+        const toasts: string[] = [];
+        let ensuredCount = 0;
+        authFacade.nextButtonResult = buildAuthResultBZ(false, null, 'network_down');
+        page.agreementAccepted = true;
+        Reflect.set(page as Object, 'authFacade', authFacade as Object);
+        Reflect.set(page as Object, 'getUIContext', (): LoginUiContextLikeBZ => uiContext);
+        Reflect.set(page as Object, 'ensureCloudProfile', async (): Promise<void> => {
+          ensuredCount += 1;
+        });
+        Reflect.set(page as Object, 'toast', (message: string): void => {
+          toasts.push(message);
+        });
+
+        // Act
+        await page.loginWithHuaweiButton(credential);
+
+        // Assert
+        expect(authFacade.buttonCalls.length).assertEqual(1);
+        expect(ensuredCount).assertEqual(0);
+        expect(router.pushedUrls.length).assertEqual(0);
+        expect(toasts.length).assertEqual(1);
+        expect(page.loading).assertFalse();
+      });
+
+      it('boundary: login_page_api_fallback_should_ignore_duplicate_request_when_loading', 0, async () => {
+        // Arrange
+        const page = createLoginPageForTest() as LoginPagePrivateBZ;
+        const authFacade = new LoginAuthFacadeMockBZ();
+        page.agreementAccepted = true;
+        page.loading = true;
+        Reflect.set(page as Object, 'authFacade', authFacade as Object);
+
+        // Act
+        await page.loginWithHuaweiApiFallback();
+
+        // Assert
+        expect(authFacade.buttonCalls.length).assertEqual(0);
+        expect(page.loading).assertTrue();
+      });
+
+      it('regression: login_page_api_fallback_should_call_facade_without_credential_and_route_on_success', 0, async () => {
+        // Arrange
+        const page = createLoginPageForTest() as LoginPagePrivateBZ;
+        const router = new LoginRouterMockBZ();
+        const hostContext = new HostContextMockBZ() as Object;
+        const uiContext: LoginUiContextLikeBZ = new LoginUiContextMockBZ(router, hostContext);
+        const authFacade = new LoginAuthFacadeMockBZ();
+        authFacade.nextButtonResult = buildAuthResultBZ(true, buildUserSessionBZ('acc-api'));
+        page.agreementAccepted = true;
+        Reflect.set(page as Object, 'authFacade', authFacade as Object);
+        Reflect.set(page as Object, 'getUIContext', (): LoginUiContextLikeBZ => uiContext);
+        Reflect.set(page as Object, 'ensureCloudProfile', async (): Promise<void> => {
+        });
+        Reflect.set(page as Object, 'toast', (_message: string): void => {
+        });
+
+        // Act
+        await page.loginWithHuaweiApiFallback();
+
+        // Assert
+        expect(authFacade.boundContexts.length).assertEqual(1);
+        expect(authFacade.buttonCalls.length).assertEqual(1);
+        expect(authFacade.buttonCalls[0].credential === undefined).assertTrue();
+        expect(authFacade.buttonCalls[0].allowGuestFallback).assertFalse();
+        expect(router.pushedUrls.length).assertEqual(1);
+        expect(router.pushedUrls[0]).assertEqual('pages/PlanListPage');
+        expect(page.loading).assertFalse();
+      });
+
+      it('combined: login_page_guest_login_should_route_only_on_success_and_reset_loading_after_exception', 0, async () => {
+        // Arrange
+        const page = createLoginPageForTest() as LoginPagePrivateBZ;
+        const router = new LoginRouterMockBZ();
+        const hostContext = new HostContextMockBZ() as Object;
+        const uiContext: LoginUiContextLikeBZ = new LoginUiContextMockBZ(router, hostContext);
+        const authFacade = new LoginAuthFacadeMockBZ();
+        const toasts: string[] = [];
+        page.agreementAccepted = true;
+        Reflect.set(page as Object, 'authFacade', authFacade as Object);
+        Reflect.set(page as Object, 'getUIContext', (): LoginUiContextLikeBZ => uiContext);
+        Reflect.set(page as Object, 'toast', (message: string): void => {
+          toasts.push(message);
+        });
+
+        // Act
+        authFacade.nextGuestResult = buildAuthResultBZ(true, buildUserSessionBZ('guest-1'));
+        await page.loginAsGuest();
+        authFacade.guestError = new Error('guest_fail');
+        await page.loginAsGuest();
+
+        // Assert
+        expect(authFacade.boundContexts.length).assertEqual(2);
+        expect(authFacade.guestCallCount).assertEqual(2);
+        expect(router.pushedUrls.length).assertEqual(1);
+        expect(router.pushedUrls[0]).assertEqual('pages/PlanListPage');
+        expect(toasts.length).assertEqual(2);
+        expect(page.loading).assertFalse();
       });
 
       it('combined: login_page_pure_exports_should_keep_parser_and_toast_rules_stable', 0, () => {

@@ -1,5 +1,7 @@
 ﻿import { describe, it, expect } from '@ohos/hypium';
+import { ThemeCenter } from '../main/ets/common/utils/ThemeCenter';
 import {
+  CompanionExecutionWeatherCard,
   getExecutionWeatherCollapsedHintText,
   getExecutionWeatherCurrentNodeText,
   getExecutionWeatherExpandToggleText,
@@ -11,6 +13,72 @@ import {
   shouldShowExecutionWeatherScore,
   splitExecutionWeatherSuggestionPopupText
 } from '../main/ets/pages/components/views/companion/CompanionExecutionWeatherCard';
+
+interface CompanionExecutionWeatherPaletteTest {
+  textPrimary: Object;
+  primary: Object;
+}
+
+interface CompanionExecutionWeatherCardParamsTest {
+  weatherExpanded?: boolean;
+  showWeatherScorePopup?: boolean;
+  showWeatherHintPopup?: boolean;
+  showWeatherSuggestionPopup?: boolean;
+  weatherSuggestionPopupText?: string;
+  weatherScoreSummary?: string;
+  weatherScoreLines?: string[];
+  weatherHintLines?: string[];
+  executionWeatherCollabBadge?: string;
+  executionWeatherLoading?: boolean;
+  executionWeatherHint?: string;
+  executionWeatherLevel?: string;
+  executionWeatherCurrentText?: string;
+  executionWeatherNextText?: string;
+  executionWeatherScore?: number;
+  executionWeatherCollabSummary?: string;
+  executionWeatherAppliedSummary?: string;
+  executionWeatherSuggestions?: Object[];
+}
+
+interface CompanionExecutionWeatherCardPrivateTest {
+  weatherExpanded: boolean;
+  showWeatherScorePopup: boolean;
+  showWeatherHintPopup: boolean;
+  showWeatherSuggestionPopup: boolean;
+  weatherSuggestionPopupText: string;
+  weatherScoreSummary: string;
+  weatherScoreLines: string[];
+  weatherHintLines: string[];
+  executionWeatherCollabBadge: string;
+  executionWeatherLoading: boolean;
+  executionWeatherHint: string;
+  executionWeatherLevel: string;
+  executionWeatherCurrentText: string;
+  executionWeatherNextText: string;
+  executionWeatherScore: number;
+  executionWeatherCollabSummary: string;
+  executionWeatherAppliedSummary: string;
+  executionWeatherSuggestions: Object[];
+  effectiveTheme: string;
+  onRefreshWeather: () => void;
+  onToggleExpanded: () => void;
+  onToggleScorePopup: () => void;
+  onToggleHintPopup: () => void;
+  onToggleSuggestionPopup: () => void;
+  onScorePopupStateChange: (visible: boolean) => void;
+  onHintPopupStateChange: (visible: boolean) => void;
+  onSuggestionPopupStateChange: (visible: boolean) => void;
+  onOpenSuggestionGuide: () => void;
+  onOpenSuggestionDetail: (item: Object) => void;
+  onApplySuggestion: (item: Object) => void;
+  onLaterSuggestion: (suggestionId: string) => void;
+  onIgnoreSuggestion: (suggestionId: string) => void;
+  setInitiallyProvidedValue(params: CompanionExecutionWeatherCardParamsTest): void;
+  updateStateVars(params: CompanionExecutionWeatherCardParamsTest): void;
+  getThemePalette(): CompanionExecutionWeatherPaletteTest;
+}
+
+class WeatherSuggestionPlaceholderTest {}
 
 export default function companionExecutionWeatherCardHelperTest() {
   describe('unit_test_case_generator_autofill_CompanionExecutionWeatherCardHelper', () => {
@@ -146,5 +214,103 @@ export default function companionExecutionWeatherCardHelperTest() {
       expect(collabVisible).assertTrue();
       expect(appliedVisible).assertTrue();
     });
+
+    it('combined: weather_card_instance_should_sync_state_and_theme_palette_without_runtime_build', 0, () => {
+      // Arrange
+      const page = new CompanionExecutionWeatherCard(undefined, {} as LocalStorage) as Object as CompanionExecutionWeatherCardPrivateTest;
+      const suggestion = new WeatherSuggestionPlaceholderTest() as Object;
+      const initParams: CompanionExecutionWeatherCardParamsTest = {
+        weatherExpanded: true,
+        showWeatherScorePopup: true,
+        showWeatherHintPopup: false,
+        showWeatherSuggestionPopup: true,
+        weatherSuggestionPopupText: 'A\nB',
+        weatherScoreSummary: 'score',
+        weatherScoreLines: ['l1'],
+        weatherHintLines: ['h1'],
+        executionWeatherCollabBadge: 'badge',
+        executionWeatherHint: 'rain',
+        executionWeatherLevel: 'NOTICE',
+        executionWeatherCurrentText: 'sunny',
+        executionWeatherNextText: 'cloud',
+        executionWeatherScore: 5,
+        executionWeatherCollabSummary: 'multi',
+        executionWeatherAppliedSummary: 'shifted',
+        executionWeatherSuggestions: [suggestion]
+      };
+      const nextParams: CompanionExecutionWeatherCardParamsTest = {
+        weatherExpanded: false,
+        showWeatherScorePopup: false,
+        showWeatherHintPopup: true,
+        showWeatherSuggestionPopup: false,
+        executionWeatherLoading: true,
+        executionWeatherHint: 'wind',
+        executionWeatherLevel: 'WARNING',
+        executionWeatherCurrentText: 'now',
+        executionWeatherNextText: 'next',
+        executionWeatherScore: 8,
+        executionWeatherCollabSummary: 'updated',
+        executionWeatherAppliedSummary: 'updated2',
+        executionWeatherSuggestions: [suggestion, suggestion]
+      };
+
+      // Act
+      page.onRefreshWeather();
+      page.onToggleExpanded();
+      page.onToggleScorePopup();
+      page.onToggleHintPopup();
+      page.onToggleSuggestionPopup();
+      page.onScorePopupStateChange(true);
+      page.onHintPopupStateChange(false);
+      page.onSuggestionPopupStateChange(true);
+      page.onOpenSuggestionGuide();
+      page.onOpenSuggestionDetail(suggestion);
+      page.onApplySuggestion(suggestion);
+      page.onLaterSuggestion('s1');
+      page.onIgnoreSuggestion('s1');
+      page.setInitiallyProvidedValue(initParams);
+      page.updateStateVars(initParams);
+      const initExpanded = page.weatherExpanded;
+      const initScorePopup = page.showWeatherScorePopup;
+      const initHintPopup = page.showWeatherHintPopup;
+      const initSuggestionPopup = page.showWeatherSuggestionPopup;
+      const initSuggestionText = page.weatherSuggestionPopupText;
+      const initScoreSummary = page.weatherScoreSummary;
+      const initScoreLineCount = page.weatherScoreLines.length;
+      const initHintLineCount = page.weatherHintLines.length;
+      const initCollabBadge = page.executionWeatherCollabBadge;
+      const initSuggestionCount = page.executionWeatherSuggestions.length;
+      page.updateStateVars(nextParams);
+      page.effectiveTheme = 'dark';
+      const palette = page.getThemePalette();
+
+      // Assert
+      expect(initExpanded).assertTrue();
+      expect(initScorePopup).assertTrue();
+      expect(initHintPopup).assertFalse();
+      expect(initSuggestionPopup).assertTrue();
+      expect(initSuggestionText).assertEqual('A\nB');
+      expect(initScoreSummary).assertEqual('score');
+      expect(initScoreLineCount).assertEqual(1);
+      expect(initHintLineCount).assertEqual(1);
+      expect(initCollabBadge).assertEqual('badge');
+      expect(initSuggestionCount).assertEqual(1);
+      expect(page.weatherExpanded).assertFalse();
+      expect(page.showWeatherScorePopup).assertFalse();
+      expect(page.showWeatherHintPopup).assertTrue();
+      expect(page.showWeatherSuggestionPopup).assertFalse();
+      expect(page.executionWeatherLoading).assertTrue();
+      expect(page.executionWeatherHint).assertEqual('wind');
+      expect(page.executionWeatherLevel).assertEqual('WARNING');
+      expect(page.executionWeatherCurrentText).assertEqual('now');
+      expect(page.executionWeatherNextText).assertEqual('next');
+      expect(page.executionWeatherScore).assertEqual(8);
+      expect(page.executionWeatherCollabSummary).assertEqual('updated');
+      expect(page.executionWeatherAppliedSummary).assertEqual('updated2');
+      expect(page.executionWeatherSuggestions.length).assertEqual(2);
+      expect(palette.textPrimary).assertEqual(ThemeCenter.getPalette('dark').textPrimary);
+      expect(palette.primary).assertEqual(ThemeCenter.getPalette('dark').primary);
+    });
   });
 }
+

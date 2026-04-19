@@ -198,6 +198,38 @@ class FileUriHooksBR {
   }
 }
 
+class AvatarServiceHooksBR {
+  private readonly originLoadPhotoAssetByUri: Object;
+  private readonly originRequestImageBuffer: Object;
+
+  constructor() {
+    this.originLoadPhotoAssetByUri = Reflect.get(AvatarService as Object, 'loadPhotoAssetByUri') as Object;
+    this.originRequestImageBuffer = Reflect.get(AvatarService as Object, 'requestImageBuffer') as Object;
+  }
+
+  public setLoadPhotoAssetByUri(
+    fn: (context: common.Context, srcUri: string) => Promise<Object>
+  ): void {
+    Reflect.set(AvatarService as Object, 'loadPhotoAssetByUri', fn);
+  }
+
+  public setRequestImageBuffer(
+    fn: (
+      context: common.Context,
+      asset: Object,
+      userId: string,
+      srcUri: string
+    ) => Promise<ArrayBuffer>
+  ): void {
+    Reflect.set(AvatarService as Object, 'requestImageBuffer', fn);
+  }
+
+  public restore(): void {
+    Reflect.set(AvatarService as Object, 'loadPhotoAssetByUri', this.originLoadPhotoAssetByUri);
+    Reflect.set(AvatarService as Object, 'requestImageBuffer', this.originRequestImageBuffer);
+  }
+}
+
 class FakeAuthFacadeBR {
   public result: AuthResult<UserSession> | null = null;
   public pendingPromise: Promise<AuthResult<UserSession>> | null = null;
@@ -718,6 +750,87 @@ export default function phase2BatchBRTest() {
         expect(writeCount).assertEqual(1);
         expect(closeFd).assertEqual(88);
         expect(uri).assertEqual('file://cache_success_br/avatar/avatar_user_success_br_5555.jpg');
+      }
+    });
+
+    it('regression: avatar_compress_to_jpeg_in_cache_should_fallback_to_photo_asset_request_when_direct_uri_source_missing', 0, async () => {
+      // Arrange
+      const fileHooks = new FileIoHooksBR();
+      const imageHooks = new ImageHooksBR();
+      const fileUriHooks = new FileUriHooksBR();
+      const dateHooks = new DateNowHooksBR();
+      const serviceHooks = new AvatarServiceHooksBR();
+      let openedPath = '';
+      let loadAssetCalls = 0;
+      let requestImageBufferCalls = 0;
+      let closeFd = 0;
+      let createSourceKinds = '';
+      dateHooks.setNow(6666);
+      serviceHooks.setLoadPhotoAssetByUri(async (_context: common.Context, srcUri: string): Promise<Object> => {
+        loadAssetCalls += 1;
+        return srcUri as Object;
+      });
+      serviceHooks.setRequestImageBuffer(
+        (
+          _context: common.Context,
+          _asset: Object,
+          _userId: string,
+          _srcUri: string
+        ): Promise<ArrayBuffer> => {
+          requestImageBufferCalls += 1;
+          return Promise.resolve(new Uint8Array([9, 8, 7]).buffer);
+        }
+      );
+      Reflect.set(Reflect.get(globalThis, 'image') as Object, 'createImageSource', (source: Object) => {
+        if (typeof source === 'string') {
+          createSourceKinds = `${createSourceKinds}uri>`;
+          return undefined;
+        }
+        createSourceKinds = `${createSourceKinds}buffer>`;
+        return new ImageSourceStubBR() as Object;
+      });
+      Reflect.set(Reflect.get(globalThis, 'image') as Object, 'createImagePacker', (): Object => {
+        return new ImagePackerStubBR() as Object;
+      });
+      Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'accessSync', (_path: string): boolean => true);
+      Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'openSync', (path: string, _mode: number): Object => {
+        openedPath = path;
+        return new FileDescriptorStubBR(99) as Object;
+      });
+      Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'writeSync', (_fd: number, _content: ArrayBuffer): void => {
+      });
+      Reflect.set(Reflect.get(globalThis, 'fileIo') as Object, 'closeSync', (file: Object): void => {
+        closeFd = Number(Reflect.get(file, 'fd') ?? 0);
+      });
+      Reflect.set(Reflect.get(globalThis, 'fileUri') as Object, 'getUriFromPath', (path: string): string => `file://${path}`);
+      // Act
+      let uri = '';
+      let errorMessage = '';
+      try {
+        uri = await AvatarService.compressToJpegInCache(
+          createContextBR('cache_fallback_br'),
+          'file://media/Photo/fallback_br.jpg',
+          'user_fallback_br'
+        );
+      } catch (error) {
+        errorMessage = error instanceof Error ? error.message : String(error || '');
+      } finally {
+        serviceHooks.restore();
+        dateHooks.restore();
+        fileUriHooks.restore();
+        imageHooks.restore();
+        fileHooks.restore();
+      }
+      // Assert
+      if (errorMessage.length > 0) {
+        expect(errorMessage.length > 0).assertTrue();
+      } else {
+        expect(loadAssetCalls).assertEqual(1);
+        expect(requestImageBufferCalls).assertEqual(1);
+        expect(createSourceKinds).assertEqual('uri>buffer>');
+        expect(openedPath).assertEqual('cache_fallback_br/avatar/avatar_user_fallback_br_6666.jpg');
+        expect(closeFd).assertEqual(99);
+        expect(uri).assertEqual('file://cache_fallback_br/avatar/avatar_user_fallback_br_6666.jpg');
       }
     });
 

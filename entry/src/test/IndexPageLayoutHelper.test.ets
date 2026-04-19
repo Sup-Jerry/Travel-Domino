@@ -1,8 +1,116 @@
 import { describe, it, expect } from '@ohos/hypium';
+import { EventEntity } from '../main/ets/model/entity/EventEntity';
 import {
+  buildIndexPageHintLines,
+  buildIndexPageScoreLines,
+  buildIndexPageWeatherSuggestionText,
+  IndexPageLayout,
   resolveIndexPageGapsCount,
   shouldShowIndexPageWeatherHint
 } from '../main/ets/pages/index/IndexPageLayout';
+
+interface IndexPageThemePaletteTest {
+  pageBg?: string;
+  primary?: string;
+  textPrimary?: string;
+}
+
+interface IndexPageLayoutParamsTest {
+  vm?: Object;
+  planTitle?: string;
+  strategyMode?: number;
+  currentStrategyExplanation?: string;
+  isCompanionMode?: boolean;
+  hasManualPlanningWeatherRefresh?: boolean;
+  showPlanningWeatherHintPopup?: boolean;
+  showPlanningWeatherScorePopup?: boolean;
+  backlogExpanded?: boolean;
+  isPageRefreshing?: boolean;
+  hasUnsavedChanges?: boolean;
+  themePalette?: IndexPageThemePaletteTest;
+  companionOverlayZIndex?: number;
+  onBack?: () => void;
+  onOpenSettings?: () => void;
+  onEnterCompanion?: () => void;
+  onRefreshWeather?: () => void;
+  onToggleHint?: () => void;
+  onToggleScore?: () => void;
+  onHintPopupVisibleChange?: (visible: boolean) => void;
+  onScorePopupVisibleChange?: (visible: boolean) => void;
+  onToggleBacklogExpand?: () => void;
+  onMoveToSchedule?: (item: Object) => void;
+  onMoveAllToSchedule?: () => void;
+  onIsDayCollapsed?: (dayOffset: number) => boolean;
+  onToggleDay?: (dayOffset: number) => void;
+  onScheduleRefresh?: () => void;
+  onOpenEditDialog?: (item: EventEntity) => void;
+  onOpenTimeEditDialog?: (item: EventEntity) => void;
+  onGapFound?: (item: EventEntity) => void;
+  onResolveConflictAction?: (item: EventEntity, strategy: string, gapMinutes: number) => void;
+  onConfirmMoveToBacklog?: (item: EventEntity) => void;
+  onConfirmDeleteEvent?: (item: EventEntity) => void;
+  onOpenGapOptimize?: () => void;
+  onFilter?: () => void;
+  onAi?: () => void;
+  onAdd?: () => void;
+  onUndo?: () => void;
+  onSave?: () => void;
+}
+
+interface IndexPageLayoutPrivateTest {
+  vm: Object;
+  planTitle: string;
+  strategyMode: number;
+  currentStrategyExplanation: string;
+  isCompanionMode: boolean;
+  hasManualPlanningWeatherRefresh: boolean;
+  showPlanningWeatherHintPopup: boolean;
+  showPlanningWeatherScorePopup: boolean;
+  backlogExpanded: boolean;
+  isPageRefreshing: boolean;
+  hasUnsavedChanges: boolean;
+  themePalette: IndexPageThemePaletteTest;
+  companionOverlayZIndex: number;
+  onBack: () => void;
+  onOpenSettings: () => void;
+  onEnterCompanion: () => void;
+  onRefreshWeather: () => void;
+  onToggleHint: () => void;
+  onToggleScore: () => void;
+  onHintPopupVisibleChange: (visible: boolean) => void;
+  onScorePopupVisibleChange: (visible: boolean) => void;
+  onToggleBacklogExpand: () => void;
+  onMoveToSchedule: (item: Object) => void;
+  onMoveAllToSchedule: () => void;
+  onIsDayCollapsed: (dayOffset: number) => boolean;
+  onToggleDay: (dayOffset: number) => void;
+  onScheduleRefresh: () => void;
+  onOpenEditDialog: (item: EventEntity) => void;
+  onOpenTimeEditDialog: (item: EventEntity) => void;
+  onGapFound: (item: EventEntity) => void;
+  onResolveConflictAction: (item: EventEntity, strategy: string, gapMinutes: number) => void;
+  onConfirmMoveToBacklog: (item: EventEntity) => void;
+  onConfirmDeleteEvent: (item: EventEntity) => void;
+  onOpenGapOptimize: () => void;
+  onFilter: () => void;
+  onAi: () => void;
+  onAdd: () => void;
+  onUndo: () => void;
+  onSave: () => void;
+  setInitiallyProvidedValue(params: IndexPageLayoutParamsTest): void;
+  updateStateVars(params: IndexPageLayoutParamsTest): void;
+}
+
+function buildLayoutEvent(id: number): EventEntity {
+  const event = new EventEntity();
+  event.id = id;
+  event.name = `layout_event_${id}`;
+  return event;
+}
+
+class IndexPageLayoutVmPlaceholderTest {
+  label: string = '';
+}
 
 export default function indexPageLayoutHelperTest() {
   describe('unit_test_case_generator_autofill_IndexPageLayoutHelper', () => {
@@ -84,6 +192,179 @@ export default function indexPageLayoutHelperTest() {
 
       // Assert
       expect(pass).assertTrue();
+    });
+
+    it('combined: page_layout_instance_should_cover_suggestion_lines_callbacks_and_prop_sync', 0, () => {
+      // Arrange
+      const page = new IndexPageLayout(undefined, {} as LocalStorage) as Object as IndexPageLayoutPrivateTest;
+      const event = buildLayoutEvent(1);
+      const planItem = buildLayoutEvent(9) as Object;
+      const initVm = new IndexPageLayoutVmPlaceholderTest() as Object;
+      const nextVm = new IndexPageLayoutVmPlaceholderTest() as Object;
+      const initThemePalette: IndexPageThemePaletteTest = {
+        pageBg: '#111111',
+        primary: '#222222',
+        textPrimary: '#333333'
+      };
+      const nextThemePalette: IndexPageThemePaletteTest = {
+        pageBg: '#AAAAAA',
+        primary: '#BBBBBB',
+        textPrimary: '#CCCCCC'
+      };
+      let callCount = 0;
+      let hintVisible = false;
+      let scoreVisible = false;
+      const initParams: IndexPageLayoutParamsTest = {
+        vm: initVm,
+        planTitle: 'trip_a',
+        strategyMode: 2,
+        currentStrategyExplanation: 'desc_a',
+        isCompanionMode: true,
+        hasManualPlanningWeatherRefresh: true,
+        showPlanningWeatherHintPopup: true,
+        showPlanningWeatherScorePopup: false,
+        backlogExpanded: true,
+        isPageRefreshing: true,
+        hasUnsavedChanges: true,
+        themePalette: initThemePalette,
+        companionOverlayZIndex: 18,
+        onBack: () => { callCount += 1; },
+        onOpenSettings: () => { callCount += 1; },
+        onEnterCompanion: () => { callCount += 1; },
+        onRefreshWeather: () => { callCount += 1; },
+        onToggleHint: () => { callCount += 1; },
+        onToggleScore: () => { callCount += 1; },
+        onHintPopupVisibleChange: (visible: boolean) => {
+          hintVisible = visible;
+          callCount += 1;
+        },
+        onScorePopupVisibleChange: (visible: boolean) => {
+          scoreVisible = visible;
+          callCount += 1;
+        },
+        onToggleBacklogExpand: () => { callCount += 1; },
+        onMoveToSchedule: (_item: Object) => { callCount += 1; },
+        onMoveAllToSchedule: () => { callCount += 1; },
+        onIsDayCollapsed: (dayOffset: number) => dayOffset === 2,
+        onToggleDay: (_dayOffset: number) => { callCount += 1; },
+        onScheduleRefresh: () => { callCount += 1; },
+        onOpenEditDialog: (_item: EventEntity) => { callCount += 1; },
+        onOpenTimeEditDialog: (_item: EventEntity) => { callCount += 1; },
+        onGapFound: (_item: EventEntity) => { callCount += 1; },
+        onResolveConflictAction: (_item: EventEntity, _strategy: string, _gapMinutes: number) => { callCount += 1; },
+        onConfirmMoveToBacklog: (_item: EventEntity) => { callCount += 1; },
+        onConfirmDeleteEvent: (_item: EventEntity) => { callCount += 1; },
+        onOpenGapOptimize: () => { callCount += 1; },
+        onFilter: () => { callCount += 1; },
+        onAi: () => { callCount += 1; },
+        onAdd: () => { callCount += 1; },
+        onUndo: () => { callCount += 1; },
+        onSave: () => { callCount += 1; }
+      };
+      const nextParams: IndexPageLayoutParamsTest = {
+        vm: nextVm,
+        planTitle: 'trip_b',
+        strategyMode: 4,
+        currentStrategyExplanation: 'desc_b',
+        isCompanionMode: false,
+        hasManualPlanningWeatherRefresh: false,
+        showPlanningWeatherHintPopup: false,
+        showPlanningWeatherScorePopup: true,
+        backlogExpanded: false,
+        isPageRefreshing: false,
+        hasUnsavedChanges: false,
+        themePalette: nextThemePalette,
+        companionOverlayZIndex: 28
+      };
+
+      // Act
+      const defaultCollapsed = page.onIsDayCollapsed(1);
+      page.onBack();
+      page.onOpenSettings();
+      page.onEnterCompanion();
+      page.onRefreshWeather();
+      page.onToggleHint();
+      page.onToggleScore();
+      page.onHintPopupVisibleChange(false);
+      page.onScorePopupVisibleChange(false);
+      page.onToggleBacklogExpand();
+      page.onMoveToSchedule(planItem);
+      page.onMoveAllToSchedule();
+      page.onToggleDay(1);
+      page.onScheduleRefresh();
+      page.onOpenEditDialog(event);
+      page.onOpenTimeEditDialog(event);
+      page.onGapFound(event);
+      page.onResolveConflictAction(event, 'smart', 15);
+      page.onConfirmMoveToBacklog(event);
+      page.onConfirmDeleteEvent(event);
+      page.onOpenGapOptimize();
+      page.onFilter();
+      page.onAi();
+      page.onAdd();
+      page.onUndo();
+      page.onSave();
+      const suggestionText = buildIndexPageWeatherSuggestionText('协作', '带伞', '多云', '改室内');
+      const hintLines = buildIndexPageHintLines('a\nb');
+      const scoreLines = buildIndexPageScoreLines('x\ny');
+      page.setInitiallyProvidedValue(initParams);
+      page.onBack();
+      page.onOpenSettings();
+      page.onEnterCompanion();
+      page.onRefreshWeather();
+      page.onToggleHint();
+      page.onToggleScore();
+      page.onHintPopupVisibleChange(true);
+      page.onScorePopupVisibleChange(false);
+      page.onToggleBacklogExpand();
+      page.onMoveToSchedule(planItem);
+      page.onMoveAllToSchedule();
+      const collapsedAfterInit = page.onIsDayCollapsed(2);
+      page.onToggleDay(2);
+      page.onScheduleRefresh();
+      page.onOpenEditDialog(event);
+      page.onOpenTimeEditDialog(event);
+      page.onGapFound(event);
+      page.onResolveConflictAction(event, 'delay', 30);
+      page.onConfirmMoveToBacklog(event);
+      page.onConfirmDeleteEvent(event);
+      page.onOpenGapOptimize();
+      page.onFilter();
+      page.onAi();
+      page.onAdd();
+      page.onUndo();
+      page.onSave();
+      page.updateStateVars(nextParams);
+      const collapsedAfterUpdate = page.onIsDayCollapsed(2);
+
+      // Assert
+      expect(defaultCollapsed).assertFalse();
+      expect(!!page.vm).assertTrue();
+      expect(suggestionText.includes('带伞')).assertTrue();
+      expect(suggestionText.includes('协作')).assertTrue();
+      expect(suggestionText.includes('改室内')).assertTrue();
+      expect(hintLines.length).assertEqual(2);
+      expect(hintLines[1]).assertEqual('b');
+      expect(scoreLines.length).assertEqual(2);
+      expect(scoreLines[0]).assertEqual('x');
+      expect(collapsedAfterInit).assertTrue();
+      expect(collapsedAfterUpdate).assertTrue();
+      expect(hintVisible).assertTrue();
+      expect(scoreVisible).assertFalse();
+      expect(callCount).assertEqual(25);
+      expect(page.planTitle).assertEqual('trip_b');
+      expect(page.strategyMode).assertEqual(4);
+      expect(page.currentStrategyExplanation).assertEqual('desc_b');
+      expect(page.isCompanionMode).assertFalse();
+      expect(page.hasManualPlanningWeatherRefresh).assertFalse();
+      expect(page.showPlanningWeatherHintPopup).assertFalse();
+      expect(page.showPlanningWeatherScorePopup).assertTrue();
+      expect(page.backlogExpanded).assertFalse();
+      expect(page.isPageRefreshing).assertFalse();
+      expect(page.hasUnsavedChanges).assertFalse();
+      expect(page.themePalette.pageBg).assertEqual('#AAAAAA');
+      expect(page.themePalette.primary).assertEqual('#BBBBBB');
+      expect(page.companionOverlayZIndex).assertEqual(28);
     });
   });
 }
