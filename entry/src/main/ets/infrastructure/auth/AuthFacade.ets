@@ -208,7 +208,26 @@ export class AuthFacade {
   }
 
   public async explicitGuestLogin(): Promise<AuthResult<UserSession>> {
-    return this.tryGuestFallback();
+    try {
+      const result = await this.tryGuestFallback();
+      if (result.success && result.data) {
+        return result;
+      }
+      hilog.warn(
+        AuthFacade.LOG_DOMAIN,
+        AuthFacade.LOG_TAG,
+        `[LOGIN_TRACE][facade] explicitGuestLogin force_local_fallback message=${result.message}`
+      );
+      return await this.forceLocalGuestSuccess('guest_result_failure', result.message);
+    } catch (error) {
+      const normalized = this.normalizeError(error);
+      hilog.error(
+        AuthFacade.LOG_DOMAIN,
+        AuthFacade.LOG_TAG,
+        `[LOGIN_TRACE][facade] explicitGuestLogin force_local_exception message=${normalized}`
+      );
+      return await this.forceLocalGuestSuccess('guest_exception', normalized);
+    }
   }
 
   public async logout(): Promise<void> {
@@ -323,12 +342,9 @@ export class AuthFacade {
         return this.failure(-1, 'guest_session_empty', 'GUEST_FALLBACK', LoginStatus.LOGIN_FAILED);
       }
       session.isGuest = true;
-      await this.onLoginSuccess(session);
-      if (this.appContext) {
-        await this.sessionManager.markGuestChosen(this.appContext);
-      }
-      hilog.info(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, '[LOGIN_TRACE][facade] guestFallback success');
-      return this.success(session, 'GUEST_FALLBACK');
+      session.loginType = 'guest';
+      session.loginMethod = session.loginMethod || 'GUEST';
+      return await this.finalizeGuestSuccess(session, 'remote_session', 'guest_gateway_ok');
     } catch (error) {
       const normalized = this.normalizeError(error);
       hilog.warn(AuthFacade.LOG_DOMAIN, AuthFacade.LOG_TAG, `[LOGIN_TRACE][facade] guestFallback exception=${normalized}`);
@@ -341,6 +357,11 @@ export class AuthFacade {
   }
 
   private async tryOfflineGuestFallback(reason: string, detail: string): Promise<AuthResult<UserSession> | null> {
+    const session = this.buildLocalGuestSession('GUEST_OFFLINE');
+    return await this.finalizeGuestSuccess(session, reason, detail);
+  }
+
+  private buildLocalGuestSession(loginMethod: string): UserSession {
     const now = Date.now();
     const session = new UserSession();
     session.isLogin = true;
@@ -353,17 +374,45 @@ export class AuthFacade {
     session.expireAt = now + AuthFacade.LOCAL_GUEST_SESSION_TTL_MS;
     session.sessionId = `offline_guest_${now}`;
     session.isGuest = true;
-    session.loginMethod = 'GUEST_OFFLINE';
-    await this.onLoginSuccess(session);
-    if (this.appContext) {
-      await this.sessionManager.markGuestChosen(this.appContext);
+    session.loginMethod = loginMethod;
+    return session;
+  }
+
+  private async finalizeGuestSuccess(session: UserSession, reason: string, detail: string): Promise<AuthResult<UserSession>> {
+    try {
+      await this.onLoginSuccess(session);
+    } catch (error) {
+      hilog.warn(
+        AuthFacade.LOG_DOMAIN,
+        AuthFacade.LOG_TAG,
+        `[LOGIN_TRACE][facade] guestFallback persist_fail reason=${reason}, detail=${detail}, error=${this.normalizeError(error)}`
+      );
+      this.sessionManager.save(session);
     }
+
+    if (this.appContext) {
+      try {
+        await this.sessionManager.markGuestChosen(this.appContext);
+      } catch (error) {
+        hilog.warn(
+          AuthFacade.LOG_DOMAIN,
+          AuthFacade.LOG_TAG,
+          `[LOGIN_TRACE][facade] guestFallback mark_guest_fail reason=${reason}, detail=${detail}, error=${this.normalizeError(error)}`
+        );
+      }
+    }
+
     hilog.warn(
       AuthFacade.LOG_DOMAIN,
       AuthFacade.LOG_TAG,
-      `[LOGIN_TRACE][facade] guestFallback offline_local_session reason=${reason}, detail=${detail}`
+      `[LOGIN_TRACE][facade] guestFallback finalized reason=${reason}, detail=${detail}, accountId=${session.accountId}`
     );
     return this.success(session, 'GUEST_FALLBACK');
+  }
+
+  private async forceLocalGuestSuccess(reason: string, detail: string): Promise<AuthResult<UserSession>> {
+    const session = this.buildLocalGuestSession('GUEST_HARD_FALLBACK');
+    return await this.finalizeGuestSuccess(session, reason, detail);
   }
 
   private convertSession(payload: AuthLoginResult): UserSession | null {

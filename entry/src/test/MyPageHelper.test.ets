@@ -3,6 +3,8 @@ import {
   normalizeMyPageLightHintKey,
   normalizeMyPageUsername,
   resolveMyPageAgreementRequiredToast,
+  resolveMyPageRemoteAvatarUrl,
+  resolveMyPageProfileBootstrapHint,
   shouldMyPageEmitLightHint
 } from '../main/ets/pages/MyPage';
 
@@ -62,6 +64,26 @@ export default function myPageHelperTest() {
       // Assert
       expect(normalizedKey).assertEqual('profile_cloud_fail:user2');
       expect(shouldEmit).assertTrue();
+    });
+
+    it('invalid: my_page_profile_bootstrap_hint_should_return_cloud_fail_payload_for_error_state', 0, () => {
+      // Arrange
+      const accountId = 'user_42';
+      // Act
+      const payload = resolveMyPageProfileBootstrapHint(accountId, 'error');
+      // Assert
+      expect(payload !== null).assertTrue();
+      expect(payload?.key).assertEqual('profile_cloud_fail:user_42');
+    });
+
+    it('regression: my_page_remote_avatar_url_should_keep_auth_avatar_when_cloud_profile_is_default', 0, () => {
+      // Arrange
+      const authAvatarUrl = 'https://cdn.example.com/avatar.jpg';
+      const cloudAvatarPath = 'app.media.headphoto';
+      // Act
+      const resolved = resolveMyPageRemoteAvatarUrl(authAvatarUrl, cloudAvatarPath, 'app.media.headphoto');
+      // Assert
+      expect(resolved).assertEqual('https://cdn.example.com/avatar.jpg');
     });
   });
 }

@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-14T21:44:27.769147",
+  "last_updated": "2026-04-19T18:00:07.692199",
   "preferences": [
     "Retrospective output should follow: issues-root causes-improvements-next constraints.",
     "When user reports Day/date mismatch, first check mixed usage of dynamic_day_offset vs day_offset.",
@@ -75,7 +75,8 @@
     "执行C1/C2分批补测时，优先服务层单测再做module元数据装配测试，减少无效断言。",
     "在Windows环境出现并发命令失败(CreateProcessWithLogonW 1056)时，切换串行读取与单进程命令。",
     "执行C4整批补测时，先补最稳定可测的manager/coordinator/persistence链路，再补auth链路，降低回归波动。",
-    "当用户要求一次性完成批次时，采用‘边修编译规则边扩覆盖’的方式，避免最后集中爆雷。"
+    "当用户要求一次性完成批次时，采用‘边修编译规则边扩覆盖’的方式，避免最后集中爆雷。",
+    "When Docker postgres shows 5432 mapped but the backend still fails with user \"travel\" password authentication failed, verify the host-side OwningProcess for port 5432 and the Windows service postgresql-x64-16 before changing login code or container credentials."
   ],
   "fixes": [
     "For cross-day domino shifts, user-facing date and writeback inputs must prefer dynamic_day_offset; do not mix with day_offset in one flow.",

@@ -84,6 +84,20 @@ export function resolveMyPageAvatarSyncPendingHint(currentUserId: string): MyPag
   };
 }
 
+export function resolveMyPageRemoteAvatarUrl(
+  authAvatarUrl: string,
+  cloudAvatarPath: string,
+  defaultAvatarPath: string
+): string {
+  const safeAuthAvatarUrl = String(authAvatarUrl || '').trim();
+  const safeCloudAvatarPath = String(cloudAvatarPath || '').trim();
+  const safeDefaultAvatarPath = String(defaultAvatarPath || '').trim();
+  if (safeCloudAvatarPath.length > 0 && safeCloudAvatarPath !== safeDefaultAvatarPath) {
+    return safeCloudAvatarPath;
+  }
+  return safeAuthAvatarUrl;
+}
+
 @Entry
 @Component
 struct MyPage {
@@ -164,14 +178,18 @@ struct MyPage {
         if (cloudProfile) {
           this.userName = cloudProfile.username || this.userName;
           this.currentUserId = cloudProfile.accountId;
-          this.currentRemoteAvatarUrl = cloudProfile.avatarPath;
-          if (cloudProfile.avatarPath === ProfileViewModel.DEFAULT_AVATAR_PATH) {
+          this.currentRemoteAvatarUrl = resolveMyPageRemoteAvatarUrl(
+            profile.avatarUrl,
+            cloudProfile.avatarPath,
+            ProfileViewModel.DEFAULT_AVATAR_PATH
+          );
+          if (cloudProfile.avatarPath === ProfileViewModel.DEFAULT_AVATAR_PATH && !this.currentRemoteAvatarUrl) {
             this.useDefaultAvatar = true;
             this.avatarDisplayUri = '';
             return;
           }
           if (this.avatarService) {
-            const avatarProfile = await this.avatarService.loadAvatarProfile(cloudProfile.accountId, cloudProfile.avatarPath);
+            const avatarProfile = await this.avatarService.loadAvatarProfile(cloudProfile.accountId, this.currentRemoteAvatarUrl);
             this.avatarDisplayUri = this.avatarService.resolveDisplayUri(avatarProfile);
             this.useDefaultAvatar = false;
             return;

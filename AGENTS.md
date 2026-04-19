@@ -96,3 +96,40 @@ A skill is a set of local instructions to follow that is stored in a `SKILL.md` 
   - 后端：`[AUTH_TRACE][auth_social_service_fail]`
 - 若出现 `social_login_internal_init`，优先检查数据库连通与密码一致性，不先改华为登录代码。
 
+## 本次登录故障补充复盘（2026-04-19）
+
+### 新增现象
+- `F:\桌面\start-dev.ps1` 已明确打印 `EnvFile=E:\Travel\.env`，且 `DATABASE_URL` 显示 `host=127.0.0.1 port=5432 db=travel_auth user=travel`。
+- Docker `postgres` 容器状态正常，`docker compose -f E:\Travel\docker-compose.auth.yml ps postgres` 显示 `0.0.0.0:5432->5432/tcp`。
+- 容器内 `travel` 角色存在，且执行 `ALTER USER travel WITH PASSWORD '<env中的DB_PASSWORD>'` 返回 `ALTER ROLE`。
+- 但后端和本机 `pg` 直连 `127.0.0.1:5432` 仍报 `user "travel" password authentication failed`。
+
+### 本次确认根因
+- 根因不是华为登录，不是 `start-dev.ps1`，也不是容器内密码未更新。
+- 根因是 **Windows 本机 PostgreSQL 服务 `postgresql-x64-16` 抢占了宿主机 `5432`**。
+- 表面上 Docker 显示端口映射正常，但实际宿主机 `5432` 监听进程是本机 `postgres`，不是 Docker 代理，因此后端连到的是错误实例。
+
+### 本次实际定位证据
+1. 容器内角色核验通过：`docker exec travel-postgres-1 psql -U travel -d postgres -c "\du"`。
+2. 容器内改密成功：`docker exec travel-postgres-1 psql -U travel -d postgres -c "ALTER USER travel WITH PASSWORD '<DB_PASSWORD>'"` 返回 `ALTER ROLE`。
+3. 宿主机 `5432` 监听核验：`Get-NetTCPConnection -LocalPort 5432 -State Listen` 查到 `OwningProcess` 对应进程名为 `postgres`。
+4. 系统服务核验：`Get-Service` 显示运行中服务为 `postgresql-x64-16 - PostgreSQL Server 16`。
+
+### 本次恢复步骤（已验证）
+1. 用管理员 PowerShell 停止本机 PostgreSQL 服务：
+   `Stop-Service -Name postgresql-x64-16 -Force`
+2. 如需防止下次开机再次抢占 5432：
+   `Set-Service -Name postgresql-x64-16 -StartupType Manual`
+3. 重新拉起 Docker PostgreSQL：
+   `docker compose -f "E:\Travel\docker-compose.auth.yml" up -d postgres`
+4. 再启动后端：
+   `powershell -ExecutionPolicy Bypass -File "F:\桌面\start-dev.ps1" -ProjectRoot "E:\Travel" -EnvFile "E:\Travel\.env"`
+
+### 新增硬约束（必须执行）
+- 当 `social_login_internal_init` + `password authentication failed` 同时出现时，即使 Docker `ps` 显示 `5432->5432` 映射正常，也必须继续核对宿主机 `5432` 的真实监听进程。
+- 诊断顺序固定为：
+  1. 核对 `EnvFile` 和 `DATABASE_URL` 打印值。
+  2. 核对容器角色与密码是否已对齐。
+  3. 核对宿主机 `5432` 的 `OwningProcess` 是否为本机 `postgres`。
+  4. 若是本机 `postgres`，优先停止 `postgresql-x64-16`，不要继续修改登录代码。
+
