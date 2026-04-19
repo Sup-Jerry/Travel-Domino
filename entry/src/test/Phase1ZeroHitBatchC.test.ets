@@ -50,6 +50,26 @@ export default function phase1ZeroHitBatchCTest() {
       expect(afterClear).assertEqual('');
     });
 
+    it('invalid: arrival_store_write_payload_should_not_write_scoped_keys_when_plan_id_is_non_positive', 0, () => {
+      // Arrange
+      const payload = buildPayload(0, 606, 15);
+      const scopedPayloadKey = ArrivalReminderStore.buildScopedPayloadKey(0);
+      const scopedSeqKey = ArrivalReminderStore.buildScopedSeqKey(0);
+      AppStorage.setOrCreate(scopedPayloadKey, '');
+      AppStorage.setOrCreate(scopedSeqKey, 0);
+      // Act
+      ArrivalReminderStore.writePayload(payload);
+      const globalRaw = AppStorage.get<string>(ArrivalReminderStore.ARRIVAL_REMINDER_PAYLOAD_KEY) ?? '';
+      const globalSeq = AppStorage.get<number>(ArrivalReminderStore.ARRIVAL_REMINDER_SEQ_KEY) ?? 0;
+      const scopedRaw = AppStorage.get<string>(scopedPayloadKey) ?? '';
+      const scopedSeq = AppStorage.get<number>(scopedSeqKey) ?? 0;
+      // Assert
+      expect(globalRaw.length > 0).assertTrue();
+      expect(globalSeq).assertEqual(15);
+      expect(scopedRaw).assertEqual('');
+      expect(scopedSeq).assertEqual(0);
+    });
+
     it('conflict: clear_payload_if_event_matches_should_only_clear_target_event', 0, () => {
       // Arrange
       const payload = buildPayload(12, 202, 9);

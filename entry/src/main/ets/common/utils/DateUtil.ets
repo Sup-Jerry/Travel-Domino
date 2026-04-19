@@ -74,7 +74,7 @@ export class DateUtil {
    */
   public static timeToMinutes(timeStr: string): number {
     const pureTime = DateUtil.extractPureTime(timeStr);
-    if (!pureTime || !pureTime.includes(':')) {
+    if (!pureTime) {
       return 0;
     }
 
