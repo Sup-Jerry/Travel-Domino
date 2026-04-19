@@ -75,6 +75,46 @@ export default function localUnitTest() {
       expect(recovered.restored?.lat).assertEqual(35.71006);
       expect(recovered.restored?.lng).assertEqual(139.8107);
     });
+
+    it('invalid: draft_parse_temp_state_should_reject_invalid_required_fields', 0, () => {
+      // Arrange
+      const invalidName = '{"name":1,"note":"","fixedTime":"09:00","isAnchor":false,"isSchedule":true,"dayOffset":0}';
+      const invalidBooleans = '{"name":"n","note":"","fixedTime":"09:00","isAnchor":"x","isSchedule":true,"dayOffset":0}';
+      const invalidDayOffset = '{"name":"n","note":"","fixedTime":"09:00","isAnchor":false,"isSchedule":true,"dayOffset":"bad"}';
+      // Act
+      const parsedInvalidName = PageDraftRecovery.parseTempDialogState(invalidName);
+      const parsedInvalidBooleans = PageDraftRecovery.parseTempDialogState(invalidBooleans);
+      const parsedInvalidDayOffset = PageDraftRecovery.parseTempDialogState(invalidDayOffset);
+      // Assert
+      expect(parsedInvalidName === null).assertTrue();
+      expect(parsedInvalidBooleans === null).assertTrue();
+      expect(parsedInvalidDayOffset === null).assertTrue();
+    });
+
+    it('boundary: draft_parse_temp_state_should_normalize_non_finite_numbers', 0, () => {
+      // Arrange
+      const raw = '{"name":"n","note":"x","fixedTime":"09:00","isAnchor":false,"isSchedule":true,"dayOffset":2.9,"duration":"bad","lat":"bad","lng":"bad"}';
+      // Act
+      const parsed = PageDraftRecovery.parseTempDialogState(raw);
+      // Assert
+      expect(parsed !== null).assertTrue();
+      expect(parsed!.duration).assertEqual(60);
+      expect(parsed!.dayOffset).assertEqual(2);
+      expect(parsed!.lat).assertEqual(0);
+      expect(parsed!.lng).assertEqual(0);
+    });
+
+    it('invalid: draft_parse_picked_location_should_reject_non_finite_coordinates_or_non_string_address', 0, () => {
+      // Arrange
+      const invalidAddress = '{"lat":35.1,"lng":139.1,"address":1}';
+      const invalidLat = '{"lat":"bad","lng":139.1,"address":"a"}';
+      // Act
+      const parsedInvalidAddress = PageDraftRecovery.parsePickedLocation(invalidAddress);
+      const parsedInvalidLat = PageDraftRecovery.parsePickedLocation(invalidLat);
+      // Assert
+      expect(parsedInvalidAddress === null).assertTrue();
+      expect(parsedInvalidLat === null).assertTrue();
+    });
   });
   describe('unit_test_case_generator_autofill_LocalUnit', () => {
     it('conflict: td-20260411-auto-LocalUnit', 0, () => {

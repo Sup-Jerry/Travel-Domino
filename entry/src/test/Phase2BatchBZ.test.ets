@@ -292,6 +292,12 @@ class PreferenceInstanceMockBZ {
   }
 }
 
+class PreferenceInstanceFalseMockBZ {
+  async getValue(_key: string, _defaultValue: boolean): Promise<boolean> {
+    return false;
+  }
+}
+
 class LoginRouterMockBZ implements LoginRouterLikeBZ {
   shouldThrow: boolean = false;
   pushedUrls: string[] = [];
@@ -327,6 +333,7 @@ class ProfileDataMockBZ {
 class ProfileViewModelMockBZ {
   boundContexts: Object[] = [];
   ensuredIds: string[] = [];
+  ensureProfileResult: Object | null = new ProfileDataMockBZ('user1') as Object;
 
   bindContext(context: Object): void {
     this.boundContexts.push(context);
@@ -334,7 +341,7 @@ class ProfileViewModelMockBZ {
 
   async ensureProfile(accountId: string): Promise<Object | null> {
     this.ensuredIds.push(accountId);
-    return new ProfileDataMockBZ('user1') as Object;
+    return this.ensureProfileResult;
   }
 
   getState(): string {
@@ -827,6 +834,28 @@ export default function phase2BatchBZTest() {
         Reflect.set(PreferenceManager as Object, 'getInstance', originalGetInstance);
       });
 
+      it('invalid: archive_page_non_skip_tip_branch_should_keep_execute_pending_until_confirm', 0, async () => {
+        // Arrange
+        const page = createArchivePageForTest() as ArchivePagePrivateBZ;
+        const item = buildPlanItemBZ(34, '深圳');
+        let executeSoftDeleteId = -1;
+        Reflect.set(page as Object, 'executeSoftDelete', async (planId: number): Promise<void> => {
+          executeSoftDeleteId = planId;
+        });
+        const originalGetInstance = Reflect.get(PreferenceManager as Object, 'getInstance') as () => Object;
+        Reflect.set(PreferenceManager as Object, 'getInstance', (): Object => {
+          return new PreferenceInstanceFalseMockBZ() as Object;
+        });
+
+        // Act
+        await page.handleSoftDelete(item);
+
+        // Assert
+        expect(executeSoftDeleteId).assertEqual(-1);
+        expect(page.tipDialogController !== null).assertTrue();
+        Reflect.set(PreferenceManager as Object, 'getInstance', originalGetInstance);
+      });
+
       it('combined: archive_page_pure_exports_should_keep_dialog_copy_stable', 0, () => {
         // Arrange
         // Act
@@ -906,6 +935,29 @@ export default function phase2BatchBZTest() {
         expect(profileViewModelMock.boundContexts.length).assertEqual(1);
         expect(profileViewModelMock.ensuredIds.length).assertEqual(1);
         expect(profileViewModelMock.ensuredIds[0]).assertEqual('acc-1');
+        Reflect.set(ProfileViewModel as Object, 'getInstance', originalGetInstance);
+      });
+
+      it('boundary: login_page_ensure_cloud_profile_should_allow_empty_profile_result_without_throwing', 0, async () => {
+        // Arrange
+        const page = createLoginPageForTest() as LoginPagePrivateBZ;
+        const profileViewModelMock = new ProfileViewModelMockBZ();
+        profileViewModelMock.ensureProfileResult = null;
+        const originalGetInstance = Reflect.get(ProfileViewModel as Object, 'getInstance') as () => Object;
+        Reflect.set(ProfileViewModel as Object, 'getInstance', (): Object => {
+          return profileViewModelMock as Object;
+        });
+        const hostContext = new HostContextMockBZ() as Object;
+        const validSession = {} as UserSession;
+        validSession.accountId = 'acc-empty';
+
+        // Act
+        await page.ensureCloudProfile(hostContext, validSession);
+
+        // Assert
+        expect(profileViewModelMock.boundContexts.length).assertEqual(1);
+        expect(profileViewModelMock.ensuredIds.length).assertEqual(1);
+        expect(profileViewModelMock.ensuredIds[0]).assertEqual('acc-empty');
         Reflect.set(ProfileViewModel as Object, 'getInstance', originalGetInstance);
       });
 

@@ -497,6 +497,23 @@ export default function phase2BatchAUTest() {
       expect(result.triggerReason).assertEqual('reach_first_node_start_time');
     });
 
+    it('boundary: state_evaluator_private_transition_meta_should_use_arrived_first_node_reason_for_in_progress', 0, () => {
+      // Arrange
+      const evaluator = new StateEvaluator();
+      const evaluatorInternal = evaluator as Object as StateEvaluatorPrivateProxyAU;
+      const input = buildInputForAU({
+        currentStatus: PlanStatus.CONFIRMED,
+        userClickedStart: false,
+        hasReachedFirstNode: true,
+        motionDetected: false
+      });
+      // Act
+      const meta = evaluatorInternal.resolveTransitionMeta(input, PlanStatus.IN_PROGRESS);
+      // Assert
+      expect(meta.triggerSource).assertEqual(TransitionTriggerSource.LOCATION_PROXIMITY);
+      expect(meta.triggerReason).assertEqual('arrived_first_node');
+    });
+
     it('invalid: state_evaluator_private_transition_meta_should_fallback_to_manual_override_when_no_branch_matches', 0, () => {
       // Arrange
       const evaluator = new StateEvaluator();

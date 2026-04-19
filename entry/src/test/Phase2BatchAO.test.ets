@@ -3308,6 +3308,22 @@ export default function phase2BatchAOTest() {
       hooks.restore();
     });
 
+    it('invalid: plan_app_service_request_enable_notification_should_stringify_non_error_throwable', 0, async () => {
+      // Arrange
+      const hooks = new NotificationHooksAO();
+      hooks.setRequestEnable(async (_hostContext: common.UIAbilityContext): Promise<void> => {
+        return Promise.reject('non_error_throwable_ao');
+      });
+      const service = PlanAppService.getInstance();
+      // Act
+      const message = await captureAsyncErrorAO(async (): Promise<void> => {
+        await service.requestEnableNotification(fakeUiContextAO());
+      });
+      // Assert
+      expect(message).assertEqual('"non_error_throwable_ao"');
+      hooks.restore();
+    });
+
     it('invalid: plan_app_service_request_enable_notification_should_throw_error_message', 0, async () => {
       // Arrange
       const hooks = new NotificationHooksAO();

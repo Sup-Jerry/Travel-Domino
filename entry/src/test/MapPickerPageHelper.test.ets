@@ -83,6 +83,16 @@ export default function mapPickerPageHelperTest() {
       expect(hint.indexOf(queryName) >= 0).assertTrue();
     });
 
+    it('boundary: map_picker_center_hint_should_fallback_when_geocode_query_name_blank', 0, () => {
+      // Arrange
+      const centerSource = 'geocode';
+      const queryName = '  ';
+      // Act
+      const hint = resolveMapPickerCenterHint(centerSource, queryName);
+      // Assert
+      expect(hint).assertEqual('已按地点名定位到附近，可拖动微调');
+    });
+
     it('boundary: map_picker_storage_key_should_floor_positive_plan_id', 0, () => {
       // Arrange
       const planId = 7.9;

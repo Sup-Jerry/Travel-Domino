@@ -3,6 +3,10 @@ import { AvatarUploadInput } from '../main/ets/domain/auth/AvatarModels';
 import { AuthApiResponse, UpdateAvatarResult } from '../main/ets/domain/auth/AuthModels';
 import { AvatarUploadApi } from '../main/ets/infrastructure/avatar/AvatarUploadApi';
 
+interface AvatarUploadApiPrivate {
+  errorMessage: (error: Object) => string;
+}
+
 export default function avatarUploadApiTest() {
   describe('avatarUploadApiTest', () => {
     it('normal: upload_api_should_return_synced_when_gateway_success', 0, async (done: () => void) => {
@@ -92,6 +96,15 @@ export default function avatarUploadApiTest() {
       const passed = actual;
       // Assert
       expect(passed).assertTrue();
+    });
+
+    it('invalid: upload_api_error_message_should_return_unknown_for_non_error_input', 0, () => {
+      // Arrange
+      const privateApi = AvatarUploadApi as Object as AvatarUploadApiPrivate;
+      // Act
+      const message = privateApi.errorMessage(new Object());
+      // Assert
+      expect(message).assertEqual('unknown_error');
     });
   });
 }

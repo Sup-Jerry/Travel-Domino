@@ -47,6 +47,16 @@ export default function planSearchPageHelperTest() {
       expect(label).assertEqual('回收站');
     });
 
+    it('boundary: plan_search_state_label_should_return_planning_for_active_non_archive_plan', 0, () => {
+      // Arrange
+      const status = 1;
+      const deleteTime = 0;
+      // Act
+      const label = resolvePlanSearchStateLabel(status, deleteTime);
+      // Assert
+      expect(label).assertEqual('规划');
+    });
+
     it('regression: td-20260412-plan_search_active_state_color_should_keep_blue', 0, () => {
       // Arrange
       const activeStatus = 1;

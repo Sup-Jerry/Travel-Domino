@@ -402,6 +402,16 @@ export default function phase2BatchALTest() {
       expect(profile.slackRatio).assertEqual(0.4);
     });
 
+    it('boundary: strategy_builder_build_profile_should_map_low_density_target_range', 0, () => {
+      // Arrange
+      const strategy: ComposableStrategy = { density: 0, pace: 1, preference: 2, energy: 1 };
+      // Act
+      const profile = StrategyBuilder.buildProfile(strategy);
+      // Assert
+      expect(profile.dailyPoiTarget.min).assertEqual(2);
+      expect(profile.dailyPoiTarget.max).assertEqual(4);
+    });
+
     it('invalid: strategy_builder_build_profile_should_fallback_for_out_of_range_levels', 0, () => {
       // Arrange
       // Act

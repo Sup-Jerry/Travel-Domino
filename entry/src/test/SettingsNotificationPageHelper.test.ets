@@ -45,6 +45,15 @@ export default function settingsNotificationPageHelperTest() {
       expect(archive === del).assertFalse();
     });
 
+    it('invalid: settings_notification_delete_disable_toast_should_contain_关闭', 0, () => {
+      // Arrange
+      const enabled = false;
+      // Act
+      const text = resolveDeleteTipToggleToast(enabled);
+      // Assert
+      expect(text.indexOf('关闭') >= 0).assertTrue();
+    });
+
     it('regression: td-20260412-settings_notification_archive_disable_toast_should_contain_关闭', 0, () => {
       // Arrange
       const enabled = false;

@@ -49,6 +49,26 @@ export default function companionPresentationHelperEdgeFallbackTest() {
       expect(supplement.includes('|')).assertTrue();
     });
 
+    it('invalid: timeline_supplement_active_branch_should_allow_zero_stay_minutes_when_start_time_missing', 0, () => {
+      // Arrange
+      const event = buildEvent(6);
+      event.actual_start_time = 0;
+      const originalGetEventState =
+        Reflect.get(CompanionPresentationHelper as Object, 'getEventState') as (event: EventEntity) => string;
+      Reflect.set(CompanionPresentationHelper as Object, 'getEventState', (_event: EventEntity): string => 'ACTIVE');
+
+      // Act
+      let supplement = '';
+      try {
+        supplement = CompanionPresentationHelper.getTimelineSupplement(event, Date.now());
+      } finally {
+        Reflect.set(CompanionPresentationHelper as Object, 'getEventState', originalGetEventState);
+      }
+
+      // Assert
+      expect(supplement.indexOf('0') >= 0).assertTrue();
+    });
+
     it('invalid: planned_range_should_fallback_to_placeholder_when_start_time_candidates_are_empty', 0, () => {
       // Arrange
       const event = buildEvent(2);
