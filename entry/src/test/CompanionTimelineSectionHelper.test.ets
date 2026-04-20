@@ -1,4 +1,4 @@
-ï»¿import { describe, it, expect } from '@ohos/hypium';
+import { describe, it, expect } from '@ohos/hypium';
 import { ThemeCenter } from '../main/ets/common/utils/ThemeCenter';
 import {
   CompanionTimelineSection,
@@ -42,6 +42,7 @@ interface CompanionTimelineSectionPrivateTest {
   setInitiallyProvidedValue(params: CompanionTimelineSectionParamsTest): void;
   updateStateVars(params: CompanionTimelineSectionParamsTest): void;
   getThemePalette(): CompanionTimelineSectionPaletteTest;
+  initialRender(): void;
 }
 
 function buildTimelineEvent(id: number, name: string): EventEntity {
@@ -101,7 +102,7 @@ export default function companionTimelineSectionHelperTest() {
 
     it('regression: filter_summary_should_keep_filter_and_position_tokens', 0, () => {
       // Arrange
-      const filterLabel = 'è¿›è¡Œä¸­';
+      const filterLabel = '½øÐÐÖÐ';
       const focusPosition = 2;
       const timelineCount = 0;
 
@@ -115,8 +116,8 @@ export default function companionTimelineSectionHelperTest() {
 
     it('combined: summary_and_empty_state_should_follow_count_matrix', 0, () => {
       // Arrange
-      const emptySummary = getCompanionTimelineFilterSummary('å…¨éƒ¨', 0, 0);
-      const nonEmptySummary = getCompanionTimelineFilterSummary('å…¨éƒ¨', 3, 8);
+      const emptySummary = getCompanionTimelineFilterSummary('È«²¿', 0, 0);
+      const nonEmptySummary = getCompanionTimelineFilterSummary('È«²¿', 3, 8);
       const emptyVisible = shouldShowCompanionTimelineEmptyState(0);
       const nonEmptyVisible = shouldShowCompanionTimelineEmptyState(8);
 
@@ -149,14 +150,14 @@ export default function companionTimelineSectionHelperTest() {
       page.onScrollStop();
       page.setInitiallyProvidedValue({
         focusedEventId: first.id,
-        filterLabel: 'å…¨éƒ¨',
+        filterLabel: 'È«²¿',
         focusPosition: 1,
         timelineCount: 2,
         events: [first, second]
       });
       page.updateStateVars({
         focusedEventId: third.id,
-        filterLabel: 'è·³è¿‡',
+        filterLabel: 'Ìø¹ý',
         focusPosition: 2,
         timelineCount: 1,
         events: [third]
@@ -172,13 +173,63 @@ export default function companionTimelineSectionHelperTest() {
       expect(borderColor).assertEqual('#DDD');
       expect(supplement).assertEqual('--');
       expect(page.focusedEventId).assertEqual(third.id);
-      expect(page.filterLabel).assertEqual('è·³è¿‡');
+      expect(page.filterLabel).assertEqual('Ìø¹ý');
       expect(page.focusPosition).assertEqual(2);
       expect(page.timelineCount).assertEqual(1);
       expect(page.events.length).assertEqual(1);
       expect(palette.textPrimary).assertEqual(ThemeCenter.getPalette('dark').textPrimary);
       expect(palette.textSecondary).assertEqual(ThemeCenter.getPalette('dark').textSecondary);
       expect(palette.companionBg).assertEqual(ThemeCenter.getPalette('dark').companionBg);
+    });
+
+    it('normal: timeline_section_initial_render_should_support_focused_list_branch', 0, () => {
+      // Arrange
+      const page = new CompanionTimelineSection(undefined, {} as LocalStorage) as Object as CompanionTimelineSectionPrivateTest;
+      const first = buildTimelineEvent(11, 'museum');
+      const second = buildTimelineEvent(12, 'station');
+      page.getEventStateLabel = (_event: EventEntity): string => '½øÐÐÖÐ';
+      page.getTimelineSupplement = (_event: EventEntity): string => '10:00-11:00';
+      page.setInitiallyProvidedValue({
+        focusedEventId: first.id,
+        filterLabel: 'È«²¿',
+        focusPosition: 1,
+        timelineCount: 2,
+        events: [first, second]
+      });
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: timeline_section_initial_render_should_support_empty_branch', 0, () => {
+      // Arrange
+      const page = new CompanionTimelineSection(undefined, {} as LocalStorage) as Object as CompanionTimelineSectionPrivateTest;
+      page.setInitiallyProvidedValue({
+        focusedEventId: -1,
+        filterLabel: 'Ìø¹ý',
+        focusPosition: 0,
+        timelineCount: 0,
+        events: []
+      });
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
   });
 }

@@ -1,5 +1,6 @@
 import { describe, it, expect } from '@ohos/hypium';
 import { ThemeCenter } from '../main/ets/common/utils/ThemeCenter';
+import { DomainConstants } from '../main/ets/common/constants/DomainConstants';
 import {
   EventItemView,
   formatEventItemCommuteTime,
@@ -91,6 +92,7 @@ interface EventItemViewPrivateTest {
   getCompanionCardBackground(): Object;
   getCompanionBorderColor(): Object;
   getConflictGapMinutes(): number;
+  initialRender(): void;
 }
 
 function buildEventItemTestEvent(id: number): EventEntity {
@@ -404,6 +406,96 @@ export default function eventItemViewHelperTest() {
       expect(nextLabel).assertEqual('SKIPPED');
       expect(nextBg).assertEqual(ThemeCenter.getPalette('dark').cardBg);
       expect(nextBorder).assertEqual(ThemeCenter.getPalette('dark').warning);
+    });
+
+    it('normal: event_item_view_initial_render_should_support_plan_weather_and_ai_reason_branch', 0, () => {
+      // Arrange
+      const page = new EventItemView(undefined, {} as LocalStorage) as Object as EventItemViewPrivateTest;
+      const event = buildEventItemTestEvent(1);
+      event.pre_travel_min = 18;
+      event.ai_reasoning = 'recommended';
+      event.weather_text = 'sunny';
+      event.weather_temperature = 26;
+      event.note = 'window seat';
+      event.transit_warning = true;
+      page.setInitiallyProvidedValue({
+        event: event,
+        index: 0,
+        totalCount: 2,
+        showTravelIndicator: true,
+        isCompanionMode: false,
+        companionCurrentEventId: -1,
+        showWeather: true
+      });
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: event_item_view_initial_render_should_support_companion_loading_branch', 0, () => {
+      // Arrange
+      const page = new EventItemView(undefined, {} as LocalStorage) as Object as EventItemViewPrivateTest;
+      const event = buildEventItemTestEvent(2);
+      event.pre_travel_min = DomainConstants.COMMUTE_LOADING;
+      event.weather_text = '';
+      event.weather_temperature = 0;
+      page.setInitiallyProvidedValue({
+        event: event,
+        index: 1,
+        totalCount: 3,
+        showTravelIndicator: true,
+        isCompanionMode: true,
+        companionCurrentEventId: 99,
+        showWeather: false
+      });
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('conflict: event_item_view_initial_render_should_support_walk_too_far_and_conflict_branch', 0, () => {
+      // Arrange
+      const page = new EventItemView(undefined, {} as LocalStorage) as Object as EventItemViewPrivateTest;
+      const event = buildEventItemTestEvent(1);
+      event.pre_travel_min = DomainConstants.COMMUTE_WALK_TOO_FAR;
+      event.is_conflict = true;
+      event.conflict_msg = 'conflict 20 min';
+      page.setInitiallyProvidedValue({
+        event: event,
+        index: 0,
+        totalCount: 2,
+        showTravelIndicator: true,
+        isCompanionMode: false,
+        companionCurrentEventId: -1,
+        showWeather: false
+      });
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
   });
 }

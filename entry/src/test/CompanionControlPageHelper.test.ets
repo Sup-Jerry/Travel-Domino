@@ -124,6 +124,7 @@ interface CompanionControlPagePrivateTest {
   getCardTranslateX(phase: CompanionCardPhase): number;
   getCardOpacity(phase: CompanionCardPhase): number;
   getCardScale(phase: CompanionCardPhase): number;
+  initialRender(): void;
 }
 
 function buildEvent(id: number): EventEntity {
@@ -420,6 +421,143 @@ export default function companionControlPageHelperTest() {
       expect(palette.companionBg).assertEqual(ThemeCenter.getPalette('dark').companionBg);
       expect(palette.pageBg).assertEqual(ThemeCenter.getPalette('dark').pageBg);
       expect(palette.primary).assertEqual(ThemeCenter.getPalette('dark').primary);
+    });
+
+    it('combined: control_page_accessors_should_cover_remaining_weather_and_timeline_state', 0, () => {
+      // Arrange
+      const page = new CompanionControlPage(undefined, {} as LocalStorage) as Object as CompanionControlPagePrivateTest;
+      const current = buildEvent(301);
+      const incoming = buildEvent(302);
+      const stable = buildEvent(303);
+      const suggestion = new CompanionControlSuggestionPlaceholderTest() as Object;
+      const replacement = new CompanionControlSuggestionPlaceholderTest() as Object;
+      const nextContext = buildControlContext('ACTIVE', current);
+
+      // Act
+      page.showWeatherScorePopup = true;
+      page.showWeatherHintPopup = true;
+      page.showWeatherSuggestionPopup = true;
+      page.weatherSuggestionPopupText = 'popup_text';
+      page.executionWeatherCollabBadge = 'badge_text';
+      page.executionWeatherHint = 'storm';
+      page.executionWeatherCurrentText = 'current_weather';
+      page.executionWeatherNextText = 'next_weather';
+      page.executionWeatherScore = 9;
+      page.executionWeatherCollabSummary = 'collab_summary';
+      page.executionWeatherAppliedSummary = 'applied_summary';
+      page.executionWeatherSuggestions = [suggestion];
+      page.weatherScoreLines = ['line_a', 'line_b'];
+      page.weatherHintLines = ['hint_a'];
+      page.incomingEvent = incoming;
+      page.cardSwitchProgress = 0.75;
+      page.context = nextContext;
+      page.safeTopInset = 30;
+      page.safeBottomInset = 40;
+      page.companionFilterState = 'ACTIVE';
+      page.isWeatherFeatureEnabled = true;
+      page.weatherExpanded = true;
+      page.executionWeatherLoading = true;
+      page.executionWeatherLevel = 'NOTICE';
+      page.canRenderSwitchCards = true;
+      page.outgoingEvent = current;
+      page.stableEvent = stable;
+      page.focusedEventId = stable.id;
+      page.isCardSwitching = false;
+      page.scheduledEvents = [current, stable];
+      page.timelineEvents = [incoming, stable];
+      page.focusPosition = 4;
+      page.timelineCount = 6;
+      page.executionWeatherSuggestions = [suggestion, replacement];
+
+      const showScore = page.showWeatherScorePopup;
+      const showHint = page.showWeatherHintPopup;
+      const showSuggestion = page.showWeatherSuggestionPopup;
+      const popupText = page.weatherSuggestionPopupText;
+      const badge = page.executionWeatherCollabBadge;
+      const hint = page.executionWeatherHint;
+      const currentText = page.executionWeatherCurrentText;
+      const nextText = page.executionWeatherNextText;
+      const score = page.executionWeatherScore;
+      const collabSummary = page.executionWeatherCollabSummary;
+      const appliedSummary = page.executionWeatherAppliedSummary;
+      const suggestionCount = page.executionWeatherSuggestions.length;
+      const scoreLineCount = page.weatherScoreLines.length;
+      const hintLineCount = page.weatherHintLines.length;
+      const incomingId = page.incomingEvent?.id ?? -1;
+      const contextState = page.context.runtimeState;
+      const safeTopInset = page.safeTopInset;
+      const safeBottomInset = page.safeBottomInset;
+      const filterState = page.companionFilterState;
+      const featureEnabled = page.isWeatherFeatureEnabled;
+      const expanded = page.weatherExpanded;
+      const loading = page.executionWeatherLoading;
+      const level = page.executionWeatherLevel;
+      const canRenderSwitchCards = page.canRenderSwitchCards;
+      const outgoingId = page.outgoingEvent?.id ?? -1;
+      const stableId = page.stableEvent?.id ?? -1;
+      const focusedEventId = page.focusedEventId;
+      const isCardSwitching = page.isCardSwitching;
+      const progress = page.cardSwitchProgress;
+      const scheduledCount = page.scheduledEvents.length;
+      const timelineCount = page.timelineEvents.length;
+      const focusPosition = page.focusPosition;
+      const totalTimelineCount = page.timelineCount;
+
+      // Assert
+      expect(showScore).assertTrue();
+      expect(showHint).assertTrue();
+      expect(showSuggestion).assertTrue();
+      expect(popupText).assertEqual('popup_text');
+      expect(badge).assertEqual('badge_text');
+      expect(hint).assertEqual('storm');
+      expect(currentText).assertEqual('current_weather');
+      expect(nextText).assertEqual('next_weather');
+      expect(score).assertEqual(9);
+      expect(collabSummary).assertEqual('collab_summary');
+      expect(appliedSummary).assertEqual('applied_summary');
+      expect(suggestionCount).assertEqual(2);
+      expect(scoreLineCount).assertEqual(2);
+      expect(hintLineCount).assertEqual(1);
+      expect(incomingId).assertEqual(incoming.id);
+      expect(contextState).assertEqual('ACTIVE');
+      expect(safeTopInset).assertEqual(30);
+      expect(safeBottomInset).assertEqual(40);
+      expect(filterState).assertEqual('ACTIVE');
+      expect(featureEnabled).assertTrue();
+      expect(expanded).assertTrue();
+      expect(loading).assertTrue();
+      expect(level).assertEqual('NOTICE');
+      expect(canRenderSwitchCards).assertTrue();
+      expect(outgoingId).assertEqual(current.id);
+      expect(stableId).assertEqual(stable.id);
+      expect(focusedEventId).assertEqual(stable.id);
+      expect(isCardSwitching).assertFalse();
+      expect(progress).assertEqual(0.75);
+      expect(scheduledCount).assertEqual(2);
+      expect(timelineCount).assertEqual(2);
+      expect(focusPosition).assertEqual(4);
+      expect(totalTimelineCount).assertEqual(6);
+    });
+
+    it('regression: control_page_initial_render_should_not_throw_with_minimal_ready_state', 0, () => {
+      // Arrange
+      const page = new CompanionControlPage(undefined, {} as LocalStorage) as Object as CompanionControlPagePrivateTest;
+      page.context = buildControlContext('READY', buildEvent(401));
+      page.isWeatherFeatureEnabled = false;
+      page.timelineEvents = [buildEvent(402)];
+      page.scheduledEvents = [buildEvent(403)];
+      page.focusedEventId = 402;
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
   });
 }

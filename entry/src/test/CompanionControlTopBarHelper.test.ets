@@ -23,6 +23,7 @@ interface CompanionControlTopBarPrivateTest {
   setInitiallyProvidedValue(params: CompanionControlTopBarParamsTest): void;
   updateStateVars(params: CompanionControlTopBarParamsTest): void;
   getThemePalette(): CompanionControlTopBarThemePaletteTest;
+  initialRender(): void;
 }
 
 export default function companionControlTopBarHelperTest() {
@@ -120,6 +121,26 @@ export default function companionControlTopBarHelperTest() {
       expect(page.runtimeDescription).assertEqual('paused');
       expect(palette.textPrimary).assertEqual(ThemeCenter.getPalette('dark').textPrimary);
       expect(palette.textSecondary).assertEqual(ThemeCenter.getPalette('dark').textSecondary);
+    });
+
+    it('normal: topbar_initial_render_should_support_runtime_description_branch', 0, () => {
+      // Arrange
+      const page = new CompanionControlTopBar(undefined, {} as LocalStorage) as Object as CompanionControlTopBarPrivateTest;
+      page.setInitiallyProvidedValue({
+        safeTopInset: 12,
+        runtimeDescription: '伴游运行中'
+      });
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
   });
 }

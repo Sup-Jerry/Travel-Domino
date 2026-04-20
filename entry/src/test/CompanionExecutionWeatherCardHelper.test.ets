@@ -311,6 +311,71 @@ export default function companionExecutionWeatherCardHelperTest() {
       expect(palette.textPrimary).assertEqual(ThemeCenter.getPalette('dark').textPrimary);
       expect(palette.primary).assertEqual(ThemeCenter.getPalette('dark').primary);
     });
+
+    it('combined: weather_card_accessors_should_cover_remaining_instance_functions', 0, () => {
+      // Arrange
+      const page = new CompanionExecutionWeatherCard(undefined, {} as LocalStorage) as Object as CompanionExecutionWeatherCardPrivateTest;
+      const suggestion = new WeatherSuggestionPlaceholderTest() as Object;
+
+      // Act
+      page.weatherExpanded = true;
+      page.showWeatherScorePopup = true;
+      page.showWeatherHintPopup = true;
+      page.showWeatherSuggestionPopup = true;
+      page.weatherSuggestionPopupText = 'popupA\npopupB';
+      page.weatherScoreSummary = 'score_summary';
+      page.weatherScoreLines = ['s1', 's2'];
+      page.weatherHintLines = ['h1'];
+      page.executionWeatherCollabBadge = 'badge_text';
+      page.executionWeatherLoading = true;
+      page.executionWeatherHint = '强风';
+      page.executionWeatherLevel = 'NOTICE';
+      page.executionWeatherCurrentText = '晴';
+      page.executionWeatherNextText = '多云';
+      page.executionWeatherScore = 6;
+      page.executionWeatherCollabSummary = '跨城联动';
+      page.executionWeatherAppliedSummary = '已顺延';
+      page.executionWeatherSuggestions = [suggestion];
+      page.effectiveTheme = 'light';
+      const expanded = page.weatherExpanded;
+      const showScorePopup = page.showWeatherScorePopup;
+      const showHintPopup = page.showWeatherHintPopup;
+      const showSuggestionPopup = page.showWeatherSuggestionPopup;
+      const popupText = page.weatherSuggestionPopupText;
+      const scoreSummary = page.weatherScoreSummary;
+      const scoreLineCount = page.weatherScoreLines.length;
+      const hintLineCount = page.weatherHintLines.length;
+      const collabBadge = page.executionWeatherCollabBadge;
+      const loading = page.executionWeatherLoading;
+      const hint = page.executionWeatherHint;
+      const level = page.executionWeatherLevel;
+      const currentText = page.executionWeatherCurrentText;
+      const nextText = page.executionWeatherNextText;
+      const score = page.executionWeatherScore;
+      const collabSummary = page.executionWeatherCollabSummary;
+      const appliedSummary = page.executionWeatherAppliedSummary;
+      const suggestionCount = page.executionWeatherSuggestions.length;
+
+      // Assert
+      expect(expanded).assertTrue();
+      expect(showScorePopup).assertTrue();
+      expect(showHintPopup).assertTrue();
+      expect(showSuggestionPopup).assertTrue();
+      expect(popupText).assertEqual('popupA\npopupB');
+      expect(scoreSummary).assertEqual('score_summary');
+      expect(scoreLineCount).assertEqual(2);
+      expect(hintLineCount).assertEqual(1);
+      expect(collabBadge).assertEqual('badge_text');
+      expect(loading).assertTrue();
+      expect(hint).assertEqual('强风');
+      expect(level).assertEqual('NOTICE');
+      expect(currentText).assertEqual('晴');
+      expect(nextText).assertEqual('多云');
+      expect(score).assertEqual(6);
+      expect(collabSummary).assertEqual('跨城联动');
+      expect(appliedSummary).assertEqual('已顺延');
+      expect(suggestionCount).assertEqual(1);
+    });
   });
 }
 

@@ -144,5 +144,6 @@ export default function companionWeatherPopupsHelperTest() {
       expect(refCount).assertEqual(3);
       expect(hasUndefinedRef).assertFalse();
     });
+
   });
 }

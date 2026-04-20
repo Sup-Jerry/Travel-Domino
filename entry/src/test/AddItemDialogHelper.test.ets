@@ -38,6 +38,7 @@ interface AddItemDialogParamsTest {
 }
 
 interface AddItemDialogPrivateTest {
+  controller: Object;
   initName: string;
   initNote: string;
   initDuration: number;
@@ -85,6 +86,11 @@ interface AddItemDialogPrivateTest {
   scopedStorageKey(base: string): string;
   canUseMapPicker(): boolean;
   isMapNativeRuntimeReady(): Promise<boolean>;
+  initialRender(): void;
+}
+
+class AddItemDialogControllerMockTest {
+  close(): void {}
 }
 
 export default function addItemDialogHelperTest() {
@@ -327,6 +333,39 @@ export default function addItemDialogHelperTest() {
       expect(canUseMapPicker).assertEqual(isAddItemMapPickerEnabled(AppConfig.AMAP_SDK_API_KEY));
       expect(runtimeReady === true || runtimeReady === false).assertTrue();
       done();
+    });
+
+    it('combined: add_item_dialog_accessors_should_cover_controller_default_duration_and_render_entry', 0, () => {
+      // Arrange
+      const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateTest;
+      const controller = new AddItemDialogControllerMockTest() as Object;
+      let threw = false;
+
+      // Act
+      page.controller = controller;
+      page.globalDefaultDuration = 90;
+      page.name = '大唐不夜城';
+      page.isSchedule = true;
+      page.isGeocoding = true;
+      page.effectiveTheme = 'light';
+      const currentController = page.controller;
+      const defaultDuration = page.globalDefaultDuration;
+      const currentName = page.name;
+      const currentSchedule = page.isSchedule;
+      const currentGeocoding = page.isGeocoding;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(currentController).assertEqual(controller);
+      expect(defaultDuration).assertEqual(90);
+      expect(currentName).assertEqual('大唐不夜城');
+      expect(currentSchedule).assertTrue();
+      expect(currentGeocoding).assertTrue();
+      expect(threw).assertFalse();
     });
   });
 }

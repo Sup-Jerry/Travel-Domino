@@ -95,6 +95,7 @@ interface GlobalBottomNavBarPrivateTest {
   navigateTo(tab: AppNavTab): Promise<void>;
   setTabPressed(tab: AppNavTab, pressed: boolean): void;
   handleTabTap(tab: AppNavTab): void;
+  initialRender(): void;
 }
 
 interface PlanBottomActionBarParamsTest {
@@ -115,6 +116,7 @@ interface PlanBottomActionBarPrivateTest {
   setInitiallyProvidedValue(params: PlanBottomActionBarParamsTest): void;
   updateStateVars(params: PlanBottomActionBarParamsTest): void;
   getPalette(): BottomNavPaletteTest;
+  initialRender(): void;
 }
 
 interface CompanionBottomActionBarParamsTest {
@@ -133,6 +135,7 @@ interface CompanionBottomActionBarPrivateTest {
   setInitiallyProvidedValue(params: CompanionBottomActionBarParamsTest): void;
   updateStateVars(params: CompanionBottomActionBarParamsTest): void;
   getPalette(): BottomNavPaletteTest;
+  initialRender(): void;
 }
 
 export default function bottomNavBarHelperTest() {
@@ -415,6 +418,66 @@ export default function bottomNavBarHelperTest() {
       expect(palette.cardBg).assertEqual(ThemeCenter.getPalette('dark').cardBg);
       expect(palette.primary).assertEqual(ThemeCenter.getPalette('dark').primary);
       expect(palette.textSecondary).assertEqual(ThemeCenter.getPalette('dark').textSecondary);
+    });
+
+    it('normal: global_bottom_nav_bar_initial_render_should_support_center_fab_branch', 0, () => {
+      // Arrange
+      const page = new GlobalBottomNavBar(undefined, {} as LocalStorage) as Object as GlobalBottomNavBarPrivateTest;
+      const routedUrls: string[] = [];
+      const fakeRouter = new GlobalBottomNavRouterImplTest(routedUrls);
+      const fakeUiContext = new GlobalBottomNavUIContextImplTest(fakeRouter);
+      page.getUIContext = (): GlobalBottomNavUIContextTest => fakeUiContext;
+      page.setInitiallyProvidedValue({
+        currentTab: 'home',
+        showCenterFab: true
+      });
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('normal: plan_bottom_action_bar_initial_render_should_support_enabled_states', 0, () => {
+      // Arrange
+      const page = new PlanBottomActionBar(undefined, {} as LocalStorage) as Object as PlanBottomActionBarPrivateTest;
+      page.setInitiallyProvidedValue({
+        aiEnabled: true,
+        addEnabled: true
+      });
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: companion_bottom_action_bar_initial_render_should_support_default_actions', 0, () => {
+      // Arrange
+      const page = new CompanionBottomActionBar(undefined, {} as LocalStorage) as Object as CompanionBottomActionBarPrivateTest;
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
   });
 }

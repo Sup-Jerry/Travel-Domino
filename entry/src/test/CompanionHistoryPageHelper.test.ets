@@ -80,6 +80,7 @@ interface CompanionHistoryPagePrivateTest {
   getCurrentHistoryStayText(): string;
   getCurrentHistoryDeviationText(): string;
   getCurrentHistoryNoteText(): string;
+  initialRender(): void;
 }
 
 function buildHistoryTimelineItem(
@@ -360,6 +361,115 @@ export default function companionHistoryPageHelperTest() {
       expect(palette.statusSkipped).assertEqual(ThemeCenter.getPalette('dark').statusSkipped);
       expect(palette.success).assertEqual(ThemeCenter.getPalette('dark').success);
       expect(palette.danger).assertEqual(ThemeCenter.getPalette('dark').danger);
+    });
+
+    it('normal: history_page_initial_render_should_support_timeline_list_branch', 0, () => {
+      // Arrange
+      const page = new CompanionHistoryPage(undefined, {} as LocalStorage) as Object as CompanionHistoryPagePrivateTest;
+      const dayKey = DateUtil.formatLocalDate(1713254400000);
+      const arrive = buildHistoryTimelineItem(11, '西湖', 'ARRIVE', 1713254400000, dayKey);
+      const leave = buildHistoryTimelineItem(12, '西湖', 'LEAVE', 1713258000000, dayKey);
+      page.setInitiallyProvidedValue({
+        showHistoryPage: true,
+        historyTimelineSummary: buildHistoryTimelineSummary('trip_timeline'),
+        historyTimelineItems: [arrive, leave],
+        historyTimelineFilter: 'all',
+        historyViewMode: 'timeline',
+        historySummary: null,
+        vm: null,
+        selectedHistoryTimelineItem: arrive,
+        safeTopInset: 8,
+        safeBottomInset: 10
+      });
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: history_page_initial_render_should_support_empty_timeline_branch', 0, () => {
+      // Arrange
+      const page = new CompanionHistoryPage(undefined, {} as LocalStorage) as Object as CompanionHistoryPagePrivateTest;
+      page.setInitiallyProvidedValue({
+        showHistoryPage: true,
+        historyTimelineSummary: null,
+        historyTimelineItems: [],
+        historyTimelineFilter: 'all',
+        historyViewMode: 'timeline',
+        historySummary: null,
+        vm: null,
+        selectedHistoryTimelineItem: null,
+        safeTopInset: 0,
+        safeBottomInset: 0
+      });
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('combined: history_page_initial_render_should_support_detail_and_hidden_branches', 0, () => {
+      // Arrange
+      const detailPage = new CompanionHistoryPage(undefined, {} as LocalStorage) as Object as CompanionHistoryPagePrivateTest;
+      const dayKey = DateUtil.formatLocalDate(1713254400000);
+      const leave = buildHistoryTimelineItem(21, '西湖', 'LEAVE', 1713258000000, dayKey);
+      detailPage.setInitiallyProvidedValue({
+        showHistoryPage: true,
+        historyTimelineSummary: buildHistoryTimelineSummary('trip_detail'),
+        historyTimelineItems: [leave],
+        historyTimelineFilter: 'all',
+        historyViewMode: 'detail',
+        historySummary: buildPlaceCheckinSummary('西湖'),
+        vm: null,
+        selectedHistoryTimelineItem: leave,
+        safeTopInset: 10,
+        safeBottomInset: 12
+      });
+      const hiddenPage = new CompanionHistoryPage(undefined, {} as LocalStorage) as Object as CompanionHistoryPagePrivateTest;
+      hiddenPage.setInitiallyProvidedValue({
+        showHistoryPage: false,
+        historyTimelineSummary: null,
+        historyTimelineItems: [],
+        historyTimelineFilter: 'all',
+        historyViewMode: 'timeline',
+        historySummary: null,
+        vm: null,
+        selectedHistoryTimelineItem: null,
+        safeTopInset: 0,
+        safeBottomInset: 0
+      });
+
+      // Act
+      let detailThrew = false;
+      let hiddenThrew = false;
+      try {
+        detailPage.initialRender();
+      } catch (_error) {
+        detailThrew = true;
+      }
+      try {
+        hiddenPage.initialRender();
+      } catch (_error) {
+        hiddenThrew = true;
+      }
+
+      // Assert
+      expect(detailThrew).assertFalse();
+      expect(hiddenThrew).assertFalse();
     });
   });
 }

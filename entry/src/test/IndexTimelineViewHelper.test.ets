@@ -75,6 +75,7 @@ interface IndexTimelineViewPrivateTest {
   onOpenGapOptimize: () => void;
   setInitiallyProvidedValue(params: IndexTimelineViewParamsTest): void;
   updateStateVars(params: IndexTimelineViewParamsTest): void;
+  initialRender(): void;
 }
 
 function buildTimelineEvent(id: number): EventEntity {
@@ -297,6 +298,71 @@ export default function indexTimelineViewHelperTest() {
       expect(page.gapsCount).assertEqual(0);
       expect(page.theme.pageBg).assertEqual('#AAAAAA');
       expect(page.theme.textPrimary).assertEqual('#BBBBBB');
+    });
+
+    it('normal: timeline_view_initial_render_should_support_group_items_and_gap_hint_branch', 0, () => {
+      // Arrange
+      const page = new IndexTimelineView(undefined, {} as LocalStorage) as Object as IndexTimelineViewPrivateTest;
+      const first = buildTimelineEvent(11);
+      const second = buildTimelineEvent(12);
+      page.setInitiallyProvidedValue({
+        groupedEvents: [{
+          dayOffset: 0,
+          actualDateMs: 10,
+          dateHeader: 'Day 1',
+          events: [first, second]
+        }],
+        allEvents: [first, second],
+        isArchived: false,
+        isCompanionMode: false,
+        showWeather: true,
+        isPageRefreshing: false,
+        gapsCount: 2,
+        onIsDayCollapsed: (_dayOffset: number) => false
+      });
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: timeline_view_initial_render_should_support_collapsed_archived_branch', 0, () => {
+      // Arrange
+      const page = new IndexTimelineView(undefined, {} as LocalStorage) as Object as IndexTimelineViewPrivateTest;
+      const event = buildTimelineEvent(21);
+      page.setInitiallyProvidedValue({
+        groupedEvents: [{
+          dayOffset: 2,
+          actualDateMs: 20,
+          dateHeader: 'Day 2',
+          events: [event]
+        }],
+        allEvents: [event],
+        isArchived: true,
+        isCompanionMode: true,
+        showWeather: false,
+        isPageRefreshing: true,
+        gapsCount: 0,
+        onIsDayCollapsed: (_dayOffset: number) => true
+      });
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
   });
 }

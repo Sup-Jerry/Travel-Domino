@@ -1,5 +1,7 @@
-import { describe, it, expect } from '@ohos/hypium';
+﻿import { describe, it, expect } from '@ohos/hypium';
+import { ThemeCenter } from '../main/ets/common/utils/ThemeCenter';
 import {
+  CompanionView,
   isCompanionOverlayVisible,
   resolveCompanionBackAction,
   resolveCompanionBackLevel,
@@ -8,7 +10,15 @@ import {
   resolveCompanionVisibleFocusId,
   resolveCompanionVisibleFocusPosition
 } from '../main/ets/pages/components/views/CompanionView';
+import { IndexCompanionOverlay } from '../main/ets/pages/index/IndexCompanionOverlay';
 import { EventEntity } from '../main/ets/model/entity/EventEntity';
+import {
+  CompanionContext,
+  HistoryTimelineItem,
+  HistoryTimelineSummary,
+  PlaceCheckinSummary,
+  TimelineViewModel
+} from '../main/ets/viewmodel/TimelineViewModel';
 
 function buildCompanionEvent(id: number, name: string, address: string = ''): EventEntity {
   const event = new EventEntity();
@@ -20,6 +30,470 @@ function buildCompanionEvent(id: number, name: string, address: string = ''): Ev
   event.actual_start_time = 0;
   event.actual_end_time = 0;
   return event;
+}
+
+type CompanionRuntimeStateTest = 'PENDING' | 'ACTIVE' | 'COMPLETED';
+
+interface CompanionViewParamsTest {
+  vm?: TimelineViewModel;
+  isShow?: boolean;
+}
+
+interface IndexCompanionOverlayParamsTest {
+  vm?: TimelineViewModel;
+  isVisible?: boolean;
+  overlayZIndex?: number;
+}
+
+interface CompanionViewCtorParamsTest {
+  vm: Object;
+  isShow: Object;
+}
+
+interface IndexCompanionOverlayPrivateTest {
+  __vm: Object;
+  __isVisible: Object;
+}
+
+interface CompanionViewPaletteTest {
+  pageBg?: Object;
+  textPrimary?: Object;
+}
+
+interface CompanionGestureEventTest {
+  offsetY: number;
+}
+
+interface CompanionConflictInfoTest {
+  name: string;
+}
+
+interface CompanionBackfillCallTest {
+  eventId: number;
+  startTs: number;
+  endTs: number;
+}
+
+interface CompanionAlertDialogButtonTest {
+  value: string;
+  action: () => void;
+}
+
+interface CompanionAlertDialogOptionsTest {
+  title: string;
+  message: string;
+  autoCancel: boolean;
+  primaryButton: CompanionAlertDialogButtonTest;
+  secondaryButton?: CompanionAlertDialogButtonTest;
+}
+
+interface CompanionViewUiContextTest {
+  animateTo(options: Object, action: () => void): void;
+  showAlertDialog(options: CompanionAlertDialogOptionsTest): void;
+  getHostContext(): Object;
+}
+
+interface CompanionViewScrollerTest {
+  scrollToIndex(index: number, smooth: boolean, align: Object): void;
+}
+
+interface CompanionWindowLikeTest {
+  off(type: string): void;
+}
+
+interface CompanionViewVmTest {
+  scheduleVersion: number;
+  orderedEvents: EventEntity[];
+  companionContext: CompanionContext;
+  historySummary: HistoryTimelineSummary | null;
+  historyItems: HistoryTimelineItem[];
+  placeSummary: PlaceCheckinSummary | null;
+  getScheduleVersion(): number;
+  getOrderedScheduleEvents(): EventEntity[];
+  getCompanionContext(): CompanionContext;
+  getCurrentPlanHistorySummary(): HistoryTimelineSummary | null;
+  getCurrentPlanHistoryTimelineItems(limit: number): HistoryTimelineItem[];
+  getPlaceCheckinSummary(placeName: string): PlaceCheckinSummary | null;
+  resumeCurrentExecution(): boolean;
+  pauseCurrentExecution(): boolean;
+  updateActualTime(eventId: number, field: string, value: number): Promise<boolean>;
+  skipEvent(event: EventEntity): Promise<void>;
+  getStartConflictInfo(excludeEventId: number): Promise<CompanionConflictInfoTest | null>;
+  backfillCheckinTime(eventId: number, startTs: number, endTs: number): Promise<boolean>;
+  reopenSkippedEvent(eventId: number): Promise<boolean>;
+}
+
+interface CompanionViewPrivateTest {
+  vm: TimelineViewModel;
+  isShow: boolean;
+  effectiveTheme: string;
+  context: CompanionContext;
+  companionSubMode: 'immersive' | 'control';
+  interactionMode: 'immersive' | 'control' | 'both';
+  immersiveText: string;
+  immersiveDragOffsetY: number;
+  showHistoryPage: boolean;
+  historyTimelineSummary: HistoryTimelineSummary | null;
+  historyTimelineItems: HistoryTimelineItem[];
+  historyTimelineFilter: string;
+  selectedHistoryTimelineItem: HistoryTimelineItem | null;
+  historySummary: PlaceCheckinSummary | null;
+  historyViewMode: string;
+  selectedHistoryPlaceName: string;
+  showSearchPage: boolean;
+  showFilterPage: boolean;
+  searchKeyword: string;
+  searchResults: EventEntity[];
+  companionFilterState: string;
+  cachedScheduledEvents: EventEntity[];
+  cachedVisibleScheduledEvents: EventEntity[];
+  focusedEventId: number;
+  focusedIndex: number;
+  focusSource: string;
+  tapPriorityUntilTs: number;
+  visibleStartIndex: number;
+  visibleEndIndex: number;
+  visibleCenterIndex: number;
+  cardDisplayEventId: number;
+  outgoingCardEventId: number;
+  incomingCardEventId: number;
+  isCardSwitching: boolean;
+  cardSwitchProgress: number;
+  pendingFocusId: number;
+  swipeStartTs: number;
+  swipeLastTs: number;
+  swipePeakDistance: number;
+  safeTopInset: number;
+  safeBottomInset: number;
+  safeLeftInset: number;
+  safeRightInset: number;
+  weatherExpanded: boolean;
+  showWeatherScorePopup: boolean;
+  showWeatherHintPopup: boolean;
+  showWeatherSuggestionPopup: boolean;
+  weatherSuggestionPopupText: string;
+  realtimeWatchTimer: number;
+  observedScheduleVersion: number;
+  observedRuntimeState: string;
+  observedBackRequest: number;
+  immersiveWindow?: CompanionWindowLikeTest;
+  timelineScroller: CompanionViewScrollerTest;
+  getUIContext: () => CompanionViewUiContextTest;
+  aboutToAppear(): void;
+  aboutToDisappear(): void;
+  setInitiallyProvidedValue(params: CompanionViewParamsTest): void;
+  updateStateVars(params: CompanionViewParamsTest): void;
+  safeShowToast(message: string): void;
+  getThemePalette(): CompanionViewPaletteTest;
+  refreshContext(): void;
+  refreshScheduleCache(): void;
+  ensureScheduleCacheUpToDate(): void;
+  getScheduledEvents(): EventEntity[];
+  getVisibleScheduledEvents(): EventEntity[];
+  getVisibleTimelineEvents(): EventEntity[];
+  getVisibleTimelineCount(): number;
+  getVisibleFocusPosition(): number;
+  ensureFocusVisible(): void;
+  openFilterPage(): void;
+  closeFilterPage(): void;
+  applyFilter(state: string): void;
+  refreshSearchResults(): void;
+  openSearchPage(): void;
+  closeSearchPage(): void;
+  pickSearchResult(event: EventEntity): void;
+  getEventById(id: number): EventEntity | null;
+  getScheduleIndexById(id: number): number;
+  pickDefaultFocusId(): number;
+  ensureFocusReady(): void;
+  getFocusedEvent(): EventEntity | null;
+  canRenderSwitchCards(): boolean;
+  getDisplayCardEvent(): EventEntity | null;
+  applyFocusById(targetId: number, source: 'tap' | 'scroll' | 'init'): void;
+  startCardSwitch(targetId: number): void;
+  handleTimelineScrollIndex(start: number, end: number, center: number): void;
+  handleTimelineScrollStop(): void;
+  handleTimelineTap(event: EventEntity, index: number): void;
+  showActiveConflictDialog(conflictName: string): void;
+  showGlobalActiveConflictDialog(excludeEventId: number): Promise<boolean>;
+  startNavigation(target?: EventEntity): void;
+  loadHistoryTimelineData(): void;
+  openHistoryList(): void;
+  openHistoryDetailFromTimeline(item: HistoryTimelineItem): void;
+  handleFocusedAdjust(event?: EventEntity): void;
+  openRecordCorrectionDialog(event: EventEntity): void;
+  handleFocusedPrimaryAction(): Promise<void>;
+  handleFocusedSkip(): Promise<void>;
+  applyCompanionCheckinBackfill(eventId: number, startTs: number, endTs: number): Promise<void>;
+  handleFocusedReopen(): Promise<void>;
+  enterControlMode(): void;
+  enterImmersiveMode(): void;
+  exitCompanion(): void;
+  handleCompanionBackNavigation(): boolean;
+  handleImmersiveSwipeStart(): void;
+  handleImmersiveSwipeUpdate(event: CompanionGestureEventTest): void;
+  resetImmersiveSwipe(): void;
+  handleImmersiveSwipeEnd(event: CompanionGestureEventTest): void;
+}
+
+class CompanionViewUiContextMockTest implements CompanionViewUiContextTest {
+  public alertCount: number = 0;
+  public lastAlert?: CompanionAlertDialogOptionsTest;
+  private readonly hostContext: Object = new CompanionViewHostContextMockTest() as Object;
+
+  animateTo(_options: Object, action: () => void): void {
+    action();
+  }
+
+  showAlertDialog(options: CompanionAlertDialogOptionsTest): void {
+    this.alertCount += 1;
+    this.lastAlert = options;
+  }
+
+  getHostContext(): Object {
+    return this.hostContext;
+  }
+}
+
+class CompanionViewHostContextMockTest {}
+
+class CompanionViewScrollerMockTest implements CompanionViewScrollerTest {
+  public indices: number[] = [];
+
+  scrollToIndex(index: number, _smooth: boolean, _align: Object): void {
+    this.indices.push(index);
+  }
+}
+
+class CompanionWindowMockTest implements CompanionWindowLikeTest {
+  public offCalls: string[] = [];
+
+  off(type: string): void {
+    this.offCalls.push(type);
+  }
+}
+
+function createCompanionViewInstance(vm: TimelineViewModel, isShow: boolean = true): CompanionViewPrivateTest {
+  const overlayParams: IndexCompanionOverlayParamsTest = {
+    vm,
+    isVisible: isShow,
+    overlayZIndex: 10
+  };
+  const overlay = new IndexCompanionOverlay(
+    undefined,
+    overlayParams as Object as LocalStorage
+  ) as Object as IndexCompanionOverlayPrivateTest;
+  const companionParams: CompanionViewCtorParamsTest = {
+    vm: overlay.__vm,
+    isShow: overlay.__isVisible
+  };
+  return new CompanionView(
+    overlay as Object,
+    companionParams as Object as LocalStorage
+  ) as Object as CompanionViewPrivateTest;
+}
+
+class CompanionViewVmMockTest implements CompanionViewVmTest {
+  public scheduleVersion: number = 1;
+  public orderedEvents: EventEntity[] = [];
+  public companionContext: CompanionContext = buildCompanionContext('IDLE', null, null);
+  public historySummary: HistoryTimelineSummary | null = null;
+  public historyItems: HistoryTimelineItem[] = [];
+  public placeSummary: PlaceCheckinSummary | null = null;
+  public resumeResult: boolean = true;
+  public resumeCount: number = 0;
+  public pauseResult: boolean = true;
+  public pauseCount: number = 0;
+  public updateActualTimeResult: boolean = true;
+  public updateActualTimeCount: number = 0;
+  public lastUpdateActualEventId: number = -1;
+  public lastUpdateActualField: string = '';
+  public lastUpdateActualValue: number = 0;
+  public skippedEventIds: number[] = [];
+  public conflictName: string = '';
+  public backfillResult: boolean = true;
+  public backfillCalls: CompanionBackfillCallTest[] = [];
+  public reopenResult: boolean = true;
+  public reopenedEventIds: number[] = [];
+
+  getScheduleVersion(): number {
+    return this.scheduleVersion;
+  }
+
+  getOrderedScheduleEvents(): EventEntity[] {
+    return this.orderedEvents;
+  }
+
+  getCompanionContext(): CompanionContext {
+    return this.companionContext;
+  }
+
+  getCurrentPlanHistorySummary(): HistoryTimelineSummary | null {
+    return this.historySummary;
+  }
+
+  getCurrentPlanHistoryTimelineItems(limit: number): HistoryTimelineItem[] {
+    return this.historyItems.slice(0, limit);
+  }
+
+  getPlaceCheckinSummary(_placeName: string): PlaceCheckinSummary | null {
+    return this.placeSummary;
+  }
+
+  resumeCurrentExecution(): boolean {
+    this.resumeCount += 1;
+    if (this.resumeResult) {
+      this.companionContext.runtimeState = 'ACTIVE';
+    }
+    return this.resumeResult;
+  }
+
+  pauseCurrentExecution(): boolean {
+    this.pauseCount += 1;
+    if (this.pauseResult) {
+      this.companionContext.runtimeState = 'PAUSED';
+    }
+    return this.pauseResult;
+  }
+
+  async updateActualTime(eventId: number, field: string, value: number): Promise<boolean> {
+    this.updateActualTimeCount += 1;
+    this.lastUpdateActualEventId = eventId;
+    this.lastUpdateActualField = field;
+    this.lastUpdateActualValue = value;
+    const target = this.orderedEvents.find((item: EventEntity) => item.id === eventId);
+    if (this.updateActualTimeResult && target && field === 'actual_start_time') {
+      target.actual_start_time = value;
+      target.actual_end_time = 0;
+      target.completion_status = EventEntity.STATE_PENDING;
+      this.companionContext.currentEvent = target;
+      this.companionContext.runtimeState = 'ACTIVE';
+    }
+    return this.updateActualTimeResult;
+  }
+
+  async skipEvent(event: EventEntity): Promise<void> {
+    this.skippedEventIds.push(event.id);
+    event.completion_status = EventEntity.STATE_SKIPPED;
+    event.actual_start_time = 0;
+    event.actual_end_time = 0;
+    if (this.companionContext.currentEvent && this.companionContext.currentEvent.id === event.id) {
+      this.companionContext.currentEvent = null;
+      this.companionContext.runtimeState = 'READY';
+    }
+  }
+
+  async getStartConflictInfo(_excludeEventId: number): Promise<CompanionConflictInfoTest | null> {
+    if (this.conflictName.length === 0) {
+      return null;
+    }
+    return { name: this.conflictName };
+  }
+
+  async backfillCheckinTime(eventId: number, startTs: number, endTs: number): Promise<boolean> {
+    this.backfillCalls.push({ eventId, startTs, endTs });
+    return this.backfillResult;
+  }
+
+  async reopenSkippedEvent(eventId: number): Promise<boolean> {
+    this.reopenedEventIds.push(eventId);
+    if (!this.reopenResult) {
+      return false;
+    }
+    const target = this.orderedEvents.find((item: EventEntity) => item.id === eventId);
+    if (target) {
+      target.completion_status = EventEntity.STATE_PENDING;
+      target.actual_start_time = 0;
+      target.actual_end_time = 0;
+      this.companionContext.nextEvent = target;
+      this.companionContext.runtimeState = 'READY';
+    }
+    return true;
+  }
+}
+
+function buildCompanionRuntimeEvent(id: number, name: string, runtime: CompanionRuntimeStateTest, address: string = ''): EventEntity {
+  const event = buildCompanionEvent(id, name, address);
+  event.status = 1;
+  event.duration = 45;
+  event.fixed_start_time = '09:00';
+  event.computed_time = '09:00';
+  event.dynamic_start_time = 1713254400000 + (id * 60000);
+  if (runtime === 'ACTIVE') {
+    event.actual_start_time = 1713254400000 + (id * 60000);
+    event.completion_status = EventEntity.STATE_PENDING;
+    return event;
+  }
+  if (runtime === 'COMPLETED') {
+    event.actual_start_time = 1713254400000 + (id * 60000);
+    event.actual_end_time = event.actual_start_time + (30 * 60000);
+    event.completion_status = EventEntity.STATE_COMPLETED;
+    return event;
+  }
+  event.completion_status = EventEntity.STATE_PENDING;
+  return event;
+}
+
+function buildCompanionContext(
+  runtimeState: 'IDLE' | 'READY' | 'ACTIVE' | 'PAUSED' | 'GAP',
+  currentEvent: EventEntity | null,
+  nextEvent: EventEntity | null
+): CompanionContext {
+  const context = {} as CompanionContext;
+  context.runtimeState = runtimeState;
+  context.currentEvent = currentEvent;
+  context.nextEvent = nextEvent;
+  context.hint = null;
+  context.actions = {
+    canStart: true,
+    canPause: true,
+    canResume: true,
+    canEnd: true,
+    canSkip: true,
+    canNavigate: true,
+    canViewDetail: true
+  };
+  return context;
+}
+
+function buildCompanionHistorySummary(planName: string): HistoryTimelineSummary {
+  const summary = {} as HistoryTimelineSummary;
+  summary.planName = planName;
+  summary.completedCount = 1;
+  summary.skippedCount = 0;
+  summary.activeCount = 1;
+  return summary;
+}
+
+function buildCompanionHistoryItem(id: number, placeName: string): HistoryTimelineItem {
+  const item = {} as HistoryTimelineItem;
+  item.id = id;
+  item.eventId = 1000 + id;
+  item.placeName = placeName;
+  item.actionType = 'ARRIVE';
+  item.plannedStart = 1713254400000;
+  item.actualStart = 1713254700000;
+  item.actualEnd = 1713256500000;
+  item.stayMinutes = 30;
+  item.deviationMinutes = 5;
+  item.status = 1;
+  item.groupDateKey = '2026-04-20';
+  item.address = `addr_${placeName}`;
+  item.note = 'history_note';
+  item.displayTs = 1713254700000;
+  item.isAbnormal = false;
+  return item;
+}
+
+function buildCompanionPlaceSummary(placeName: string): PlaceCheckinSummary {
+  const summary = {} as PlaceCheckinSummary;
+  summary.placeName = placeName;
+  summary.totalRecords = 1;
+  summary.completedRecords = 1;
+  summary.skippedRecords = 0;
+  summary.avgStayMinutes = 30;
+  summary.lastEndTime = 1713256500000;
+  summary.records = [];
+  return summary;
 }
 
 export default function companionViewHelperTest() {
@@ -271,4 +745,338 @@ export default function companionViewHelperTest() {
       expect(focused).assertEqual(71);
     });
   });
+
+  describe('unit_test_case_generator_autofill_CompanionViewInstanceStateAndFlow', () => {
+    it('combined: companion_view_instance_should_sync_state_cache_search_history_and_back_flow', 0, () => {
+      // Arrange
+      const active = buildCompanionRuntimeEvent(101, 'active_spot', 'ACTIVE', 'West Lake');
+      const pending = buildCompanionRuntimeEvent(102, 'pending_spot', 'PENDING', 'Lake Road');
+      const completed = buildCompanionRuntimeEvent(103, 'completed_spot', 'COMPLETED', 'City Center');
+      const historyItem = buildCompanionHistoryItem(1, pending.name);
+      const historySummary = buildCompanionHistorySummary('trip_companion');
+      const placeSummary = buildCompanionPlaceSummary(pending.name);
+      const vm = new CompanionViewVmMockTest();
+      vm.orderedEvents = [active, pending, completed];
+      vm.companionContext = buildCompanionContext('ACTIVE', active, pending);
+      vm.historySummary = historySummary;
+      vm.historyItems = [historyItem];
+      vm.placeSummary = placeSummary;
+      const uiContext = new CompanionViewUiContextMockTest();
+      const scroller = new CompanionViewScrollerMockTest();
+      const page = createCompanionViewInstance(vm as Object as TimelineViewModel);
+
+      page.getUIContext = (): CompanionViewUiContextTest => uiContext;
+      page.timelineScroller = scroller;
+      page.isShow = false;
+      page.isShow = true;
+      page.effectiveTheme = 'dark';
+      page.immersiveText = 'assistant';
+      page.immersiveDragOffsetY = 18;
+      page.interactionMode = 'control';
+      page.showHistoryPage = false;
+      page.showSearchPage = true;
+      page.showFilterPage = true;
+      page.searchKeyword = 'museum';
+      page.searchResults = [pending];
+      page.weatherExpanded = true;
+      page.showWeatherScorePopup = true;
+      page.showWeatherHintPopup = false;
+      page.showWeatherSuggestionPopup = true;
+      page.weatherSuggestionPopupText = 'weather_detail';
+      page.safeTopInset = 11;
+      page.safeBottomInset = 22;
+      page.safeLeftInset = 3;
+      page.safeRightInset = 4;
+      page.refreshContext();
+
+      // Act
+      const scheduledCount = page.getScheduledEvents().length;
+      const visibleCount = page.getVisibleScheduledEvents().length;
+      const visibleTimelineCount = page.getVisibleTimelineCount();
+      const visibleTimelineEvents = page.getVisibleTimelineEvents();
+      const defaultFocusId = page.pickDefaultFocusId();
+      page.ensureFocusReady();
+      const initFocusedId = page.getFocusedEvent()?.id ?? -1;
+      const initDisplayId = page.getDisplayCardEvent()?.id ?? -1;
+
+      page.focusedEventId = 999;
+      page.cardDisplayEventId = pending.id;
+      page.applyFilter('PENDING');
+      page.ensureFocusVisible();
+      const focusedIdAfterFilter = page.focusedEventId;
+      const visibleFocusPosition = page.getVisibleFocusPosition();
+      const pendingVisibleCount = page.cachedVisibleScheduledEvents.length;
+
+      page.openFilterPage();
+      const filterOpen = page.showFilterPage;
+      page.closeFilterPage();
+      page.openSearchPage();
+      const seededSearchCount = page.searchResults.length;
+      page.searchKeyword = 'lake';
+      page.refreshSearchResults();
+      const keywordSearchCount = page.searchResults.length;
+      page.cardDisplayEventId = active.id;
+      page.focusedEventId = active.id;
+      page.pickSearchResult(active);
+      const eventById = page.getEventById(pending.id);
+      const missingEvent = page.getEventById(999);
+      const scheduleIndex = page.getScheduleIndexById(completed.id);
+      const missingIndex = page.getScheduleIndexById(999);
+      page.handleTimelineScrollIndex(2, 4, 3);
+      page.handleTimelineScrollStop();
+      page.loadHistoryTimelineData();
+      page.openHistoryList();
+      page.openHistoryDetailFromTimeline(historyItem);
+      const detailPlaceName = page.selectedHistoryPlaceName;
+      page.showActiveConflictDialog('');
+      page.focusedEventId = -1;
+      page.startNavigation();
+      page.startNavigation(pending);
+      page.handleFocusedAdjust();
+      const backHandled = page.handleCompanionBackNavigation();
+      page.exitCompanion();
+      const palette = page.getThemePalette();
+
+      // Assert
+      expect(scheduledCount).assertEqual(3);
+      expect(visibleCount).assertEqual(3);
+      expect(visibleTimelineCount).assertEqual(3);
+      expect(visibleTimelineEvents.length).assertEqual(3);
+      expect(defaultFocusId).assertEqual(active.id);
+      expect(initFocusedId).assertEqual(active.id);
+      expect(initDisplayId).assertEqual(active.id);
+      expect(page.companionFilterState).assertEqual('PENDING');
+      expect(focusedIdAfterFilter).assertEqual(pending.id);
+      expect(visibleFocusPosition).assertEqual(1);
+      expect(pendingVisibleCount).assertEqual(1);
+      expect(filterOpen).assertTrue();
+      expect(page.showFilterPage).assertFalse();
+      expect(seededSearchCount).assertEqual(3);
+      expect(keywordSearchCount).assertEqual(2);
+      expect(page.showSearchPage).assertFalse();
+      expect(page.searchKeyword).assertEqual('');
+      expect(page.searchResults.length).assertEqual(0);
+      expect(eventById?.id).assertEqual(pending.id);
+      expect(missingEvent).assertNull();
+      expect(scheduleIndex).assertEqual(2);
+      expect(missingIndex).assertEqual(-1);
+      expect(page.visibleStartIndex).assertEqual(2);
+      expect(page.visibleEndIndex).assertEqual(4);
+      expect(page.visibleCenterIndex).assertEqual(3);
+      expect(page.historyTimelineSummary?.planName).assertEqual(historySummary.planName);
+      expect(page.historyTimelineItems.length).assertEqual(1);
+      expect(detailPlaceName).assertEqual(pending.name);
+      expect(page.historyViewMode).assertEqual('timeline');
+      expect(page.selectedHistoryPlaceName).assertEqual('');
+      expect(page.historySummary).assertNull();
+      expect(page.selectedHistoryTimelineItem).assertNull();
+      expect(uiContext.alertCount).assertEqual(1);
+      expect((uiContext.lastAlert?.title?.length ?? 0) > 0).assertTrue();
+      expect((uiContext.lastAlert?.message?.length ?? 0) > 0).assertTrue();
+      expect(backHandled).assertTrue();
+      expect(page.isShow).assertFalse();
+      expect(page.effectiveTheme).assertEqual('dark');
+      expect(page.immersiveText).assertEqual('assistant');
+      expect(page.immersiveDragOffsetY).assertEqual(0);
+      expect(page.interactionMode).assertEqual('control');
+      expect(page.weatherExpanded).assertTrue();
+      expect(page.showWeatherScorePopup).assertTrue();
+      expect(page.showWeatherHintPopup).assertFalse();
+      expect(page.showWeatherSuggestionPopup).assertTrue();
+      expect(page.weatherSuggestionPopupText).assertEqual('weather_detail');
+      expect(page.safeTopInset).assertEqual(11);
+      expect(page.safeBottomInset).assertEqual(22);
+      expect(page.safeLeftInset).assertEqual(3);
+      expect(page.safeRightInset).assertEqual(4);
+      expect(palette.pageBg).assertEqual(ThemeCenter.getPalette('dark').pageBg);
+      expect(palette.textPrimary).assertEqual(ThemeCenter.getPalette('dark').textPrimary);
+    });
+  });
+
+  describe('unit_test_case_generator_autofill_CompanionViewInstanceSwitchAndSwipe', () => {
+    it('combined: companion_view_instance_should_switch_cards_modes_and_swipe_with_pending_focus', 0, async () => {
+      // Arrange
+      const active = buildCompanionRuntimeEvent(201, 'active_node', 'ACTIVE', 'A Street');
+      const pending = buildCompanionRuntimeEvent(202, 'pending_node', 'PENDING', 'B Street');
+      const completed = buildCompanionRuntimeEvent(203, 'completed_node', 'COMPLETED', 'C Street');
+      const vm = new CompanionViewVmMockTest();
+      vm.orderedEvents = [active, pending, completed];
+      vm.companionContext = buildCompanionContext('ACTIVE', active, pending);
+      const uiContext = new CompanionViewUiContextMockTest();
+      const scroller = new CompanionViewScrollerMockTest();
+      const page = createCompanionViewInstance(vm as Object as TimelineViewModel);
+
+      page.getUIContext = (): CompanionViewUiContextTest => uiContext;
+      page.timelineScroller = scroller;
+      page.refreshContext();
+
+      // Act
+      const initDisplayId = page.getDisplayCardEvent()?.id ?? -1;
+      page.applyFocusById(pending.id, 'tap');
+      const renderDuringSwitch = page.canRenderSwitchCards();
+      const firstOutgoingId = page.outgoingCardEventId;
+      const firstIncomingId = page.incomingCardEventId;
+      page.applyFocusById(completed.id, 'scroll');
+      const queuedPendingId = page.pendingFocusId;
+      await new Promise<void>((resolve: () => void): void => {
+        setTimeout((): void => {
+          resolve();
+        }, 330);
+      });
+      const switchingAfterFirstWait = page.isCardSwitching;
+      await new Promise<void>((resolve: () => void): void => {
+        setTimeout((): void => {
+          resolve();
+        }, 330);
+      });
+      const finalDisplayId = page.cardDisplayEventId;
+      const finalFocusedId = page.focusedEventId;
+      const renderAfterSwitch = page.canRenderSwitchCards();
+      page.handleTimelineTap(active, 0);
+      await new Promise<void>((resolve: () => void): void => {
+        setTimeout((): void => {
+          resolve();
+        }, 330);
+      });
+      const postTapDisplayId = page.cardDisplayEventId;
+      page.enterControlMode();
+      await new Promise<void>((resolve: () => void): void => {
+        setTimeout((): void => {
+          resolve();
+        }, 280);
+      });
+      const controlMode = page.companionSubMode;
+      const controlInteraction = page.interactionMode;
+      page.showHistoryPage = true;
+      page.showSearchPage = true;
+      page.showFilterPage = true;
+      page.enterImmersiveMode();
+      await new Promise<void>((resolve: () => void): void => {
+        setTimeout((): void => {
+          resolve();
+        }, 270);
+      });
+      const immersiveMode = page.companionSubMode;
+      page.handleImmersiveSwipeStart();
+      const swipeStartTs = page.swipeStartTs;
+      page.handleImmersiveSwipeUpdate({ offsetY: -60 });
+      const dragOffsetAfterUpdate = page.immersiveDragOffsetY;
+      page.swipeStartTs = Date.now() - 1000;
+      page.handleImmersiveSwipeEnd({ offsetY: -20 });
+      const modeAfterShortSwipe = page.companionSubMode;
+      const dragOffsetAfterShortSwipe = page.immersiveDragOffsetY;
+      page.handleImmersiveSwipeStart();
+      page.swipeStartTs = Date.now() - 300;
+      page.swipePeakDistance = 120;
+      page.handleImmersiveSwipeEnd({ offsetY: -120 });
+      await new Promise<void>((resolve: () => void): void => {
+        setTimeout((): void => {
+          resolve();
+        }, 280);
+      });
+      const modeAfterLongSwipe = page.companionSubMode;
+      page.showHistoryPage = false;
+      page.showSearchPage = false;
+      page.showFilterPage = false;
+      page.handleCompanionBackNavigation();
+      await new Promise<void>((resolve: () => void): void => {
+        setTimeout((): void => {
+          resolve();
+        }, 270);
+      });
+      const modeAfterBack = page.companionSubMode;
+
+      // Assert
+      expect(initDisplayId).assertEqual(active.id);
+      expect(renderDuringSwitch).assertTrue();
+      expect(firstOutgoingId).assertEqual(active.id);
+      expect(firstIncomingId).assertEqual(pending.id);
+      expect(queuedPendingId).assertEqual(completed.id);
+      expect(switchingAfterFirstWait).assertTrue();
+      expect(finalDisplayId).assertEqual(completed.id);
+      expect(finalFocusedId).assertEqual(completed.id);
+      expect(renderAfterSwitch).assertFalse();
+      expect(page.pendingFocusId).assertEqual(-1);
+      expect(page.cardSwitchProgress).assertEqual(1);
+      expect(postTapDisplayId).assertEqual(active.id);
+      expect(scroller.indices[0]).assertEqual(0);
+      expect(controlMode).assertEqual('control');
+      expect(controlInteraction).assertEqual('control');
+      expect(immersiveMode).assertEqual('immersive');
+      expect(page.showHistoryPage).assertFalse();
+      expect(page.showSearchPage).assertFalse();
+      expect(page.showFilterPage).assertFalse();
+      expect(swipeStartTs > 0).assertTrue();
+      expect(dragOffsetAfterUpdate < 0).assertTrue();
+      expect(modeAfterShortSwipe).assertEqual('immersive');
+      expect(dragOffsetAfterShortSwipe).assertEqual(0);
+      expect(modeAfterLongSwipe).assertEqual('control');
+      expect(modeAfterBack).assertEqual('immersive');
+    });
+  });
+
+  describe('unit_test_case_generator_autofill_CompanionViewLifecycle', () => {
+    it('combined: companion_view_lifecycle_should_start_watch_refresh_back_level_and_stop_cleanly', 0, async () => {
+      // Arrange
+      const active = buildCompanionRuntimeEvent(501, 'lifecycle_active', 'ACTIVE', 'Alpha Street');
+      const pending = buildCompanionRuntimeEvent(502, 'lifecycle_pending', 'PENDING', 'Beta Street');
+      const vm = new CompanionViewVmMockTest();
+      vm.orderedEvents = [active, pending];
+      vm.companionContext = buildCompanionContext('ACTIVE', active, pending);
+      const uiContext = new CompanionViewUiContextMockTest();
+      const page = createCompanionViewInstance(vm as Object as TimelineViewModel);
+      page.getUIContext = (): CompanionViewUiContextTest => uiContext;
+      page.isShow = true;
+      AppStorage.setOrCreate('COMPANION_BACK_LEVEL', '');
+      AppStorage.setOrCreate('COMPANION_BACK_REQUEST', 0);
+
+      // Act
+      page.aboutToAppear();
+      await new Promise<void>((resolve: () => void): void => {
+        setTimeout((): void => {
+          resolve();
+        }, 360);
+      });
+      const backLevelAfterAppear = String(AppStorage.get('COMPANION_BACK_LEVEL') || '');
+      const timerAfterAppear = page.realtimeWatchTimer;
+
+      page.showHistoryPage = true;
+      await new Promise<void>((resolve: () => void): void => {
+        setTimeout((): void => {
+          resolve();
+        }, 360);
+      });
+      const backLevelWithOverlay = String(AppStorage.get('COMPANION_BACK_LEVEL') || '');
+
+      page.showHistoryPage = false;
+      vm.scheduleVersion = 2;
+      vm.companionContext = buildCompanionContext('READY', null, pending);
+      AppStorage.setOrCreate('COMPANION_BACK_REQUEST', 1);
+      await new Promise<void>((resolve: () => void): void => {
+        setTimeout((): void => {
+          resolve();
+        }, 360);
+      });
+      const backRequestAfterRefresh = page.observedBackRequest;
+
+      page.aboutToDisappear();
+      const backLevelAfterDisappear = String(AppStorage.get('COMPANION_BACK_LEVEL') || '');
+
+      // Assert
+      expect(page.companionSubMode).assertEqual('immersive');
+      expect(page.interactionMode).assertEqual('immersive');
+      expect(page.focusedEventId).assertEqual(active.id);
+      expect(page.cardDisplayEventId).assertEqual(active.id);
+      expect(page.searchKeyword).assertEqual('');
+      expect(page.searchResults.length).assertEqual(0);
+      expect(timerAfterAppear !== -1).assertTrue();
+      expect(backLevelAfterAppear).assertEqual('immersive');
+      expect(backLevelWithOverlay).assertEqual('overlay');
+      expect(backRequestAfterRefresh).assertEqual(1);
+      expect(page.isShow).assertFalse();
+      expect(page.realtimeWatchTimer).assertEqual(-1);
+      expect(backLevelAfterDisappear).assertEqual('none');
+    });
+  });
+
 }

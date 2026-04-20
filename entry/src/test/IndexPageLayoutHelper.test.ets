@@ -99,6 +99,7 @@ interface IndexPageLayoutPrivateTest {
   onSave: () => void;
   setInitiallyProvidedValue(params: IndexPageLayoutParamsTest): void;
   updateStateVars(params: IndexPageLayoutParamsTest): void;
+  initialRender(): void;
 }
 
 function buildLayoutEvent(id: number): EventEntity {
@@ -110,6 +111,36 @@ function buildLayoutEvent(id: number): EventEntity {
 
 class IndexPageLayoutVmPlaceholderTest {
   label: string = '';
+  isArchived: boolean = false;
+  weatherLoading: boolean = false;
+  weatherPlanningHint: string = '';
+  weatherCollabLabel: string = '';
+  weatherCollabSummary: string = '';
+  weatherStrategyHint: string = '';
+  weatherRouteScore: number = 0;
+  events: EventEntity[] = [];
+  groupedEvents: Object[] = [];
+  gapsCount: number = 0;
+
+  isWeatherFeatureEnabled(): boolean {
+    return true;
+  }
+
+  buildPlanningWeatherHintExplanation(): string {
+    return 'hint_a\nhint_b';
+  }
+
+  buildWeatherScoreExplanation(_score: number): string {
+    return 'score_a\nscore_b';
+  }
+
+  getSortedGaps(): EventEntity[] {
+    const list: EventEntity[] = [];
+    for (let i = 0; i < this.gapsCount; i++) {
+      list.push(buildLayoutEvent(i + 100));
+    }
+    return list;
+  }
 }
 
 export default function indexPageLayoutHelperTest() {
@@ -365,6 +396,78 @@ export default function indexPageLayoutHelperTest() {
       expect(page.themePalette.pageBg).assertEqual('#AAAAAA');
       expect(page.themePalette.primary).assertEqual('#BBBBBB');
       expect(page.companionOverlayZIndex).assertEqual(28);
+    });
+
+    it('normal: page_layout_initial_render_should_support_planning_hint_branch', 0, () => {
+      // Arrange
+      const page = new IndexPageLayout(undefined, {} as LocalStorage) as Object as IndexPageLayoutPrivateTest;
+      const vm = new IndexPageLayoutVmPlaceholderTest() as Object as IndexPageLayoutVmPlaceholderTest;
+      vm.weatherPlanningHint = 'weather_hint';
+      vm.weatherCollabLabel = 'collab';
+      vm.weatherCollabSummary = 'summary';
+      vm.weatherStrategyHint = 'strategy';
+      vm.weatherRouteScore = 88;
+      vm.events = [buildLayoutEvent(1)];
+      vm.groupedEvents = [];
+      vm.gapsCount = 2;
+      page.setInitiallyProvidedValue({
+        vm: vm as Object,
+        planTitle: 'trip_render',
+        strategyMode: 1,
+        currentStrategyExplanation: 'desc_render',
+        isCompanionMode: false,
+        hasManualPlanningWeatherRefresh: true,
+        showPlanningWeatherHintPopup: true,
+        showPlanningWeatherScorePopup: false,
+        backlogExpanded: true,
+        isPageRefreshing: false,
+        hasUnsavedChanges: true
+      });
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: page_layout_initial_render_should_support_companion_overlay_branch', 0, () => {
+      // Arrange
+      const page = new IndexPageLayout(undefined, {} as LocalStorage) as Object as IndexPageLayoutPrivateTest;
+      const vm = new IndexPageLayoutVmPlaceholderTest() as Object as IndexPageLayoutVmPlaceholderTest;
+      vm.events = [];
+      vm.groupedEvents = [];
+      vm.gapsCount = 0;
+      page.setInitiallyProvidedValue({
+        vm: vm as Object,
+        planTitle: 'trip_overlay',
+        strategyMode: 0,
+        currentStrategyExplanation: '',
+        isCompanionMode: true,
+        hasManualPlanningWeatherRefresh: false,
+        showPlanningWeatherHintPopup: false,
+        showPlanningWeatherScorePopup: false,
+        backlogExpanded: false,
+        isPageRefreshing: true,
+        hasUnsavedChanges: false,
+        companionOverlayZIndex: 99
+      });
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
   });
 }

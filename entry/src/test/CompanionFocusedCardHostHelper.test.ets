@@ -56,6 +56,7 @@ interface CompanionFocusedCardHostPrivateTest {
   setInitiallyProvidedValue(params: CompanionFocusedCardHostParamsTest): void;
   updateStateVars(params: CompanionFocusedCardHostParamsTest): void;
   getThemePalette(): CompanionFocusedCardHostPaletteTest;
+  initialRender(): void;
 }
 
 function buildEvent(id: number): EventEntity {
@@ -223,6 +224,151 @@ export default function companionFocusedCardHostHelperTest() {
       expect(palette.textPrimary).assertEqual(ThemeCenter.getPalette('dark').textPrimary);
       expect(palette.companionCardBg).assertEqual(ThemeCenter.getPalette('dark').companionCardBg);
       expect(palette.primary).assertEqual(ThemeCenter.getPalette('dark').primary);
+    });
+
+    it('normal: focused_card_host_initial_render_should_support_switch_cards_with_default_pending_actions', 0, () => {
+      // Arrange
+      const page = new CompanionFocusedCardHost(undefined, {} as LocalStorage) as Object as CompanionFocusedCardHostPrivateTest;
+      const outgoing = buildEvent(31);
+      const incoming = buildEvent(32);
+      page.setInitiallyProvidedValue({
+        canRenderSwitchCards: true,
+        outgoingEvent: outgoing,
+        incomingEvent: incoming,
+        stableEvent: null,
+        runtimeState: 'READY',
+        currentEventId: outgoing.id
+      });
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: focused_card_host_initial_render_should_support_stable_card_branch', 0, () => {
+      // Arrange
+      const page = new CompanionFocusedCardHost(undefined, {} as LocalStorage) as Object as CompanionFocusedCardHostPrivateTest;
+      const stable = buildEvent(41);
+      page.setInitiallyProvidedValue({
+        canRenderSwitchCards: false,
+        outgoingEvent: null,
+        incomingEvent: null,
+        stableEvent: stable,
+        runtimeState: 'IDLE',
+        currentEventId: -1
+      });
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('conflict: focused_card_host_initial_render_should_support_skipped_action_branch_with_disabled_skip_tap', 0, () => {
+      // Arrange
+      const page = new CompanionFocusedCardHost(undefined, {} as LocalStorage) as Object as CompanionFocusedCardHostPrivateTest;
+      const stable = buildEvent(51);
+      page.getEventState = (_event: EventEntity) => 'SKIPPED';
+      page.setInitiallyProvidedValue({
+        canRenderSwitchCards: false,
+        outgoingEvent: null,
+        incomingEvent: null,
+        stableEvent: stable,
+        runtimeState: 'IDLE',
+        currentEventId: -1
+      });
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('regression: focused_card_host_initial_render_should_support_disabled_action_branch', 0, () => {
+      // Arrange
+      const page = new CompanionFocusedCardHost(undefined, {} as LocalStorage) as Object as CompanionFocusedCardHostPrivateTest;
+      const stable = buildEvent(61);
+      page.getEventState = (_event: EventEntity) => 'COMPLETED';
+      page.setInitiallyProvidedValue({
+        canRenderSwitchCards: false,
+        outgoingEvent: null,
+        incomingEvent: null,
+        stableEvent: stable,
+        runtimeState: 'IDLE',
+        currentEventId: -1
+      });
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('combined: focused_card_host_initial_render_should_support_paused_and_empty_state_branches', 0, () => {
+      // Arrange
+      const pausedPage = new CompanionFocusedCardHost(undefined, {} as LocalStorage) as Object as CompanionFocusedCardHostPrivateTest;
+      const pausedStable = buildEvent(71);
+      pausedPage.getEventState = (_event: EventEntity) => 'COMPLETED';
+      pausedPage.setInitiallyProvidedValue({
+        canRenderSwitchCards: false,
+        outgoingEvent: null,
+        incomingEvent: null,
+        stableEvent: pausedStable,
+        runtimeState: 'PAUSED',
+        currentEventId: pausedStable.id
+      });
+      const emptyPage = new CompanionFocusedCardHost(undefined, {} as LocalStorage) as Object as CompanionFocusedCardHostPrivateTest;
+      emptyPage.setInitiallyProvidedValue({
+        canRenderSwitchCards: false,
+        outgoingEvent: null,
+        incomingEvent: null,
+        stableEvent: null,
+        runtimeState: 'IDLE',
+        currentEventId: -1
+      });
+
+      // Act
+      let pausedThrew = false;
+      let emptyThrew = false;
+      try {
+        pausedPage.initialRender();
+      } catch (_error) {
+        pausedThrew = true;
+      }
+      try {
+        emptyPage.initialRender();
+      } catch (_error) {
+        emptyThrew = true;
+      }
+
+      // Assert
+      expect(pausedThrew).assertFalse();
+      expect(emptyThrew).assertFalse();
     });
   });
 }

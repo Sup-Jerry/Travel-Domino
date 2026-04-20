@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from '@ohos/hypium';
+import { describe, it, expect } from '@ohos/hypium';
 import {
   CompanionOverlayPages,
   shouldShowCompanionFilterOverlay,
@@ -50,6 +50,7 @@ interface CompanionOverlayPagesPrivateTest {
   onFilterSelect: (state: string) => void;
   setInitiallyProvidedValue(params: CompanionOverlayPagesParamsTest): void;
   updateStateVars(params: CompanionOverlayPagesParamsTest): void;
+  initialRender(): void;
 }
 
 function createOverlayEvent(id: number): EventEntity {
@@ -196,6 +197,69 @@ export default function companionOverlayPagesHelperTest() {
       expect(page.safeTopInset).assertEqual(14);
       expect(page.safeBottomInset).assertEqual(16);
     });
+
+    it('normal: overlay_pages_initial_render_should_support_all_overlay_branches', 0, () => {
+      // Arrange
+      const page = new CompanionOverlayPages(undefined, {} as LocalStorage) as Object as CompanionOverlayPagesPrivateTest;
+      page.setInitiallyProvidedValue({
+        showHistoryPage: true,
+        historyTimelineItems: [new OverlayPlaceholderTest() as Object],
+        historyTimelineFilter: 'all',
+        historyViewMode: 'timeline',
+        historySummary: new OverlayPlaceholderTest() as Object,
+        vm: null,
+        selectedHistoryTimelineItem: new OverlayPlaceholderTest() as Object,
+        showSearchPage: true,
+        searchKeyword: 'museum',
+        searchResults: [createOverlayEvent(1)],
+        showFilterPage: true,
+        companionFilterState: 'ACTIVE',
+        safeTopInset: 8,
+        safeBottomInset: 10
+      });
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: overlay_pages_initial_render_should_support_hidden_overlay_branch', 0, () => {
+      // Arrange
+      const page = new CompanionOverlayPages(undefined, {} as LocalStorage) as Object as CompanionOverlayPagesPrivateTest;
+      page.setInitiallyProvidedValue({
+        showHistoryPage: false,
+        historyTimelineItems: [],
+        historyTimelineFilter: 'all',
+        historyViewMode: 'timeline',
+        historySummary: null,
+        vm: null,
+        selectedHistoryTimelineItem: null,
+        showSearchPage: false,
+        searchKeyword: '',
+        searchResults: [],
+        showFilterPage: false,
+        companionFilterState: 'ALL',
+        safeTopInset: 0,
+        safeBottomInset: 0
+      });
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
   });
 }
-
