@@ -62,6 +62,28 @@ export default function authSessionStoreTest() {
       expect(loaded === null).assertTrue();
     });
 
+    it('regression: local_guest_session_should_load_without_remote_tokens', 0, () => {
+      // Arrange
+      resetAuthStorage();
+      const guest = buildPayload(Date.now() + 60_000);
+      guest.accountId = 'guest_local';
+      guest.userId = 'guest_local';
+      guest.isGuest = true;
+      guest.loginMethod = 'GUEST_HARD_FALLBACK';
+      guest.accessToken = '';
+      guest.refreshToken = '';
+      guest.sessionId = '';
+      // Act
+      AuthSessionStore.save(guest);
+      const loaded = AuthSessionStore.load();
+      const token = AuthSessionStore.getAccessToken();
+      // Assert
+      expect(loaded !== null).assertTrue();
+      expect(loaded?.isGuest === true).assertTrue();
+      expect(loaded?.accountId || '').assertEqual('guest_local');
+      expect(token).assertEqual('');
+    });
+
     it('conflict: guest_and_silent_block_flags_should_not_affect_each_other', 0, () => {
       // Arrange
       resetAuthStorage();

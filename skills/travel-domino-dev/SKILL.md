@@ -245,6 +245,8 @@ description: 用于 Travel Domino（HarmonyOS 行程规划项目）的定向开�
 - 当用户要求一次性完成批次时，采用‘边修编译规则边扩覆盖’的方式，避免最后集中爆雷。
 - When Docker postgres shows 5432 mapped but the backend still fails with user "travel" password authentication failed, verify the host-side OwningProcess for port 5432 and the Windows service postgresql-x64-16 before changing login code or container credentials.
 - For HarmonyOS avatar picker failures with AVATAR_TRACE pick_fail reason Cannot read property createPixelMap of undefined, first treat PhotoSelectResult.photoUris as temporary authorized URIs and recover through photoAccessHelper.getAssets plus MediaAssetManager.requestImageData instead of direct image.createImageSource(uri) only.
+- When guest login must work after Huawei login failure, verify AuthSessionStore can reload local guest sessions with empty tokens and ensure LoginPage guest actions can override in-flight Huawei login instead of sharing one blocking loading flag.
+- When AuthGate blank checking page stays near 3 seconds after Huawei silent login failure, inspect AppStartupCoordinator.STARTUP_AUTH_TIMEOUT_MS before changing page UI.
 
 ### Known Fixes & Workarounds
 - For cross-day domino shifts, user-facing date and writeback inputs must prefer dynamic_day_offset; do not mix with day_offset in one flow.

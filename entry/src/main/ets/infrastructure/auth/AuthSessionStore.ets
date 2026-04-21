@@ -34,13 +34,14 @@ export class AuthSessionStore {
     }
     try {
       const parsed = JSON.parse(rawText) as StoredSession;
-      if (!parsed.accessToken || !parsed.refreshToken || !parsed.sessionId) {
+      const isGuest = parsed.isGuest === true;
+      if (!isGuest && (!parsed.accessToken || !parsed.refreshToken || !parsed.sessionId)) {
         return null;
       }
       const payload = new AuthSessionPayload();
       payload.accountId = parsed.accountId || '';
       payload.userId = parsed.userId || '';
-      payload.isGuest = parsed.isGuest === true;
+      payload.isGuest = isGuest;
       payload.loginMethod = parsed.loginMethod || '';
       payload.accessToken = parsed.accessToken;
       payload.refreshToken = parsed.refreshToken;

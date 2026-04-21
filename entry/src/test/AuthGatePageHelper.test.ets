@@ -5,6 +5,7 @@ import {
   resolveAuthGateTargetUrl,
   shouldAuthGateRouteToPlanList
 } from '../main/ets/pages/AuthGatePage';
+import { shouldLoginSceneStart } from '../main/ets/pages/LoginPage';
 
 export default function authGatePageHelperTest() {
   describe('unit_test_case_generator_autofill_AuthGatePageHelper', () => {
@@ -67,6 +68,16 @@ export default function authGatePageHelperTest() {
       // Assert
       expect(target).assertEqual('pages/LoginPage');
       expect(text).assertEqual('正在跳转...');
+    });
+    it('regression: guest_login_should_be_allowed_to_override_huawei_inflight', 0, () => {
+      // Arrange
+      const huaweiBusy = 'huawei';
+      // Act
+      const allowGuest = shouldLoginSceneStart(huaweiBusy, 'guest', true);
+      const allowDuplicateHuawei = shouldLoginSceneStart(huaweiBusy, 'huawei', false);
+      // Assert
+      expect(allowGuest).assertTrue();
+      expect(allowDuplicateHuawei).assertFalse();
     });
   });
 }

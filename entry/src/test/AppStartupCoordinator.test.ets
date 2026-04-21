@@ -25,6 +25,10 @@ interface StartupInternal {
   silentLoginWithTimeout: () => Promise<AuthResult<UserSession>>;
 }
 
+interface StartupStaticInternal {
+  STARTUP_AUTH_TIMEOUT_MS: number;
+}
+
 class DeferredAuthResult {
   promise: Promise<AuthResult<UserSession>>;
   private resolver: ((value: AuthResult<UserSession>) => void) | null = null;
@@ -128,6 +132,15 @@ export default function appStartupCoordinatorTest() {
       expect(result.message).assertEqual('silent_login_timeout');
       expect(result.status).assertEqual(LoginStatus.UNAUTHENTICATED);
       done();
+    });
+
+    it('regression: startup_auth_timeout_should_not_hold_gate_for_three_seconds', 0, () => {
+      // Arrange
+      const internal = AppStartupCoordinator as Object as StartupStaticInternal;
+      // Act
+      const timeoutMs = internal.STARTUP_AUTH_TIMEOUT_MS;
+      // Assert
+      expect(timeoutMs <= 1000).assertTrue();
     });
 
     it('regression: td-20260411-c4-startup-inflight-should-reset-after-finished', 0, async (done: () => void) => {

@@ -26,6 +26,15 @@ export function resolveLoginFailureToast(prefix: string, message: string): strin
   return `${prefix}${message}`;
 }
 
+export function shouldLoginSceneStart(activeScene: string, nextScene: string, allowOverride: boolean): boolean {
+  const active = String(activeScene || 'none');
+  const next = String(nextScene || 'none');
+  if (active === 'none') {
+    return true;
+  }
+  return allowOverride && active !== next;
+}
+
 @Entry
 @Component
 struct LoginPage {
@@ -33,6 +42,8 @@ struct LoginPage {
   private static readonly LOG_TAG: string = 'LoginPage';
   @State private agreementAccepted: boolean = false;
   @State private loading: boolean = false;
+  @State private activeLoginScene: string = 'none';
+  private loginGeneration: number = 0;
   private readonly authFacade: AuthFacade = AuthFacade.getInstance();
 
   private createLoginTraceId(scene: string): string {
@@ -90,9 +101,39 @@ struct LoginPage {
     }
   }
 
+  private beginLogin(scene: string, allowOverride: boolean = false): number {
+    if (!shouldLoginSceneStart(this.activeLoginScene, scene, allowOverride)) {
+      return -1;
+    }
+    if (this.activeLoginScene !== 'none') {
+      hilog.warn(
+        LoginPage.LOG_DOMAIN,
+        LoginPage.LOG_TAG,
+        `[LOGIN_TRACE][page] override login active=${this.activeLoginScene}, next=${scene}`
+      );
+    }
+    this.loginGeneration += 1;
+    this.activeLoginScene = scene;
+    this.loading = true;
+    return this.loginGeneration;
+  }
+
+  private finishLogin(scene: string, generation: number): void {
+    if (generation !== this.loginGeneration || this.activeLoginScene !== scene) {
+      return;
+    }
+    this.activeLoginScene = 'none';
+    this.loading = false;
+  }
+
+  private isCurrentLogin(generation: number): boolean {
+    return generation === this.loginGeneration;
+  }
+
   private async loginWithHuaweiButton(credential: HuaweiCredential): Promise<void> {
     const traceId = this.createLoginTraceId('button');
-    if (this.loading) {
+    const generation = this.beginLogin('huawei');
+    if (generation < 0) {
       hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] ignore duplicated loginWithHuaweiButton trace=${traceId}`);
       return;
     }
@@ -103,20 +144,27 @@ struct LoginPage {
     );
     if (!this.ensureAgreement()) {
       hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] blocked by agreement trace=${traceId}`);
+      this.finishLogin('huawei', generation);
       return;
     }
     const hostContext = this.getUIContext().getHostContext() as common.Context;
     this.authFacade.bindContext(hostContext);
-    this.loading = true;
     let result = new AuthResult<UserSession>();
     try {
       result = await this.authFacade.explicitLoginByButton(credential, false);
     } catch (error) {
+      if (!this.isCurrentLogin(generation)) {
+        return;
+      }
       hilog.error(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] login exception=${JSON.stringify(error)}, trace=${traceId}`);
       this.toast('登录异常，请检查网络后重试');
       return;
     } finally {
-      this.loading = false;
+      this.finishLogin('huawei', generation);
+    }
+    if (!this.isCurrentLogin(generation)) {
+      hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] ignore stale huawei result trace=${traceId}`);
+      return;
     }
     if (!result.success) {
       hilog.warn(
@@ -135,26 +183,34 @@ struct LoginPage {
 
   private async loginWithHuaweiApiFallback(): Promise<void> {
     const traceId = this.createLoginTraceId('api_fallback');
-    if (this.loading) {
+    const generation = this.beginLogin('huawei');
+    if (generation < 0) {
       hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] ignore duplicated loginWithHuaweiApiFallback trace=${traceId}`);
       return;
     }
     if (!this.ensureAgreement()) {
       hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] api_fallback blocked by agreement trace=${traceId}`);
+      this.finishLogin('huawei', generation);
       return;
     }
     const hostContext = this.getUIContext().getHostContext() as common.Context;
     this.authFacade.bindContext(hostContext);
-    this.loading = true;
     let result = new AuthResult<UserSession>();
     try {
       result = await this.authFacade.explicitLoginByButton(undefined, false);
     } catch (error) {
+      if (!this.isCurrentLogin(generation)) {
+        return;
+      }
       hilog.error(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] api_fallback exception=${JSON.stringify(error)}, trace=${traceId}`);
       this.toast('登录异常，请检查网络后重试');
       return;
     } finally {
-      this.loading = false;
+      this.finishLogin('huawei', generation);
+    }
+    if (!this.isCurrentLogin(generation)) {
+      hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] ignore stale api_fallback result trace=${traceId}`);
+      return;
     }
     if (!result.success) {
       hilog.warn(
@@ -173,26 +229,34 @@ struct LoginPage {
 
   private async loginAsGuest(): Promise<void> {
     const traceId = this.createLoginTraceId('guest');
-    if (this.loading) {
+    const generation = this.beginLogin('guest', true);
+    if (generation < 0) {
       hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] ignore duplicated loginAsGuest trace=${traceId}`);
       return;
     }
     if (!this.ensureAgreement()) {
       hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] guest_login blocked by agreement trace=${traceId}`);
+      this.finishLogin('guest', generation);
       return;
     }
     const hostContext = this.getUIContext().getHostContext() as common.Context;
     this.authFacade.bindContext(hostContext);
-    this.loading = true;
     let result = new AuthResult<UserSession>();
     try {
       result = await this.authFacade.explicitGuestLogin();
     } catch (error) {
+      if (!this.isCurrentLogin(generation)) {
+        return;
+      }
       hilog.error(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] guest_login exception=${JSON.stringify(error)}, trace=${traceId}`);
       this.toast('游客登录异常，请稍后重试');
       return;
     } finally {
-      this.loading = false;
+      this.finishLogin('guest', generation);
+    }
+    if (!this.isCurrentLogin(generation)) {
+      hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] ignore stale guest result trace=${traceId}`);
+      return;
     }
     if (!result.success) {
       hilog.warn(

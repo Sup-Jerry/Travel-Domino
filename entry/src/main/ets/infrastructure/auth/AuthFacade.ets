@@ -387,7 +387,15 @@ export class AuthFacade {
         AuthFacade.LOG_TAG,
         `[LOGIN_TRACE][facade] guestFallback persist_fail reason=${reason}, detail=${detail}, error=${this.normalizeError(error)}`
       );
-      this.sessionManager.save(session);
+      try {
+        this.sessionManager.save(session);
+      } catch (memoryError) {
+        hilog.error(
+          AuthFacade.LOG_DOMAIN,
+          AuthFacade.LOG_TAG,
+          `[LOGIN_TRACE][facade] guestFallback memory_save_fail reason=${reason}, detail=${detail}, error=${this.normalizeError(memoryError)}`
+        );
+      }
     }
 
     if (this.appContext) {

@@ -5,7 +5,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 export class AppStartupCoordinator {
   private static readonly LOG_DOMAIN: number = 0x0000;
   private static readonly LOG_TAG: string = 'AppStartupCoordinator';
-  private static readonly STARTUP_AUTH_TIMEOUT_MS: number = 2800;
+  private static readonly STARTUP_AUTH_TIMEOUT_MS: number = 900;
   private static instance: AppStartupCoordinator = new AppStartupCoordinator();
   private readonly authFacade: AuthFacade = AuthFacade.getInstance();
   private startupAuthInFlight: Promise<AuthResult<UserSession>> | null = null;
