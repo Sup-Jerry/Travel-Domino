@@ -145,6 +145,22 @@ function buildControlContext(runtimeState: 'IDLE' | 'READY' | 'ACTIVE' | 'PAUSED
 
 class CompanionControlSuggestionPlaceholderTest {}
 
+class CompanionControlSuggestionRenderTest {
+  suggestionId: string = 'control_weather_s1';
+  level: string = 'NOTICE';
+  triggerType: string = 'RAIN';
+  actionType: string = 'SHIFT_TIME';
+  title: string = 'move indoor';
+  message: string = 'rain is coming';
+  relatedNodeIds: string[] = ['n1'];
+  createdAt: number = 1;
+  reason: string = 'rain';
+  expectedBenefit: string = 'less risk';
+  canRollback: boolean = true;
+  cooldownKey: string = 'control_weather_s1';
+  expiresAt: number = 2;
+}
+
 export default function companionControlPageHelperTest() {
   describe('unit_test_case_generator_autofill_CompanionControlPageHelper', () => {
     it('normal: weather_card_should_follow_feature_flag', 0, () => {
@@ -251,6 +267,61 @@ export default function companionControlPageHelperTest() {
 
       // Assert
       expect(scale).assertEqual(0.996);
+    });
+
+    it('boundary: control_card_helpers_should_cover_zero_and_full_progress_edges', 0, () => {
+      // Arrange
+      const zero = 0;
+      const full = 1;
+
+      // Act
+      const outgoingStartX = resolveCompanionControlCardTranslateX(true, zero, 'outgoing');
+      const outgoingEndX = resolveCompanionControlCardTranslateX(true, full, 'outgoing');
+      const incomingStartX = resolveCompanionControlCardTranslateX(true, zero, 'incoming');
+      const incomingEndX = resolveCompanionControlCardTranslateX(true, full, 'incoming');
+      const outgoingStartOpacity = resolveCompanionControlCardOpacity(true, zero, 'outgoing');
+      const outgoingEndOpacity = resolveCompanionControlCardOpacity(true, full, 'outgoing');
+      const incomingStartOpacity = resolveCompanionControlCardOpacity(true, zero, 'incoming');
+      const incomingEndOpacity = resolveCompanionControlCardOpacity(true, full, 'incoming');
+      const outgoingStartScale = resolveCompanionControlCardScale(true, zero, 'outgoing');
+      const outgoingEndScale = resolveCompanionControlCardScale(true, full, 'outgoing');
+      const incomingStartScale = resolveCompanionControlCardScale(true, zero, 'incoming');
+      const incomingEndScale = resolveCompanionControlCardScale(true, full, 'incoming');
+
+      // Assert
+      expect(outgoingStartX).assertEqual(0);
+      expect(outgoingEndX).assertEqual(-18);
+      expect(incomingStartX).assertEqual(18);
+      expect(incomingEndX).assertEqual(0);
+      expect(outgoingStartOpacity).assertEqual(1);
+      expect(outgoingEndOpacity).assertEqual(0);
+      expect(incomingStartOpacity).assertEqual(0);
+      expect(incomingEndOpacity).assertEqual(1);
+      expect(outgoingStartScale).assertEqual(1);
+      expect(outgoingEndScale).assertEqual(0.985);
+      expect(incomingStartScale).assertEqual(0.992);
+      expect(incomingEndScale).assertEqual(1);
+    });
+
+    it('combined: control_card_helpers_should_keep_stable_phase_fixed_while_switching', 0, () => {
+      // Arrange
+      const progressValues: number[] = [0, 0.35, 1];
+
+      // Act
+      const translateSum = progressValues
+        .map((progress: number) => resolveCompanionControlCardTranslateX(true, progress, 'stable'))
+        .reduce((sum: number, value: number) => sum + value, 0);
+      const opacitySum = progressValues
+        .map((progress: number) => resolveCompanionControlCardOpacity(true, progress, 'stable'))
+        .reduce((sum: number, value: number) => sum + value, 0);
+      const scaleSum = progressValues
+        .map((progress: number) => resolveCompanionControlCardScale(true, progress, 'stable'))
+        .reduce((sum: number, value: number) => sum + value, 0);
+
+      // Assert
+      expect(translateSum).assertEqual(0);
+      expect(opacitySum).assertEqual(3);
+      expect(scaleSum).assertEqual(3);
     });
 
     it('combined: control_page_instance_should_sync_props_callbacks_and_private_card_methods', 0, () => {
@@ -539,6 +610,45 @@ export default function companionControlPageHelperTest() {
       expect(totalTimelineCount).assertEqual(6);
     });
 
+    it('boundary: control_page_empty_param_updates_should_keep_constructor_defaults', 0, () => {
+      // Arrange
+      const page = new CompanionControlPage(undefined, {} as LocalStorage) as Object as CompanionControlPagePrivateTest;
+
+      // Act
+      page.setInitiallyProvidedValue({});
+      page.updateStateVars({});
+      const palette = page.getThemePalette();
+      const translate = page.getCardTranslateX('stable');
+      const opacity = page.getCardOpacity('stable');
+      const scale = page.getCardScale('stable');
+
+      // Assert
+      expect(page.context.runtimeState).assertEqual('IDLE');
+      expect(page.safeTopInset).assertEqual(0);
+      expect(page.safeBottomInset).assertEqual(0);
+      expect(page.companionFilterState).assertEqual('ALL');
+      expect(page.isWeatherFeatureEnabled).assertFalse();
+      expect(page.weatherExpanded).assertFalse();
+      expect(page.showWeatherScorePopup).assertFalse();
+      expect(page.showWeatherHintPopup).assertFalse();
+      expect(page.showWeatherSuggestionPopup).assertFalse();
+      expect(page.weatherSuggestionPopupText).assertEqual('');
+      expect(page.executionWeatherScore).assertEqual(-1);
+      expect(page.executionWeatherSuggestions.length).assertEqual(0);
+      expect(page.canRenderSwitchCards).assertFalse();
+      expect(page.focusedEventId).assertEqual(-1);
+      expect(page.isCardSwitching).assertFalse();
+      expect(page.cardSwitchProgress).assertEqual(1);
+      expect(page.scheduledEvents.length).assertEqual(0);
+      expect(page.timelineEvents.length).assertEqual(0);
+      expect(page.focusPosition).assertEqual(0);
+      expect(page.timelineCount).assertEqual(0);
+      expect(translate).assertEqual(0);
+      expect(opacity).assertEqual(1);
+      expect(scale).assertEqual(1);
+      expect(palette.companionBg).assertEqual(ThemeCenter.getPalette(page.effectiveTheme).companionBg);
+    });
+
     it('regression: control_page_initial_render_should_not_throw_with_minimal_ready_state', 0, () => {
       // Arrange
       const page = new CompanionControlPage(undefined, {} as LocalStorage) as Object as CompanionControlPagePrivateTest;
@@ -558,6 +668,175 @@ export default function companionControlPageHelperTest() {
 
       // Assert
       expect(threw).assertFalse();
+    });
+
+    it('normal: control_page_initial_render_should_cover_weather_switch_and_timeline_branches', 0, () => {
+      // Arrange
+      const page = new CompanionControlPage(undefined, {} as LocalStorage) as Object as CompanionControlPagePrivateTest;
+      const current = buildEvent(501);
+      const outgoing = buildEvent(502);
+      const incoming = buildEvent(503);
+      const stable = buildEvent(504);
+      const suggestion = new CompanionControlSuggestionRenderTest() as Object;
+      page.context = buildControlContext('ACTIVE', current);
+      page.safeTopInset = 12;
+      page.safeBottomInset = 16;
+      page.companionFilterState = 'ACTIVE';
+      page.isWeatherFeatureEnabled = true;
+      page.weatherExpanded = true;
+      page.showWeatherScorePopup = false;
+      page.showWeatherHintPopup = false;
+      page.showWeatherSuggestionPopup = false;
+      page.weatherSuggestionPopupText = 'line1\nline2';
+      page.executionWeatherCollabBadge = 'badge';
+      page.executionWeatherLoading = false;
+      page.executionWeatherHint = 'rain warning';
+      page.executionWeatherLevel = 'NOTICE';
+      page.executionWeatherCurrentText = 'sunny';
+      page.executionWeatherNextText = 'rain';
+      page.executionWeatherScore = 76;
+      page.executionWeatherCollabSummary = 'city sync';
+      page.executionWeatherAppliedSummary = 'shifted';
+      page.executionWeatherSuggestions = [suggestion];
+      page.weatherScoreLines = ['score'];
+      page.weatherHintLines = ['hint'];
+      page.canRenderSwitchCards = true;
+      page.outgoingEvent = outgoing;
+      page.incomingEvent = incoming;
+      page.stableEvent = stable;
+      page.focusedEventId = incoming.id;
+      page.isCardSwitching = true;
+      page.cardSwitchProgress = 0.4;
+      page.scheduledEvents = [current, outgoing, incoming];
+      page.timelineEvents = [outgoing, incoming, stable];
+      page.focusPosition = 2;
+      page.timelineCount = 3;
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.isWeatherFeatureEnabled).assertTrue();
+      expect(page.executionWeatherSuggestions.length).assertEqual(1);
+    });
+
+    it('boundary: control_page_initial_render_should_cover_hidden_weather_stable_empty_timeline', 0, () => {
+      // Arrange
+      const page = new CompanionControlPage(undefined, {} as LocalStorage) as Object as CompanionControlPagePrivateTest;
+      const stable = buildEvent(601);
+      page.context = buildControlContext('IDLE', null);
+      page.safeTopInset = 0;
+      page.safeBottomInset = 0;
+      page.companionFilterState = 'ALL';
+      page.isWeatherFeatureEnabled = false;
+      page.weatherExpanded = false;
+      page.canRenderSwitchCards = false;
+      page.outgoingEvent = null;
+      page.incomingEvent = null;
+      page.stableEvent = stable;
+      page.focusedEventId = -1;
+      page.timelineEvents = [];
+      page.scheduledEvents = [];
+      page.focusPosition = 0;
+      page.timelineCount = 0;
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.isWeatherFeatureEnabled).assertFalse();
+      expect(page.timelineEvents.length).assertEqual(0);
+    });
+
+    it('combined: control_page_initial_render_should_cover_paused_collapsed_weather_and_bottom_actions', 0, () => {
+      // Arrange
+      const page = new CompanionControlPage(undefined, {} as LocalStorage) as Object as CompanionControlPagePrivateTest;
+      const current = buildEvent(701);
+      const next = buildEvent(702);
+      page.context = buildControlContext('PAUSED', current);
+      page.safeTopInset = 20;
+      page.safeBottomInset = 24;
+      page.companionFilterState = 'SKIPPED';
+      page.isWeatherFeatureEnabled = true;
+      page.weatherExpanded = false;
+      page.showWeatherScorePopup = false;
+      page.showWeatherHintPopup = false;
+      page.showWeatherSuggestionPopup = false;
+      page.executionWeatherLoading = true;
+      page.executionWeatherHint = 'wind';
+      page.executionWeatherScore = -1;
+      page.executionWeatherSuggestions = [];
+      page.canRenderSwitchCards = false;
+      page.stableEvent = current;
+      page.focusedEventId = current.id;
+      page.timelineEvents = [current, next];
+      page.scheduledEvents = [current, next];
+      page.focusPosition = 1;
+      page.timelineCount = 2;
+      page.effectiveTheme = 'dark';
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.context.runtimeState).assertEqual('PAUSED');
+      expect(page.weatherExpanded).assertFalse();
+    });
+
+    it('invalid: control_page_initial_render_should_handle_gap_state_without_current_event', 0, () => {
+      // Arrange
+      const page = new CompanionControlPage(undefined, {} as LocalStorage) as Object as CompanionControlPagePrivateTest;
+      const blocked = buildEvent(801);
+      page.context = buildControlContext('GAP', null);
+      page.safeTopInset = -2;
+      page.safeBottomInset = -4;
+      page.companionFilterState = 'SKIPPED';
+      page.isWeatherFeatureEnabled = true;
+      page.weatherExpanded = true;
+      page.executionWeatherLevel = 'WARNING';
+      page.executionWeatherScore = 0;
+      page.canRenderSwitchCards = true;
+      page.outgoingEvent = null;
+      page.incomingEvent = null;
+      page.stableEvent = blocked;
+      page.focusedEventId = -1;
+      page.timelineEvents = [blocked];
+      page.scheduledEvents = [];
+      page.focusPosition = 0;
+      page.timelineCount = 1;
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(getCompanionControlCurrentEventId(page.context.currentEvent)).assertEqual(-1);
+      expect(page.context.runtimeState).assertEqual('GAP');
+      expect(page.executionWeatherLevel).assertEqual('WARNING');
+      expect(page.timelineEvents.length).assertEqual(1);
     });
   });
 }

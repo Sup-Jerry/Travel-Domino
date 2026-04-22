@@ -23,16 +23,23 @@ struct SettingsAccountSecurityPage {
     return ThemeCenter.getPalette(this.effectiveTheme);
   }
 
+  private safeShowToast(message: string): void {
+    try {
+      promptAction.openToast({ message: message });
+    } catch (_error) {
+    }
+  }
+
   private async doLogout(): Promise<void> {
     try {
       const hostContext = this.getUIContext().getHostContext() as common.Context;
       this.authFacade.bindContext(hostContext);
       await this.authFacade.logout();
       ProfileViewModel.getInstance().reset();
-      promptAction.openToast({ message: resolveLogoutToastMessage(true) });
+      this.safeShowToast(resolveLogoutToastMessage(true));
       await this.getUIContext().getRouter().replaceUrl({ url: resolveLogoutRedirectUrl() });
     } catch (_error) {
-      promptAction.openToast({ message: resolveLogoutToastMessage(false) });
+      this.safeShowToast(resolveLogoutToastMessage(false));
     }
   }
 
@@ -77,4 +84,8 @@ struct SettingsAccountSecurityPage {
     .alignItems(HorizontalAlign.Start)
     .backgroundColor(this.getThemePalette().pageBg);
   }
+}
+
+export function createSettingsAccountSecurityPageForTest(): Object {
+  return new SettingsAccountSecurityPage(undefined, {} as LocalStorage);
 }

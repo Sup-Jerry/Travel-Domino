@@ -100,3 +100,7 @@ struct SettingsPage {
     .backgroundColor(this.getThemePalette().pageBg);
   }
 }
+
+export function createSettingsPageForTest(): Object {
+  return new SettingsPage(undefined, {} as LocalStorage);
+}

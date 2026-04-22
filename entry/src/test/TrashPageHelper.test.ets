@@ -1,8 +1,92 @@
 import { describe, it, expect } from '@ohos/hypium';
 import {
+  createTrashPageForTest,
   resolveTrashAutoPurgeDiffMs,
   resolveTrashRemainingTimeText
 } from '../main/ets/pages/TrashPage';
+import { PlanItem } from '../main/ets/infrastructure/persistence/PlanRepositoryImpl';
+
+interface TrashPagePrivateTest {
+  effectiveTheme: string;
+  planList: PlanItem[];
+  getThemePalette(): Object;
+  onPageShow(): void;
+  loadPlans(): Promise<void>;
+  getRemainingTimeText(deleteTime: number | undefined): string;
+  handleHardDelete(item: PlanItem): void;
+  TrashSwipeMenu(item: PlanItem): void;
+  initialRender(): void;
+  getUIContext(): TrashUiContextTest;
+}
+
+interface TrashPlanServiceTest {
+  loadTrashPlans(): Promise<PlanItem[]>;
+  hardDeletePlan(planId: number): Promise<void>;
+  restorePlan(planId: number): Promise<void>;
+}
+
+interface TrashAlertButtonTest {
+  value: string;
+  action: () => Promise<void> | void;
+}
+
+interface TrashAlertOptionsTest {
+  title: string;
+  message: string;
+  autoCancel: boolean;
+  primaryButton: TrashAlertButtonTest;
+  secondaryButton: TrashAlertButtonTest;
+}
+
+interface TrashUiContextTest {
+  showAlertDialog(options: TrashAlertOptionsTest): void;
+}
+
+class TrashPlanServiceMockTest implements TrashPlanServiceTest {
+  public plans: PlanItem[] = [];
+  public hardDeletedPlanIds: number[] = [];
+  public restoredPlanIds: number[] = [];
+
+  async loadTrashPlans(): Promise<PlanItem[]> {
+    return this.plans;
+  }
+
+  async hardDeletePlan(planId: number): Promise<void> {
+    this.hardDeletedPlanIds.push(planId);
+  }
+
+  async restorePlan(planId: number): Promise<void> {
+    this.restoredPlanIds.push(planId);
+  }
+}
+
+class TrashUiContextMockTest implements TrashUiContextTest {
+  public showCount: number = 0;
+  public lastOptions?: TrashAlertOptionsTest;
+
+  showAlertDialog(options: TrashAlertOptionsTest): void {
+    this.showCount += 1;
+    this.lastOptions = options;
+  }
+}
+
+function createTrashPagePrivateForTest(service: TrashPlanServiceTest): TrashPagePrivateTest {
+  const page = createTrashPageForTest() as TrashPagePrivateTest;
+  Reflect.set(page as Object, 'planService', service);
+  return page;
+}
+
+function buildTrashPlanItemForTest(id: number, title: string): PlanItem {
+  return {
+    id: id,
+    title: title,
+    createdAt: Date.now(),
+    startDate: new Date(2026, 3, 22).getTime(),
+    status: 0,
+    delFlag: 1,
+    deleteTime: Date.now() - 3_600_000
+  };
+}
 
 export default function trashPageHelperTest() {
   describe('unit_test_case_generator_autofill_TrashPageHelper', () => {
@@ -68,6 +152,67 @@ export default function trashPageHelperTest() {
       // Assert
       expect(diff > 0).assertTrue();
       expect(text).assertEqual('0小时 后自动清除');
+    });
+
+    it('normal: trash_page_load_plans_should_sync_plan_list_from_service', 0, async () => {
+      // Arrange
+      const service = new TrashPlanServiceMockTest();
+      service.plans = [buildTrashPlanItemForTest(201, 'Seoul')];
+      const page = createTrashPagePrivateForTest(service);
+
+      // Act
+      await page.loadPlans();
+
+      // Assert
+      expect(page.planList.length).assertEqual(1);
+      expect(page.planList[0].title).assertEqual('Seoul');
+    });
+
+    it('combined: trash_page_hard_delete_dialog_should_execute_secondary_action', 0, async () => {
+      // Arrange
+      const service = new TrashPlanServiceMockTest();
+      const page = createTrashPagePrivateForTest(service);
+      const uiContext = new TrashUiContextMockTest();
+      let refreshCount = 0;
+      Reflect.set(page as Object, 'getUIContext', (): TrashUiContextTest => uiContext);
+      Reflect.set(page as Object, 'loadPlans', (): void => {
+        refreshCount += 1;
+      });
+      const item = buildTrashPlanItemForTest(202, 'Busan');
+
+      // Act
+      page.handleHardDelete(item);
+      await uiContext.lastOptions?.secondaryButton.action();
+
+      // Assert
+      expect(uiContext.showCount).assertEqual(1);
+      expect(service.hardDeletedPlanIds[0]).assertEqual(202);
+      expect(refreshCount).assertEqual(1);
+    });
+
+    it('regression: td-20260422-trash_page_render_and_swipe_menu_should_cover_deleted_plan_paths', 0, () => {
+      // Arrange
+      const service = new TrashPlanServiceMockTest();
+      const page = createTrashPagePrivateForTest(service);
+      const item = buildTrashPlanItemForTest(203, 'Daegu');
+      page.planList = [item];
+      page.effectiveTheme = 'dark';
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+        page.TrashSwipeMenu(item);
+      } catch (_error) {
+        threw = true;
+      }
+      const remainingText = page.getRemainingTimeText(item.deleteTime);
+      const palette = page.getThemePalette();
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(remainingText.length > 0).assertTrue();
+      expect(palette !== null).assertTrue();
     });
   });
 }

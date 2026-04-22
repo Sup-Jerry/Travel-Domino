@@ -1,10 +1,57 @@
 import { describe, it, expect } from '@ohos/hypium';
 import {
+  AdvanceAdjustDialog,
   toggleAdvanceAdjustSelection,
   advanceAdjustMinutesToTime,
   advanceAdjustTimeToMinutes,
-  resolveAdvanceAdjustDefaultStartTime
+  resolveAdvanceAdjustDefaultStartTime,
+  resolveAdvanceAdjustPreviewGapColor,
+  resolveAdvanceAdjustPreviewGapMessage,
+  resolveAdvanceAdjustPreviewRangeMessage,
+  resolveAdvanceAdjustSelectedIds,
+  resolveAdvanceAdjustSelectedSummary
 } from '../main/ets/pages/components/dialogs/AdvanceAdjustDialog';
+import {
+  AdvanceAdjustCandidate,
+  AdvanceAdjustContext,
+  AdvanceAdjustPreview
+} from '../main/ets/viewmodel/TimelineViewModel';
+
+interface AdvanceAdjustDialogPrivateTest {
+  targetName: string;
+  context: AdvanceAdjustContext | null;
+  selectedIds: Set<number>;
+  targetStartTime: string;
+  preview: AdvanceAdjustPreview | null;
+  initialRender(): void;
+}
+
+class AdvanceAdjustCandidateTest implements AdvanceAdjustCandidate {
+  id: number = 0;
+  index: number = 0;
+  name: string = '';
+  currentStartTime: string = '';
+  currentEndTime: string = '';
+  duration: number = 0;
+}
+
+function buildAdvanceAdjustCandidateTest(
+  id: number,
+  index: number,
+  name: string,
+  currentStartTime: string,
+  currentEndTime: string,
+  duration: number
+): AdvanceAdjustCandidate {
+  const candidate = new AdvanceAdjustCandidateTest();
+  candidate.id = id;
+  candidate.index = index;
+  candidate.name = name;
+  candidate.currentStartTime = currentStartTime;
+  candidate.currentEndTime = currentEndTime;
+  candidate.duration = duration;
+  return candidate;
+}
 
 export default function advanceAdjustDialogHelperTest() {
   describe('unit_test_case_generator_autofill_AdvanceAdjustDialogHelper', () => {
@@ -90,6 +137,125 @@ export default function advanceAdjustDialogHelperTest() {
       // Assert
       expect(nextSelectedIds.has(7)).assertTrue();
       expect(nextSelectedIds.size).assertEqual(1);
+    });
+
+    it('normal: advance_adjust_selected_ids_should_include_all_candidates', 0, () => {
+      // Arrange
+      const candidates: AdvanceAdjustCandidate[] = [];
+      candidates.push(buildAdvanceAdjustCandidateTest(1, 0, 'a', '08:00', '09:00', 60));
+      candidates.push(buildAdvanceAdjustCandidateTest(2, 1, 'b', '09:10', '10:00', 50));
+
+      // Act
+      const selectedIds = resolveAdvanceAdjustSelectedIds(candidates);
+
+      // Assert
+      expect(selectedIds.has(1)).assertTrue();
+      expect(selectedIds.has(2)).assertTrue();
+      expect(selectedIds.size).assertEqual(2);
+    });
+
+    it('boundary: advance_adjust_preview_helpers_should_fallback_for_null_preview', 0, () => {
+      // Arrange
+      const preview = null;
+
+      // Act
+      const summary = resolveAdvanceAdjustSelectedSummary(preview);
+      const gapMessage = resolveAdvanceAdjustPreviewGapMessage(preview);
+      const gapColor = resolveAdvanceAdjustPreviewGapColor(preview);
+      const rangeMessage = resolveAdvanceAdjustPreviewRangeMessage(preview);
+
+      // Assert
+      expect(summary).assertEqual('已选 0 个，预计前移 0 分钟');
+      expect(gapMessage).assertEqual('最少前移 0 分钟；已达到消冲突阈值');
+      expect(gapColor).assertEqual('#2E7D32');
+      expect(rangeMessage).assertEqual('首地点：-，末地点：-');
+    });
+
+    it('conflict: advance_adjust_preview_helpers_should_show_remaining_gap_warning', 0, () => {
+      // Arrange
+      const preview: AdvanceAdjustPreview = {
+        valid: false,
+        message: '还不够',
+        selectedCount: 2,
+        shiftMinutes: 15,
+        requiredGapMinutes: 30,
+        remainingGapMinutes: 15,
+        firstNewStartTime: '08:45',
+        lastNewEndTime: '10:20',
+        items: []
+      };
+
+      // Act
+      const summary = resolveAdvanceAdjustSelectedSummary(preview);
+      const gapMessage = resolveAdvanceAdjustPreviewGapMessage(preview);
+      const gapColor = resolveAdvanceAdjustPreviewGapColor(preview);
+      const rangeMessage = resolveAdvanceAdjustPreviewRangeMessage(preview);
+
+      // Assert
+      expect(summary).assertEqual('已选 2 个，预计前移 15 分钟');
+      expect(gapMessage).assertEqual('最少前移 30 分钟；还差 15 分钟');
+      expect(gapColor).assertEqual('#FF4D4F');
+      expect(rangeMessage).assertEqual('首地点：08:45，末地点：10:20');
+    });
+
+    it('combined: advance_adjust_dialog_initial_render_should_support_valid_preview_branch', 0, () => {
+      // Arrange
+      const page = new AdvanceAdjustDialog(undefined, {} as LocalStorage) as Object as AdvanceAdjustDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.targetName = '午餐';
+      page.context = {
+        targetIndex: 2,
+        targetId: 200,
+        targetDayOffset: 0,
+        candidates: [
+          buildAdvanceAdjustCandidateTest(1, 0, '早餐', '08:00', '09:00', 60),
+          buildAdvanceAdjustCandidateTest(2, 1, '通勤', '09:10', '09:40', 30)
+        ]
+      };
+      page.selectedIds = new Set<number>([1, 2]);
+      page.targetStartTime = '07:30';
+      page.preview = {
+        valid: true,
+        message: 'ok',
+        selectedCount: 2,
+        shiftMinutes: 30,
+        requiredGapMinutes: 20,
+        remainingGapMinutes: 0,
+        firstNewStartTime: '07:30',
+        lastNewEndTime: '09:10',
+        items: []
+      };
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('regression: advance_adjust_dialog_initial_render_should_support_empty_context_branch', 0, () => {
+      // Arrange
+      const page = new AdvanceAdjustDialog(undefined, {} as LocalStorage) as Object as AdvanceAdjustDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.targetName = '冲突点';
+      page.context = null;
+      page.selectedIds = new Set<number>();
+      page.targetStartTime = '';
+      page.preview = null;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
   });
 }

@@ -369,6 +369,10 @@ struct PlanSearchPage {
   }
 }
 
+export function createPlanSearchPageForTest(): Object {
+  return new PlanSearchPage(undefined, {} as LocalStorage);
+}
+
 
 
 

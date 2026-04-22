@@ -56,6 +56,7 @@ interface CompanionFocusedCardHostPrivateTest {
   setInitiallyProvidedValue(params: CompanionFocusedCardHostParamsTest): void;
   updateStateVars(params: CompanionFocusedCardHostParamsTest): void;
   getThemePalette(): CompanionFocusedCardHostPaletteTest;
+  FocusedCardBody(event: EventEntity, phase: CompanionFocusedCardPhaseTest): void;
   initialRender(): void;
 }
 
@@ -369,6 +370,110 @@ export default function companionFocusedCardHostHelperTest() {
       // Assert
       expect(pausedThrew).assertFalse();
       expect(emptyThrew).assertFalse();
+    });
+
+    it('normal: focused_card_host_initial_render_should_support_active_action_branch_with_custom_getters', 0, () => {
+      // Arrange
+      const page = new CompanionFocusedCardHost(undefined, {} as LocalStorage) as Object as CompanionFocusedCardHostPrivateTest;
+      const stable = buildEvent(81);
+      page.getEventStateLabel = (event: EventEntity) => `label_${event.id}`;
+      page.getStateTagTextColor = (_event: EventEntity) => '#111111';
+      page.getStateTagBackgroundColor = (_event: EventEntity) => '#EEEEEE';
+      page.getStateBorderColor = (_event: EventEntity) => '#123456';
+      page.getMainCardTimeText = (event: EventEntity) => `time_${event.id}`;
+      page.getPlannedRange = (event: EventEntity) => `range_${event.id}`;
+      page.getEventState = (_event: EventEntity) => 'ACTIVE';
+      page.canEndFocused = (_event: EventEntity) => true;
+      page.getCardTranslateX = (phase: CompanionFocusedCardPhaseTest) => phase === 'stable' ? 4 : 0;
+      page.getCardOpacity = (phase: CompanionFocusedCardPhaseTest) => phase === 'stable' ? 0.88 : 1;
+      page.getCardScale = (phase: CompanionFocusedCardPhaseTest) => phase === 'stable' ? 0.97 : 1;
+      page.setInitiallyProvidedValue({
+        canRenderSwitchCards: false,
+        outgoingEvent: null,
+        incomingEvent: null,
+        stableEvent: stable,
+        runtimeState: 'ACTIVE',
+        currentEventId: stable.id
+      });
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.getEventStateLabel(stable)).assertEqual('label_81');
+      expect(page.getMainCardTimeText(stable)).assertEqual('time_81');
+      expect(page.getPlannedRange(stable)).assertEqual('range_81');
+      expect(page.getStateBorderColor(stable)).assertEqual('#123456');
+      expect(page.getCardTranslateX('stable')).assertEqual(4);
+      expect(page.getCardOpacity('stable')).assertEqual(0.88);
+      expect(page.getCardScale('stable')).assertEqual(0.97);
+      expect(page.canEndFocused(stable)).assertTrue();
+    });
+
+    it('combined: focused_card_host_initial_render_should_support_paused_active_and_hidden_planned_range_branch', 0, () => {
+      // Arrange
+      const page = new CompanionFocusedCardHost(undefined, {} as LocalStorage) as Object as CompanionFocusedCardHostPrivateTest;
+      const stable = buildEvent(91);
+      page.getEventState = (_event: EventEntity) => 'COMPLETED';
+      page.canEndFocused = (_event: EventEntity) => false;
+      page.setInitiallyProvidedValue({
+        canRenderSwitchCards: false,
+        outgoingEvent: null,
+        incomingEvent: null,
+        stableEvent: stable,
+        runtimeState: 'PAUSED',
+        currentEventId: stable.id
+      });
+      const pendingVisible = shouldShowFocusedPlannedRange('PENDING');
+      const pausedMode = resolveCompanionFocusedActionMode('COMPLETED', 'PAUSED', stable.id, stable.id);
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(pendingVisible).assertFalse();
+      expect(pausedMode).assertEqual('PAUSED_ACTIVE');
+      expect(page.canEndFocused(stable)).assertFalse();
+    });
+
+    it('regression: focused_card_host_focused_card_body_should_support_direct_builder_invocation_for_stable_phase', 0, () => {
+      // Arrange
+      const page = new CompanionFocusedCardHost(undefined, {} as LocalStorage) as Object as CompanionFocusedCardHostPrivateTest;
+      const stable = buildEvent(101);
+      page.getEventState = (_event: EventEntity) => 'ACTIVE';
+      page.canEndFocused = (_event: EventEntity) => true;
+      page.getEventStateLabel = (_event: EventEntity) => '进行中';
+      page.getMainCardTimeText = (_event: EventEntity) => '10:00-10:30';
+      page.getPlannedRange = (_event: EventEntity) => '10:00-11:00';
+      page.runtimeState = 'ACTIVE';
+      page.currentEventId = stable.id;
+      let threw = false;
+
+      // Act
+      try {
+        page.FocusedCardBody(stable, 'stable');
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.getEventStateLabel(stable)).assertEqual('进行中');
+      expect(page.getMainCardTimeText(stable)).assertEqual('10:00-10:30');
+      expect(page.getPlannedRange(stable)).assertEqual('10:00-11:00');
+      expect(page.canEndFocused(stable)).assertTrue();
     });
   });
 }

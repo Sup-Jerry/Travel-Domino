@@ -47,6 +47,16 @@ function assertThrow(action: () => void, expectedMessage: string): void {
   expect(actual).assertEqual(expectedMessage);
 }
 
+function assertAnyThrow(action: () => void): void {
+  let thrown = false;
+  try {
+    action();
+  } catch (_error) {
+    thrown = true;
+  }
+  expect(thrown).assertTrue();
+}
+
 export default function phase1ZeroHitBatchBTest() {
   describe('phase1ZeroHitBatchBTest', () => {
     it('normal: deep_link_should_round_trip_payload', 0, () => {
@@ -75,6 +85,58 @@ export default function phase1ZeroHitBatchBTest() {
       // Act
       // Assert
       assertThrow(() => DeepLinkService.parseShareLink(invalidUrl), 'missing_data_parameter');
+    });
+
+    it('normal: deep_link_parse_should_restore_payload', 0, () => {
+      // Arrange
+      const payload = '{"v":1,"p":{"t":"parse"}}';
+      const url = 'travelapp://import?data=eyJ2IjoxLCJwIjp7InQiOiJwYXJzZSJ9fQ==';
+
+      // Act
+      const restored = DeepLinkService.parseShareLink(url);
+
+      // Assert
+      expect(restored).assertEqual(payload);
+    });
+
+    it('boundary: deep_link_parse_should_find_data_after_other_query_segments', 0, () => {
+      // Arrange
+      const payload = '{"v":1,"p":{"t":"query"}}';
+      const dataValue = 'eyJ2IjoxLCJwIjp7InQiOiJxdWVyeSJ9fQ==';
+      const reordered = `travelapp://import?foo=bar&data=${dataValue}&tail=1`;
+
+      // Act
+      const restored = DeepLinkService.parseShareLink(reordered);
+
+      // Assert
+      expect(restored).assertEqual(payload);
+    });
+
+    it('invalid: deep_link_parse_should_reject_wrong_scheme', 0, () => {
+      // Arrange
+      const invalidUrl = 'https://import?data=abc';
+
+      // Act
+      // Assert
+      assertThrow(() => DeepLinkService.parseShareLink(invalidUrl), 'invalid_deep_link_scheme');
+    });
+
+    it('invalid: deep_link_parse_should_reject_empty_data_value', 0, () => {
+      // Arrange
+      const invalidUrl = 'travelapp://import?data=';
+
+      // Act
+      // Assert
+      assertThrow(() => DeepLinkService.parseShareLink(invalidUrl), 'missing_data_parameter');
+    });
+
+    it('regression: deep_link_parse_should_throw_on_invalid_base64_payload', 0, () => {
+      // Arrange
+      const invalidUrl = 'travelapp://import?data=not-valid-base64%%%';
+
+      // Act
+      // Assert
+      assertAnyThrow(() => DeepLinkService.parseShareLink(invalidUrl));
     });
 
     it('conflict: serializer_should_fallback_to_transport_mode_when_travel_mode_missing', 0, () => {

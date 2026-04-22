@@ -1,5 +1,15 @@
 import { describe, it, expect } from '@ohos/hypium';
-import { canStartPlanImport, classifyPlanImportPayload } from '../main/ets/pages/components/dialogs/PlanImportDialog';
+import {
+  canStartPlanImport,
+  classifyPlanImportPayload,
+  PlanImportDialog
+} from '../main/ets/pages/components/dialogs/PlanImportDialog';
+
+interface PlanImportDialogPrivateTest {
+  inputJson: string;
+  importing: boolean;
+  initialRender(): void;
+}
 
 export default function planImportDialogHelperTest() {
   describe('unit_test_case_generator_autofill_PlanImportDialogHelper', () => {
@@ -60,6 +70,42 @@ export default function planImportDialogHelperTest() {
       // Assert
       expect(kind).assertEqual('deep_link');
       expect(canStart).assertTrue();
+    });
+
+    it('normal: plan_import_dialog_initial_render_should_support_plain_payload_branch', 0, () => {
+      // Arrange
+      const page = new PlanImportDialog(undefined, {} as LocalStorage) as Object as PlanImportDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.inputJson = '{\"schemaVersion\":1}';
+      page.importing = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: plan_import_dialog_initial_render_should_support_importing_deep_link_branch', 0, () => {
+      // Arrange
+      const page = new PlanImportDialog(undefined, {} as LocalStorage) as Object as PlanImportDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.inputJson = 'travelapp://import?data=abc';
+      page.importing = true;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
   });
 }
