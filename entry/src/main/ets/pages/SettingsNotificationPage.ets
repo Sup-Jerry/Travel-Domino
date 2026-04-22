@@ -145,3 +145,7 @@ struct SettingsNotificationPage {
     .backgroundColor(this.getThemePalette().pageBg);
   }
 }
+
+export function createSettingsNotificationPageForTest(): Object {
+  return new SettingsNotificationPage(undefined, {} as LocalStorage);
+}
