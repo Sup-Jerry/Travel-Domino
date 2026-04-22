@@ -80,3 +80,7 @@ struct SettingsPrivacyPage {
     .backgroundColor(this.getThemePalette().pageBg);
   }
 }
+
+export function createSettingsPrivacyPageForTest(): Object {
+  return new SettingsPrivacyPage(undefined, {} as LocalStorage);
+}
