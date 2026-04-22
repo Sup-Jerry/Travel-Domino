@@ -441,12 +441,24 @@ class CompanionActionHostTest {
     return invokeCompanionActionMethodTest(companionApplyCheckinBackfillTest, this, eventId, startTs, endTs);
   }
 
+  async handleFocusedSkip(): Promise<void> {
+    return invokeCompanionActionMethodTest(companionHandleFocusedSkipTest, this);
+  }
+
+  async handleFocusedReopen(): Promise<void> {
+    return invokeCompanionActionMethodTest(companionHandleFocusedReopenTest, this);
+  }
+
   getFocusedEvent(): EventEntity | null {
     return this.vm.orderedEvents.find((item: EventEntity) => item.id === this.focusedEventId) ?? null;
   }
 
   getScheduledEvents(): EventEntity[] {
     return this.vm.orderedEvents;
+  }
+
+  getScheduleIndexById(id: number): number {
+    return this.vm.orderedEvents.findIndex((item: EventEntity) => item.id === id);
   }
 
   async showGlobalActiveConflictDialog(excludeEventId: number): Promise<boolean> {
@@ -503,6 +515,12 @@ const companionHandleFocusedPrimaryActionTest = getCompanionActionMethodTest<
 const companionApplyCheckinBackfillTest = getCompanionActionMethodTest<
   (this: CompanionActionHostTest, eventId: number, startTs: number, endTs: number) => Promise<void>
 >('applyCompanionCheckinBackfill');
+const companionHandleFocusedSkipTest = getCompanionActionMethodTest<
+  (this: CompanionActionHostTest) => Promise<void>
+>('handleFocusedSkip');
+const companionHandleFocusedReopenTest = getCompanionActionMethodTest<
+  (this: CompanionActionHostTest) => Promise<void>
+>('handleFocusedReopen');
 
 function buildCompanionRuntimeEvent(id: number, name: string, runtime: CompanionRuntimeStateTest, address: string = ''): EventEntity {
   const event = buildCompanionEvent(id, name, address);
@@ -1384,6 +1402,136 @@ export default function companionViewHelperTest() {
       expect(vm.backfillCalls.length).assertEqual(1);
       expect(vm.backfillCalls[0].eventId).assertEqual(pending.id);
       expect(page.context.nextEvent?.id).assertEqual(pending.id);
+    });
+  });
+
+  describe('unit_test_case_generator_autofill_CompanionViewSkipReopenAndDialogBranches', () => {
+    it('normal: focused_skip_should_skip_pending_event_and_focus_next_startable', 0, async () => {
+      // Arrange
+      const first = buildCompanionRuntimeEvent(701, 'skip_first', 'PENDING', 'Skip First Road');
+      const second = buildCompanionRuntimeEvent(702, 'skip_second', 'PENDING', 'Skip Second Road');
+      const vm = new CompanionViewVmMockTest();
+      vm.orderedEvents = [first, second];
+      vm.companionContext = buildCompanionContext('READY', null, first);
+      const page = new CompanionActionHostTest(vm, first);
+
+      // Act
+      await page.handleFocusedSkip();
+      await new Promise<void>((resolve: () => void): void => {
+        setTimeout((): void => {
+          resolve();
+        }, 150);
+      });
+
+      // Assert
+      expect(vm.skippedEventIds.length).assertEqual(1);
+      expect(vm.skippedEventIds[0]).assertEqual(first.id);
+      expect(first.completion_status).assertEqual(EventEntity.STATE_SKIPPED);
+      expect(page.focusedEventId).assertEqual(second.id);
+    });
+
+    it('boundary: focused_skip_should_noop_when_focus_missing', 0, async () => {
+      // Arrange
+      const pending = buildCompanionRuntimeEvent(703, 'skip_missing', 'PENDING', 'Missing Road');
+      const vm = new CompanionViewVmMockTest();
+      vm.orderedEvents = [pending];
+      vm.companionContext = buildCompanionContext('READY', null, pending);
+      const page = new CompanionActionHostTest(vm, null);
+
+      // Act
+      await page.handleFocusedSkip();
+
+      // Assert
+      expect(vm.skippedEventIds.length).assertEqual(0);
+      expect(page.focusedEventId).assertEqual(-1);
+    });
+
+    it('invalid: focused_skip_should_toast_when_focused_event_is_active', 0, async () => {
+      // Arrange
+      const active = buildCompanionRuntimeEvent(704, 'skip_active', 'ACTIVE', 'Active Road');
+      const vm = new CompanionViewVmMockTest();
+      vm.orderedEvents = [active];
+      vm.companionContext = buildCompanionContext('ACTIVE', active, null);
+      const page = new CompanionActionHostTest(vm, active);
+
+      // Act
+      await page.handleFocusedSkip();
+
+      // Assert
+      expect(vm.skippedEventIds.length).assertEqual(0);
+      expect(page.toastMessages[0]).assertEqual('仅“未开始”任务可跳过');
+    });
+
+    it('conflict: focused_reopen_should_block_when_other_event_is_active', 0, async () => {
+      // Arrange
+      const active = buildCompanionRuntimeEvent(705, 'reopen_blocker', 'ACTIVE', 'Blocker Road');
+      const skipped = buildCompanionRuntimeEvent(706, 'reopen_skipped', 'PENDING', 'Skipped Road');
+      skipped.completion_status = EventEntity.STATE_SKIPPED;
+      const vm = new CompanionViewVmMockTest();
+      vm.orderedEvents = [active, skipped];
+      vm.companionContext = buildCompanionContext('ACTIVE', active, null);
+      const page = new CompanionActionHostTest(vm, skipped);
+
+      // Act
+      await page.handleFocusedReopen();
+
+      // Assert
+      expect(vm.reopenedEventIds.length).assertEqual(0);
+      expect(vm.updateActualTimeCount).assertEqual(0);
+      expect(page.toastMessages[0]).assertEqual('请先结束当前进行中的任务');
+    });
+
+    it('regression: td-20260422-focused_reopen_should_toast_when_reopen_repository_fails', 0, async () => {
+      // Arrange
+      const skipped = buildCompanionRuntimeEvent(707, 'reopen_fail', 'PENDING', 'Fail Road');
+      skipped.completion_status = EventEntity.STATE_SKIPPED;
+      const vm = new CompanionViewVmMockTest();
+      vm.orderedEvents = [skipped];
+      vm.reopenResult = false;
+      vm.companionContext = buildCompanionContext('READY', null, skipped);
+      const page = new CompanionActionHostTest(vm, skipped);
+
+      // Act
+      await page.handleFocusedReopen();
+
+      // Assert
+      expect(vm.reopenedEventIds.length).assertEqual(1);
+      expect(vm.updateActualTimeCount).assertEqual(0);
+      expect(page.toastMessages[0]).assertEqual('重新开始失败');
+    });
+
+    it('combined: focused_reopen_and_dialog_helpers_should_cover_success_and_missing_target_paths', 0, async () => {
+      // Arrange
+      const skipped = buildCompanionRuntimeEvent(708, 'reopen_success', 'PENDING', 'Success Road');
+      skipped.completion_status = EventEntity.STATE_SKIPPED;
+      const vm = new CompanionViewVmMockTest();
+      vm.orderedEvents = [skipped];
+      vm.companionContext = buildCompanionContext('READY', null, skipped);
+      const page = new CompanionActionHostTest(vm, skipped);
+
+      const dialogVm = new CompanionViewVmMockTest();
+      dialogVm.orderedEvents = [skipped];
+      dialogVm.conflictName = 'running_spot';
+      dialogVm.companionContext = buildCompanionContext('READY', null, skipped);
+      const uiContext = new CompanionViewUiContextMockTest();
+      const dialogPage = createCompanionViewInstance(dialogVm as Object as TimelineViewModel);
+      setCompanionViewUiContextForTest(dialogPage, uiContext);
+      dialogPage.refreshContext();
+      const missing = buildCompanionRuntimeEvent(799, 'missing_dialog_target', 'PENDING', 'Missing Dialog Road');
+
+      // Act
+      await page.handleFocusedReopen();
+      const conflictShown = await dialogPage.showGlobalActiveConflictDialog(skipped.id);
+      dialogPage.openRecordCorrectionDialog(missing);
+
+      // Assert
+      expect(vm.reopenedEventIds[0]).assertEqual(skipped.id);
+      expect(vm.updateActualTimeCount).assertEqual(1);
+      expect(page.focusedEventId).assertEqual(skipped.id);
+      expect(page.companionSubMode).assertEqual('immersive');
+      expect(conflictShown).assertTrue();
+      expect(uiContext.alertCount).assertEqual(1);
+      expect(uiContext.lastAlert?.message.includes('running_spot')).assertTrue();
     });
   });
 

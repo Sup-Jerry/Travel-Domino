@@ -471,5 +471,7 @@ export default function companionHistoryPageHelperTest() {
       expect(detailThrew).assertFalse();
       expect(hiddenThrew).assertFalse();
     });
+
+
   });
 }

@@ -506,7 +506,7 @@ const registeredSuiteNames: string[] = [
   'Phase2BatchBX',
   'Phase2BatchBY',
   'Phase2BatchBZ',
-  'Phase2BatchCA'
+  'Phase2BatchCA',
 ];
 
 function containsSuite(name: string): boolean {
@@ -847,6 +847,7 @@ export default function testsuite() {
     });
   });
 }
+
 
 
 

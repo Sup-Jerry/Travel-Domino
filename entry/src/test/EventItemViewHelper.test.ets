@@ -497,5 +497,73 @@ export default function eventItemViewHelperTest() {
       // Assert
       expect(threw).assertFalse();
     });
+
+    it('invalid: event_item_view_initial_render_should_support_no_transit_branch', 0, () => {
+      // Arrange
+      const page = new EventItemView(undefined, {} as LocalStorage) as Object as EventItemViewPrivateTest;
+      const event = buildEventItemTestEvent(2);
+      event.pre_travel_min = DomainConstants.COMMUTE_NO_TRANSIT;
+      event.travel_mode = 3;
+      event.note = '';
+      page.setInitiallyProvidedValue({
+        event: event,
+        index: 2,
+        totalCount: 4,
+        showTravelIndicator: true,
+        isCompanionMode: false,
+        companionCurrentEventId: -1,
+        showWeather: true
+      });
+      page.effectiveTheme = 'dark';
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.getTravelModeIcon(event.travel_mode)).assertEqual('🚇');
+    });
+
+    it('combined: event_item_view_initial_render_should_support_fallback_commute_and_manual_popup_branch', 0, () => {
+      // Arrange
+      const page = new EventItemView(undefined, {} as LocalStorage) as Object as EventItemViewPrivateTest;
+      const event = buildEventItemTestEvent(1);
+      event.pre_travel_min = DomainConstants.COMMUTE_FALLBACK_UNKNOWN;
+      event.travel_mode = 2;
+      event.transit_warning = false;
+      event.ai_reasoning = '';
+      event.weather_text = '';
+      event.weather_temperature = 0;
+      page.setInitiallyProvidedValue({
+        event: event,
+        index: 1,
+        totalCount: 2,
+        showTravelIndicator: true,
+        isCompanionMode: true,
+        companionCurrentEventId: 99,
+        showWeather: true
+      });
+      page.companionTimeDisplayMode = 1;
+      page.isManualInputPopupShow = true;
+      page.tempCommuteVal = '33';
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.formatCommuteTime(event.pre_travel_min)).assertEqual('16h 39m');
+      expect(page.isManualInputPopupShow).assertTrue();
+    });
   });
 }

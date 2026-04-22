@@ -31,6 +31,7 @@ A skill is a set of local instructions to follow that is stored in a `SKILL.md` 
 - 改代码：使用 `travel-domino-dev`，并结合 `skills-workbench` 的迭代沉淀能力。
 - 代码瘦身：使用 `app-size-pruner`。
 - 单测补齐/生成：使用 `unit-test-case-generator`。
+- 遇到无关改动时：默认忽略；不回滚；不纳入当前任务判断；只处理用户明确要求处理的文件或范围。
 - 上传到 GitHub：使用当前仓库已落地的 Git 治理流程（commit-msg / pre-push hooks、`scripts/git-flow.ps1`、相关 workflows）。
 - Git 上传策略：默认禁止直推 `main`。必须走 `develop / feature/* / release/* / hotfix/*`，除非用户当次明确授权直推 `main`。
 - Git 上传执行入口：必须优先使用 `scripts/git-auto-publish.ps1`，不要直接手工 `git push`。
