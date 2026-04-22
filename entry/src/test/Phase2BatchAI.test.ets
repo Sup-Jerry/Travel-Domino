@@ -1209,7 +1209,7 @@ export default function phase2BatchAITest() {
       for (let i = 0; i < 7; i++) {
         const event = createEventForBatch(920 + i, 1, 32 + i / 10, 118 + i / 10, i);
         event.dynamic_day_offset = i < 2 ? i : 1;
-        event.address = `城市${i}市测试路`;
+        event.address = `测试${i}市测试路`;
         events.push(event);
         bindings.push(createBindingForBatch(event, i === 0 ? 80 : 65, ['RAIN'], ''));
       }
