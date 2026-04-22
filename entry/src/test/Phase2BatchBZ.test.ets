@@ -203,6 +203,7 @@ interface ArchiveDialogControllerLikeBZ {
 interface LoginPagePrivateBZ {
   agreementAccepted: boolean;
   loading: boolean;
+  activeLoginScene: string;
   createLoginTraceId(scene: string): string;
   ensureAgreement(): boolean;
   replaceUrl(url: string): Promise<void>;
@@ -1127,6 +1128,7 @@ export default function phase2BatchBZTest() {
         const authFacade = new LoginAuthFacadeMockBZ();
         page.agreementAccepted = true;
         page.loading = true;
+        page.activeLoginScene = 'huawei';
         Reflect.set(page as Object, 'authFacade', authFacade as Object);
 
         // Act

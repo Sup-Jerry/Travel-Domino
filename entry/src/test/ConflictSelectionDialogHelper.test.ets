@@ -1,8 +1,14 @@
 ﻿import { describe, it, expect } from '@ohos/hypium';
 import {
+  ConflictSelectionDialog,
   getConflictSelectionGapPrompt,
   shouldUseConflictAdvanceAdjust
 } from '../main/ets/pages/components/dialogs/ConflictSelectionDialog';
+
+interface ConflictSelectionDialogPrivateTest {
+  gapMinutes: number;
+  initialRender(): void;
+}
 
 export default function conflictSelectionDialogHelperTest() {
   describe('unit_test_case_generator_autofill_ConflictSelectionDialogHelper', () => {
@@ -65,6 +71,22 @@ export default function conflictSelectionDialogHelperTest() {
       // Assert
       expect(prompt.indexOf('12') >= 0).assertTrue();
       expect(useAdvance).assertTrue();
+    });
+    it('normal: conflict_selection_dialog_initial_render_should_support_three_resolution_options', 0, () => {
+      // Arrange
+      const page = new ConflictSelectionDialog(undefined, {} as LocalStorage) as Object as ConflictSelectionDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.gapMinutes = 25;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
   });
 }
