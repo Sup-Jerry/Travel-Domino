@@ -1,9 +1,32 @@
-import { describe, it, expect } from '@ohos/hypium';
+﻿import { describe, it, expect } from '@ohos/hypium';
 import {
+  SettingCategoryItem,
+  SettingSelectItem,
+  SettingsSubPageHeader,
   getSettingsSubPageBackLabel,
   resolveSettingSelectValueText,
   shouldShowSettingSwitchLoading
 } from '../main/ets/pages/components/views/SettingsItems';
+
+interface SettingSelectItemPrivateTest {
+  title: string;
+  desc: string;
+  valueText: string;
+  initialRender(): void;
+}
+
+interface SettingCategoryItemPrivateTest {
+  title: string;
+  desc: string;
+  effectiveTheme: string;
+  initialRender(): void;
+}
+
+interface SettingsSubPageHeaderPrivateTest {
+  title: string;
+  effectiveTheme: string;
+  initialRender(): void;
+}
 
 export default function settingsItemsHelperTest() {
   describe('unit_test_case_generator_autofill_SettingsItemsHelper', () => {
@@ -61,6 +84,62 @@ export default function settingsItemsHelperTest() {
       // Assert
       expect(showLoading).assertTrue();
       expect(resolved).assertEqual('手动');
+    });
+
+    it('normal: settings_select_item_initial_render_should_support_value_branch', 0, () => {
+      // Arrange
+      const page = new SettingSelectItem(undefined, {} as LocalStorage) as Object as SettingSelectItemPrivateTest;
+      let threw = false;
+
+      // Act
+      page.title = '主题模式';
+      page.desc = '支持浅色深色';
+      page.valueText = '深色';
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('combined: settings_category_item_initial_render_should_support_theme_palette_branch', 0, () => {
+      // Arrange
+      const page = new SettingCategoryItem(undefined, {} as LocalStorage) as Object as SettingCategoryItemPrivateTest;
+      let threw = false;
+
+      // Act
+      page.title = '偏好洞察';
+      page.desc = '查看你的行程偏好';
+      page.effectiveTheme = 'dark';
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: settings_sub_page_header_initial_render_should_support_back_button_branch', 0, () => {
+      // Arrange
+      const page = new SettingsSubPageHeader(undefined, {} as LocalStorage) as Object as SettingsSubPageHeaderPrivateTest;
+      let threw = false;
+
+      // Act
+      page.title = '通用设置';
+      page.effectiveTheme = 'light';
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
   });
 }

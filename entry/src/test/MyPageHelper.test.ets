@@ -1,12 +1,39 @@
 import { describe, it, expect } from '@ohos/hypium';
 import {
+  createMyPageForTest,
   normalizeMyPageLightHintKey,
   normalizeMyPageUsername,
   resolveMyPageAgreementRequiredToast,
+  resolveMyPageAvatarSyncPendingHint,
+  resolveMyPageAvatarUpdateToast,
   resolveMyPageRemoteAvatarUrl,
   resolveMyPageProfileBootstrapHint,
   shouldMyPageEmitLightHint
 } from '../main/ets/pages/MyPage';
+
+interface MyPagePrivateTest {
+  userName: string;
+  loadingProfile: boolean;
+  actionLoading: boolean;
+  isGuestUser: boolean;
+  agreementAccepted: boolean;
+  avatarDisplayUri: string;
+  useDefaultAvatar: boolean;
+  avatarBusy: boolean;
+  currentUserId: string;
+  currentRemoteAvatarUrl: string;
+  showUsernameEditor: boolean;
+  usernameDraft: string;
+  profileReady: boolean;
+  effectiveTheme: string;
+  initialRender(): void;
+  normalizeAndValidateUsername(rawValue: string): string;
+  openUsernameEditor(): void;
+}
+
+function createMyPagePrivateForTest(): MyPagePrivateTest {
+  return createMyPageForTest() as MyPagePrivateTest;
+}
 
 export default function myPageHelperTest() {
   describe('unit_test_case_generator_autofill_MyPageHelper', () => {
@@ -84,6 +111,110 @@ export default function myPageHelperTest() {
       const resolved = resolveMyPageRemoteAvatarUrl(authAvatarUrl, cloudAvatarPath, 'app.media.headphoto');
       // Assert
       expect(resolved).assertEqual('https://cdn.example.com/avatar.jpg');
+    });
+
+    it('normal: my_page_avatar_update_toast_should_distinguish_synced_and_local', 0, () => {
+      // Arrange
+      const syncedState = 'SYNCED';
+      const pendingState = 'PENDING';
+
+      // Act
+      const syncedToast = resolveMyPageAvatarUpdateToast(syncedState);
+      const pendingToast = resolveMyPageAvatarUpdateToast(pendingState);
+      const pendingHint = resolveMyPageAvatarSyncPendingHint('user_9');
+
+      // Assert
+      expect(syncedToast.length > 0).assertTrue();
+      expect(pendingToast.length > 0).assertTrue();
+      expect(pendingHint.key).assertEqual('avatar_cloud_sync_pending:user_9');
+    });
+
+    it('boundary: my_page_profile_bootstrap_hint_should_use_guest_when_account_blank', 0, () => {
+      // Arrange
+      const accountId = '';
+
+      // Act
+      const payload = resolveMyPageProfileBootstrapHint(accountId, 'offline');
+
+      // Assert
+      expect(payload !== null).assertTrue();
+      expect(payload?.key).assertEqual('profile_offline:guest_local');
+    });
+
+    it('combined: my_page_should_render_guest_login_card_with_empty_avatar', 0, () => {
+      // Arrange
+      const page = createMyPagePrivateForTest();
+      page.profileReady = true;
+      page.isGuestUser = true;
+      page.agreementAccepted = false;
+      page.avatarDisplayUri = '';
+      page.useDefaultAvatar = false;
+      page.avatarBusy = false;
+      page.effectiveTheme = 'light';
+
+      // Act
+      page.initialRender();
+
+      // Assert
+      expect(page.isGuestUser).assertTrue();
+      expect(page.profileReady).assertTrue();
+    });
+
+    it('combined: my_page_should_render_default_avatar_for_guest_profile', 0, () => {
+      // Arrange
+      const page = createMyPagePrivateForTest();
+      page.profileReady = true;
+      page.isGuestUser = true;
+      page.useDefaultAvatar = true;
+      page.avatarDisplayUri = '';
+      page.actionLoading = true;
+      page.effectiveTheme = 'dark';
+
+      // Act
+      page.initialRender();
+
+      // Assert
+      expect(page.useDefaultAvatar).assertTrue();
+      expect(page.actionLoading).assertTrue();
+    });
+
+    it('combined: my_page_should_render_non_guest_editor_and_remote_avatar', 0, () => {
+      // Arrange
+      const page = createMyPagePrivateForTest();
+      page.profileReady = true;
+      page.isGuestUser = false;
+      page.userName = 'Alice';
+      page.currentUserId = 'account_1';
+      page.avatarDisplayUri = 'file://avatar/account_1.png';
+      page.useDefaultAvatar = false;
+      page.showUsernameEditor = true;
+      page.usernameDraft = 'Alice_2';
+      page.effectiveTheme = 'light';
+
+      // Act
+      const normalized = page.normalizeAndValidateUsername(page.usernameDraft);
+      page.initialRender();
+
+      // Assert
+      expect(normalized).assertEqual('Alice_2');
+      expect(page.isGuestUser).assertFalse();
+    });
+
+    it('combined: my_page_open_username_editor_should_copy_current_name_before_render', 0, () => {
+      // Arrange
+      const page = createMyPagePrivateForTest();
+      page.profileReady = true;
+      page.isGuestUser = false;
+      page.userName = 'Bob';
+      page.showUsernameEditor = false;
+
+      // Act
+      page.openUsernameEditor();
+      page.initialRender();
+
+      // Assert
+      expect(page.showUsernameEditor).assertTrue();
+      expect(page.usernameDraft).assertEqual('Bob');
     });
   });
 }

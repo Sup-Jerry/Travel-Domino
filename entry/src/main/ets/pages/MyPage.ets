@@ -581,3 +581,7 @@ struct MyPage {
     .backgroundColor(this.getThemePalette().pageBg);
   }
 }
+
+export function createMyPageForTest(): Object {
+  return new MyPage(undefined, {} as LocalStorage);
+}

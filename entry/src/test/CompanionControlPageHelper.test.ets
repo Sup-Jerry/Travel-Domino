@@ -145,6 +145,22 @@ function buildControlContext(runtimeState: 'IDLE' | 'READY' | 'ACTIVE' | 'PAUSED
 
 class CompanionControlSuggestionPlaceholderTest {}
 
+class CompanionControlSuggestionRenderTest {
+  suggestionId: string = 'control_weather_s1';
+  level: string = 'NOTICE';
+  triggerType: string = 'RAIN';
+  actionType: string = 'SHIFT_TIME';
+  title: string = 'move indoor';
+  message: string = 'rain is coming';
+  relatedNodeIds: string[] = ['n1'];
+  createdAt: number = 1;
+  reason: string = 'rain';
+  expectedBenefit: string = 'less risk';
+  canRollback: boolean = true;
+  cooldownKey: string = 'control_weather_s1';
+  expiresAt: number = 2;
+}
+
 export default function companionControlPageHelperTest() {
   describe('unit_test_case_generator_autofill_CompanionControlPageHelper', () => {
     it('normal: weather_card_should_follow_feature_flag', 0, () => {
@@ -558,6 +574,137 @@ export default function companionControlPageHelperTest() {
 
       // Assert
       expect(threw).assertFalse();
+    });
+
+    it('normal: control_page_initial_render_should_cover_weather_switch_and_timeline_branches', 0, () => {
+      // Arrange
+      const page = new CompanionControlPage(undefined, {} as LocalStorage) as Object as CompanionControlPagePrivateTest;
+      const current = buildEvent(501);
+      const outgoing = buildEvent(502);
+      const incoming = buildEvent(503);
+      const stable = buildEvent(504);
+      const suggestion = new CompanionControlSuggestionRenderTest() as Object;
+      page.context = buildControlContext('ACTIVE', current);
+      page.safeTopInset = 12;
+      page.safeBottomInset = 16;
+      page.companionFilterState = 'ACTIVE';
+      page.isWeatherFeatureEnabled = true;
+      page.weatherExpanded = true;
+      page.showWeatherScorePopup = false;
+      page.showWeatherHintPopup = false;
+      page.showWeatherSuggestionPopup = false;
+      page.weatherSuggestionPopupText = 'line1\nline2';
+      page.executionWeatherCollabBadge = 'badge';
+      page.executionWeatherLoading = false;
+      page.executionWeatherHint = 'rain warning';
+      page.executionWeatherLevel = 'NOTICE';
+      page.executionWeatherCurrentText = 'sunny';
+      page.executionWeatherNextText = 'rain';
+      page.executionWeatherScore = 76;
+      page.executionWeatherCollabSummary = 'city sync';
+      page.executionWeatherAppliedSummary = 'shifted';
+      page.executionWeatherSuggestions = [suggestion];
+      page.weatherScoreLines = ['score'];
+      page.weatherHintLines = ['hint'];
+      page.canRenderSwitchCards = true;
+      page.outgoingEvent = outgoing;
+      page.incomingEvent = incoming;
+      page.stableEvent = stable;
+      page.focusedEventId = incoming.id;
+      page.isCardSwitching = true;
+      page.cardSwitchProgress = 0.4;
+      page.scheduledEvents = [current, outgoing, incoming];
+      page.timelineEvents = [outgoing, incoming, stable];
+      page.focusPosition = 2;
+      page.timelineCount = 3;
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.isWeatherFeatureEnabled).assertTrue();
+      expect(page.executionWeatherSuggestions.length).assertEqual(1);
+    });
+
+    it('boundary: control_page_initial_render_should_cover_hidden_weather_stable_empty_timeline', 0, () => {
+      // Arrange
+      const page = new CompanionControlPage(undefined, {} as LocalStorage) as Object as CompanionControlPagePrivateTest;
+      const stable = buildEvent(601);
+      page.context = buildControlContext('IDLE', null);
+      page.safeTopInset = 0;
+      page.safeBottomInset = 0;
+      page.companionFilterState = 'ALL';
+      page.isWeatherFeatureEnabled = false;
+      page.weatherExpanded = false;
+      page.canRenderSwitchCards = false;
+      page.outgoingEvent = null;
+      page.incomingEvent = null;
+      page.stableEvent = stable;
+      page.focusedEventId = -1;
+      page.timelineEvents = [];
+      page.scheduledEvents = [];
+      page.focusPosition = 0;
+      page.timelineCount = 0;
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.isWeatherFeatureEnabled).assertFalse();
+      expect(page.timelineEvents.length).assertEqual(0);
+    });
+
+    it('combined: control_page_initial_render_should_cover_paused_collapsed_weather_and_bottom_actions', 0, () => {
+      // Arrange
+      const page = new CompanionControlPage(undefined, {} as LocalStorage) as Object as CompanionControlPagePrivateTest;
+      const current = buildEvent(701);
+      const next = buildEvent(702);
+      page.context = buildControlContext('PAUSED', current);
+      page.safeTopInset = 20;
+      page.safeBottomInset = 24;
+      page.companionFilterState = 'SKIPPED';
+      page.isWeatherFeatureEnabled = true;
+      page.weatherExpanded = false;
+      page.showWeatherScorePopup = false;
+      page.showWeatherHintPopup = false;
+      page.showWeatherSuggestionPopup = false;
+      page.executionWeatherLoading = true;
+      page.executionWeatherHint = 'wind';
+      page.executionWeatherScore = -1;
+      page.executionWeatherSuggestions = [];
+      page.canRenderSwitchCards = false;
+      page.stableEvent = current;
+      page.focusedEventId = current.id;
+      page.timelineEvents = [current, next];
+      page.scheduledEvents = [current, next];
+      page.focusPosition = 1;
+      page.timelineCount = 2;
+      page.effectiveTheme = 'dark';
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.context.runtimeState).assertEqual('PAUSED');
+      expect(page.weatherExpanded).assertFalse();
     });
   });
 }

@@ -80,6 +80,7 @@ interface IndexScheduleAreaPrivateTest {
   onSave: () => void;
   setInitiallyProvidedValue(params: IndexScheduleAreaParamsTest): void;
   updateStateVars(params: IndexScheduleAreaParamsTest): void;
+  initialRender(): void;
 }
 
 function buildScheduleEvent(id: number): EventEntity {
@@ -301,6 +302,65 @@ export default function indexScheduleAreaHelperTest() {
       expect(page.timelineTheme.pageBg).assertEqual('#AAAAAA');
       expect(page.unsavedTheme.primary).assertEqual('#CCCCCC');
       expect(!!page.vm).assertTrue();
+    });
+
+    it('combined: schedule_area_initial_render_should_cover_timeline_bottom_bar_and_unsaved_bar', 0, () => {
+      // Arrange
+      const page = new IndexScheduleArea(undefined, {} as LocalStorage) as Object as IndexScheduleAreaPrivateTest;
+      const event = buildScheduleEvent(11);
+      const grouped: IndexScheduleGroupTest[] = [{
+        dayOffset: 0,
+        actualDateMs: 100,
+        dateHeader: 'Day 1',
+        events: [event]
+      }];
+      let threw = false;
+
+      // Act
+      page.vm = new IndexScheduleVmPlaceholderTest() as Object;
+      page.groupedEvents = grouped;
+      page.allEvents = [event];
+      page.isArchived = false;
+      page.isCompanionMode = false;
+      page.showWeather = true;
+      page.isPageRefreshing = false;
+      page.gapsCount = 2;
+      page.hasUnsavedChanges = true;
+      page.onIsDayCollapsed = (_dayOffset: number) => false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: schedule_area_initial_render_should_cover_companion_mode_without_bottom_bar', 0, () => {
+      // Arrange
+      const page = new IndexScheduleArea(undefined, {} as LocalStorage) as Object as IndexScheduleAreaPrivateTest;
+      let threw = false;
+
+      // Act
+      page.vm = new IndexScheduleVmPlaceholderTest() as Object;
+      page.groupedEvents = [];
+      page.allEvents = [];
+      page.isArchived = true;
+      page.isCompanionMode = true;
+      page.showWeather = false;
+      page.isPageRefreshing = false;
+      page.gapsCount = 0;
+      page.hasUnsavedChanges = false;
+      page.onIsDayCollapsed = (_dayOffset: number) => true;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
   });
 }

@@ -247,6 +247,7 @@ description: 用于 Travel Domino（HarmonyOS 行程规划项目）的定向开�
 - For HarmonyOS avatar picker failures with AVATAR_TRACE pick_fail reason Cannot read property createPixelMap of undefined, first treat PhotoSelectResult.photoUris as temporary authorized URIs and recover through photoAccessHelper.getAssets plus MediaAssetManager.requestImageData instead of direct image.createImageSource(uri) only.
 - When guest login must work after Huawei login failure, verify AuthSessionStore can reload local guest sessions with empty tokens and ensure LoginPage guest actions can override in-flight Huawei login instead of sharing one blocking loading flag.
 - When AuthGate blank checking page stays near 3 seconds after Huawei silent login failure, inspect AppStartupCoordinator.STARTUP_AUTH_TIMEOUT_MS before changing page UI.
+- When unrelated working-tree changes are present, ignore them by default; do not revert them and do not include them in current-task scope or judgment unless the user explicitly asks to handle them.
 
 ### Known Fixes & Workarounds
 - For cross-day domino shifts, user-facing date and writeback inputs must prefer dynamic_day_offset; do not mix with day_offset in one flow.

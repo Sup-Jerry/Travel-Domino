@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-21T22:22:49.416173",
+  "last_updated": "2026-04-21T22:30:13.290767",
   "preferences": [
     "Retrospective output should follow: issues-root causes-improvements-next constraints.",
     "When user reports Day/date mismatch, first check mixed usage of dynamic_day_offset vs day_offset.",
@@ -79,7 +79,8 @@
     "When Docker postgres shows 5432 mapped but the backend still fails with user \"travel\" password authentication failed, verify the host-side OwningProcess for port 5432 and the Windows service postgresql-x64-16 before changing login code or container credentials.",
     "For HarmonyOS avatar picker failures with AVATAR_TRACE pick_fail reason Cannot read property createPixelMap of undefined, first treat PhotoSelectResult.photoUris as temporary authorized URIs and recover through photoAccessHelper.getAssets plus MediaAssetManager.requestImageData instead of direct image.createImageSource(uri) only.",
     "When guest login must work after Huawei login failure, verify AuthSessionStore can reload local guest sessions with empty tokens and ensure LoginPage guest actions can override in-flight Huawei login instead of sharing one blocking loading flag.",
-    "When AuthGate blank checking page stays near 3 seconds after Huawei silent login failure, inspect AppStartupCoordinator.STARTUP_AUTH_TIMEOUT_MS before changing page UI."
+    "When AuthGate blank checking page stays near 3 seconds after Huawei silent login failure, inspect AppStartupCoordinator.STARTUP_AUTH_TIMEOUT_MS before changing page UI.",
+    "When unrelated working-tree changes are present, ignore them by default; do not revert them and do not include them in current-task scope or judgment unless the user explicitly asks to handle them."
   ],
   "fixes": [
     "For cross-day domino shifts, user-facing date and writeback inputs must prefer dynamic_day_offset; do not mix with day_offset in one flow.",

@@ -1,8 +1,16 @@
 import { describe, it, expect } from '@ohos/hypium';
 import {
   canCreatePlanWithTitle,
+  CreatePlanDialog,
   formatCreatePlanDateText
 } from '../main/ets/pages/components/dialogs/CreatePlanDialog';
+
+interface CreatePlanDialogPrivateTest {
+  title: string;
+  selectedDate: Date;
+  effectiveTheme: string;
+  initialRender(): void;
+}
 
 export default function createPlanDialogHelperTest() {
   describe('unit_test_case_generator_autofill_CreatePlanDialogHelper', () => {
@@ -61,6 +69,25 @@ export default function createPlanDialogHelperTest() {
       // Assert
       expect(canCreate).assertTrue();
       expect(dateText.length > 0).assertTrue();
+    });
+
+    it('normal: create_plan_dialog_initial_render_should_support_title_and_date_branch', 0, () => {
+      // Arrange
+      const page = new CreatePlanDialog(undefined, {} as LocalStorage) as Object as CreatePlanDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.title = 'xian trip';
+      page.selectedDate = new Date(2026, 3, 12);
+      page.effectiveTheme = 'dark';
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
   });
 }

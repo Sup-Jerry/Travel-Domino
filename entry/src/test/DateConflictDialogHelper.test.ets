@@ -1,8 +1,16 @@
 import { describe, it, expect } from '@ohos/hypium';
 import {
+  DateConflictDialog,
   getDateConflictDescription,
   shouldShowDateConflictPlanStartOption
 } from '../main/ets/pages/components/dialogs/DateConflictDialog';
+
+interface DateConflictDialogPrivateTest {
+  conflictDateStr: string;
+  planStartDateStr: string;
+  planStartDate: number;
+  initialRender(): void;
+}
 
 export default function dateConflictDialogHelperTest() {
   describe('unit_test_case_generator_autofill_DateConflictDialogHelper', () => {
@@ -65,6 +73,25 @@ export default function dateConflictDialogHelperTest() {
       // Assert
       expect(show).assertFalse();
       expect(text.indexOf('x') >= 0).assertTrue();
+    });
+
+    it('normal: date_conflict_dialog_initial_render_should_support_conflict_options_layout', 0, () => {
+      // Arrange
+      const page = new DateConflictDialog(undefined, {} as LocalStorage) as Object as DateConflictDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.conflictDateStr = '05月01日';
+      page.planStartDateStr = '05月05日';
+      page.planStartDate = new Date(2026, 4, 5).getTime();
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
   });
 }

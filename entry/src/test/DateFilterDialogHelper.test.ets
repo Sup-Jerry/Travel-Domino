@@ -1,8 +1,13 @@
 import { describe, it, expect } from '@ohos/hypium';
 import {
+  DateFilterDialog,
   getDateFilterDialogActions,
   isDateFilterDialogActionSupported
 } from '../main/ets/pages/components/dialogs/DateFilterDialog';
+
+interface DateFilterDialogPrivateTest {
+  initialRender(): void;
+}
 
 export default function dateFilterDialogHelperTest() {
   describe('unit_test_case_generator_autofill_DateFilterDialogHelper', () => {
@@ -57,6 +62,22 @@ export default function dateFilterDialogHelperTest() {
       const allSupported = actions.every((action: string) => isDateFilterDialogActionSupported(action));
       // Assert
       expect(allSupported).assertTrue();
+    });
+
+    it('normal: date_filter_dialog_initial_render_should_support_all_actions_layout', 0, () => {
+      // Arrange
+      const page = new DateFilterDialog(undefined, {} as LocalStorage) as Object as DateFilterDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
   });
 }
