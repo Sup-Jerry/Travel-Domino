@@ -472,6 +472,115 @@ export default function companionHistoryPageHelperTest() {
       expect(hiddenThrew).assertFalse();
     });
 
+    it('regression: history_page_private_methods_should_keep_sorted_groups_and_detail_fallbacks', 0, () => {
+      // Arrange
+      const page = new CompanionHistoryPage(undefined, {} as LocalStorage) as Object as CompanionHistoryPagePrivateTest;
+      const dayOne = DateUtil.formatLocalDate(1713254400000);
+      const dayTwo = DateUtil.formatLocalDate(1713340800000);
+      const later = buildHistoryTimelineItem(31, '博物馆', 'ARRIVE', 1713344400000, dayTwo);
+      later.actualStart = 0;
+      later.actualEnd = 0;
+      later.note = '   ';
+      later.address = '   ';
+      later.deviationMinutes = 0;
+      const earlier = buildHistoryTimelineItem(32, '博物馆', 'LEAVE', 1713258000000, dayOne);
+      const skipped = buildHistoryTimelineItem(33, '机场', 'SKIP', 1713256200000, '未定');
+      skipped.displayTs = 0;
+      page.setInitiallyProvidedValue({
+        showHistoryPage: true,
+        historyTimelineSummary: buildHistoryTimelineSummary('trip_sort'),
+        historyTimelineItems: [later, skipped, earlier],
+        historyTimelineFilter: 'all',
+        historyViewMode: 'detail',
+        historySummary: buildPlaceCheckinSummary('博物馆'),
+        vm: null,
+        selectedHistoryTimelineItem: later,
+        safeTopInset: 0,
+        safeBottomInset: 0
+      });
+      page.updateStateVars({
+        showHistoryPage: true,
+        historyTimelineSummary: buildHistoryTimelineSummary('trip_sort'),
+        historyTimelineItems: [later, skipped, earlier],
+        historyTimelineFilter: 'all',
+        historyViewMode: 'detail',
+        historySummary: buildPlaceCheckinSummary('博物馆'),
+        vm: null,
+        selectedHistoryTimelineItem: later,
+        safeTopInset: 0,
+        safeBottomInset: 0
+      });
+
+      // Act
+      const groups = page.getHistoryTimelineGroups() as Record<string, Object>[];
+      const latest = page.getCurrentHistoryLatestItem();
+      const statusText = page.getCurrentHistoryStatusText();
+      const actualStartText = page.getCurrentHistoryActualStartText();
+      const actualEndText = page.getCurrentHistoryActualEndText();
+      const stayText = page.getCurrentHistoryStayText();
+      const deviationText = page.getCurrentHistoryDeviationText();
+      const noteText = page.getCurrentHistoryNoteText();
+      const addressText = page.getHistoryAddress('博物馆');
+      const subText = page.getTimelineSubText(skipped);
+
+      // Assert
+      expect(groups.length).assertEqual(3);
+      expect(groups[0]['key']).assertEqual(dayOne);
+      expect(groups[1]['key']).assertEqual(dayTwo);
+      expect(groups[2]['key']).assertEqual('未定');
+      expect(latest?.id).assertEqual(later.id);
+      expect(statusText).assertEqual('进行中');
+      expect(actualStartText).assertEqual('--:--');
+      expect(actualEndText).assertEqual('--:--');
+      expect(stayText).assertEqual('0 分钟');
+      expect(deviationText).assertEqual('准时');
+      expect(noteText).assertEqual('--');
+      expect(addressText).assertEqual('--');
+      expect(subText).assertEqual('原因：时间不足');
+    });
+
+    it('combined: history_page_initial_render_should_support_detail_empty_summary_branch', 0, () => {
+      // Arrange
+      const page = new CompanionHistoryPage(undefined, {} as LocalStorage) as Object as CompanionHistoryPagePrivateTest;
+      page.setInitiallyProvidedValue({
+        showHistoryPage: true,
+        historyTimelineSummary: null,
+        historyTimelineItems: [],
+        historyTimelineFilter: 'abnormal',
+        historyViewMode: 'detail',
+        historySummary: null,
+        vm: null,
+        selectedHistoryTimelineItem: null,
+        safeTopInset: 6,
+        safeBottomInset: 8
+      });
+      page.updateStateVars({
+        showHistoryPage: true,
+        historyTimelineSummary: null,
+        historyTimelineItems: [],
+        historyTimelineFilter: 'abnormal',
+        historyViewMode: 'detail',
+        historySummary: null,
+        vm: null,
+        selectedHistoryTimelineItem: null,
+        safeTopInset: 6,
+        safeBottomInset: 8
+      });
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.historyViewMode).assertEqual('detail');
+      expect(page.historySummary).assertNull();
+    });
+
 
   });
 }

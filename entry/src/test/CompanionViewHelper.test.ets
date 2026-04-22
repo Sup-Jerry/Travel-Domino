@@ -179,10 +179,12 @@ interface CompanionViewPrivateTest {
   immersiveWindow?: CompanionWindowLikeTest;
   timelineScroller: CompanionViewScrollerTest;
   getUIContext: () => CompanionViewUiContextTest;
+  initialRender(): void;
   aboutToAppear(): void;
   aboutToDisappear(): void;
   setInitiallyProvidedValue(params: CompanionViewParamsTest): void;
   updateStateVars(params: CompanionViewParamsTest): void;
+  updateSafeAreaInsets(): void;
   safeShowToast(message: string): void;
   getThemePalette(): CompanionViewPaletteTest;
   refreshContext(): void;
@@ -306,6 +308,16 @@ class CompanionViewVmMockTest implements CompanionViewVmTest {
   public historySummary: HistoryTimelineSummary | null = null;
   public historyItems: HistoryTimelineItem[] = [];
   public placeSummary: PlaceCheckinSummary | null = null;
+  public executionWeatherCollabBadge: string = '';
+  public executionWeatherLoading: boolean = false;
+  public executionWeatherHint: string = '';
+  public executionWeatherLevel: string = 'INFO';
+  public executionWeatherCurrentText: string = '';
+  public executionWeatherNextText: string = '';
+  public executionWeatherScore: number = -1;
+  public executionWeatherCollabSummary: string = '';
+  public executionWeatherAppliedSummary: string = '';
+  public executionWeatherSuggestions: Object[] = [];
   public resumeResult: boolean = true;
   public resumeCount: number = 0;
   public pauseResult: boolean = true;
@@ -344,6 +356,18 @@ class CompanionViewVmMockTest implements CompanionViewVmTest {
 
   getPlaceCheckinSummary(_placeName: string): PlaceCheckinSummary | null {
     return this.placeSummary;
+  }
+
+  isWeatherFeatureEnabled(): boolean {
+    return true;
+  }
+
+  buildWeatherScoreExplanation(_score: number): string {
+    return 'score_line';
+  }
+
+  buildWeatherHintExplanation(): string {
+    return 'hint_line';
   }
 
   resumeCurrentExecution(): boolean {
@@ -416,6 +440,12 @@ class CompanionViewVmMockTest implements CompanionViewVmTest {
     }
     return true;
   }
+
+  async refreshExecutionWeather(_forceRefresh: boolean, _trigger: string): Promise<void> {
+    return Promise.resolve();
+  }
+
+  dismissExecutionSuggestion(_suggestionId: string): void {}
 }
 
 class CompanionActionHostTest {
@@ -1190,6 +1220,80 @@ export default function companionViewHelperTest() {
     });
   });
 
+  describe('unit_test_case_generator_autofill_CompanionViewInitialRender', () => {
+    it('normal: companion_view_initial_render_should_cover_control_and_immersive_branches', 0, () => {
+      // Arrange
+      const active = buildCompanionRuntimeEvent(551, 'render_active', 'ACTIVE', 'Render Road');
+      const pending = buildCompanionRuntimeEvent(552, 'render_pending', 'PENDING', 'Render Lake');
+      const vm = new CompanionViewVmMockTest();
+      vm.orderedEvents = [active, pending];
+      vm.companionContext = buildCompanionContext('ACTIVE', active, pending);
+      vm.executionWeatherHint = 'rain later';
+      vm.executionWeatherLevel = 'NOTICE';
+      vm.executionWeatherCurrentText = 'cloudy';
+      vm.executionWeatherNextText = 'rain';
+      vm.executionWeatherScore = 78;
+      vm.executionWeatherCollabBadge = 'SYNC';
+      vm.executionWeatherCollabSummary = 'summary';
+      vm.executionWeatherAppliedSummary = 'applied';
+      vm.executionWeatherSuggestions = [];
+      const page = createCompanionViewInstance(vm as Object as TimelineViewModel);
+      page.companionSubMode = 'control';
+      page.interactionMode = 'both';
+      page.refreshContext();
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.context.runtimeState).assertEqual('ACTIVE');
+      expect(page.focusedEventId).assertEqual(active.id);
+    });
+
+    it('combined: companion_view_initial_render_should_cover_overlay_pages_branch', 0, () => {
+      // Arrange
+      const pending = buildCompanionRuntimeEvent(553, 'overlay_pending', 'PENDING', 'Overlay Road');
+      const historyItem = buildCompanionHistoryItem(9, pending.name);
+      const vm = new CompanionViewVmMockTest();
+      vm.orderedEvents = [pending];
+      vm.companionContext = buildCompanionContext('READY', null, pending);
+      vm.historySummary = buildCompanionHistorySummary('overlay_plan');
+      vm.historyItems = [historyItem];
+      vm.placeSummary = buildCompanionPlaceSummary(pending.name);
+      const page = createCompanionViewInstance(vm as Object as TimelineViewModel);
+      page.companionSubMode = 'control';
+      page.showHistoryPage = true;
+      page.showSearchPage = true;
+      page.showFilterPage = true;
+      page.searchKeyword = 'overlay';
+      page.searchResults = [pending];
+      page.historyTimelineSummary = vm.historySummary;
+      page.historyTimelineItems = vm.historyItems;
+      page.historySummary = vm.placeSummary;
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.showHistoryPage).assertTrue();
+      expect(page.showSearchPage).assertTrue();
+      expect(page.showFilterPage).assertTrue();
+    });
+
+  });
+
   describe('unit_test_case_generator_autofill_CompanionViewPrimaryActionAndBackfillBranches', () => {
     it('normal: focused_primary_action_should_resume_execution_and_keep_focus', 0, async () => {
       // Arrange
@@ -1532,6 +1636,32 @@ export default function companionViewHelperTest() {
       expect(conflictShown).assertTrue();
       expect(uiContext.alertCount).assertEqual(1);
       expect(uiContext.lastAlert?.message.includes('running_spot')).assertTrue();
+    });
+
+    it('regression: companion_view_update_safe_area_insets_should_fallback_to_zero_when_window_resolution_fails', 0, () => {
+      // Arrange
+      const vm = new CompanionViewVmMockTest();
+      const page = createCompanionViewInstance(vm as Object as TimelineViewModel);
+      page.safeTopInset = 12;
+      page.safeBottomInset = 18;
+      page.safeLeftInset = 4;
+      page.safeRightInset = 6;
+      page.immersiveWindow = new CompanionWindowMockTest();
+      let threw = false;
+
+      // Act
+      try {
+        page.updateSafeAreaInsets();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.safeTopInset).assertEqual(0);
+      expect(page.safeBottomInset).assertEqual(0);
+      expect(page.safeLeftInset).assertEqual(0);
+      expect(page.safeRightInset).assertEqual(0);
     });
   });
 
