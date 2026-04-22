@@ -269,6 +269,61 @@ export default function companionControlPageHelperTest() {
       expect(scale).assertEqual(0.996);
     });
 
+    it('boundary: control_card_helpers_should_cover_zero_and_full_progress_edges', 0, () => {
+      // Arrange
+      const zero = 0;
+      const full = 1;
+
+      // Act
+      const outgoingStartX = resolveCompanionControlCardTranslateX(true, zero, 'outgoing');
+      const outgoingEndX = resolveCompanionControlCardTranslateX(true, full, 'outgoing');
+      const incomingStartX = resolveCompanionControlCardTranslateX(true, zero, 'incoming');
+      const incomingEndX = resolveCompanionControlCardTranslateX(true, full, 'incoming');
+      const outgoingStartOpacity = resolveCompanionControlCardOpacity(true, zero, 'outgoing');
+      const outgoingEndOpacity = resolveCompanionControlCardOpacity(true, full, 'outgoing');
+      const incomingStartOpacity = resolveCompanionControlCardOpacity(true, zero, 'incoming');
+      const incomingEndOpacity = resolveCompanionControlCardOpacity(true, full, 'incoming');
+      const outgoingStartScale = resolveCompanionControlCardScale(true, zero, 'outgoing');
+      const outgoingEndScale = resolveCompanionControlCardScale(true, full, 'outgoing');
+      const incomingStartScale = resolveCompanionControlCardScale(true, zero, 'incoming');
+      const incomingEndScale = resolveCompanionControlCardScale(true, full, 'incoming');
+
+      // Assert
+      expect(outgoingStartX).assertEqual(0);
+      expect(outgoingEndX).assertEqual(-18);
+      expect(incomingStartX).assertEqual(18);
+      expect(incomingEndX).assertEqual(0);
+      expect(outgoingStartOpacity).assertEqual(1);
+      expect(outgoingEndOpacity).assertEqual(0);
+      expect(incomingStartOpacity).assertEqual(0);
+      expect(incomingEndOpacity).assertEqual(1);
+      expect(outgoingStartScale).assertEqual(1);
+      expect(outgoingEndScale).assertEqual(0.985);
+      expect(incomingStartScale).assertEqual(0.992);
+      expect(incomingEndScale).assertEqual(1);
+    });
+
+    it('combined: control_card_helpers_should_keep_stable_phase_fixed_while_switching', 0, () => {
+      // Arrange
+      const progressValues: number[] = [0, 0.35, 1];
+
+      // Act
+      const translateSum = progressValues
+        .map((progress: number) => resolveCompanionControlCardTranslateX(true, progress, 'stable'))
+        .reduce((sum: number, value: number) => sum + value, 0);
+      const opacitySum = progressValues
+        .map((progress: number) => resolveCompanionControlCardOpacity(true, progress, 'stable'))
+        .reduce((sum: number, value: number) => sum + value, 0);
+      const scaleSum = progressValues
+        .map((progress: number) => resolveCompanionControlCardScale(true, progress, 'stable'))
+        .reduce((sum: number, value: number) => sum + value, 0);
+
+      // Assert
+      expect(translateSum).assertEqual(0);
+      expect(opacitySum).assertEqual(3);
+      expect(scaleSum).assertEqual(3);
+    });
+
     it('combined: control_page_instance_should_sync_props_callbacks_and_private_card_methods', 0, () => {
       // Arrange
       const page = new CompanionControlPage(undefined, {} as LocalStorage) as Object as CompanionControlPagePrivateTest;
@@ -555,6 +610,45 @@ export default function companionControlPageHelperTest() {
       expect(totalTimelineCount).assertEqual(6);
     });
 
+    it('boundary: control_page_empty_param_updates_should_keep_constructor_defaults', 0, () => {
+      // Arrange
+      const page = new CompanionControlPage(undefined, {} as LocalStorage) as Object as CompanionControlPagePrivateTest;
+
+      // Act
+      page.setInitiallyProvidedValue({});
+      page.updateStateVars({});
+      const palette = page.getThemePalette();
+      const translate = page.getCardTranslateX('stable');
+      const opacity = page.getCardOpacity('stable');
+      const scale = page.getCardScale('stable');
+
+      // Assert
+      expect(page.context.runtimeState).assertEqual('IDLE');
+      expect(page.safeTopInset).assertEqual(0);
+      expect(page.safeBottomInset).assertEqual(0);
+      expect(page.companionFilterState).assertEqual('ALL');
+      expect(page.isWeatherFeatureEnabled).assertFalse();
+      expect(page.weatherExpanded).assertFalse();
+      expect(page.showWeatherScorePopup).assertFalse();
+      expect(page.showWeatherHintPopup).assertFalse();
+      expect(page.showWeatherSuggestionPopup).assertFalse();
+      expect(page.weatherSuggestionPopupText).assertEqual('');
+      expect(page.executionWeatherScore).assertEqual(-1);
+      expect(page.executionWeatherSuggestions.length).assertEqual(0);
+      expect(page.canRenderSwitchCards).assertFalse();
+      expect(page.focusedEventId).assertEqual(-1);
+      expect(page.isCardSwitching).assertFalse();
+      expect(page.cardSwitchProgress).assertEqual(1);
+      expect(page.scheduledEvents.length).assertEqual(0);
+      expect(page.timelineEvents.length).assertEqual(0);
+      expect(page.focusPosition).assertEqual(0);
+      expect(page.timelineCount).assertEqual(0);
+      expect(translate).assertEqual(0);
+      expect(opacity).assertEqual(1);
+      expect(scale).assertEqual(1);
+      expect(palette.companionBg).assertEqual(ThemeCenter.getPalette(page.effectiveTheme).companionBg);
+    });
+
     it('regression: control_page_initial_render_should_not_throw_with_minimal_ready_state', 0, () => {
       // Arrange
       const page = new CompanionControlPage(undefined, {} as LocalStorage) as Object as CompanionControlPagePrivateTest;
@@ -705,6 +799,44 @@ export default function companionControlPageHelperTest() {
       expect(threw).assertFalse();
       expect(page.context.runtimeState).assertEqual('PAUSED');
       expect(page.weatherExpanded).assertFalse();
+    });
+
+    it('invalid: control_page_initial_render_should_handle_gap_state_without_current_event', 0, () => {
+      // Arrange
+      const page = new CompanionControlPage(undefined, {} as LocalStorage) as Object as CompanionControlPagePrivateTest;
+      const blocked = buildEvent(801);
+      page.context = buildControlContext('GAP', null);
+      page.safeTopInset = -2;
+      page.safeBottomInset = -4;
+      page.companionFilterState = 'SKIPPED';
+      page.isWeatherFeatureEnabled = true;
+      page.weatherExpanded = true;
+      page.executionWeatherLevel = 'WARNING';
+      page.executionWeatherScore = 0;
+      page.canRenderSwitchCards = true;
+      page.outgoingEvent = null;
+      page.incomingEvent = null;
+      page.stableEvent = blocked;
+      page.focusedEventId = -1;
+      page.timelineEvents = [blocked];
+      page.scheduledEvents = [];
+      page.focusPosition = 0;
+      page.timelineCount = 1;
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(getCompanionControlCurrentEventId(page.context.currentEvent)).assertEqual(-1);
+      expect(page.context.runtimeState).assertEqual('GAP');
+      expect(page.executionWeatherLevel).assertEqual('WARNING');
+      expect(page.timelineEvents.length).assertEqual(1);
     });
   });
 }

@@ -1,5 +1,6 @@
 import { describe, it, expect } from '@ohos/hypium';
 import { AiService, AiGenerateRequest, AiRawItem } from '../main/ets/infrastructure/services/AiService';
+import { AiDailyPoiRangeConfig } from '../main/ets/common/utils/PreferenceManager';
 
 interface AiServiceObjectBodyTest {
   message: string;
@@ -510,6 +511,38 @@ export default function aiServiceTest() {
       expect(leisureMax).assertEqual(10);
       expect(customMin).assertEqual(12);
       expect(customMax).assertEqual(16);
+    });
+
+    it('boundary: resolve_configured_range_and_generation_requirement_should_cover_private_strategy_paths', 0, () => {
+      // Arrange
+      const config: AiDailyPoiRangeConfig = {
+        defaultMin: 4,
+        defaultMax: 7,
+        soldierMin: 8,
+        soldierMax: 12,
+        leisureMin: 2,
+        leisureMax: 5
+      };
+      const request: AiGenerateRequest = {
+        userPrompt: '3\u5929\u9152\u5e97\u4f4f\u5bbf',
+        strategyMode: 1
+      };
+
+      // Act
+      const soldierRange = AiService.resolveConfiguredRangeForTest(1, config);
+      const leisureRange = AiService.resolveConfiguredRangeForTest(2, config);
+      const defaultRange = AiService.resolveConfiguredRangeForTest(0, config);
+      const requirement = AiService.resolveGenerationRequirementForTest(request);
+
+      // Assert
+      expect(soldierRange[0]).assertEqual(8);
+      expect(soldierRange[1]).assertEqual(12);
+      expect(leisureRange[0]).assertEqual(2);
+      expect(leisureRange[1]).assertEqual(5);
+      expect(defaultRange[0]).assertEqual(4);
+      expect(defaultRange[1]).assertEqual(7);
+      expect(requirement[0]).assertEqual(3);
+      expect(requirement[5]).assertEqual(1);
     });
 
     it('invalid: parse_model_response_should_fail_when_content_segments_have_no_text', 0, () => {
