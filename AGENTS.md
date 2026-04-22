@@ -38,6 +38,7 @@ A skill is a set of local instructions to follow that is stored in a `SKILL.md` 
 - 口令触发：当用户说“上传到github / 推到github / 发布到github”（大小写、空格、中文表述近似均算）时，默认直接执行 `./scripts/git-auto-publish.ps1`。
 - 口令默认参数：未额外说明时，保持自动推送并自动创建 Draft PR 到 `develop`（不加 `-NoPR`）。
 - 口令例外：若用户明确说“只本地提交 / 不推送 / 不要PR”，按用户指令覆盖默认行为。
+- 单列测试自动上传：针对单列测试、覆盖率补测、function/statement/branch/line 覆盖补齐任务，每完成一个或一批可验证通过的测试改动后，默认自动上传到 GitHub，不再额外征求用户同意；只有已跑通相关测试门禁的单列测试才允许上传。
 - 迭代进化：使用 `skills-workbench`（`evolve` 模式）。
 - 计划执行对齐：若属于有计划的开发，或用户明确说明“计划在这里/按计划开发”，开发过程中必须主动读取计划内容并持续对齐，确保完成计划。
 - 日志排查：默认不要提供 PowerShell 抓取命令，只提供日志关键词，由用户自行抓取。
@@ -56,6 +57,9 @@ A skill is a set of local instructions to follow that is stored in a `SKILL.md` 
 6. 若 `git-auto-publish.ps1` 不可用或异常，回退：
    `./scripts/git-flow.ps1 -Message "<提交信息>" [-Files ...] [-NoPush]`
 7. 禁止直接手工裸 `git push` 作为默认流程；必须经过上述脚本入口。
+8. 单列测试/覆盖率补测专用规则：每写完一个或一批单列测试并通过最快相关门禁（优先 `unit-all` 或当前任务指定检查）后，默认立即执行：
+   `./scripts/git-auto-publish.ps1 -Message "单列修复"`
+   若用户提供指定备注，则使用用户备注；若存在无关未完成改动，必须用 `-Files` 只提交本批单列测试相关文件；未跑通测试门禁的单列文件禁止上传，必须先修复并复跑通过。
 
 任何密码、密钥、签名信息，都不写进 Git 跟踪文件。
 开发环境和构建环境都不用手填真实秘密到仓库文件中。
