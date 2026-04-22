@@ -248,6 +248,7 @@ description: 用于 Travel Domino（HarmonyOS 行程规划项目）的定向开�
 - When guest login must work after Huawei login failure, verify AuthSessionStore can reload local guest sessions with empty tokens and ensure LoginPage guest actions can override in-flight Huawei login instead of sharing one blocking loading flag.
 - When AuthGate blank checking page stays near 3 seconds after Huawei silent login failure, inspect AppStartupCoordinator.STARTUP_AUTH_TIMEOUT_MS before changing page UI.
 - When unrelated working-tree changes are present, ignore them by default; do not revert them and do not include them in current-task scope or judgment unless the user explicitly asks to handle them.
+- When adding login diagnostics, include elapsedMs at facade, page routing, and profile refresh boundaries so slow phases are attributable from device logs.
 
 ### Known Fixes & Workarounds
 - For cross-day domino shifts, user-facing date and writeback inputs must prefer dynamic_day_offset; do not mix with day_offset in one flow.
@@ -348,3 +349,4 @@ description: 用于 Travel Domino（HarmonyOS 行程规划项目）的定向开�
 - 为避免污染提交范围，发布到GitHub时优先通过git-auto-publish的-Files显式控制提交文件。
 - ArkTS测试代码禁止stand-alone this和结构化类型推断，测试替身统一改为显式class + implements接口。
 - C4补测完成后必须串行执行validate-unit-test-cases与unit-all双验收，并以unit-all脚本结论为准。
+- For explicit guest login, use local-first success and keep remote guest/profile requests off the critical path; guest UI upgrade entry must become visible before avatar/cloud profile loading.

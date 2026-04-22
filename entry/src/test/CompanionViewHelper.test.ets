@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from '@ohos/hypium';
+import { describe, it, expect } from '@ohos/hypium';
 import { ThemeCenter } from '../main/ets/common/utils/ThemeCenter';
 import {
   CompanionView,
@@ -292,6 +292,13 @@ function createCompanionViewInstance(vm: TimelineViewModel, isShow: boolean = tr
   ) as Object as CompanionViewPrivateTest;
 }
 
+function setCompanionViewUiContextForTest(
+  page: CompanionViewPrivateTest,
+  uiContext: CompanionViewUiContextTest
+): void {
+  Reflect.set(page as Object, 'getUIContext', (): CompanionViewUiContextTest => uiContext);
+}
+
 class CompanionViewVmMockTest implements CompanionViewVmTest {
   public scheduleVersion: number = 1;
   public orderedEvents: EventEntity[] = [];
@@ -410,6 +417,92 @@ class CompanionViewVmMockTest implements CompanionViewVmTest {
     return true;
   }
 }
+
+class CompanionActionHostTest {
+  vm: CompanionViewVmMockTest;
+  context: CompanionContext;
+  focusedEventId: number = -1;
+  companionSubMode: 'immersive' | 'control' = 'control';
+  toastMessages: string[] = [];
+  uiContext: CompanionViewUiContextMockTest;
+
+  constructor(vm: CompanionViewVmMockTest, focusedEvent: EventEntity | null, uiContext?: CompanionViewUiContextMockTest) {
+    this.vm = vm;
+    this.context = vm.getCompanionContext();
+    this.focusedEventId = focusedEvent ? focusedEvent.id : -1;
+    this.uiContext = uiContext ? uiContext : new CompanionViewUiContextMockTest();
+  }
+
+  async handleFocusedPrimaryAction(): Promise<void> {
+    return invokeCompanionActionMethodTest(companionHandleFocusedPrimaryActionTest, this);
+  }
+
+  async applyCompanionCheckinBackfill(eventId: number, startTs: number, endTs: number): Promise<void> {
+    return invokeCompanionActionMethodTest(companionApplyCheckinBackfillTest, this, eventId, startTs, endTs);
+  }
+
+  getFocusedEvent(): EventEntity | null {
+    return this.vm.orderedEvents.find((item: EventEntity) => item.id === this.focusedEventId) ?? null;
+  }
+
+  getScheduledEvents(): EventEntity[] {
+    return this.vm.orderedEvents;
+  }
+
+  async showGlobalActiveConflictDialog(excludeEventId: number): Promise<boolean> {
+    const conflict = await this.vm.getStartConflictInfo(excludeEventId);
+    if (!conflict) {
+      return false;
+    }
+    this.uiContext.showAlertDialog({
+      title: '无法开始打卡',
+      message: `当前已有进行中的地点【${conflict.name}】。`,
+      autoCancel: true,
+      primaryButton: {
+        value: '知道了',
+        action: (): void => {}
+      }
+    });
+    return true;
+  }
+
+  safeShowToast(message: string): void {
+    this.toastMessages.push(message);
+  }
+
+  refreshContext(): void {
+    this.context = this.vm.getCompanionContext();
+  }
+
+  applyFocusById(targetId: number, _source: 'tap' | 'scroll' | 'init'): void {
+    this.focusedEventId = targetId;
+  }
+
+  enterImmersiveMode(): void {
+    this.companionSubMode = 'immersive';
+  }
+}
+
+function getCompanionActionMethodTest<T>(name: string): T {
+  const prototype = Reflect.get(CompanionView as Object, 'prototype') as Object;
+  return Reflect.get(prototype, name) as T;
+}
+
+function invokeCompanionActionMethodTest<THost, TResult, TArgs extends (Object | number | string | boolean)[]>(
+  method: (this: THost, ...args: TArgs) => TResult,
+  host: THost,
+  ...args: TArgs
+): TResult {
+  const bound = method.bind(host) as (...boundArgs: TArgs) => TResult;
+  return bound(...args);
+}
+
+const companionHandleFocusedPrimaryActionTest = getCompanionActionMethodTest<
+  (this: CompanionActionHostTest) => Promise<void>
+>('handleFocusedPrimaryAction');
+const companionApplyCheckinBackfillTest = getCompanionActionMethodTest<
+  (this: CompanionActionHostTest, eventId: number, startTs: number, endTs: number) => Promise<void>
+>('applyCompanionCheckinBackfill');
 
 function buildCompanionRuntimeEvent(id: number, name: string, runtime: CompanionRuntimeStateTest, address: string = ''): EventEntity {
   const event = buildCompanionEvent(id, name, address);
@@ -765,7 +858,7 @@ export default function companionViewHelperTest() {
       const scroller = new CompanionViewScrollerMockTest();
       const page = createCompanionViewInstance(vm as Object as TimelineViewModel);
 
-      page.getUIContext = (): CompanionViewUiContextTest => uiContext;
+      setCompanionViewUiContextForTest(page, uiContext);
       page.timelineScroller = scroller;
       page.isShow = false;
       page.isShow = true;
@@ -906,7 +999,7 @@ export default function companionViewHelperTest() {
       const scroller = new CompanionViewScrollerMockTest();
       const page = createCompanionViewInstance(vm as Object as TimelineViewModel);
 
-      page.getUIContext = (): CompanionViewUiContextTest => uiContext;
+      setCompanionViewUiContextForTest(page, uiContext);
       page.timelineScroller = scroller;
       page.refreshContext();
 
@@ -1025,7 +1118,7 @@ export default function companionViewHelperTest() {
       vm.companionContext = buildCompanionContext('ACTIVE', active, pending);
       const uiContext = new CompanionViewUiContextMockTest();
       const page = createCompanionViewInstance(vm as Object as TimelineViewModel);
-      page.getUIContext = (): CompanionViewUiContextTest => uiContext;
+      setCompanionViewUiContextForTest(page, uiContext);
       page.isShow = true;
       AppStorage.setOrCreate('COMPANION_BACK_LEVEL', '');
       AppStorage.setOrCreate('COMPANION_BACK_REQUEST', 0);
@@ -1076,6 +1169,221 @@ export default function companionViewHelperTest() {
       expect(page.isShow).assertFalse();
       expect(page.realtimeWatchTimer).assertEqual(-1);
       expect(backLevelAfterDisappear).assertEqual('none');
+    });
+  });
+
+  describe('unit_test_case_generator_autofill_CompanionViewPrimaryActionAndBackfillBranches', () => {
+    it('normal: focused_primary_action_should_resume_execution_and_keep_focus', 0, async () => {
+      // Arrange
+      const pending = buildCompanionRuntimeEvent(601, 'resume_pending', 'PENDING', 'Resume Road');
+      const vm = new CompanionViewVmMockTest();
+      vm.orderedEvents = [pending];
+      vm.companionContext = buildCompanionContext('PAUSED', pending, pending);
+      vm.companionContext.actions.canResume = true;
+      const page = new CompanionActionHostTest(vm, pending);
+
+      // Act
+      await page.handleFocusedPrimaryAction();
+
+      // Assert
+      expect(vm.resumeCount).assertEqual(1);
+      expect(page.focusedEventId).assertEqual(pending.id);
+      expect(page.context.runtimeState).assertEqual('ACTIVE');
+    });
+
+    it('boundary: focused_primary_action_should_start_pending_event_when_startable', 0, async () => {
+      // Arrange
+      const pending = buildCompanionRuntimeEvent(602, 'start_pending', 'PENDING', 'Start Road');
+      const vm = new CompanionViewVmMockTest();
+      vm.orderedEvents = [pending];
+      vm.companionContext = buildCompanionContext('READY', null, pending);
+      vm.companionContext.actions.canResume = false;
+      const page = new CompanionActionHostTest(vm, pending);
+
+      // Act
+      await page.handleFocusedPrimaryAction();
+
+      // Assert
+      expect(vm.updateActualTimeCount).assertEqual(1);
+      expect(vm.lastUpdateActualEventId).assertEqual(pending.id);
+      expect(vm.lastUpdateActualField).assertEqual('actual_start_time');
+      expect(page.context.runtimeState).assertEqual('ACTIVE');
+      expect(page.companionSubMode).assertEqual('immersive');
+    });
+
+    it('invalid: focused_primary_action_should_toast_when_resume_fails', 0, async () => {
+      // Arrange
+      const pending = buildCompanionRuntimeEvent(603, 'resume_fail', 'PENDING', 'Fail Road');
+      const vm = new CompanionViewVmMockTest();
+      vm.orderedEvents = [pending];
+      vm.resumeResult = false;
+      vm.companionContext = buildCompanionContext('PAUSED', pending, pending);
+      vm.companionContext.actions.canResume = true;
+      const page = new CompanionActionHostTest(vm, pending);
+
+      // Act
+      await page.handleFocusedPrimaryAction();
+
+      // Assert
+      expect(vm.resumeCount).assertEqual(1);
+      expect(page.context.runtimeState).assertEqual('PAUSED');
+    });
+
+    it('conflict: focused_primary_action_should_show_conflict_when_pending_start_is_blocked', 0, async () => {
+      // Arrange
+      const active = buildCompanionRuntimeEvent(604, 'active_blocker', 'ACTIVE', 'Active Road');
+      const pending = buildCompanionRuntimeEvent(605, 'blocked_pending', 'PENDING', 'Blocked Road');
+      const vm = new CompanionViewVmMockTest();
+      vm.orderedEvents = [active, pending];
+      vm.conflictName = active.name;
+      vm.companionContext = buildCompanionContext('READY', null, pending);
+      vm.companionContext.actions.canResume = false;
+      const uiContext = new CompanionViewUiContextMockTest();
+      const page = new CompanionActionHostTest(vm, pending, uiContext);
+
+      // Act
+      await page.handleFocusedPrimaryAction();
+
+      // Assert
+      expect(vm.updateActualTimeCount).assertEqual(0);
+      expect(uiContext.alertCount).assertEqual(1);
+      expect(uiContext.lastAlert?.message.includes(active.name)).assertTrue();
+    });
+
+    it('regression: td-20260422-focused_primary_action_should_toast_when_active_pause_is_disabled', 0, async () => {
+      // Arrange
+      const active = buildCompanionRuntimeEvent(606, 'pause_disabled', 'ACTIVE', 'Pause Road');
+      const vm = new CompanionViewVmMockTest();
+      vm.orderedEvents = [active];
+      vm.companionContext = buildCompanionContext('ACTIVE', active, null);
+      vm.companionContext.actions.canResume = false;
+      vm.companionContext.actions.canPause = false;
+      const page = new CompanionActionHostTest(vm, active);
+
+      // Act
+      await page.handleFocusedPrimaryAction();
+
+      // Assert
+      expect(vm.pauseCount).assertEqual(0);
+      expect(page.context.runtimeState).assertEqual('ACTIVE');
+    });
+
+    it('combined: focused_primary_action_should_cover_start_failure_without_conflict_and_pause_success', 0, async () => {
+      // Arrange
+      const pending = buildCompanionRuntimeEvent(607, 'start_fail', 'PENDING', 'Start Fail Road');
+      const active = buildCompanionRuntimeEvent(608, 'pause_active', 'ACTIVE', 'Pause Active Road');
+      const vm = new CompanionViewVmMockTest();
+      vm.orderedEvents = [pending];
+      vm.updateActualTimeResult = false;
+      vm.companionContext = buildCompanionContext('READY', null, pending);
+      vm.companionContext.actions.canResume = false;
+      const page = new CompanionActionHostTest(vm, pending);
+
+      // Act
+      await page.handleFocusedPrimaryAction();
+      vm.updateActualTimeResult = true;
+      vm.scheduleVersion = 2;
+      vm.orderedEvents = [active];
+      vm.companionContext = buildCompanionContext('ACTIVE', active, null);
+      vm.companionContext.actions.canResume = false;
+      vm.companionContext.actions.canPause = true;
+      page.refreshContext();
+      page.applyFocusById(active.id, 'tap');
+      await page.handleFocusedPrimaryAction();
+
+      // Assert
+      expect(vm.updateActualTimeCount).assertEqual(1);
+      expect(vm.pauseCount).assertEqual(1);
+      expect(page.context.runtimeState).assertEqual('PAUSED');
+    });
+
+    it('boundary: checkin_backfill_should_reject_end_without_start', 0, async () => {
+      // Arrange
+      const pending = buildCompanionRuntimeEvent(609, 'backfill_pending', 'PENDING', 'Backfill Road');
+      const vm = new CompanionViewVmMockTest();
+      vm.orderedEvents = [pending];
+      vm.companionContext = buildCompanionContext('READY', null, pending);
+      const page = new CompanionActionHostTest(vm, pending);
+
+      // Act
+      await page.applyCompanionCheckinBackfill(pending.id, 0, 2000);
+
+      // Assert
+      expect(vm.backfillCalls.length).assertEqual(0);
+      expect(page.toastMessages[0]).assertEqual('请先设置开始时间');
+      expect(page.context.runtimeState).assertEqual('READY');
+    });
+
+    it('invalid: checkin_backfill_should_reject_end_before_start', 0, async () => {
+      // Arrange
+      const pending = buildCompanionRuntimeEvent(610, 'backfill_invalid', 'PENDING', 'Invalid Road');
+      const vm = new CompanionViewVmMockTest();
+      vm.orderedEvents = [pending];
+      vm.companionContext = buildCompanionContext('READY', null, pending);
+      const page = new CompanionActionHostTest(vm, pending);
+
+      // Act
+      await page.applyCompanionCheckinBackfill(pending.id, 3000, 2000);
+
+      // Assert
+      expect(vm.backfillCalls.length).assertEqual(0);
+      expect(page.toastMessages[0]).assertEqual('结束时间不能早于开始时间');
+      expect(page.context.runtimeState).assertEqual('READY');
+    });
+
+    it('conflict: checkin_backfill_should_toast_when_repository_rejects_update', 0, async () => {
+      // Arrange
+      const pending = buildCompanionRuntimeEvent(611, 'backfill_fail', 'PENDING', 'Reject Road');
+      const vm = new CompanionViewVmMockTest();
+      vm.orderedEvents = [pending];
+      vm.backfillResult = false;
+      vm.companionContext = buildCompanionContext('READY', null, pending);
+      const page = new CompanionActionHostTest(vm, pending);
+
+      // Act
+      await page.applyCompanionCheckinBackfill(pending.id, 1000.8, 2000.2);
+
+      // Assert
+      expect(vm.backfillCalls.length).assertEqual(1);
+      expect(vm.backfillCalls[0].startTs).assertEqual(1000);
+      expect(vm.backfillCalls[0].endTs).assertEqual(2000);
+      expect(page.toastMessages[0]).assertEqual('补打卡失败，请稍后重试');
+      expect(page.context.runtimeState).assertEqual('READY');
+    });
+
+    it('regression: td-20260422-checkin_backfill_should_clear_record_when_times_are_invalid_numbers', 0, async () => {
+      // Arrange
+      const pending = buildCompanionRuntimeEvent(612, 'backfill_clear', 'PENDING', 'Clear Road');
+      const vm = new CompanionViewVmMockTest();
+      vm.orderedEvents = [pending];
+      vm.companionContext = buildCompanionContext('READY', null, pending);
+      const page = new CompanionActionHostTest(vm, pending);
+
+      // Act
+      await page.applyCompanionCheckinBackfill(pending.id, Number.NaN, Number.POSITIVE_INFINITY);
+
+      // Assert
+      expect(vm.backfillCalls.length).assertEqual(1);
+      expect(vm.backfillCalls[0].startTs).assertEqual(0);
+      expect(vm.backfillCalls[0].endTs).assertEqual(0);
+      expect(page.context.nextEvent?.id).assertEqual(pending.id);
+    });
+
+    it('combined: checkin_backfill_should_save_positive_time_and_refresh_context', 0, async () => {
+      // Arrange
+      const pending = buildCompanionRuntimeEvent(613, 'backfill_save', 'PENDING', 'Save Road');
+      const vm = new CompanionViewVmMockTest();
+      vm.orderedEvents = [pending];
+      vm.companionContext = buildCompanionContext('READY', null, pending);
+      const page = new CompanionActionHostTest(vm, pending);
+
+      // Act
+      await page.applyCompanionCheckinBackfill(pending.id, 1000, 2000);
+
+      // Assert
+      expect(vm.backfillCalls.length).assertEqual(1);
+      expect(vm.backfillCalls[0].eventId).assertEqual(pending.id);
+      expect(page.context.nextEvent?.id).assertEqual(pending.id);
     });
   });
 

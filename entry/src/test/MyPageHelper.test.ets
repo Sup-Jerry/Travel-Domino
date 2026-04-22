@@ -8,7 +8,8 @@ import {
   resolveMyPageAvatarUpdateToast,
   resolveMyPageRemoteAvatarUrl,
   resolveMyPageProfileBootstrapHint,
-  shouldMyPageEmitLightHint
+  shouldMyPageEmitLightHint,
+  shouldMyPageUseImmediateGuestProfile
 } from '../main/ets/pages/MyPage';
 
 interface MyPagePrivateTest {
@@ -139,6 +140,21 @@ export default function myPageHelperTest() {
       // Assert
       expect(payload !== null).assertTrue();
       expect(payload?.key).assertEqual('profile_offline:guest_local');
+    });
+
+    it('regression: my_page_should_show_guest_upgrade_card_without_waiting_for_remote_profile', 0, () => {
+      // Arrange
+      const guestHasSession = true;
+      const guestFlag = true;
+      const nonGuestFlag = false;
+
+      // Act
+      const guestImmediate = shouldMyPageUseImmediateGuestProfile(guestHasSession, guestFlag);
+      const nonGuestImmediate = shouldMyPageUseImmediateGuestProfile(guestHasSession, nonGuestFlag);
+
+      // Assert
+      expect(guestImmediate).assertTrue();
+      expect(nonGuestImmediate).assertFalse();
     });
 
     it('combined: my_page_should_render_guest_login_card_with_empty_avatar', 0, () => {

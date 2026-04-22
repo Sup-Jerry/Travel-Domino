@@ -1,11 +1,33 @@
 import { describe, it, expect } from '@ohos/hypium';
 import {
   canPlanItemShowConflictFixButton,
+  PlanItemDisplayState,
+  PlanItemView,
   resolvePlanItemDisplayState,
   resolvePlanItemTimeText,
   shouldPlanItemShowCrossDayLabel
 } from '../main/ets/pages/components/views/PlanItemView';
 import { TravelPlanItem } from '../main/ets/model/interface/IStandardEvent';
+
+interface PlanItemViewParamsTest {
+  item?: TravelPlanItem;
+  index?: number;
+  onDurationChange?: (value: number) => void;
+  onCommuteChange?: (value: number) => void;
+  onFixConflict?: (shiftMinutes: number) => void;
+}
+
+interface PlanItemViewPrivateTest {
+  item: TravelPlanItem;
+  index: number;
+  onDurationChange: (value: number) => void;
+  onCommuteChange: (value: number) => void;
+  onFixConflict: (shiftMinutes: number) => void;
+  setInitiallyProvidedValue(params: PlanItemViewParamsTest): void;
+  updateStateVars(params: PlanItemViewParamsTest): void;
+  getDisplayState(): PlanItemDisplayState;
+  initialRender(): void;
+}
 
 function buildPlanItemViewTestItem(): TravelPlanItem {
   return {
@@ -18,6 +40,10 @@ function buildPlanItemViewTestItem(): TravelPlanItem {
     computedStartTime: '09:00',
     computedEndTime: '10:00'
   };
+}
+
+function createPlanItemViewPrivateForTest(): PlanItemViewPrivateTest {
+  return new PlanItemView(undefined, {} as LocalStorage) as Object as PlanItemViewPrivateTest;
 }
 
 export default function planItemViewHelperTest() {
@@ -145,6 +171,110 @@ export default function planItemViewHelperTest() {
       expect(state.endText).assertEqual('00:10');
       expect(state.conflictText).assertEqual('刚性地点冲突');
       expect(state.showConflictFixButton).assertFalse();
+    });
+
+    it('combined: plan_item_view_instance_should_resolve_display_state_from_initial_params', 0, () => {
+      // Arrange
+      const page = createPlanItemViewPrivateForTest();
+      const item = buildPlanItemViewTestItem();
+      item.isConflict = true;
+      item.conflictMsg = 'overlap';
+      item.suggestedShiftMinutes = 35;
+      let durationChanged = 0;
+      let commuteChanged = 0;
+      let fixedMinutes = 0;
+      const params: PlanItemViewParamsTest = {
+        item: item,
+        index: 2,
+        onDurationChange: (value: number) => {
+          durationChanged = value;
+        },
+        onCommuteChange: (value: number) => {
+          commuteChanged = value;
+        },
+        onFixConflict: (shiftMinutes: number) => {
+          fixedMinutes = shiftMinutes;
+        }
+      };
+
+      // Act
+      page.setInitiallyProvidedValue(params);
+      const state = page.getDisplayState();
+      page.onDurationChange(90);
+      page.onCommuteChange(12);
+      page.onFixConflict(state.fixButtonMinutes);
+
+      // Assert
+      expect(state.showConflict).assertTrue();
+      expect(state.conflictText).assertEqual('overlap');
+      expect(state.showConflictFixButton).assertTrue();
+      expect(state.fixButtonMinutes).assertEqual(35);
+      expect(durationChanged).assertEqual(90);
+      expect(commuteChanged).assertEqual(12);
+      expect(fixedMinutes).assertEqual(35);
+    });
+
+    it('boundary: plan_item_view_instance_should_update_to_cross_day_without_fix_button', 0, () => {
+      // Arrange
+      const page = createPlanItemViewPrivateForTest();
+      const initialItem = buildPlanItemViewTestItem();
+      const nextItem = buildPlanItemViewTestItem();
+      nextItem.computedStartTime = '04-23 00:20';
+      nextItem.computedEndTime = '';
+      nextItem.isConflict = true;
+      nextItem.suggestedShiftMinutes = 0;
+      page.setInitiallyProvidedValue({
+        item: initialItem,
+        index: 0
+      });
+
+      // Act
+      page.updateStateVars({
+        item: nextItem,
+        index: 4
+      });
+      const state = page.getDisplayState();
+
+      // Assert
+      expect(state.showCrossDayLabel).assertTrue();
+      expect(state.startText).assertEqual('04-23 00:20');
+      expect(state.endText).assertEqual('--:--');
+      expect(state.showConflict).assertTrue();
+      expect(state.showConflictFixButton).assertFalse();
+    });
+
+    it('regression: td-20260422-plan_item_view_initial_render_should_cover_plain_and_conflict_paths', 0, () => {
+      // Arrange
+      const plainPage = createPlanItemViewPrivateForTest();
+      const conflictPage = createPlanItemViewPrivateForTest();
+      const plainItem = buildPlanItemViewTestItem();
+      const conflictItem = buildPlanItemViewTestItem();
+      conflictItem.note = 'memo';
+      conflictItem.isConflict = true;
+      conflictItem.conflictMsg = 'overlap';
+      conflictItem.suggestedShiftMinutes = 45;
+      conflictItem.computedStartTime = '04-23 00:20';
+      plainPage.setInitiallyProvidedValue({
+        item: plainItem,
+        index: 0
+      });
+      conflictPage.setInitiallyProvidedValue({
+        item: conflictItem,
+        index: 1,
+        onDurationChange: (_value: number) => {},
+        onFixConflict: (_shiftMinutes: number) => {}
+      });
+
+      // Act
+      plainPage.initialRender();
+      conflictPage.initialRender();
+      const plainState = plainPage.getDisplayState();
+      const conflictState = conflictPage.getDisplayState();
+
+      // Assert
+      expect(plainState.showConflict).assertFalse();
+      expect(conflictState.showCrossDayLabel).assertTrue();
+      expect(conflictState.showConflictFixButton).assertTrue();
     });
   });
 }
