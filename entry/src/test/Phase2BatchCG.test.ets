@@ -131,6 +131,38 @@ export default function phase2BatchCGTest() {
       expect(resolved).assertEqual(12);
     });
 
+    it('boundary: settings_general_numeric_inputs_should_keep_current_for_blank_and_parse_prefix_digits', 0, () => {
+      // Arrange
+      const blank = '   ';
+      const prefixed = '18minutes';
+
+      // Act
+      const idleBlank = resolveSettingsGeneralIdleGapTriggerMinutes(blank, 45);
+      const idlePrefixed = resolveSettingsGeneralIdleGapTriggerMinutes(prefixed, 45);
+      const durationBlank = resolveSettingsGeneralMinEventDuration(blank, 30);
+      const durationPrefixed = resolveSettingsGeneralMinEventDuration(prefixed, 30);
+
+      // Assert
+      expect(idleBlank).assertEqual(45);
+      expect(idlePrefixed).assertEqual(18);
+      expect(durationBlank).assertEqual(30);
+      expect(durationPrefixed).assertEqual(18);
+    });
+
+    it('normal: settings_general_ai_poi_input_should_parse_prefix_and_clamp_negative_fallback', 0, () => {
+      // Arrange
+      const prefixedInput = '7 spots';
+      const invalidInput = 'NaN';
+
+      // Act
+      const parsed = resolveSettingsGeneralAiPoiInput(prefixedInput, 4);
+      const fallback = resolveSettingsGeneralAiPoiInput(invalidInput, -5);
+
+      // Assert
+      expect(parsed).assertEqual(7);
+      expect(fallback).assertEqual(1);
+    });
+
     it('conflict: settings_general_ai_poi_range_should_clamp_before_swapping_reversed_pairs', 0, () => {
       // Arrange
       const inputState = buildInputStateCG('20', '0', '12', '1', '-3', '30');
@@ -163,6 +195,40 @@ export default function phase2BatchCGTest() {
       expect(config.soldierMax).assertEqual(current.soldierMax);
       expect(config.leisureMin).assertEqual(3);
       expect(config.leisureMax).assertEqual(4);
+    });
+
+    it('boundary: settings_general_ai_poi_range_should_keep_equal_min_max_pairs', 0, () => {
+      // Arrange
+      const inputState = buildInputStateCG('5', '5', '8', '8', '3', '3');
+      const current = buildRangeConfigCG();
+
+      // Act
+      const config = buildSettingsGeneralAiPoiRangeConfig(inputState, current);
+
+      // Assert
+      expect(config.defaultMin).assertEqual(5);
+      expect(config.defaultMax).assertEqual(5);
+      expect(config.soldierMin).assertEqual(8);
+      expect(config.soldierMax).assertEqual(8);
+      expect(config.leisureMin).assertEqual(3);
+      expect(config.leisureMax).assertEqual(3);
+    });
+
+    it('combined: settings_general_ai_poi_range_should_mix_current_fallback_parsed_and_swapped_pairs', 0, () => {
+      // Arrange
+      const inputState = buildInputStateCG('', '9', '6', 'bad', '11', '2');
+      const current = buildRangeConfigCG();
+
+      // Act
+      const config = buildSettingsGeneralAiPoiRangeConfig(inputState, current);
+
+      // Assert
+      expect(config.defaultMin).assertEqual(current.defaultMin);
+      expect(config.defaultMax).assertEqual(9);
+      expect(config.soldierMin).assertEqual(6);
+      expect(config.soldierMax).assertEqual(current.soldierMax);
+      expect(config.leisureMin).assertEqual(2);
+      expect(config.leisureMax).assertEqual(11);
     });
 
     it('combined: settings_general_page_should_render_system_theme_with_disabled_idle_gap_inputs', 0, () => {

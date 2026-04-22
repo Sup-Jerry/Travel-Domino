@@ -152,6 +152,52 @@ export default function mapPickerPageHelperTest() {
       expect(resolving).assertTrue();
       expect(distanceText).assertEqual('');
     });
+
+    it('boundary: map_picker_coordinate_valid_should_accept_signed_world_edges_except_origin', 0, () => {
+      // Arrange
+      const northEastLat = 90;
+      const northEastLng = 180;
+      const southWestLat = -90;
+      const southWestLng = -180;
+
+      // Act
+      const northEastValid = isMapPickerCoordinateValid(northEastLat, northEastLng);
+      const southWestValid = isMapPickerCoordinateValid(southWestLat, southWestLng);
+      const originValid = isMapPickerCoordinateValid(0, 0);
+
+      // Assert
+      expect(northEastValid).assertTrue();
+      expect(southWestValid).assertTrue();
+      expect(originValid).assertFalse();
+    });
+
+    it('invalid: map_picker_coordinate_valid_should_reject_nan_and_out_of_range_longitude', 0, () => {
+      // Arrange
+      const nanLat = Number.NaN;
+      const outOfRangeLng = 181;
+
+      // Act
+      const nanValid = isMapPickerCoordinateValid(nanLat, 120);
+      const lngValid = isMapPickerCoordinateValid(30, outOfRangeLng);
+
+      // Assert
+      expect(nanValid).assertFalse();
+      expect(lngValid).assertFalse();
+    });
+
+    it('boundary: map_picker_distance_should_floor_meter_decimal_and_keep_negative_linear', 0, () => {
+      // Arrange
+      const decimalMeters = 999.9;
+      const negativeMeters = -2.4;
+
+      // Act
+      const decimalText = formatMapPickerDistance(decimalMeters);
+      const negativeText = formatMapPickerDistance(negativeMeters);
+
+      // Assert
+      expect(decimalText).assertEqual('999m');
+      expect(negativeText).assertEqual('-3m');
+    });
   });
 
   describe('unit_test_case_generator_autofill_MapPickerPageHelperBranches', () => {
@@ -227,6 +273,31 @@ export default function mapPickerPageHelperTest() {
       // Assert
       expect(hint.length > 0).assertTrue();
       expect(resolved).assertEqual(buildMapPickerCoordinateFallbackAddress(lat, lng));
+    });
+
+    it('boundary: map_picker_selection_address_should_trim_saved_address_and_keep_non_unknown_text', 0, () => {
+      // Arrange
+      const currentAddress = '  saved place  ';
+
+      // Act
+      const resolved = resolveMapPickerSelectionAddress(currentAddress, 31.2, 121.5);
+
+      // Assert
+      expect(resolved).assertEqual('saved place');
+    });
+
+    it('combined: map_picker_storage_key_should_handle_negative_decimal_and_large_fraction', 0, () => {
+      // Arrange
+      const negativePlanId = -2.5;
+      const largeFractionPlanId = 1024.99;
+
+      // Act
+      const negativeKey = resolveMapPickerStorageKey(negativePlanId);
+      const largeKey = resolveMapPickerStorageKey(largeFractionPlanId);
+
+      // Assert
+      expect(negativeKey).assertEqual('pickedLocationStr');
+      expect(largeKey).assertEqual('pickedLocationStr_1024');
     });
 
     it('normal: map_picker_instance_should_render_fallback_runtime_with_results', 0, () => {

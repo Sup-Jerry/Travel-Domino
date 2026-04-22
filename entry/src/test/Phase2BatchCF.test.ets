@@ -4,6 +4,7 @@ import {
   normalizeMyPageLightHintKey,
   normalizeMyPageUsername,
   resolveMyPageAvatarSyncPendingHint,
+  resolveMyPageAvatarUpdateToast,
   resolveMyPageRemoteAvatarUrl,
   resolveMyPageProfileBootstrapHint,
   shouldMyPageEmitLightHint,
@@ -135,6 +136,58 @@ export default function phase2BatchCFTest() {
       expect(offlineHint !== null).assertTrue();
       expect(offlineHint?.key).assertEqual('profile_offline:guest_local');
       expect(avatarHint.key).assertEqual('avatar_cloud_sync_pending:guest_local');
+    });
+
+    it('boundary: my_page_profile_bootstrap_hint_should_return_null_for_ready_state', 0, () => {
+      // Arrange
+      const accountId = 'account_cf_ready';
+
+      // Act
+      const hint = resolveMyPageProfileBootstrapHint(accountId, 'ready');
+
+      // Assert
+      expect(hint === null).assertTrue();
+    });
+
+    it('normal: my_page_avatar_update_toast_should_distinguish_synced_and_local_states', 0, () => {
+      // Arrange
+      const syncedState = 'SYNCED';
+      const pendingState = 'PENDING';
+
+      // Act
+      const syncedToast = resolveMyPageAvatarUpdateToast(syncedState);
+      const pendingToast = resolveMyPageAvatarUpdateToast(pendingState);
+      const blankToast = resolveMyPageAvatarUpdateToast('   ');
+
+      // Assert
+      expect(syncedToast.length > 0).assertTrue();
+      expect(pendingToast.length > 0).assertTrue();
+      expect(blankToast).assertEqual(pendingToast);
+      expect(syncedToast === pendingToast).assertFalse();
+    });
+
+    it('conflict: my_page_light_hint_should_dedupe_same_key_before_boundary', 0, () => {
+      // Arrange
+      const key = 'avatar_cloud_sync_pending:account_cf';
+
+      // Act
+      const beforeBoundary = shouldMyPageEmitLightHint(key, 1000, ` ${key} `, 12999, 12000);
+      const differentKey = shouldMyPageEmitLightHint(key, 1000, 'profile_cloud_fail:account_cf', 1001, 12000);
+
+      // Assert
+      expect(beforeBoundary).assertFalse();
+      expect(differentKey).assertTrue();
+    });
+
+    it('invalid: my_page_remote_avatar_should_return_empty_when_all_sources_empty_or_default', 0, () => {
+      // Arrange
+      const defaultAvatarPath = 'app.media.headphoto';
+
+      // Act
+      const resolved = resolveMyPageRemoteAvatarUrl('   ', defaultAvatarPath, defaultAvatarPath);
+
+      // Assert
+      expect(resolved).assertEqual('');
     });
 
     it('regression: my_page_guest_immediate_profile_should_require_session_and_guest_flag', 0, () => {

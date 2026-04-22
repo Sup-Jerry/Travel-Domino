@@ -30,6 +30,8 @@ interface SettingsAccountSecurityAuthFacadeCH {
   logout(): Promise<void>;
 }
 
+class SettingsAccountSecurityHostContextCH {}
+
 class SettingsAccountSecurityRouterMockCH implements SettingsAccountSecurityRouterCH {
   public urls: string[] = [];
   public shouldFail: boolean = false;
@@ -44,7 +46,7 @@ class SettingsAccountSecurityRouterMockCH implements SettingsAccountSecurityRout
 
 class SettingsAccountSecurityUiContextMockCH implements SettingsAccountSecurityUiContextCH {
   private readonly router: SettingsAccountSecurityRouterCH;
-  public hostContext: Object = {};
+  public hostContext: Object = new SettingsAccountSecurityHostContextCH();
 
   constructor(router: SettingsAccountSecurityRouterCH) {
     this.router = router;
@@ -117,6 +119,36 @@ export default function phase2BatchCHTest() {
       expect(url).assertEqual(expected);
       expect(url.indexOf('pages/') === 0).assertTrue();
       expect(url.indexOf(' ') < 0).assertTrue();
+    });
+
+    it('regression: settings_account_security_redirect_url_should_be_stable_across_repeated_calls', 0, () => {
+      // Arrange
+      // Act
+      const first = resolveLogoutRedirectUrl();
+      const second = resolveLogoutRedirectUrl();
+
+      // Assert
+      expect(first).assertEqual(second);
+      expect(first).assertEqual('pages/LoginPage');
+    });
+
+    it('combined: settings_account_security_logout_messages_should_keep_success_and_failure_outputs_stable', 0, () => {
+      // Arrange
+      const success = true;
+      const failed = false;
+
+      // Act
+      const successText = resolveLogoutToastMessage(success);
+      const failedText = resolveLogoutToastMessage(failed);
+      const successAgain = resolveLogoutToastMessage(success);
+      const failedAgain = resolveLogoutToastMessage(failed);
+
+      // Assert
+      expect(successText.trim().length > 0).assertTrue();
+      expect(failedText.trim().length > 0).assertTrue();
+      expect(successAgain).assertEqual(successText);
+      expect(failedAgain).assertEqual(failedText);
+      expect(successText === failedText).assertFalse();
     });
 
     it('combined: settings_account_security_logout_success_should_bind_context_and_redirect_once', 0, async () => {

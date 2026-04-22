@@ -8,7 +8,9 @@ import {
   getEventItemTravelModeIcon,
   resolveEventItemCompanionOpacity,
   resolveEventItemCompanionStateLabel,
+  resolveEventItemActualRangeMeta,
   resolveEventItemConflictGapMinutes,
+  resolveEventItemForecastRange,
   resolveEventItemPlanRange,
   resolveEventItemStartTimeDisplay,
   resolveEventItemThemeColor
@@ -190,6 +192,57 @@ export default function eventItemViewHelperTest() {
       const range = resolveEventItemPlanRange(computedTime, fixedStartTime, duration);
       // Assert
       expect(range).assertEqual('09:00-10:30');
+    });
+
+    it('normal: event_item_forecast_range_should_prefer_dynamic_range_when_both_bounds_present', 0, () => {
+      // Arrange
+      const dynamicStart = new Date(2026, 3, 19, 8, 10, 0, 0).getTime();
+      const dynamicEnd = new Date(2026, 3, 19, 9, 40, 0, 0).getTime();
+      const planRange = '08:00-09:30';
+
+      // Act
+      const range = resolveEventItemForecastRange(dynamicStart, dynamicEnd, planRange);
+
+      // Assert
+      expect(range).assertEqual('08:10-09:40');
+    });
+
+    it('boundary: event_item_forecast_range_should_fallback_to_plan_when_one_dynamic_bound_missing', 0, () => {
+      // Arrange
+      const dynamicStart = new Date(2026, 3, 19, 8, 10, 0, 0).getTime();
+      const dynamicEnd = 0;
+      const planRange = '08:00-09:30';
+
+      // Act
+      const range = resolveEventItemForecastRange(dynamicStart, dynamicEnd, planRange);
+
+      // Assert
+      expect(range).assertEqual(planRange);
+    });
+
+    it('combined: event_item_actual_range_meta_should_cover_actual_estimated_dynamic_and_plan_fallbacks', 0, () => {
+      // Arrange
+      const actualStart = new Date(2026, 3, 19, 10, 0, 0, 0).getTime();
+      const actualEnd = new Date(2026, 3, 19, 11, 0, 0, 0).getTime();
+      const dynamicStart = new Date(2026, 3, 19, 10, 15, 0, 0).getTime();
+      const dynamicEnd = new Date(2026, 3, 19, 11, 15, 0, 0).getTime();
+      const planRange = '10:00-11:00';
+
+      // Act
+      const exact = resolveEventItemActualRangeMeta(actualStart, actualEnd, 0, 0, 60, planRange);
+      const estimatedFromActualStart = resolveEventItemActualRangeMeta(actualStart, 0, 0, 0, 45, planRange);
+      const estimatedFromDynamic = resolveEventItemActualRangeMeta(0, 0, dynamicStart, dynamicEnd, 60, planRange);
+      const fallback = resolveEventItemActualRangeMeta(0, 0, 0, 0, 60, planRange);
+
+      // Assert
+      expect(exact.text).assertEqual('10:00-11:00');
+      expect(exact.isEstimated).assertFalse();
+      expect(estimatedFromActualStart.text).assertEqual('10:00-10:45');
+      expect(estimatedFromActualStart.isEstimated).assertTrue();
+      expect(estimatedFromDynamic.text).assertEqual('10:15-11:15');
+      expect(estimatedFromDynamic.isEstimated).assertTrue();
+      expect(fallback.text).assertEqual(planRange);
+      expect(fallback.isEstimated).assertTrue();
     });
 
     it('boundary: event_item_start_display_should_fallback_to_placeholder_when_both_times_empty', 0, () => {
