@@ -268,6 +268,7 @@ import phase2BatchCNTest from './Phase2BatchCN.test';
 import phase2BatchCOTest from './Phase2BatchCO.test';
 import phase2BatchCPTest from './Phase2BatchCP.test';
 import phase2BatchCQTest from './Phase2BatchCQ.test';
+import phase2BatchCRTest from './Phase2BatchCR.test';
 
 const registeredSuiteNames: string[] = [
   'LocalUnit',
@@ -539,6 +540,7 @@ const registeredSuiteNames: string[] = [
   'Phase2BatchCO',
   'Phase2BatchCP',
   'Phase2BatchCQ',
+  'Phase2BatchCR',
 ];
 
 function containsSuite(name: string): boolean {
@@ -832,6 +834,7 @@ export default function testsuite() {
   phase2BatchCOTest();
   phase2BatchCPTest();
   phase2BatchCQTest();
+  phase2BatchCRTest();
 
   describe('listTest', () => {
     it('normal: list_should_keep_core_test_modules_registered', 0, () => {
