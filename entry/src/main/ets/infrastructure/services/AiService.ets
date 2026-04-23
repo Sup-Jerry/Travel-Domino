@@ -262,6 +262,11 @@ export class AiService {
     return AiService.buildDailyItemRange(config.defaultMin, config.defaultMax);
   }
 
+  public static resolveConfiguredRangeForTest(mode: number, config: AiDailyPoiRangeConfig): number[] {
+    const range = AiService.resolveDailyItemRangeByConfiguredPreset(mode, config);
+    return [range.min, range.max];
+  }
+
   private static async resolveDailyItemRangeRuntime(request: AiGenerateRequest): Promise<DailyItemRange> {
     if (request.customStrategy) {
       const customRange = AiService.resolveDailyItemRange(request);
@@ -330,6 +335,18 @@ export class AiService {
       totalMaxItems: dailyMaxItems * requestedDays,
       allowAccommodation: AiService.shouldAllowAccommodation(request.userPrompt)
     };
+  }
+
+  public static resolveGenerationRequirementForTest(request: AiGenerateRequest): number[] {
+    const requirement = AiService.resolveGenerationRequirement(request);
+    return [
+      requirement.requestedDays,
+      requirement.dailyMinItems,
+      requirement.dailyMaxItems,
+      requirement.totalMinItems,
+      requirement.totalMaxItems,
+      requirement.allowAccommodation ? 1 : 0
+    ];
   }
 
   private static async resolveGenerationRequirementRuntime(request: AiGenerateRequest): Promise<AiGenerationRequirement> {
@@ -554,7 +571,7 @@ export class AiService {
     const status = Number(response.responseCode || 0);
     const raw = typeof response.result === 'string'
       ? response.result
-      : JSON.stringify(response.result);
+      : AiService.toSafeString(response.result as Object);
     const normalized = (raw || '').trim();
     let backendMessage = '';
     if (normalized.length > 0) {

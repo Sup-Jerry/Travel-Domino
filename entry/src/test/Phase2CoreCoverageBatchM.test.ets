@@ -206,6 +206,26 @@ export default function phase2CoreCoverageBatchMTest() {
       hooks.restore();
     });
 
+    it('regression: auth_facade_get_profile_should_return_local_guest_without_me_request', 0, async () => {
+      // Arrange
+      const bundle = createBundleForM();
+      const hooks = new HooksForM();
+      let meCalls = 0;
+      bundle.session.session = createSessionForM('', true);
+      hooks.setMe(async (_token: string): Promise<AuthApiResponse<AuthMeResult>> => {
+        meCalls += 1;
+        return createMeResponseForM();
+      });
+      // Act
+      const profile = await bundle.facade.getCurrentUserProfile('default_guest_m');
+      // Assert
+      expect(profile.isGuest).assertTrue();
+      expect(profile.userId).assertEqual('acc_m');
+      expect(profile.nickname).assertEqual('default_guest_m');
+      expect(meCalls).assertEqual(0);
+      hooks.restore();
+    });
+
     it('boundary: auth_facade_update_username_should_return_profile_when_gateway_success', 0, async () => {
       // Arrange
       const bundle = createBundleForM();
@@ -294,21 +314,19 @@ export default function phase2CoreCoverageBatchMTest() {
       hooks.restore();
     });
 
-    it('combined: auth_facade_guest_fallback_exception_should_return_offline_guest_and_mark_guest_chosen', 0, async () => {
+    it('combined: auth_facade_explicit_guest_login_should_return_local_guest_and_mark_guest_chosen', 0, async () => {
       // Arrange
       const bundle = createBundleForM();
       const hooks = new HooksForM();
       const ctx = new AppContextForM();
       bundle.facade.bindContext(ctx as never);
-      hooks.setCreateGuest(async (_device: DeviceInfo): Promise<AuthApiResponse<AuthLoginResult>> => {
-        throw new Error('guest_gateway_exception_m');
-      });
       // Act
       const result = await bundle.facade.explicitGuestLogin();
       // Assert
       expect(result.success).assertTrue();
       expect(result.data !== null).assertTrue();
       expect(result.data!.isGuest).assertTrue();
+      expect(result.data!.loginMethod).assertEqual('GUEST_LOCAL_FIRST');
       expect(bundle.session.guestChosenCalls).assertEqual(1);
       hooks.restore();
     });
@@ -330,7 +348,7 @@ export default function phase2CoreCoverageBatchMTest() {
       expect(result.success).assertTrue();
       expect(result.data !== null).assertTrue();
       expect(result.data!.isGuest).assertTrue();
-      expect(result.data!.loginMethod).assertEqual('GUEST_OFFLINE');
+      expect(result.data!.loginMethod).assertEqual('GUEST_LOCAL_FIRST');
       expect(bundle.session.saveCalls > 0).assertTrue();
       expect(bundle.session.savePersistedCalls).assertEqual(1);
       expect(bundle.session.guestChosenCalls).assertEqual(1);

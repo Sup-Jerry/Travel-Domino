@@ -79,6 +79,33 @@ export default function indexCompanionOverlayHelperTest() {
       expect(visibleCount).assertEqual(2);
       expect(zSum).assertEqual(15);
     });
+
+    it('boundary: companion_overlay_z_index_should_keep_negative_value', 0, () => {
+      // Arrange
+      const zIndex = -3;
+
+      // Act
+      const actual = resolveIndexCompanionOverlayZIndex(zIndex);
+
+      // Assert
+      expect(actual).assertEqual(-3);
+    });
+
+    it('combined: companion_overlay_helpers_should_keep_identity_for_repeated_inputs', 0, () => {
+      // Arrange
+      const visible = true;
+      const zIndex = 12;
+
+      // Act
+      const firstShow = shouldShowIndexCompanionOverlay(visible);
+      const secondShow = shouldShowIndexCompanionOverlay(visible);
+      const firstZ = resolveIndexCompanionOverlayZIndex(zIndex);
+      const secondZ = resolveIndexCompanionOverlayZIndex(zIndex);
+
+      // Assert
+      expect(firstShow).assertEqual(secondShow);
+      expect(firstZ).assertEqual(secondZ);
+    });
   });
 }
 

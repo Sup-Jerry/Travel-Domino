@@ -1,5 +1,12 @@
 import { describe, it, expect } from '@ohos/hypium';
-import { resolveAmapRouteApiToggleToast } from '../main/ets/pages/SettingsPrivacyPage';
+import {
+  createSettingsPrivacyPageForTest,
+  resolveAmapRouteApiToggleToast
+} from '../main/ets/pages/SettingsPrivacyPage';
+
+interface SettingsPrivacyPagePrivateTest {
+  safeShowToast(message: string): void;
+}
 
 export default function settingsPrivacyPageHelperTest() {
   describe('unit_test_case_generator_autofill_SettingsPrivacyPageHelper', () => {
@@ -58,6 +65,22 @@ export default function settingsPrivacyPageHelperTest() {
       // Assert
       expect(messages.length).assertEqual(2);
       expect(messages[0] === messages[1]).assertFalse();
+    });
+
+    it('boundary: settings_privacy_safe_show_toast_should_swallow_platform_errors', 0, () => {
+      // Arrange
+      const page = createSettingsPrivacyPageForTest() as SettingsPrivacyPagePrivateTest;
+      let threw = false;
+
+      // Act
+      try {
+        page.safeShowToast('privacy_toast_test');
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
   });
 }

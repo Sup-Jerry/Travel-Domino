@@ -1,5 +1,15 @@
 import { describe, it, expect } from '@ohos/hypium';
-import { canStartPlanImport, classifyPlanImportPayload } from '../main/ets/pages/components/dialogs/PlanImportDialog';
+import {
+  canStartPlanImport,
+  classifyPlanImportPayload,
+  PlanImportDialog
+} from '../main/ets/pages/components/dialogs/PlanImportDialog';
+
+interface PlanImportDialogPrivateTest {
+  inputJson: string;
+  importing: boolean;
+  initialRender(): void;
+}
 
 export default function planImportDialogHelperTest() {
   describe('unit_test_case_generator_autofill_PlanImportDialogHelper', () => {
@@ -59,6 +69,74 @@ export default function planImportDialogHelperTest() {
       const canStart = canStartPlanImport(payload);
       // Assert
       expect(kind).assertEqual('deep_link');
+      expect(canStart).assertTrue();
+    });
+
+    it('normal: plan_import_dialog_initial_render_should_support_plain_payload_branch', 0, () => {
+      // Arrange
+      const page = new PlanImportDialog(undefined, {} as LocalStorage) as Object as PlanImportDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.inputJson = '{\"schemaVersion\":1}';
+      page.importing = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: plan_import_dialog_initial_render_should_support_importing_deep_link_branch', 0, () => {
+      // Arrange
+      const page = new PlanImportDialog(undefined, {} as LocalStorage) as Object as PlanImportDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.inputJson = 'travelapp://import?data=abc';
+      page.importing = true;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: plan_import_should_trim_payload_before_classifying_deep_link_and_compressed', 0, () => {
+      // Arrange
+      const deepLinkPayload = '  travelapp://import?data=abc  ';
+      const compressedPayload = '\n{"v":1,"p":"abc"}\n';
+      // Act
+      const deepLinkKind = classifyPlanImportPayload(deepLinkPayload);
+      const compressedKind = classifyPlanImportPayload(compressedPayload);
+      // Assert
+      expect(deepLinkKind).assertEqual('deep_link');
+      expect(compressedKind).assertEqual('compressed');
+    });
+
+    it('invalid: plan_import_should_not_treat_uppercase_deep_link_as_supported_prefix', 0, () => {
+      // Arrange
+      const payload = 'TRAVELAPP://import?data=abc';
+      // Act
+      const kind = classifyPlanImportPayload(payload);
+      // Assert
+      expect(kind).assertEqual('plain');
+    });
+
+    it('combined: plan_import_plain_non_empty_payload_should_be_startable', 0, () => {
+      // Arrange
+      const payload = 'not-json-but-non-empty';
+      // Act
+      const kind = classifyPlanImportPayload(payload);
+      const canStart = canStartPlanImport(payload);
+      // Assert
+      expect(kind).assertEqual('plain');
       expect(canStart).assertTrue();
     });
   });

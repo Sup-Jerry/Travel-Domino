@@ -1,10 +1,19 @@
 import { describe, it, expect } from '@ohos/hypium';
 import {
+  createSettingsNotificationPageForTest,
   resolveArchiveTipToggleToast,
   resolveDeleteTipToggleToast,
   resolveHideTipFromVisibleFlag,
   resolveTipVisibleFromHideFlag
 } from '../main/ets/pages/SettingsNotificationPage';
+
+interface SettingsNotificationPagePrivateTest {
+  showArchiveTip: boolean;
+  showDeleteTip: boolean;
+  loading: boolean;
+  effectiveTheme: string;
+  initialRender(): void;
+}
 
 export default function settingsNotificationPageHelperTest() {
   describe('unit_test_case_generator_autofill_SettingsNotificationPageHelper', () => {
@@ -71,6 +80,49 @@ export default function settingsNotificationPageHelperTest() {
       const visibleBack = resolveTipVisibleFromHideFlag(hideFlag);
       // Assert
       expect(visibleBack).assertEqual(visible);
+    });
+
+    it('boundary: settings_notification_visibility_roundtrip_should_keep_hidden_state', 0, () => {
+      // Arrange
+      const visible = false;
+      // Act
+      const hideFlag = resolveHideTipFromVisibleFlag(visible);
+      const visibleBack = resolveTipVisibleFromHideFlag(hideFlag);
+      // Assert
+      expect(hideFlag).assertTrue();
+      expect(visibleBack).assertFalse();
+    });
+
+    it('combined: settings_notification_enable_toasts_should_contain_open_keyword_for_both_tips', 0, () => {
+      // Arrange
+      const enabled = true;
+      // Act
+      const archive = resolveArchiveTipToggleToast(enabled);
+      const del = resolveDeleteTipToggleToast(enabled);
+      // Assert
+      expect(archive.indexOf('开启') >= 0).assertTrue();
+      expect(del.indexOf('开启') >= 0).assertTrue();
+    });
+    it('combined: settings_notification_page_initial_render_should_support_loaded_switches', 0, () => {
+      // Arrange
+      const page = createSettingsNotificationPageForTest() as SettingsNotificationPagePrivateTest;
+      let threw = false;
+
+      // Act
+      page.showArchiveTip = true;
+      page.showDeleteTip = false;
+      page.loading = false;
+      page.effectiveTheme = 'dark';
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.showArchiveTip).assertTrue();
+      expect(page.showDeleteTip).assertFalse();
     });
   });
 }

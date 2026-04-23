@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from '@ohos/hypium';
+import { describe, it, expect } from '@ohos/hypium';
 import localUnitTest from './LocalUnit.test';
 import automatedTest from './AutomatedTest.test';
 import conflictCompressionTest from './ConflictCompression.test';
@@ -251,6 +251,111 @@ import phase2BatchBWTest from './Phase2BatchBW.test';
 import phase2BatchBXTest from './Phase2BatchBX.test';
 import phase2BatchBYTest from './Phase2BatchBY.test';
 import phase2BatchBZTest from './Phase2BatchBZ.test';
+import phase2BatchCATest from './Phase2BatchCA.test';
+import phase2BatchCBTest from './Phase2BatchCB.test';
+import phase2BatchCCTest from './Phase2BatchCC.test';
+import phase2BatchCDTest from './Phase2BatchCD.test';
+import phase2BatchCETest from './Phase2BatchCE.test';
+import phase2BatchCFTest from './Phase2BatchCF.test';
+import phase2BatchCGTest from './Phase2BatchCG.test';
+import phase2BatchCHTest from './Phase2BatchCH.test';
+import phase2BatchCITest from './Phase2BatchCI.test';
+import phase2BatchCJTest from './Phase2BatchCJ.test';
+import phase2BatchCKTest from './Phase2BatchCK.test';
+import phase2BatchCLTest from './Phase2BatchCL.test';
+import phase2BatchCMTest from './Phase2BatchCM.test';
+import phase2BatchCNTest from './Phase2BatchCN.test';
+import phase2BatchCOTest from './Phase2BatchCO.test';
+import phase2BatchCPTest from './Phase2BatchCP.test';
+import phase2BatchCQTest from './Phase2BatchCQ.test';
+import phase2BatchCRTest from './Phase2BatchCR.test';
+import phase2BatchCSTest from './Phase2BatchCS.test';
+import phase2BatchCTTest from './Phase2BatchCT.test';
+import phase2BatchCUTest from './Phase2BatchCU.test';
+import phase2BatchCVTest from './Phase2BatchCV.test';
+import phase2BatchCWTest from './Phase2BatchCW.test';
+import phase2BatchCXTest from './Phase2BatchCX.test';
+import phase2BatchCYTest from './Phase2BatchCY.test';
+import phase2BatchCZTest from './Phase2BatchCZ.test';
+import phase2BatchDATest from './Phase2BatchDA.test';
+import phase2BatchDBTest from './Phase2BatchDB.test';
+import phase2BatchDCTest from './Phase2BatchDC.test';
+import phase2BatchDDTest from './Phase2BatchDD.test';
+import phase2BatchDETest from './Phase2BatchDE.test';
+import phase2BatchDFTest from './Phase2BatchDF.test';
+import phase2BatchDGTest from './Phase2BatchDG.test';
+import phase2BatchDHTest from './Phase2BatchDH.test';
+import phase2BatchDITest from './Phase2BatchDI.test';
+import phase2BatchDJTest from './Phase2BatchDJ.test';
+import phase2BatchDKTest from './Phase2BatchDK.test';
+import phase2BatchDLTest from './Phase2BatchDL.test';
+import phase2BatchDMTest from './Phase2BatchDM.test';
+import phase2BatchDNTest from './Phase2BatchDN.test';
+import phase2BatchDOTest from './Phase2BatchDO.test';
+import phase2BatchDPTest from './Phase2BatchDP.test';
+import phase2BatchDQTest from './Phase2BatchDQ.test';
+import phase2BatchDRTest from './Phase2BatchDR.test';
+import phase2BatchDSTest from './Phase2BatchDS.test';
+import phase2BatchDTTest from './Phase2BatchDT.test';
+import phase2BatchDUTest from './Phase2BatchDU.test';
+import phase2BatchDVTest from './Phase2BatchDV.test';
+import phase2BatchDWTest from './Phase2BatchDW.test';
+import phase2BatchDYTest from './Phase2BatchDY.test';
+import phase2BatchEATest from './Phase2BatchEA.test';
+import phase2BatchEBTest from './Phase2BatchEB.test';
+import phase2BatchECTest from './Phase2BatchEC.test';
+import phase2BatchEDTest from './Phase2BatchED.test';
+import phase2BatchEETest from './Phase2BatchEE.test';
+import phase2BatchEFTest from './Phase2BatchEF.test';
+import phase2BatchEGTest from './Phase2BatchEG.test';
+import phase2BatchEHTest from './Phase2BatchEH.test';
+import phase2BatchEITest from './Phase2BatchEI.test';
+import phase2BatchEJTest from './Phase2BatchEJ.test';
+import phase2BatchEKTest from './Phase2BatchEK.test';
+import phase2BatchELTest from './Phase2BatchEL.test';
+import phase2BatchEMTest from './Phase2BatchEM.test';
+import phase2BatchENTest from './Phase2BatchEN.test';
+import phase2BatchEOTest from './Phase2BatchEO.test';
+import phase2BatchEPTest from './Phase2BatchEP.test';
+import phase2BatchEQTest from './Phase2BatchEQ.test';
+import phase2BatchERTest from './Phase2BatchER.test';
+import phase2BatchESTest from './Phase2BatchES.test';
+import phase2BatchETTest from './Phase2BatchET.test';
+import phase2BatchEUTest from './Phase2BatchEU.test';
+import phase2BatchEVTest from './Phase2BatchEV.test';
+import phase2BatchEWTest from './Phase2BatchEW.test';
+import phase2BatchEXTest from './Phase2BatchEX.test';
+import phase2BatchEYTest from './Phase2BatchEY.test';
+import phase2BatchEZTest from './Phase2BatchEZ.test';
+import phase2BatchFATest from './Phase2BatchFA.test';
+import phase2BatchFBTest from './Phase2BatchFB.test';
+import phase2BatchFCTest from './Phase2BatchFC.test';
+import phase2BatchFDTest from './Phase2BatchFD.test';
+import phase2BatchFETest from './Phase2BatchFE.test';
+import phase2BatchFFTest from './Phase2BatchFF.test';
+import phase2BatchFGTest from './Phase2BatchFG.test';
+import phase2BatchFHTest from './Phase2BatchFH.test';
+import phase2BatchFITest from './Phase2BatchFI.test';
+import phase2BatchFJTest from './Phase2BatchFJ.test';
+import phase2BatchFKTest from './Phase2BatchFK.test';
+import phase2BatchFLTest from './Phase2BatchFL.test';
+import phase2BatchFMTest from './Phase2BatchFM.test';
+import phase2BatchFNTest from './Phase2BatchFN.test';
+import phase2BatchFOTest from './Phase2BatchFO.test';
+import phase2BatchFPTest from './Phase2BatchFP.test';
+import phase2BatchFQTest from './Phase2BatchFQ.test';
+import phase2BatchFRTest from './Phase2BatchFR.test';
+import phase2BatchFSTest from './Phase2BatchFS.test';
+import phase2BatchFTTest from './Phase2BatchFT.test';
+import phase2BatchFUTest from './Phase2BatchFU.test';
+import phase2BatchFVTest from './Phase2BatchFV.test';
+import phase2BatchFWTest from './Phase2BatchFW.test';
+import phase2BatchFXTest from './Phase2BatchFX.test';
+import phase2BatchFYTest from './Phase2BatchFY.test';
+import phase2BatchFZTest from './Phase2BatchFZ.test';
+import phase2BatchGATest from './Phase2BatchGA.test';
+import phase2BatchGBTest from './Phase2BatchGB.test';
+import phase2BatchGCTest from './Phase2BatchGC.test';
 
 const registeredSuiteNames: string[] = [
   'LocalUnit',
@@ -504,7 +609,112 @@ const registeredSuiteNames: string[] = [
   'Phase2BatchBW',
   'Phase2BatchBX',
   'Phase2BatchBY',
-  'Phase2BatchBZ'
+  'Phase2BatchBZ',
+  'Phase2BatchCA',
+  'Phase2BatchCB',
+  'Phase2BatchCC',
+  'Phase2BatchCD',
+  'Phase2BatchCE',
+  'Phase2BatchCF',
+  'Phase2BatchCG',
+  'Phase2BatchCH',
+  'Phase2BatchCI',
+  'Phase2BatchCJ',
+  'Phase2BatchCK',
+  'Phase2BatchCL',
+  'Phase2BatchCM',
+  'Phase2BatchCN',
+  'Phase2BatchCO',
+  'Phase2BatchCP',
+  'Phase2BatchCQ',
+  'Phase2BatchCR',
+  'Phase2BatchCS',
+  'Phase2BatchCT',
+  'Phase2BatchCU',
+  'Phase2BatchCV',
+  'Phase2BatchCW',
+  'Phase2BatchCX',
+  'Phase2BatchCY',
+  'Phase2BatchCZ',
+  'Phase2BatchDA',
+  'Phase2BatchDB',
+  'Phase2BatchDC',
+  'Phase2BatchDD',
+  'Phase2BatchDE',
+  'Phase2BatchDF',
+  'Phase2BatchDG',
+  'Phase2BatchDH',
+  'Phase2BatchDI',
+  'Phase2BatchDJ',
+  'Phase2BatchDK',
+  'Phase2BatchDL',
+  'Phase2BatchDM',
+  'Phase2BatchDN',
+  'Phase2BatchDO',
+  'Phase2BatchDP',
+  'Phase2BatchDQ',
+  'Phase2BatchDR',
+  'Phase2BatchDS',
+  'Phase2BatchDT',
+  'Phase2BatchDU',
+  'Phase2BatchDV',
+  'Phase2BatchDW',
+  'Phase2BatchDY',
+  'Phase2BatchEA',
+  'Phase2BatchEB',
+  'Phase2BatchEC',
+  'Phase2BatchED',
+  'Phase2BatchEE',
+  'Phase2BatchEF',
+  'Phase2BatchEG',
+  'Phase2BatchEH',
+  'Phase2BatchEI',
+  'Phase2BatchEJ',
+  'Phase2BatchEK',
+  'Phase2BatchEL',
+  'Phase2BatchEM',
+  'Phase2BatchEN',
+  'Phase2BatchEO',
+  'Phase2BatchEP',
+  'Phase2BatchEQ',
+  'Phase2BatchER',
+  'Phase2BatchES',
+  'Phase2BatchET',
+  'Phase2BatchEU',
+  'Phase2BatchEV',
+  'Phase2BatchEW',
+  'Phase2BatchEX',
+  'Phase2BatchEY',
+  'Phase2BatchEZ',
+  'Phase2BatchFA',
+  'Phase2BatchFB',
+  'Phase2BatchFC',
+  'Phase2BatchFD',
+  'Phase2BatchFE',
+  'Phase2BatchFF',
+  'Phase2BatchFG',
+  'Phase2BatchFH',
+  'Phase2BatchFI',
+  'Phase2BatchFJ',
+  'Phase2BatchFK',
+  'Phase2BatchFL',
+  'Phase2BatchFM',
+  'Phase2BatchFN',
+  'Phase2BatchFO',
+  'Phase2BatchFP',
+  'Phase2BatchFQ',
+  'Phase2BatchFR',
+  'Phase2BatchFS',
+  'Phase2BatchFT',
+  'Phase2BatchFU',
+  'Phase2BatchFV',
+  'Phase2BatchFW',
+  'Phase2BatchFX',
+  'Phase2BatchFY',
+  'Phase2BatchFZ',
+  'Phase2BatchGA',
+  'Phase2BatchGB',
+  'Phase2BatchGC',
 ];
 
 function containsSuite(name: string): boolean {
@@ -781,6 +991,111 @@ export default function testsuite() {
   phase2BatchBXTest();
   phase2BatchBYTest();
   phase2BatchBZTest();
+  phase2BatchCATest();
+  phase2BatchCBTest();
+  phase2BatchCCTest();
+  phase2BatchCDTest();
+  phase2BatchCETest();
+  phase2BatchCFTest();
+  phase2BatchCGTest();
+  phase2BatchCHTest();
+  phase2BatchCITest();
+  phase2BatchCJTest();
+  phase2BatchCKTest();
+  phase2BatchCLTest();
+  phase2BatchCMTest();
+  phase2BatchCNTest();
+  phase2BatchCOTest();
+  phase2BatchCPTest();
+  phase2BatchCQTest();
+  phase2BatchCRTest();
+  phase2BatchCSTest();
+  phase2BatchCTTest();
+  phase2BatchCUTest();
+  phase2BatchCVTest();
+  phase2BatchCWTest();
+  phase2BatchCXTest();
+  phase2BatchCYTest();
+  phase2BatchCZTest();
+  phase2BatchDATest();
+  phase2BatchDBTest();
+  phase2BatchDCTest();
+  phase2BatchDDTest();
+  phase2BatchDETest();
+  phase2BatchDFTest();
+  phase2BatchDGTest();
+  phase2BatchDHTest();
+  phase2BatchDITest();
+  phase2BatchDJTest();
+  phase2BatchDKTest();
+  phase2BatchDLTest();
+  phase2BatchDMTest();
+  phase2BatchDNTest();
+  phase2BatchDOTest();
+  phase2BatchDPTest();
+  phase2BatchDQTest();
+  phase2BatchDRTest();
+  phase2BatchDSTest();
+  phase2BatchDTTest();
+  phase2BatchDUTest();
+  phase2BatchDVTest();
+  phase2BatchDWTest();
+  phase2BatchDYTest();
+  phase2BatchEATest();
+  phase2BatchEBTest();
+  phase2BatchECTest();
+  phase2BatchEDTest();
+  phase2BatchEETest();
+  phase2BatchEFTest();
+  phase2BatchEGTest();
+  phase2BatchEHTest();
+  phase2BatchEITest();
+  phase2BatchEJTest();
+  phase2BatchEKTest();
+  phase2BatchELTest();
+  phase2BatchEMTest();
+  phase2BatchENTest();
+  phase2BatchEOTest();
+  phase2BatchEPTest();
+  phase2BatchEQTest();
+  phase2BatchERTest();
+  phase2BatchESTest();
+  phase2BatchETTest();
+  phase2BatchEUTest();
+  phase2BatchEVTest();
+  phase2BatchEWTest();
+  phase2BatchEXTest();
+  phase2BatchEYTest();
+  phase2BatchEZTest();
+  phase2BatchFATest();
+  phase2BatchFBTest();
+  phase2BatchFCTest();
+  phase2BatchFDTest();
+  phase2BatchFETest();
+  phase2BatchFFTest();
+  phase2BatchFGTest();
+  phase2BatchFHTest();
+  phase2BatchFITest();
+  phase2BatchFJTest();
+  phase2BatchFKTest();
+  phase2BatchFLTest();
+  phase2BatchFMTest();
+  phase2BatchFNTest();
+  phase2BatchFOTest();
+  phase2BatchFPTest();
+  phase2BatchFQTest();
+  phase2BatchFRTest();
+  phase2BatchFSTest();
+  phase2BatchFTTest();
+  phase2BatchFUTest();
+  phase2BatchFVTest();
+  phase2BatchFWTest();
+  phase2BatchFXTest();
+  phase2BatchFYTest();
+  phase2BatchFZTest();
+  phase2BatchGATest();
+  phase2BatchGBTest();
+  phase2BatchGCTest();
 
   describe('listTest', () => {
     it('normal: list_should_keep_core_test_modules_registered', 0, () => {
@@ -844,6 +1159,18 @@ export default function testsuite() {
     });
   });
 }
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from '@ohos/hypium';
+import { describe, expect, it } from '@ohos/hypium';
 import {
   AiReplanPreviewItem,
   AiReplanPreviewResult,
@@ -806,7 +806,7 @@ export default function phase2BatchATTest() {
         return idSeed;
       });
       profileHooks.set('recordStrategyUsage', async (): Promise<void> => {
-        return;
+        throw new Error('profile_usage_fail_at');
       });
       const service = new TimelineAiService(host);
 

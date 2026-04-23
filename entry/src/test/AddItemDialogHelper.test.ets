@@ -367,5 +367,34 @@ export default function addItemDialogHelperTest() {
       expect(currentGeocoding).assertTrue();
       expect(threw).assertFalse();
     });
+
+    it('boundary: add_item_mode_should_treat_whitespace_name_as_new_schedule_item', 0, () => {
+      // Arrange
+      const initName = '   ';
+      const initIsSchedule = false;
+      // Act
+      const mode = resolveAddItemMode(initName, initIsSchedule);
+      // Assert
+      expect(mode).assertEqual(1);
+    });
+
+    it('normal: add_item_duration_should_prefer_positive_initial_duration_over_default', 0, () => {
+      // Arrange
+      const initDuration = 25;
+      const defaultDuration = 90;
+      // Act
+      const duration = resolveAddItemDuration(initDuration, defaultDuration);
+      // Assert
+      expect(duration).assertEqual(25);
+    });
+
+    it('invalid: add_item_coordinate_should_reject_latitude_and_longitude_out_of_world_range', 0, () => {
+      // Arrange
+      const invalidLat = isAddItemCoordinateValid(90.1, 120);
+      const invalidLng = isAddItemCoordinateValid(30, 180.1);
+      // Assert
+      expect(invalidLat).assertFalse();
+      expect(invalidLng).assertFalse();
+    });
   });
 }

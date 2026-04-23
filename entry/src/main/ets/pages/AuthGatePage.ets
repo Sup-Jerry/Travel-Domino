@@ -86,3 +86,7 @@ struct AuthGatePage {
     .alignItems(HorizontalAlign.Center)
   }
 }
+
+export function createAuthGatePageForTest(): Object {
+  return new AuthGatePage(undefined, {} as LocalStorage);
+}

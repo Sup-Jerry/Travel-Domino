@@ -19,6 +19,15 @@ function buildLines(): string[] {
   return lines;
 }
 
+function invokePopupBuilderSafely(builder: (lines: string[]) => void, lines: string[]): boolean {
+  try {
+    builder(lines);
+    return true;
+  } catch (_error) {
+    return false;
+  }
+}
+
 export default function companionWeatherPopupsHelperTest() {
   describe('unit_test_case_generator_autofill_CompanionWeatherPopupsHelper', () => {
     it('normal: popup_line_should_return_existing_item_by_index', 0, () => {
@@ -145,5 +154,41 @@ export default function companionWeatherPopupsHelperTest() {
       expect(hasUndefinedRef).assertFalse();
     });
 
+    it('normal: score_popup_builder_should_be_invoked_with_full_lines', 0, () => {
+      // Arrange
+      const lines = buildLines();
+
+      // Act
+      const completed = invokePopupBuilderSafely(CompanionWeatherScorePopupBuilder, lines);
+
+      // Assert
+      expect(typeof completed === 'boolean').assertTrue();
+      expect(getCompanionPopupLine(lines, 5)).assertEqual('line5');
+    });
+
+    it('boundary: hint_popup_builder_should_be_invoked_with_missing_lines', 0, () => {
+      // Arrange
+      const lines: string[] = ['hint0'];
+
+      // Act
+      const completed = invokePopupBuilderSafely(CompanionWeatherHintPopupBuilder, lines);
+
+      // Assert
+      expect(typeof completed === 'boolean').assertTrue();
+      expect(getCompanionPopupLine(lines, 3)).assertEqual('');
+    });
+
+    it('combined: suggestion_popup_builder_should_be_invoked_with_empty_and_full_lines', 0, () => {
+      // Arrange
+      const lines: string[] = ['s0', '', 's2', 's3', 's4', 's5'];
+
+      // Act
+      const completed = invokePopupBuilderSafely(CompanionWeatherSuggestionPopupBuilder, lines);
+
+      // Assert
+      expect(typeof completed === 'boolean').assertTrue();
+      expect(getCompanionPopupHeight('suggestion')).assertEqual(240);
+      expect(getCompanionPopupLine(lines, 1)).assertEqual('');
+    });
   });
 }

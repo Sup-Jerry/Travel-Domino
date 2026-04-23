@@ -469,6 +469,49 @@ export default function indexPageLayoutHelperTest() {
       // Assert
       expect(threw).assertFalse();
     });
+
+    it('boundary: page_hint_and_score_lines_should_keep_single_empty_and_single_line_outputs', 0, () => {
+      // Arrange
+      const emptyText = '';
+      const singleLine = 'only_one';
+
+      // Act
+      const hintLines = buildIndexPageHintLines(emptyText);
+      const scoreLines = buildIndexPageScoreLines(singleLine);
+
+      // Assert
+      expect(hintLines.length).assertEqual(1);
+      expect(hintLines[0]).assertEqual('');
+      expect(scoreLines.length).assertEqual(1);
+      expect(scoreLines[0]).assertEqual('only_one');
+    });
+
+    it('invalid: page_gaps_count_should_keep_negative_value_without_clamping', 0, () => {
+      // Arrange
+      const gapsCount = -3;
+
+      // Act
+      const actual = resolveIndexPageGapsCount(gapsCount);
+
+      // Assert
+      expect(actual).assertEqual(-3);
+    });
+
+    it('combined: page_weather_suggestion_should_include_planning_hint_without_optional_segments', 0, () => {
+      // Arrange
+      const collabLabel = '';
+      const planningHint = '建议带伞';
+      const collabSummary = '';
+      const strategyHint = '';
+
+      // Act
+      const text = buildIndexPageWeatherSuggestionText(collabLabel, planningHint, collabSummary, strategyHint);
+
+      // Assert
+      expect(text.indexOf('建议带伞') >= 0).assertTrue();
+      expect(text.indexOf('天气建议') >= 0).assertTrue();
+      expect(text.indexOf('策略联动') < 0).assertTrue();
+    });
   });
 }
 
