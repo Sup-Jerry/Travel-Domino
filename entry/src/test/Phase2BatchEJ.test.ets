@@ -14,6 +14,9 @@ import {
 import { WeatherFacade } from '../main/ets/domain/services/WeatherFacade';
 import { WeatherRefreshScheduler } from '../main/ets/domain/services/WeatherRefreshScheduler';
 import { ITimelineWeatherHost, TimelineWeatherService } from '../main/ets/domain/timeline/services/TimelineWeatherService';
+import { TrafficEngine } from '../main/ets/infrastructure/services/TrafficEngine';
+import { DriveStrategy, LocationInfo } from '../main/ets/model/interface/IMapService';
+import { ArrivalReminderCoordinator } from '../main/ets/infrastructure/services/ArrivalReminderCoordinator';
 
 class StrategyDataForEJ implements ComposableStrategy {
   density: DensityLevel = DensityLevel.MEDIUM;
@@ -149,6 +152,30 @@ function identityEJ(item: AiParserItem): AiParserItem {
   return item;
 }
 
+interface TrafficEnginePrivateForEJ {
+  cache: Map<string, number>;
+  transientFailureUntil: Map<string, number>;
+  markTransientFailure(key: string, reason: string): void;
+  fetchAmapTrafficAsync(from: LocationInfo, to: LocationInfo, strategy: DriveStrategy, key: string): Promise<void>;
+}
+
+interface ArrivalReminderCoordinatorPrivateForEJ {
+  isTerminalStatus(status: PlanStatus): boolean;
+}
+
+function createLocationEJ(name: string): LocationInfo {
+  const location = {} as LocationInfo;
+  location.name = name;
+  location.latitude = 31.2;
+  location.longitude = 121.5;
+  return location;
+}
+
+function resetTrafficEngineEJ(): TrafficEnginePrivateForEJ {
+  Reflect.set(TrafficEngine as Object, 'instance', null);
+  return TrafficEngine.getInstance() as Object as TrafficEnginePrivateForEJ;
+}
+
 export default function phase2BatchEJTest() {
   describe('phase2BatchEJTest', () => {
     it('normal: ai_parser_should_pick_first_array_from_unknown_object_key', 0, () => {
@@ -225,6 +252,38 @@ export default function phase2BatchEJTest() {
       bundle.scheduler.lastCallback?.();
       // Assert
       expect(executionRefreshCalls).assertEqual(1);
+    });
+
+    it('normal: traffic_engine_private_mark_transient_failure_should_record_guard_window', 0, () => {
+      // Arrange
+      const engine = resetTrafficEngineEJ();
+      const key = 'from->to_M0';
+      // Act
+      engine.markTransientFailure(key, 'unit_guard');
+      // Assert
+      expect((engine.transientFailureUntil.get(key) ?? 0) > Date.now()).assertTrue();
+    });
+
+    it('boundary: traffic_engine_drive_fetch_should_mark_transient_when_service_missing', 0, async () => {
+      // Arrange
+      const engine = resetTrafficEngineEJ();
+      const key = 'drive_missing_service';
+      // Act
+      await engine.fetchAmapTrafficAsync(createLocationEJ('from'), createLocationEJ('to'), DriveStrategy.FASTEST, key);
+      // Assert
+      expect(engine.cache.has(key)).assertFalse();
+      expect(engine.transientFailureUntil.has(key)).assertTrue();
+    });
+
+    it('invalid: arrival_coordinator_terminal_status_helper_should_reject_non_terminal_status', 0, () => {
+      // Arrange
+      const coordinator = ArrivalReminderCoordinator.getInstance() as Object as ArrivalReminderCoordinatorPrivateForEJ;
+      // Act
+      const completed = coordinator.isTerminalStatus(PlanStatus.COMPLETED);
+      const ready = coordinator.isTerminalStatus(PlanStatus.READY);
+      // Assert
+      expect(completed).assertTrue();
+      expect(ready).assertFalse();
     });
   });
 }
