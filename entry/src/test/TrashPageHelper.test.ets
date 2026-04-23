@@ -214,6 +214,64 @@ export default function trashPageHelperTest() {
       expect(remainingText.length > 0).assertTrue();
       expect(palette !== null).assertTrue();
     });
+
+    it('boundary: trash_auto_purge_diff_should_treat_zero_delete_time_as_missing', 0, () => {
+      // Arrange
+      const now = 20_000;
+      // Act
+      const diff = resolveTrashAutoPurgeDiffMs(0, now);
+      const text = resolveTrashRemainingTimeText(0, now);
+      // Assert
+      expect(diff).assertEqual(-1);
+      expect(text).assertEqual('即将清除');
+    });
+
+    it('boundary: trash_remaining_time_should_floor_partial_hours', 0, () => {
+      // Arrange
+      const now = 100_000;
+      const deleteTime = now - 30 * 60 * 1000;
+      const retentionMs = 2 * 3600 * 1000;
+      // Act
+      const text = resolveTrashRemainingTimeText(deleteTime, now, retentionMs);
+      // Assert
+      expect(text).assertEqual('1小时 后自动清除');
+    });
+
+    it('normal: trash_page_on_page_show_should_delegate_to_load_plans_once', 0, () => {
+      // Arrange
+      const service = new TrashPlanServiceMockTest();
+      const page = createTrashPagePrivateForTest(service);
+      let loadCount = 0;
+      Reflect.set(page as Object, 'loadPlans', (): void => {
+        loadCount += 1;
+      });
+      // Act
+      page.onPageShow();
+      // Assert
+      expect(loadCount).assertEqual(1);
+    });
+
+    it('combined: trash_page_hard_delete_primary_button_should_not_delete_or_reload', 0, () => {
+      // Arrange
+      const service = new TrashPlanServiceMockTest();
+      const page = createTrashPagePrivateForTest(service);
+      const uiContext = new TrashUiContextMockTest();
+      let refreshCount = 0;
+      Reflect.set(page as Object, 'getUIContext', (): TrashUiContextTest => uiContext);
+      Reflect.set(page as Object, 'loadPlans', (): void => {
+        refreshCount += 1;
+      });
+      const item = buildTrashPlanItemForTest(204, 'Jeju');
+
+      // Act
+      page.handleHardDelete(item);
+      uiContext.lastOptions?.primaryButton.action();
+
+      // Assert
+      expect(uiContext.showCount).assertEqual(1);
+      expect(service.hardDeletedPlanIds.length).assertEqual(0);
+      expect(refreshCount).assertEqual(0);
+    });
   });
 }
 

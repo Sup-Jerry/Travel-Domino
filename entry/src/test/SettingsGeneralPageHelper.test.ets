@@ -215,5 +215,56 @@ export default function settingsGeneralPageHelperTest() {
       expect(themeText).assertEqual('深色');
       expect(page.weatherFeatureEnabled).assertFalse();
     });
+
+    it('boundary: settings_general_numeric_inputs_should_parse_prefix_and_floor_decimals', 0, () => {
+      // Arrange
+      const idleInput = '12abc';
+      const durationInput = '8.9';
+      // Act
+      const idleValue = resolveSettingsGeneralIdleGapTriggerMinutes(idleInput, 45);
+      const durationValue = resolveSettingsGeneralMinEventDuration(durationInput, 30);
+      // Assert
+      expect(idleValue).assertEqual(12);
+      expect(durationValue).assertEqual(8);
+    });
+
+    it('boundary: settings_general_ai_poi_input_should_clamp_low_and_high_values', 0, () => {
+      // Arrange
+      const lowInput = '-2';
+      const highInput = '99';
+      // Act
+      const lowValue = resolveSettingsGeneralAiPoiInput(lowInput, 6);
+      const highValue = resolveSettingsGeneralAiPoiInput(highInput, 6);
+      // Assert
+      expect(lowValue).assertEqual(1);
+      expect(highValue).assertEqual(12);
+    });
+
+    it('invalid: settings_general_ai_poi_input_should_normalize_invalid_fallback_to_one', 0, () => {
+      // Arrange
+      const input = 'bad';
+      const fallback = Number.NaN;
+      // Act
+      const value = resolveSettingsGeneralAiPoiInput(input, fallback);
+      // Assert
+      expect(value).assertEqual(1);
+    });
+
+    it('combined: settings_general_ai_poi_range_should_mix_prefix_decimal_and_invalid_values', 0, () => {
+      // Arrange
+      const inputState = buildSettingsGeneralInputStateForTest('2abc', '6.9', 'bad', '99', '-3', '');
+      const current = buildSettingsGeneralRangeConfigForTest();
+
+      // Act
+      const config = buildSettingsGeneralAiPoiRangeConfig(inputState, current);
+
+      // Assert
+      expect(config.defaultMin).assertEqual(2);
+      expect(config.defaultMax).assertEqual(6);
+      expect(config.soldierMin).assertEqual(5);
+      expect(config.soldierMax).assertEqual(12);
+      expect(config.leisureMin).assertEqual(1);
+      expect(config.leisureMax).assertEqual(5);
+    });
   });
 }

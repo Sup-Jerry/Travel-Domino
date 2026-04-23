@@ -1,6 +1,14 @@
 import { describe, expect, it } from '@ohos/hypium';
 import { EventEntity } from '../main/ets/model/entity/EventEntity';
-import { IndexTimelineView } from '../main/ets/pages/index/IndexTimelineView';
+import {
+  buildIndexTimelineHeaderText,
+  IndexTimelineView,
+  resolveIndexTimelineBottomSpacerHeight,
+  resolveIndexTimelineVisiblePlaceCount,
+  shouldEnableIndexTimelineItem,
+  shouldShowIndexTimelineGapHint,
+  shouldShowIndexTimelineGroupItems
+} from '../main/ets/pages/index/IndexTimelineView';
 
 interface IndexTimelineThemeEI {
   pageBg: string;
@@ -77,6 +85,88 @@ function createIndexTimelineViewEI(): IndexTimelineViewPrivateEI {
 
 export default function phase2BatchEITest() {
   describe('phase2BatchEITest', () => {
+    it('normal: index_timeline_header_text_should_include_visible_place_count', 0, () => {
+      // Arrange
+      const text = 'Day 1';
+      const placeCount = 3;
+
+      // Act
+      const header = buildIndexTimelineHeaderText(text, placeCount);
+
+      // Assert
+      expect(header.indexOf(text) >= 0).assertTrue();
+      expect(header.indexOf('3') >= 0).assertTrue();
+    });
+
+    it('boundary: index_timeline_visible_place_count_should_clamp_negative_to_zero', 0, () => {
+      // Arrange
+      const negativeCount = -4;
+      const zeroCount = 0;
+
+      // Act
+      const negativeVisible = resolveIndexTimelineVisiblePlaceCount(negativeCount);
+      const zeroVisible = resolveIndexTimelineVisiblePlaceCount(zeroCount);
+
+      // Assert
+      expect(negativeVisible).assertEqual(0);
+      expect(zeroVisible).assertEqual(0);
+    });
+
+    it('invalid: index_timeline_archived_items_should_disable_swipe_and_gap_hint', 0, () => {
+      // Arrange
+      const archived = true;
+
+      // Act
+      const enabled = shouldEnableIndexTimelineItem(archived);
+      const showGapHint = shouldShowIndexTimelineGapHint(archived, 5);
+
+      // Assert
+      expect(enabled).assertFalse();
+      expect(showGapHint).assertFalse();
+    });
+
+    it('conflict: index_timeline_group_visibility_should_invert_collapsed_state', 0, () => {
+      // Arrange
+      const collapsed = true;
+      const expanded = false;
+
+      // Act
+      const collapsedVisible = shouldShowIndexTimelineGroupItems(collapsed);
+      const expandedVisible = shouldShowIndexTimelineGroupItems(expanded);
+
+      // Assert
+      expect(collapsedVisible).assertFalse();
+      expect(expandedVisible).assertTrue();
+    });
+
+    it('regression: index_timeline_bottom_spacer_should_shrink_in_companion_mode', 0, () => {
+      // Arrange
+      const companionMode = true;
+      const planningMode = false;
+
+      // Act
+      const companionHeight = resolveIndexTimelineBottomSpacerHeight(companionMode);
+      const planningHeight = resolveIndexTimelineBottomSpacerHeight(planningMode);
+
+      // Assert
+      expect(companionHeight).assertEqual(24);
+      expect(planningHeight).assertEqual(100);
+      expect(companionHeight < planningHeight).assertTrue();
+    });
+
+    it('combined: index_timeline_gap_hint_should_require_non_archived_positive_gap_count', 0, () => {
+      // Arrange
+      // Act
+      const nonArchivedWithGap = shouldShowIndexTimelineGapHint(false, 1);
+      const nonArchivedWithoutGap = shouldShowIndexTimelineGapHint(false, 0);
+      const archivedWithGap = shouldShowIndexTimelineGapHint(true, 1);
+
+      // Assert
+      expect(nonArchivedWithGap).assertTrue();
+      expect(nonArchivedWithoutGap).assertFalse();
+      expect(archivedWithGap).assertFalse();
+    });
+
     it('normal: index_timeline_private_builders_should_render_expanded_active_group', 0, () => {
       // Arrange
       const page = createIndexTimelineViewEI();
@@ -118,6 +208,31 @@ export default function phase2BatchEITest() {
       // Assert
       expect(threw).assertFalse();
       expect(toggledDay).assertEqual(-1);
+    });
+
+    it('boundary: index_timeline_empty_params_should_keep_default_state_and_render_empty_list', 0, () => {
+      // Arrange
+      const page = createIndexTimelineViewEI();
+
+      // Act
+      page.setInitiallyProvidedValue({});
+      page.updateStateVars({});
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.groupedEvents.length).assertEqual(0);
+      expect(page.allEvents.length).assertEqual(0);
+      expect(page.isArchived).assertFalse();
+      expect(page.isCompanionMode).assertFalse();
+      expect(page.showWeather).assertFalse();
+      expect(page.isPageRefreshing).assertFalse();
+      expect(page.gapsCount).assertEqual(0);
     });
 
     it('boundary: index_timeline_private_builders_should_render_collapsed_archived_group', 0, () => {

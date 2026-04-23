@@ -340,6 +340,61 @@ export default function planListPageHelperTest() {
       expect(items[1].endTime).assertEqual('11:00');
     });
 
+    it('boundary: plan_list_reprompt_should_allow_first_prompt_even_when_cooldown_not_met', 0, () => {
+      // Arrange
+      const now = 1000;
+      const lastPromptAt = 2000;
+      const cooldownMs = 10 * 60 * 1000;
+      // Act
+      const allowed = canPlanListRepromptPermission(now, lastPromptAt, false, cooldownMs);
+      // Assert
+      expect(allowed).assertTrue();
+    });
+
+    it('boundary: plan_list_share_start_should_use_computed_time_when_fixed_time_missing', 0, () => {
+      // Arrange
+      const event = buildShareEvent();
+      event.fixedStartTime = '';
+      event.computedStartTime = '18:45';
+      // Act
+      const start = resolvePlanListShareStartTime(event);
+      // Assert
+      expect(start).assertEqual('18:45');
+    });
+
+    it('regression: plan_list_share_sort_should_not_mutate_source_order', 0, () => {
+      // Arrange
+      const first = buildShareEvent();
+      first.name = 'first';
+      first.dayOffset = 2;
+      first.sortOrder = 1;
+      const second = buildShareEvent();
+      second.name = 'second';
+      second.dayOffset = 0;
+      second.sortOrder = 1;
+      const source: TravelPlanItem[] = [first, second];
+      // Act
+      const sorted = sortPlanListShareEvents(source);
+      // Assert
+      expect(sorted[0].name).assertEqual('second');
+      expect(source[0].name).assertEqual('first');
+    });
+
+    it('combined: plan_list_share_item_should_floor_fractional_duration_and_day_offset', 0, () => {
+      // Arrange
+      const event = buildShareEvent();
+      event.name = 'fractional';
+      event.dayOffset = 2.8;
+      event.duration = 95.9;
+      event.fixedStartTime = '07:10';
+      // Act
+      const items = buildPlanListShareEventItems([event]);
+      // Assert
+      expect(items[0].dayOffset).assertEqual(2);
+      expect(items[0].duration).assertEqual(1.6);
+      expect(items[0].endTime).assertEqual('08:45');
+    });
+
     it('normal: plan_list_instance_should_convert_sort_and_palette_without_service_dependency', 0, () => {
       // Arrange
       const page = createPlanListPageForTest() as PlanListPagePrivateTest;

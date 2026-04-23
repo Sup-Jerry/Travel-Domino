@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from '@ohos/hypium';
+import { describe, it, expect } from '@ohos/hypium';
 import localUnitTest from './LocalUnit.test';
 import automatedTest from './AutomatedTest.test';
 import conflictCompressionTest from './ConflictCompression.test';

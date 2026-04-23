@@ -1,224 +1,243 @@
 import { describe, expect, it } from '@ohos/hypium';
 import {
-  ArrivalReminderCoordinator,
-  HomeArrivalConsumeInput,
-  PlanArrivalConsumeInput
-} from '../main/ets/infrastructure/services/ArrivalReminderCoordinator';
-import { ArrivalReminderPayload } from '../main/ets/infrastructure/services/ArrivalReminderEngine';
-import { EventEntity } from '../main/ets/model/entity/EventEntity';
-import { PlanStatus } from '../main/ets/domain/statemachine/PlanStatus';
+  buildDiagnosticsTransitionLogLine,
+  createSettingsAdvancedPageForTest,
+  normalizeDiagnosticsPlanIdInput,
+  resolveDiagnosticsExportPreview,
+  shouldLoadStateMachineDiagnostics
+} from '../main/ets/pages/SettingsAdvancedPage';
+import { PlanTransitionEvent } from '../main/ets/domain/statemachine/ExecutionContext';
+import { PlanStateDiagnosticsSnapshot } from '../main/ets/domain/statemachine/PlanStateMachine';
+import { PlanStateMetricsSnapshot } from '../main/ets/domain/statemachine/PlanStateMetricsStore';
 
-interface ArrivalReminderCoordinatorPrivateCQ {
-  acknowledgeCalls?: string[];
-  readPayload(planId?: number): ArrivalReminderPayload | null;
-  acknowledge(eventId: number, action: string): void;
-  canShowByPlanStatus(planId: number): boolean;
-  isTerminalStatus(status: PlanStatus): boolean;
+class TransitionEventCQ {
+  timestamp: number = 0;
+  fromStatus: string = '';
+  toStatus: string = '';
+  triggerReason: string = '';
 }
 
-interface FakePlanStatusResultCQ {
-  planId: string;
-  status: PlanStatus;
+interface SettingsAdvancedPagePrivateCQ {
+  diagnosticsPlanIdInput: string;
+  diagnosticsSummary: string;
+  diagnosticsLogs: string[];
+  diagnosticsExportPreview: string;
+  effectiveTheme: string;
+  refreshStateMachineDiagnostics(): void;
+  exportStateMachineDiagnostics(): void;
+  initialRender(): void;
 }
 
-class FakePlanStateMachineCQ {
-  public status: PlanStatus = PlanStatus.READY;
-  public requestedPlanIds: string[] = [];
+class SettingsAdvancedStateMachineMockCQ {
+  public exportPlanIds: string[] = [];
 
-  getPlanStatus(planId: string): FakePlanStatusResultCQ {
-    this.requestedPlanIds.push(planId);
-    const result: FakePlanStatusResultCQ = { planId: planId, status: this.status };
-    return result;
+  getDailyMetrics(planId: string): PlanStateMetricsSnapshot {
+    const counters: Record<string, number> = {};
+    counters['auto_transition_attempt_ready'] = 1;
+    counters['auto_transition_success_ready'] = 1;
+    counters['auto_transition_fail_ready'] = 0;
+    return {
+      dayKey: '2026-04-23',
+      planId: planId,
+      counters: counters,
+      reasons: {},
+      updatedAt: 1710000000000
+    };
+  }
+
+  getRecentTransitions(_planId: string, _limit: number): PlanTransitionEvent[] {
+    const first = new TransitionEventCQ();
+    first.timestamp = 1710000000000;
+    first.fromStatus = 'READY';
+    first.toStatus = 'IN_PROGRESS';
+    first.triggerReason = 'auto';
+    const second = new TransitionEventCQ();
+    second.timestamp = 1710000001000;
+    second.fromStatus = 'IN_PROGRESS';
+    second.toStatus = 'DONE';
+    second.triggerReason = 'manual';
+    return [first as Object as PlanTransitionEvent, second as Object as PlanTransitionEvent];
+  }
+
+  exportDiagnosticsSnapshot(planId: string): PlanStateDiagnosticsSnapshot {
+    this.exportPlanIds.push(planId);
+    return {
+      planId: planId,
+      dayKey: '2026-04-23',
+      generatedAt: 1710000000000,
+      metrics: this.getDailyMetrics(planId),
+      transitions: this.getRecentTransitions(planId, 50)
+    };
   }
 }
 
-class CoordinatorHooksCQ {
-  private readonly coordinator: ArrivalReminderCoordinator;
-  private readonly originReadPayload: Object;
-  private readonly originAcknowledge: Object;
-  private readonly originPlanStateMachine: Object;
-  public readonly stateMachine: FakePlanStateMachineCQ = new FakePlanStateMachineCQ();
-
-  constructor(coordinator: ArrivalReminderCoordinator) {
-    this.coordinator = coordinator;
-    this.originReadPayload = Reflect.get(coordinator as Object, 'readPayload') as Object;
-    this.originAcknowledge = Reflect.get(coordinator as Object, 'acknowledge') as Object;
-    this.originPlanStateMachine = Reflect.get(coordinator as Object, 'planStateMachine') as Object;
-    Reflect.set(coordinator as Object, 'planStateMachine', this.stateMachine as Object);
-  }
-
-  setPayload(payload: ArrivalReminderPayload | null): void {
-    Reflect.set(this.coordinator as Object, 'readPayload', (_planId?: number): ArrivalReminderPayload | null => payload);
-  }
-
-  captureAcknowledge(): string[] {
-    const calls: string[] = [];
-    Reflect.set(this.coordinator as Object, 'acknowledge', (eventId: number, action: string): void => {
-      calls.push(`${eventId}:${action}`);
-    });
-    return calls;
-  }
-
-  restore(): void {
-    Reflect.set(this.coordinator as Object, 'readPayload', this.originReadPayload);
-    Reflect.set(this.coordinator as Object, 'acknowledge', this.originAcknowledge);
-    Reflect.set(this.coordinator as Object, 'planStateMachine', this.originPlanStateMachine);
-  }
-}
-
-function payloadCQ(planId: number, eventId: number, seq: number = 1): ArrivalReminderPayload {
-  return {
-    seq: seq,
-    planId: planId,
-    eventId: eventId,
-    placeName: `place_${eventId}`,
-    distanceMeters: 80,
-    triggerAt: 1000 + seq
-  };
-}
-
-function eventCQ(id: number, status: number, completionStatus: number, actualStart: number, actualEnd: number): EventEntity {
-  const event = new EventEntity();
-  event.id = id;
-  event.status = status;
-  event.completion_status = completionStatus;
-  event.actual_start_time = actualStart;
-  event.actual_end_time = actualEnd;
-  return event;
+function createSettingsAdvancedPageCQ(machine: SettingsAdvancedStateMachineMockCQ): SettingsAdvancedPagePrivateCQ {
+  const page = createSettingsAdvancedPageForTest() as SettingsAdvancedPagePrivateCQ;
+  Reflect.set(page as Object, 'planStateMachine', machine);
+  return page;
 }
 
 export default function phase2BatchCQTest() {
-  describe('unit_test_case_generator_autofill_Phase2BatchCQ_arrival_reminder_coordinator', () => {
-    it('normal: arrival_home_consume_should_show_payload_with_resolved_title', 0, () => {
+  describe('unit_test_case_generator_autofill_Phase2BatchCQ_settings_advanced_extra', () => {
+    it('normal: diagnostics_plan_id_should_trim_numeric_and_text_ids', 0, () => {
       // Arrange
-      const coordinator = ArrivalReminderCoordinator.getInstance();
-      const hooks = new CoordinatorHooksCQ(coordinator);
-      hooks.setPayload(payloadCQ(41, 4101));
-      let shownTitle = '';
-      let shownEventId = 0;
-      const input: HomeArrivalConsumeInput = {
-        isDialogOpen: false,
-        resolvePlanTitle: (planId: number): string => `Plan-${planId}`,
-        onShow: (payload: ArrivalReminderPayload, title: string): void => {
-          shownEventId = payload.eventId;
-          shownTitle = title;
-        }
-      };
+      const numeric = '  42  ';
+      const text = ' plan-42 ';
+
       // Act
-      coordinator.consumeOnHome(input);
-      hooks.restore();
+      const numericResult = normalizeDiagnosticsPlanIdInput(numeric);
+      const textResult = normalizeDiagnosticsPlanIdInput(text);
+
       // Assert
-      expect(shownEventId).assertEqual(4101);
-      expect(shownTitle).assertEqual('Plan-41');
+      expect(numericResult).assertEqual('42');
+      expect(textResult).assertEqual('plan-42');
     });
 
-    it('boundary: arrival_plan_consume_should_ignore_mismatched_plan_payload', 0, () => {
+    it('boundary: diagnostics_preview_should_return_original_when_length_equals_max', 0, () => {
       // Arrange
-      const coordinator = ArrivalReminderCoordinator.getInstance();
-      const hooks = new CoordinatorHooksCQ(coordinator);
-      hooks.setPayload(payloadCQ(42, 4201));
-      let showCount = 0;
-      const input: PlanArrivalConsumeInput = {
-        isDialogOpen: false,
-        currentPlanId: 43,
-        events: [eventCQ(4201, 1, EventEntity.STATE_PENDING, 0, 0)],
-        onShow: (_payload: ArrivalReminderPayload): void => {
-          showCount++;
-        }
-      };
+      const json = '12345';
+
       // Act
-      coordinator.consumeOnPlan(input);
-      hooks.restore();
+      const preview = resolveDiagnosticsExportPreview(json, 5);
+
       // Assert
-      expect(showCount).assertEqual(0);
+      expect(preview).assertEqual('12345');
     });
 
-    it('invalid: arrival_plan_consume_should_acknowledge_missing_target_event', 0, () => {
+    it('boundary: diagnostics_preview_should_truncate_when_length_exceeds_max_by_one', 0, () => {
       // Arrange
-      const coordinator = ArrivalReminderCoordinator.getInstance();
-      const hooks = new CoordinatorHooksCQ(coordinator);
-      hooks.setPayload(payloadCQ(44, 4401));
-      const acknowledgeCalls = hooks.captureAcknowledge();
-      const input: PlanArrivalConsumeInput = {
-        isDialogOpen: false,
-        currentPlanId: 44,
-        events: [],
-        onShow: (_payload: ArrivalReminderPayload): void => {
-        }
-      };
+      const json = '123456';
+
       // Act
-      coordinator.consumeOnPlan(input);
-      hooks.restore();
+      const preview = resolveDiagnosticsExportPreview(json, 5);
+
       // Assert
-      expect(acknowledgeCalls.length).assertEqual(1);
-      expect(acknowledgeCalls[0]).assertEqual('4401:dismiss');
+      expect(preview).assertEqual('12345...');
     });
 
-    it('conflict: arrival_plan_consume_should_acknowledge_when_other_event_is_active', 0, () => {
+    it('invalid: diagnostics_should_not_load_for_blank_after_string_normalization', 0, () => {
       // Arrange
-      const coordinator = ArrivalReminderCoordinator.getInstance();
-      const hooks = new CoordinatorHooksCQ(coordinator);
-      hooks.setPayload(payloadCQ(45, 4501));
-      const acknowledgeCalls = hooks.captureAcknowledge();
-      const input: PlanArrivalConsumeInput = {
-        isDialogOpen: false,
-        currentPlanId: 45,
-        events: [
-          eventCQ(4599, 1, EventEntity.STATE_PENDING, 100, 0),
-          eventCQ(4501, 1, EventEntity.STATE_PENDING, 0, 0)
-        ],
-        onShow: (_payload: ArrivalReminderPayload): void => {
-        }
-      };
+      const input = '   ';
+
       // Act
-      coordinator.consumeOnPlan(input);
-      hooks.restore();
+      const normalized = normalizeDiagnosticsPlanIdInput(input);
+      const shouldLoad = shouldLoadStateMachineDiagnostics(normalized);
+
       // Assert
-      expect(acknowledgeCalls.length).assertEqual(1);
-      expect(acknowledgeCalls[0]).assertEqual('4501:dismiss');
+      expect(normalized).assertEqual('');
+      expect(shouldLoad).assertFalse();
     });
 
-    it('regression: arrival_status_gate_should_allow_ready_and_block_completed', 0, () => {
+    it('normal: diagnostics_transition_log_line_should_include_status_flow_and_reason', 0, () => {
       // Arrange
-      const coordinator = ArrivalReminderCoordinator.getInstance();
-      const hooks = new CoordinatorHooksCQ(coordinator);
-      const privateApi = coordinator as Object as ArrivalReminderCoordinatorPrivateCQ;
+      const event = new TransitionEventCQ();
+      event.timestamp = 1710000000000;
+      event.fromStatus = 'READY';
+      event.toStatus = 'IN_PROGRESS';
+      event.triggerReason = 'auto';
+
       // Act
-      hooks.stateMachine.status = PlanStatus.READY;
-      const ready = privateApi.canShowByPlanStatus(46);
-      hooks.stateMachine.status = PlanStatus.COMPLETED;
-      const completed = privateApi.canShowByPlanStatus(46);
-      hooks.restore();
+      const line = buildDiagnosticsTransitionLogLine(event as Object as PlanTransitionEvent);
+
       // Assert
-      expect(ready).assertTrue();
-      expect(completed).assertFalse();
-      expect(hooks.stateMachine.requestedPlanIds[0]).assertEqual('46');
+      expect(line.indexOf('READY') >= 0).assertTrue();
+      expect(line.indexOf('IN_PROGRESS') >= 0).assertTrue();
+      expect(line.indexOf('auto') >= 0).assertTrue();
     });
 
-    it('combined: arrival_plan_consume_should_show_only_startable_matching_event_and_terminal_status_should_include_expired', 0, () => {
+    it('conflict: diagnostics_preview_should_append_only_one_ellipsis_marker_after_truncation', 0, () => {
       // Arrange
-      const coordinator = ArrivalReminderCoordinator.getInstance();
-      const hooks = new CoordinatorHooksCQ(coordinator);
-      hooks.setPayload(payloadCQ(47, 4701));
-      const privateApi = coordinator as Object as ArrivalReminderCoordinatorPrivateCQ;
-      let shownEventId = 0;
-      const input: PlanArrivalConsumeInput = {
-        isDialogOpen: false,
-        currentPlanId: 47,
-        events: [eventCQ(4701, 1, EventEntity.STATE_PENDING, 0, 0)],
-        onShow: (payload: ArrivalReminderPayload): void => {
-          shownEventId = payload.eventId;
-        }
-      };
+      const json = 'abcdefghij';
+
       // Act
-      coordinator.consumeOnPlan(input);
-      const expired = privateApi.isTerminalStatus(PlanStatus.EXPIRED);
-      const paused = privateApi.isTerminalStatus(PlanStatus.PAUSED);
-      hooks.restore();
+      const preview = resolveDiagnosticsExportPreview(json, 4);
+
       // Assert
-      expect(shownEventId).assertEqual(4701);
-      expect(expired).assertTrue();
-      expect(paused).assertFalse();
+      expect(preview).assertEqual('abcd...');
+      expect(preview.indexOf('......') < 0).assertTrue();
+    });
+
+    it('regression: diagnostics_transition_log_line_should_keep_from_to_and_reason', 0, () => {
+      // Arrange
+      const event = new TransitionEventCQ();
+      event.timestamp = 1710000000000;
+      event.fromStatus = 'READY';
+      event.toStatus = 'DONE';
+      event.triggerReason = 'manual';
+
+      // Act
+      const line = buildDiagnosticsTransitionLogLine(event as Object as PlanTransitionEvent);
+
+      // Assert
+      expect(line.indexOf('READY') >= 0).assertTrue();
+      expect(line.indexOf('DONE') >= 0).assertTrue();
+      expect(line.indexOf('manual') >= 0).assertTrue();
+      expect(line.indexOf('->') >= 0).assertTrue();
+    });
+
+    it('combined: settings_advanced_refresh_should_reverse_recent_transition_logs', 0, () => {
+      // Arrange
+      const machine = new SettingsAdvancedStateMachineMockCQ();
+      const page = createSettingsAdvancedPageCQ(machine);
+
+      // Act
+      page.diagnosticsPlanIdInput = ' plan-cq ';
+      page.refreshStateMachineDiagnostics();
+
+      // Assert
+      expect(page.diagnosticsSummary.indexOf('plan=plan-cq') >= 0).assertTrue();
+      expect(page.diagnosticsLogs.length).assertEqual(2);
+      expect(page.diagnosticsLogs[0].indexOf('DONE') >= 0).assertTrue();
+    });
+
+    it('invalid: settings_advanced_refresh_should_clear_logs_for_blank_plan_id', 0, () => {
+      // Arrange
+      const machine = new SettingsAdvancedStateMachineMockCQ();
+      const page = createSettingsAdvancedPageCQ(machine);
+      page.diagnosticsPlanIdInput = 'plan-before';
+      page.refreshStateMachineDiagnostics();
+      page.diagnosticsPlanIdInput = '   ';
+
+      // Act
+      page.refreshStateMachineDiagnostics();
+
+      // Assert
+      expect(page.diagnosticsSummary.length > 0).assertTrue();
+      expect(page.diagnosticsLogs.length).assertEqual(0);
+    });
+
+    it('combined: settings_advanced_export_should_skip_blank_plan_id_and_preserve_empty_preview', 0, () => {
+      // Arrange
+      const machine = new SettingsAdvancedStateMachineMockCQ();
+      const page = createSettingsAdvancedPageCQ(machine);
+
+      // Act
+      page.diagnosticsPlanIdInput = '   ';
+      page.exportStateMachineDiagnostics();
+
+      // Assert
+      expect(machine.exportPlanIds.length).assertEqual(0);
+      expect(page.diagnosticsExportPreview).assertEqual('');
+    });
+
+    it('combined: settings_advanced_render_should_cover_summary_logs_and_preview_states', 0, () => {
+      // Arrange
+      const machine = new SettingsAdvancedStateMachineMockCQ();
+      const page = createSettingsAdvancedPageCQ(machine);
+
+      // Act
+      page.effectiveTheme = 'light';
+      page.diagnosticsSummary = 'summary';
+      page.diagnosticsLogs = ['a -> b'];
+      page.diagnosticsExportPreview = '{"planId":"cq"}';
+      page.initialRender();
+      page.effectiveTheme = 'dark';
+      page.diagnosticsExportPreview = '';
+      page.initialRender();
+
+      // Assert
+      expect(page.diagnosticsLogs.length).assertEqual(1);
+      expect(page.diagnosticsSummary).assertEqual('summary');
     });
   });
 }

@@ -364,5 +364,64 @@ export default function settingsPreferenceInsightsPageHelperTest() {
       expect(zeroRate.length > 0).assertTrue();
       expect(zeroWidth).assertEqual('0%');
     });
+
+    it('invalid: settings_preference_clamp_should_return_min_for_non_finite_value', 0, () => {
+      // Arrange
+      const value = Number.NaN;
+      // Act
+      const result = clampSettingsPreferenceInt(value, 2, 5);
+      // Assert
+      expect(result).assertEqual(2);
+    });
+
+    it('invalid: settings_preference_mode_count_should_ignore_decimal_negative_and_missing_key', 0, () => {
+      // Arrange
+      const raw = '{"1":2.8,"2":-3,"0":4}';
+      // Act
+      const decimalCount = parseSettingsPreferenceModeCount(raw, '1');
+      const negativeCount = parseSettingsPreferenceModeCount(raw, '2');
+      const missingCount = parseSettingsPreferenceModeCount(raw, '-1');
+      // Assert
+      expect(decimalCount).assertEqual(2);
+      expect(negativeCount).assertEqual(0);
+      expect(missingCount).assertEqual(0);
+    });
+
+    it('conflict: settings_preference_dominant_mode_should_keep_default_when_counts_tie', 0, () => {
+      // Arrange
+      const freq: ModeFrequencyView = { modeCustom: 3, modeDefault: 3, modeSoldier: 3, modeLeisure: 3 };
+      // Act
+      const dominant = resolveSettingsPreferenceDominantModeText(freq, 12);
+      // Assert
+      expect(dominant).assertEqual(resolveSettingsPreferenceDominantModeText({
+        modeCustom: 0,
+        modeDefault: 1,
+        modeSoldier: 0,
+        modeLeisure: 0
+      }, 1));
+    });
+
+    it('boundary: settings_preference_preference_text_should_cover_culture_branch', 0, () => {
+      // Arrange
+      const cultureValue = 3;
+      // Act
+      const cultureText = resolveSettingsPreferencePreferenceText(cultureValue);
+      // Assert
+      expect(cultureText.length > 0).assertTrue();
+      expect(cultureText !== resolveSettingsPreferencePreferenceText(2)).assertTrue();
+      expect(cultureText !== resolveSettingsPreferencePreferenceText(4)).assertTrue();
+    });
+
+    it('combined: settings_preference_mode_usage_items_should_preserve_counts_by_mode_order', 0, () => {
+      // Arrange
+      const freq: ModeFrequencyView = { modeCustom: 7, modeDefault: 4, modeSoldier: 3, modeLeisure: 2 };
+      // Act
+      const items = buildSettingsPreferenceModeUsageItems(freq);
+      // Assert
+      expect(items[0].count).assertEqual(4);
+      expect(items[1].count).assertEqual(3);
+      expect(items[2].count).assertEqual(2);
+      expect(items[3].count).assertEqual(7);
+    });
   });
 }

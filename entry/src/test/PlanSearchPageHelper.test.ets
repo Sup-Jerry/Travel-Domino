@@ -117,6 +117,46 @@ export default function planSearchPageHelperTest() {
       expect(allowLoadMore).assertTrue();
     });
 
+    it('combined: plan_search_load_more_guard_should_block_each_unready_flag', 0, () => {
+      // Arrange
+      // Act
+      const notLoaded = shouldPlanSearchLoadMore(false, false, false, true);
+      const searchingNow = shouldPlanSearchLoadMore(true, true, false, true);
+      const alreadyLoadingMore = shouldPlanSearchLoadMore(true, false, true, true);
+      const noMore = shouldPlanSearchLoadMore(true, false, false, false);
+
+      // Assert
+      expect(notLoaded).assertFalse();
+      expect(searchingNow).assertFalse();
+      expect(alreadyLoadingMore).assertFalse();
+      expect(noMore).assertFalse();
+    });
+
+    it('boundary: plan_search_cache_key_should_lowercase_trimmed_keyword', 0, () => {
+      // Arrange
+      const rawKeyword = '  BeiJing  ';
+
+      // Act
+      const cacheKey = resolvePlanSearchCacheKey(rawKeyword);
+
+      // Assert
+      expect(cacheKey).assertEqual('beijing');
+    });
+
+    it('conflict: plan_search_state_color_should_prioritize_trash_over_active_status', 0, () => {
+      // Arrange
+      const activeStatus = 1;
+      const deleteTime = 1;
+
+      // Act
+      const color = resolvePlanSearchStateColor(activeStatus, deleteTime);
+      const isTrash = isPlanSearchTrashPlan(deleteTime);
+
+      // Assert
+      expect(isTrash).assertTrue();
+      expect(color).assertEqual('#D03D3D');
+    });
+
     it('boundary: plan_search_cache_fresh_should_reject_invalid_or_reverse_time', 0, () => {
       // Arrange
       const cachedAt = 1000;
@@ -133,6 +173,17 @@ export default function planSearchPageHelperTest() {
       expect(expired).assertFalse();
       expect(reverse).assertFalse();
       expect(invalid).assertFalse();
+    });
+
+    it('boundary: plan_search_cache_fresh_should_reject_negative_cached_time_and_invalid_ttl', 0, () => {
+      // Arrange
+      // Act
+      const negativeCached = isPlanSearchCacheFresh(-1, 1000, 3000);
+      const invalidTtl = isPlanSearchCacheFresh(1000, 2000, Number.NaN);
+
+      // Assert
+      expect(negativeCached).assertFalse();
+      expect(invalidTtl).assertFalse();
     });
 
     it('combined: plan_search_result_text_should_prioritize_searching_and_loading_states', 0, () => {

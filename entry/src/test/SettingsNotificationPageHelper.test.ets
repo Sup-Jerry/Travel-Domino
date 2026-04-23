@@ -72,5 +72,27 @@ export default function settingsNotificationPageHelperTest() {
       // Assert
       expect(visibleBack).assertEqual(visible);
     });
+
+    it('boundary: settings_notification_visibility_roundtrip_should_keep_hidden_state', 0, () => {
+      // Arrange
+      const visible = false;
+      // Act
+      const hideFlag = resolveHideTipFromVisibleFlag(visible);
+      const visibleBack = resolveTipVisibleFromHideFlag(hideFlag);
+      // Assert
+      expect(hideFlag).assertTrue();
+      expect(visibleBack).assertFalse();
+    });
+
+    it('combined: settings_notification_enable_toasts_should_contain_open_keyword_for_both_tips', 0, () => {
+      // Arrange
+      const enabled = true;
+      // Act
+      const archive = resolveArchiveTipToggleToast(enabled);
+      const del = resolveDeleteTipToggleToast(enabled);
+      // Assert
+      expect(archive.indexOf('开启') >= 0).assertTrue();
+      expect(del.indexOf('开启') >= 0).assertTrue();
+    });
   });
 }

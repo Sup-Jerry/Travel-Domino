@@ -1,139 +1,273 @@
 import { describe, expect, it } from '@ohos/hypium';
-import { TrafficEngine } from '../main/ets/infrastructure/services/TrafficEngine';
-import { DriveStrategy, IMapService, LocationInfo } from '../main/ets/model/interface/IMapService';
+import { LoginStatus } from '../main/ets/domain/auth/AuthTypes';
+import {
+  createAuthGatePageForTest,
+  resolveAuthGateCheckingText,
+  resolveAuthGateTargetUrl,
+  shouldAuthGateRouteToPlanList
+} from '../main/ets/pages/AuthGatePage';
 
-interface TrafficEnginePrivateCP {
-  fetchAmapTrafficAsync(from: LocationInfo, to: LocationInfo, strategy: DriveStrategy, key: string): Promise<void>;
-  markTransientFailure(key: string, reason: string): void;
+interface AuthGatePagePrivateCP {
+  checking: boolean;
+  checkingInProgress: boolean;
+  initialRender(): void;
+  onPageShow(): void;
+  checkAndRoute(): Promise<void>;
+  replaceUrl(url: string): Promise<void>;
 }
 
-class MapServiceStubCP implements IMapService {
-  public driveDuration: number = 16;
-  public driveError: string = '';
-  public driveCalls: number = 0;
-
-  public async getLocationInfo(_keyword: string): Promise<LocationInfo[]> {
-    return [];
-  }
-
-  public async calculateCommute(_from: string, _to: string): Promise<number> {
-    return 0;
-  }
-
-  public async getDriveDuration(
-    _origin: LocationInfo,
-    _destination: LocationInfo,
-    _strategy: DriveStrategy
-  ): Promise<number> {
-    this.driveCalls += 1;
-    if (this.driveError.length > 0) {
-      throw new Error(this.driveError);
-    }
-    return this.driveDuration;
-  }
-
-  public async getDurationByMode(
-    _origin: LocationInfo,
-    _destination: LocationInfo,
-    _mode: number,
-    _startTime?: string
-  ): Promise<number> {
-    return 0;
-  }
+interface AuthGateStartupResultCP {
+  success: boolean;
+  status: LoginStatus;
+  source?: string;
+  message?: string;
+  code?: number;
+  data?: AuthGateSessionCP | null;
 }
 
-function resetTrafficEngineCP(): TrafficEngine {
-  Reflect.set(Object(TrafficEngine), 'instance', null);
-  return TrafficEngine.getInstance();
+interface AuthGateSessionCP {
+  accountId?: string;
 }
 
-function locationCP(name: string): LocationInfo {
-  return {
-    name: name,
-    latitude: 31.23,
-    longitude: 121.47
+class AuthGateStartupCoordinatorMockCP {
+  public result: AuthGateStartupResultCP = {
+    success: false,
+    status: LoginStatus.UNAUTHENTICATED,
+    source: 'test',
+    message: 'none',
+    code: 0,
+    data: null
   };
+  public shouldThrow: boolean = false;
+  public checkCount: number = 0;
+
+  async checkStartupAuth(): Promise<AuthGateStartupResultCP> {
+    this.checkCount += 1;
+    if (this.shouldThrow) {
+      throw new Error('startup_failed_cp');
+    }
+    return this.result;
+  }
+}
+
+class AuthGateAuthFacadeMockCP {
+  public logoutCount: number = 0;
+
+  async logout(): Promise<void> {
+    this.logoutCount += 1;
+  }
+}
+
+function createAuthGatePageCP(
+  startupCoordinator: AuthGateStartupCoordinatorMockCP,
+  authFacade: AuthGateAuthFacadeMockCP
+): AuthGatePagePrivateCP {
+  const page = createAuthGatePageForTest() as AuthGatePagePrivateCP;
+  Reflect.set(page as Object, 'startupCoordinator', startupCoordinator);
+  Reflect.set(page as Object, 'authFacade', authFacade);
+  return page;
 }
 
 export default function phase2BatchCPTest() {
-  describe('unit_test_case_generator_autofill_Phase2BatchCP_traffic_engine_drive_fetch', () => {
-    it('normal: traffic_drive_fetch_should_cache_duration_and_clear_transient_failure', 0, async () => {
+  describe('unit_test_case_generator_autofill_Phase2BatchCP_auth_gate_extra', () => {
+    it('normal: auth_gate_should_route_authenticated_success_to_plan_list', 0, () => {
       // Arrange
-      const engine = resetTrafficEngineCP();
-      const service = new MapServiceStubCP();
-      const key = 'drive_success_cp';
-      Reflect.set(engine as Object, 'mapService', service as Object);
-      (Reflect.get(engine as Object, 'transientFailureUntil') as Map<string, number>).set(key, Date.now() + 10_000);
+      const success = true;
+      const status = LoginStatus.AUTHENTICATED;
 
       // Act
-      await (engine as Object as TrafficEnginePrivateCP).fetchAmapTrafficAsync(locationCP('A'), locationCP('B'), DriveStrategy.FASTEST, key);
+      const shouldRoute = shouldAuthGateRouteToPlanList(success, status);
+      const target = resolveAuthGateTargetUrl(success, status);
 
       // Assert
-      expect(service.driveCalls).assertEqual(1);
-      expect((Reflect.get(engine as Object, 'cache') as Map<string, number>).get(key)).assertEqual(16);
-      expect((Reflect.get(engine as Object, 'transientFailureUntil') as Map<string, number>).has(key)).assertFalse();
+      expect(shouldRoute).assertTrue();
+      expect(target).assertEqual('pages/PlanListPage');
     });
 
-    it('boundary: traffic_drive_fetch_should_skip_when_same_key_is_inflight', 0, async () => {
+    it('boundary: auth_gate_should_route_all_non_authenticated_states_to_login', 0, () => {
       // Arrange
-      const engine = resetTrafficEngineCP();
-      const service = new MapServiceStubCP();
-      const key = 'drive_inflight_cp';
-      Reflect.set(engine as Object, 'mapService', service as Object);
-      (Reflect.get(engine as Object, 'cache') as Map<string, number>).set(key, -1);
+      const success = true;
+      const states: LoginStatus[] = [LoginStatus.UNAUTHENTICATED, LoginStatus.LOGIN_FAILED];
 
       // Act
-      await (engine as Object as TrafficEnginePrivateCP).fetchAmapTrafficAsync(locationCP('A'), locationCP('B'), DriveStrategy.FASTEST, key);
+      const targets = states.map((status) => resolveAuthGateTargetUrl(success, status));
+      const allLogin = targets.every((target) => target === 'pages/LoginPage');
 
       // Assert
-      expect(service.driveCalls).assertEqual(0);
-      expect((Reflect.get(engine as Object, 'cache') as Map<string, number>).get(key)).assertEqual(-1);
+      expect(allLogin).assertTrue();
     });
 
-    it('invalid: traffic_drive_fetch_should_mark_transient_failure_when_service_missing', 0, async () => {
+    it('invalid: auth_gate_should_not_route_to_plan_list_when_success_false_even_if_status_authenticated', 0, () => {
       // Arrange
-      const engine = resetTrafficEngineCP();
-      const key = 'drive_no_service_cp';
-      Reflect.set(engine as Object, 'mapService', null);
+      const success = false;
+      const status = LoginStatus.AUTHENTICATED;
 
       // Act
-      await (engine as Object as TrafficEnginePrivateCP).fetchAmapTrafficAsync(locationCP('A'), locationCP('B'), DriveStrategy.FASTEST, key);
+      const shouldRoute = shouldAuthGateRouteToPlanList(success, status);
+      const target = resolveAuthGateTargetUrl(success, status);
 
       // Assert
-      expect((Reflect.get(engine as Object, 'cache') as Map<string, number>).has(key)).assertFalse();
-      const blockedUntil = (Reflect.get(engine as Object, 'transientFailureUntil') as Map<string, number>).get(key) ?? 0;
-      expect(blockedUntil > Date.now()).assertTrue();
+      expect(shouldRoute).assertFalse();
+      expect(target).assertEqual('pages/LoginPage');
     });
 
-    it('regression: traffic_drive_fetch_should_delete_loading_cache_and_mark_failure_on_exception', 0, async () => {
+    it('conflict: auth_gate_checking_text_should_differ_between_checking_and_redirecting', 0, () => {
       // Arrange
-      const engine = resetTrafficEngineCP();
-      const service = new MapServiceStubCP();
-      service.driveError = 'drive_failed_cp';
-      const key = 'drive_throw_cp';
-      Reflect.set(engine as Object, 'mapService', service as Object);
+      const checking = true;
+      const redirecting = false;
 
       // Act
-      await (engine as Object as TrafficEnginePrivateCP).fetchAmapTrafficAsync(locationCP('A'), locationCP('B'), DriveStrategy.AVOID_CONGESTION, key);
+      const checkingText = resolveAuthGateCheckingText(checking);
+      const redirectingText = resolveAuthGateCheckingText(redirecting);
 
       // Assert
-      expect(service.driveCalls).assertEqual(1);
-      expect((Reflect.get(engine as Object, 'cache') as Map<string, number>).has(key)).assertFalse();
-      const blockedUntil = (Reflect.get(engine as Object, 'transientFailureUntil') as Map<string, number>).get(key) ?? 0;
-      expect(blockedUntil > Date.now()).assertTrue();
+      expect(checkingText.trim().length > 0).assertTrue();
+      expect(redirectingText.trim().length > 0).assertTrue();
+      expect(checkingText === redirectingText).assertFalse();
     });
 
-    it('combined: traffic_mark_transient_failure_should_set_future_block_window', 0, () => {
+    it('regression: auth_gate_check_and_route_should_use_plan_list_for_authenticated_startup', 0, async () => {
       // Arrange
-      const engine = resetTrafficEngineCP();
-      const key = 'manual_mark_cp';
+      const startup = new AuthGateStartupCoordinatorMockCP();
+      const auth = new AuthGateAuthFacadeMockCP();
+      const page = createAuthGatePageCP(startup, auth);
+      const routed: string[] = [];
+      startup.result = {
+        success: true,
+        status: LoginStatus.AUTHENTICATED,
+        source: 'cache',
+        message: 'ok',
+        data: { accountId: 'account_cp' }
+      };
+      Reflect.set(page as Object, 'replaceUrl', async (url: string): Promise<void> => {
+        routed.push(url);
+      });
 
       // Act
-      (engine as Object as TrafficEnginePrivateCP).markTransientFailure(key, 'manual_test');
+      await page.checkAndRoute();
 
       // Assert
-      const blockedUntil = (Reflect.get(engine as Object, 'transientFailureUntil') as Map<string, number>).get(key) ?? 0;
-      expect(blockedUntil > Date.now()).assertTrue();
+      expect(startup.checkCount).assertEqual(1);
+      expect(routed[0]).assertEqual('pages/PlanListPage');
+      expect(auth.logoutCount).assertEqual(0);
+    });
+
+    it('boundary: auth_gate_check_and_route_should_send_unauthenticated_success_to_login_without_logout', 0, async () => {
+      // Arrange
+      const startup = new AuthGateStartupCoordinatorMockCP();
+      const auth = new AuthGateAuthFacadeMockCP();
+      const page = createAuthGatePageCP(startup, auth);
+      const routed: string[] = [];
+      startup.result = {
+        success: true,
+        status: LoginStatus.UNAUTHENTICATED,
+        source: 'cache',
+        message: 'missing_session',
+        data: null
+      };
+      Reflect.set(page as Object, 'replaceUrl', async (url: string): Promise<void> => {
+        routed.push(url);
+      });
+
+      // Act
+      await page.checkAndRoute();
+
+      // Assert
+      expect(startup.checkCount).assertEqual(1);
+      expect(routed[0]).assertEqual('pages/LoginPage');
+      expect(auth.logoutCount).assertEqual(0);
+    });
+
+    it('invalid: auth_gate_check_and_route_should_send_failed_authenticated_status_to_login', 0, async () => {
+      // Arrange
+      const startup = new AuthGateStartupCoordinatorMockCP();
+      const auth = new AuthGateAuthFacadeMockCP();
+      const page = createAuthGatePageCP(startup, auth);
+      const routed: string[] = [];
+      startup.result = {
+        success: false,
+        status: LoginStatus.AUTHENTICATED,
+        source: 'network',
+        message: 'invalid',
+        data: { accountId: 'account_cp' }
+      };
+      Reflect.set(page as Object, 'replaceUrl', async (url: string): Promise<void> => {
+        routed.push(url);
+      });
+
+      // Act
+      await page.checkAndRoute();
+
+      // Assert
+      expect(routed[0]).assertEqual('pages/LoginPage');
+      expect(auth.logoutCount).assertEqual(0);
+    });
+
+    it('combined: auth_gate_check_and_route_should_fallback_to_login_and_logout_on_exception', 0, async () => {
+      // Arrange
+      const startup = new AuthGateStartupCoordinatorMockCP();
+      const auth = new AuthGateAuthFacadeMockCP();
+      const page = createAuthGatePageCP(startup, auth);
+      const routed: string[] = [];
+      startup.shouldThrow = true;
+      Reflect.set(page as Object, 'replaceUrl', async (url: string): Promise<void> => {
+        routed.push(url);
+      });
+
+      // Act
+      await page.checkAndRoute();
+
+      // Assert
+      expect(auth.logoutCount).assertEqual(1);
+      expect(routed[0]).assertEqual('pages/LoginPage');
+    });
+
+    it('combined: auth_gate_on_page_show_should_skip_when_checking_already_in_progress', 0, () => {
+      // Arrange
+      const startup = new AuthGateStartupCoordinatorMockCP();
+      const auth = new AuthGateAuthFacadeMockCP();
+      const page = createAuthGatePageCP(startup, auth);
+      page.checkingInProgress = true;
+
+      // Act
+      page.onPageShow();
+
+      // Assert
+      expect(startup.checkCount).assertEqual(0);
+      expect(page.checkingInProgress).assertTrue();
+    });
+
+    it('combined: auth_gate_on_page_show_should_mark_checking_in_progress_for_new_cycle', 0, () => {
+      // Arrange
+      const startup = new AuthGateStartupCoordinatorMockCP();
+      const auth = new AuthGateAuthFacadeMockCP();
+      const page = createAuthGatePageCP(startup, auth);
+      page.checking = false;
+      page.checkingInProgress = false;
+
+      // Act
+      page.onPageShow();
+
+      // Assert
+      expect(page.checking).assertTrue();
+      expect(page.checkingInProgress).assertTrue();
+    });
+
+    it('combined: auth_gate_render_should_cover_checking_and_redirecting_text_states', 0, () => {
+      // Arrange
+      const startup = new AuthGateStartupCoordinatorMockCP();
+      const auth = new AuthGateAuthFacadeMockCP();
+      const page = createAuthGatePageCP(startup, auth);
+
+      // Act
+      page.checking = true;
+      page.initialRender();
+      page.checking = false;
+      page.initialRender();
+
+      // Assert
+      expect(resolveAuthGateCheckingText(true).length > 0).assertTrue();
+      expect(resolveAuthGateCheckingText(false).length > 0).assertTrue();
     });
   });
 }

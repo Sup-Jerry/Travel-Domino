@@ -196,5 +196,28 @@ export default function settingsAccountSecurityPageHelperTest() {
       expect(threw).assertFalse();
       expect(palette !== null).assertTrue();
     });
+
+    it('combined: settings_account_security_logout_success_should_redirect_to_resolved_url', 0, async () => {
+      // Arrange
+      const authFacade = new SettingsAccountSecurityAuthFacadeMockTest();
+      const router = new SettingsAccountSecurityRouterMockTest();
+      const page = createSettingsAccountSecurityPrivateForTest(authFacade, router);
+
+      // Act
+      await page.doLogout();
+
+      // Assert
+      expect(router.urls.length).assertEqual(1);
+      expect(router.urls[0]).assertEqual(resolveLogoutRedirectUrl());
+    });
+
+    it('regression: settings_account_security_failure_toast_should_keep_failure_keyword', 0, () => {
+      // Arrange
+      const success = false;
+      // Act
+      const text = resolveLogoutToastMessage(success);
+      // Assert
+      expect(text.indexOf('失败') >= 0).assertTrue();
+    });
   });
 }
