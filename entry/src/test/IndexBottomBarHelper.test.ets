@@ -77,6 +77,34 @@ export default function indexBottomBarHelperTest() {
       // Assert
       expect(enabledCount).assertEqual(3);
     });
+
+    it('boundary: bottom_bar_helpers_should_keep_both_buttons_disabled_when_flags_false', 0, () => {
+      // Arrange
+      const ai = false;
+      const add = false;
+
+      // Act
+      const aiResult = shouldEnableIndexBottomBarAi(ai);
+      const addResult = shouldEnableIndexBottomBarAdd(add);
+
+      // Assert
+      expect(aiResult).assertFalse();
+      expect(addResult).assertFalse();
+    });
+
+    it('combined: bottom_bar_helpers_should_keep_both_buttons_enabled_when_flags_true', 0, () => {
+      // Arrange
+      const ai = true;
+      const add = true;
+
+      // Act
+      const aiResult = shouldEnableIndexBottomBarAi(ai);
+      const addResult = shouldEnableIndexBottomBarAdd(add);
+
+      // Assert
+      expect(aiResult).assertTrue();
+      expect(addResult).assertTrue();
+    });
   });
 }
 

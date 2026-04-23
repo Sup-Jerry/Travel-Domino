@@ -1,5 +1,9 @@
 import { describe, it, expect } from '@ohos/hypium';
-import { shouldIncludeIndexBacklogEvent } from '../main/ets/pages/index/IndexBacklogView';
+import { EventEntity } from '../main/ets/model/entity/EventEntity';
+import {
+  resolveIndexBacklogItems,
+  shouldIncludeIndexBacklogEvent
+} from '../main/ets/pages/index/IndexBacklogView';
 
 export default function indexBacklogViewHelperTest() {
   describe('unit_test_case_generator_autofill_IndexBacklogViewHelper', () => {
@@ -70,6 +74,41 @@ export default function indexBacklogViewHelperTest() {
 
       // Assert
       expect(includedCount).assertEqual(3);
+    });
+
+    it('boundary: backlog_items_should_return_empty_list_for_empty_events', 0, () => {
+      // Arrange
+      const events: EventEntity[] = [];
+
+      // Act
+      const items = resolveIndexBacklogItems(events);
+
+      // Assert
+      expect(items.length).assertEqual(0);
+    });
+
+    it('combined: backlog_items_should_filter_only_status_one_and_keep_other_events', 0, () => {
+      // Arrange
+      const pending = new EventEntity();
+      pending.id = 1;
+      pending.name = 'pending';
+      pending.status = 0;
+      const completed = new EventEntity();
+      completed.id = 2;
+      completed.name = 'completed';
+      completed.status = 1;
+      const skipped = new EventEntity();
+      skipped.id = 3;
+      skipped.name = 'skipped';
+      skipped.status = 2;
+
+      // Act
+      const items = resolveIndexBacklogItems([pending, completed, skipped]);
+
+      // Assert
+      expect(items.length).assertEqual(2);
+      expect(items[0].id).assertEqual(1);
+      expect(items[1].id).assertEqual(3);
     });
   });
 }

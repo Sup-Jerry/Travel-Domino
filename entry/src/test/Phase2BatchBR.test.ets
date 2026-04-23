@@ -1,4 +1,4 @@
-import { describe, expect, it } from '@ohos/hypium';
+﻿import { describe, expect, it } from '@ohos/hypium';
 import { common } from '@kit.AbilityKit';
 import photoAccessHelper from '@ohos.file.photoAccessHelper';
 import { PreferenceManager } from '../main/ets/common/utils/PreferenceManager';

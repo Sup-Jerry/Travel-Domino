@@ -93,6 +93,23 @@ export default function indexBacklogSectionHelperTest() {
       // Assert
       expect(threw).assertFalse();
     });
+
+    it('boundary: backlog_section_divider_color_should_keep_default_token_value', 0, () => {
+      // Arrange
+      // Act
+      const color = getDefaultIndexBacklogSectionDividerColor();
+      // Assert
+      expect(color).assertEqual('#E7EDF5');
+    });
+
+    it('combined: backlog_section_divider_color_should_remain_stable_across_calls', 0, () => {
+      // Arrange
+      // Act
+      const first = getDefaultIndexBacklogSectionDividerColor();
+      const second = getDefaultIndexBacklogSectionDividerColor();
+      // Assert
+      expect(first).assertEqual(second);
+    });
   });
 }
 

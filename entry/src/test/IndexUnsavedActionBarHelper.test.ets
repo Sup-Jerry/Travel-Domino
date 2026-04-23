@@ -123,6 +123,31 @@ export default function indexUnsavedActionBarHelperTest() {
       // Assert
       expect(threw).assertFalse();
     });
+
+    it('boundary: unsaved_action_bar_default_theme_should_expose_all_required_tokens', 0, () => {
+      // Arrange
+      // Act
+      const theme = getDefaultIndexUnsavedActionTheme();
+      // Assert
+      expect(theme.textPrimary.length > 0).assertTrue();
+      expect(theme.textSecondary.length > 0).assertTrue();
+      expect(theme.divider.length > 0).assertTrue();
+      expect(theme.primary.length > 0).assertTrue();
+      expect(theme.cardBg.length > 0).assertTrue();
+    });
+
+    it('combined: unsaved_action_bar_default_theme_should_remain_stable_across_calls', 0, () => {
+      // Arrange
+      // Act
+      const first = getDefaultIndexUnsavedActionTheme();
+      const second = getDefaultIndexUnsavedActionTheme();
+      // Assert
+      expect(first.textPrimary).assertEqual(second.textPrimary);
+      expect(first.textSecondary).assertEqual(second.textSecondary);
+      expect(first.divider).assertEqual(second.divider);
+      expect(first.primary).assertEqual(second.primary);
+      expect(first.cardBg).assertEqual(second.cardBg);
+    });
   });
 }
 

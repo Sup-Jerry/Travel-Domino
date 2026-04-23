@@ -362,6 +362,42 @@ export default function indexScheduleAreaHelperTest() {
       // Assert
       expect(threw).assertFalse();
     });
+
+    it('boundary: schedule_helper_matrix_should_disable_actions_but_keep_margin_in_normal_archived_mode', 0, () => {
+      // Arrange
+      const isArchived = true;
+      const isCompanionMode = false;
+
+      // Act
+      const showBottomBar = shouldShowIndexScheduleBottomBar(isCompanionMode);
+      const aiEnabled = resolveIndexScheduleBottomBarAiEnabled(isArchived);
+      const addEnabled = resolveIndexScheduleBottomBarAddEnabled(isArchived);
+      const margin = resolveIndexScheduleUnsavedMarginBottom(isCompanionMode);
+
+      // Assert
+      expect(showBottomBar).assertTrue();
+      expect(aiEnabled).assertFalse();
+      expect(addEnabled).assertFalse();
+      expect(margin).assertEqual(96);
+    });
+
+    it('combined: schedule_helper_matrix_should_hide_bottom_bar_but_keep_actions_computable_in_companion_mode', 0, () => {
+      // Arrange
+      const isArchived = false;
+      const isCompanionMode = true;
+
+      // Act
+      const showBottomBar = shouldShowIndexScheduleBottomBar(isCompanionMode);
+      const aiEnabled = resolveIndexScheduleBottomBarAiEnabled(isArchived);
+      const addEnabled = resolveIndexScheduleBottomBarAddEnabled(isArchived);
+      const margin = resolveIndexScheduleUnsavedMarginBottom(isCompanionMode);
+
+      // Assert
+      expect(showBottomBar).assertFalse();
+      expect(aiEnabled).assertTrue();
+      expect(addEnabled).assertTrue();
+      expect(margin).assertEqual(30);
+    });
   });
 }
 
