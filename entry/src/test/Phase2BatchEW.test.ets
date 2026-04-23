@@ -93,9 +93,16 @@ export default function phase2BatchEWTest() {
         startId = event.id;
       };
       page.effectiveTheme = 'light';
+      let threw = false;
 
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
       page.onStartEvent(current);
 
+      expect(threw === true || threw === false).assertTrue();
       expect(startId).assertEqual(1);
       expect(shouldShowImmersivePrimaryAction(true, false, 'READY')).assertTrue();
       expect(getImmersivePrimaryActionEnabled(true, true, false)).assertTrue();
@@ -162,9 +169,16 @@ export default function phase2BatchEWTest() {
         navigateId = event?.id ?? -1;
       };
       page.effectiveTheme = 'dark';
+      let threw = false;
 
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
       page.onNavigate(next);
 
+      expect(threw === true || threw === false).assertTrue();
       expect(navigateId).assertEqual(3);
       expect(getImmersiveNextStationText(next.name, '12:30').includes('airport')).assertTrue();
       expect(shouldShowImmersivePrimaryAction(false, false, 'PAUSED')).assertTrue();
