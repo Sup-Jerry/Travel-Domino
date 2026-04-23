@@ -20,6 +20,7 @@ interface ConflictCompressDialogPrivateTest {
   context: CompressionSelectionContext | null;
   selectedIds: Set<number>;
   previewPlan: CompressionPlan | null;
+  safeShowToast(message: string, duration?: number): void;
   initialRender(): void;
 }
 
@@ -156,6 +157,23 @@ export default function conflictCompressDialogHelperTest() {
       expect(newVal).assertEqual(30);
       expect(reduced).assertEqual(20);
       expect(gap).assertEqual(12);
+    });
+
+    it('boundary: conflict_compress_dialog_safe_show_toast_should_support_optional_duration', 0, () => {
+      // Arrange
+      const page = new ConflictCompressDialog(undefined, {} as LocalStorage) as Object as ConflictCompressDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      try {
+        page.safeShowToast('compress toast');
+        page.safeShowToast('compress toast timed', 1200);
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
 
     it('normal: conflict_compress_dialog_initial_render_should_support_selectable_preview_branch', 0, () => {

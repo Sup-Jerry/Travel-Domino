@@ -3,6 +3,8 @@ import {
   IndexToolbar,
   IndexToolbarTheme,
   resolveIndexToolbarDisplayTitle,
+  resolveIndexToolbarModeColor,
+  resolveIndexToolbarModeLabel,
   shouldShowIndexToolbarModeExplanation,
   shouldShowIndexToolbarModeTag,
   shouldShowIndexToolbarWeatherAction
@@ -224,6 +226,49 @@ export default function indexToolbarHelperTest() {
       expect(page.weatherLoading).assertTrue();
       expect(page.theme.primary).assertEqual('#AAAAAA');
       expect(page.theme.textPrimary).assertEqual('#DDDDDD');
+    });
+
+    it('boundary: toolbar_mode_label_should_cover_soldier_leisure_and_custom_modes', 0, () => {
+      // Arrange
+      // Act
+      const soldier = resolveIndexToolbarModeLabel(1);
+      const leisure = resolveIndexToolbarModeLabel(2);
+      const custom = resolveIndexToolbarModeLabel(-1);
+
+      // Assert
+      expect(soldier.length > 0).assertTrue();
+      expect(leisure.length > 0).assertTrue();
+      expect(custom.length > 0).assertTrue();
+      expect(soldier === leisure).assertFalse();
+      expect(leisure === custom).assertFalse();
+    });
+
+    it('invalid: toolbar_mode_label_should_fallback_to_empty_for_default_mode', 0, () => {
+      // Arrange
+      const strategyMode = 0;
+
+      // Act
+      const label = resolveIndexToolbarModeLabel(strategyMode);
+
+      // Assert
+      expect(label).assertEqual('');
+    });
+
+    it('combined: toolbar_mode_color_should_use_strategy_palette_or_fallback', 0, () => {
+      // Arrange
+      const fallbackColor = '#123456';
+
+      // Act
+      const soldier = resolveIndexToolbarModeColor(1, fallbackColor);
+      const leisure = resolveIndexToolbarModeColor(2, fallbackColor);
+      const custom = resolveIndexToolbarModeColor(-1, fallbackColor);
+      const fallback = resolveIndexToolbarModeColor(0, fallbackColor);
+
+      // Assert
+      expect(soldier).assertEqual('#FF6B35');
+      expect(leisure).assertEqual('#4CAF50');
+      expect(custom).assertEqual('#2196F3');
+      expect(fallback).assertEqual(fallbackColor);
     });
   });
 }

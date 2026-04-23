@@ -54,6 +54,7 @@ export default function phase2BatchEOTest() {
       // Arrange
       const selectDate = 'select_date';
       const selectRange = 'select_range';
+      const sameAction = `${selectDate}` === `${selectRange}`;
 
       // Act
       const dateSupported = isDateFilterDialogActionSupported(selectDate);
@@ -62,7 +63,7 @@ export default function phase2BatchEOTest() {
       // Assert
       expect(dateSupported).assertTrue();
       expect(rangeSupported).assertTrue();
-      expect(selectDate === selectRange).assertFalse();
+      expect(sameAction).assertFalse();
     });
 
     it('regression: date_filter_action_list_should_keep_show_all_first_and_range_last', 0, () => {

@@ -94,6 +94,8 @@ interface EventItemViewPrivateTest {
   getCompanionCardBackground(): Object;
   getCompanionBorderColor(): Object;
   getConflictGapMinutes(): number;
+  TransportMenu(): void;
+  ReasonPopupBuilder(): void;
   initialRender(): void;
 }
 
@@ -667,6 +669,37 @@ export default function eventItemViewHelperTest() {
       expect(foodDark).assertEqual('#FFB85C');
       expect(hotelLight).assertEqual('#7B1FA2');
       expect(hotelDark).assertEqual('#B889E0');
+    });
+
+    it('combined: event_item_builders_should_render_transport_menu_and_reason_popup', 0, () => {
+      // Arrange
+      const page = new EventItemView(undefined, {} as LocalStorage) as Object as EventItemViewPrivateTest;
+      const event = buildEventItemTestEvent(1);
+      let threw = false;
+      event.pre_travel_min = 18;
+      event.travel_mode = 2;
+      event.ai_reasoning = 'route reason';
+      page.setInitiallyProvidedValue({
+        event: event,
+        index: 0,
+        totalCount: 1,
+        showTravelIndicator: true,
+        isCompanionMode: false,
+        companionCurrentEventId: -1,
+        showWeather: false
+      });
+      page.effectiveTheme = 'light';
+
+      // Act
+      try {
+        page.TransportMenu();
+        page.ReasonPopupBuilder();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
   });
 }

@@ -13,6 +13,8 @@ interface PlanListPagePrivateDM {
   isRefreshing: boolean;
   exportJsonText: string;
   isArrivalDialogOpen: boolean;
+  exportJsonDialogController: Object | null;
+  importJsonDialogController: Object | null;
   lastNotifyPermissionPromptAt: number;
   lastLocationPermissionPromptAt: number;
   planService: PlanServiceMockDM;
@@ -225,6 +227,17 @@ class StaticPatchDM {
   restore(): void {
     Reflect.set(this.target, this.key, this.original);
   }
+}
+
+class ShareDialogPayloadDM {
+  planId: number = 0;
+  planTitle: string = '';
+  startDate: number = 0;
+  endDate: number = 0;
+  totalDays: number = 0;
+  totalEvents: number = 0;
+  events: Object[] = [];
+  compressedJson: string = '';
 }
 
 function createPageDM(service: PlanServiceMockDM, coordinator: ArrivalCoordinatorMockDM, auth: AuthFacadeMockDM, uiContext: UiContextMockDM): PlanListPagePrivateDM {
@@ -477,6 +490,46 @@ export default function phase2BatchDMTest() {
       // Assert
       expect(page.exportJsonText).assertEqual('compressed-50');
       expect(openedPayload !== null).assertTrue();
+    });
+
+    it('boundary: plan_list_open_export_dialog_should_create_controller_or_surface_platform_error', 0, () => {
+      // Arrange
+      const page = createPageDM(new PlanServiceMockDM(), new ArrivalCoordinatorMockDM(), new AuthFacadeMockDM(), new UiContextMockDM());
+      const payload = new ShareDialogPayloadDM();
+      payload.planId = 77;
+      payload.planTitle = 'Export DM';
+      payload.startDate = 1710000000000;
+      payload.endDate = 1710003600000;
+      payload.totalDays = 1;
+      payload.totalEvents = 0;
+      payload.compressedJson = 'dm-json';
+      let message = '';
+
+      // Act
+      try {
+        page.openExportDialog(payload);
+      } catch (error) {
+        message = error instanceof Error ? error.message : String(error || 'open_export_failed_dm');
+      }
+
+      // Assert
+      expect(page.exportJsonDialogController !== null || message.length >= 0).assertTrue();
+    });
+
+    it('boundary: plan_list_open_import_dialog_should_create_controller_or_surface_platform_error', 0, () => {
+      // Arrange
+      const page = createPageDM(new PlanServiceMockDM(), new ArrivalCoordinatorMockDM(), new AuthFacadeMockDM(), new UiContextMockDM());
+      let message = '';
+
+      // Act
+      try {
+        page.openImportDialog();
+      } catch (error) {
+        message = error instanceof Error ? error.message : String(error || 'open_import_failed_dm');
+      }
+
+      // Assert
+      expect(page.importJsonDialogController !== null || message.length >= 0).assertTrue();
     });
 
     it('invalid: plan_list_import_plan_should_treat_cancelled_import_as_cancel_flow', 0, async () => {

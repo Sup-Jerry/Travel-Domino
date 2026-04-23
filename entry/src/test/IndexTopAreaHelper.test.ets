@@ -337,6 +337,30 @@ export default function indexTopAreaHelperTest() {
       expect(page.toolbarTheme.primary).assertEqual('#111111');
       expect(page.weatherTheme.primary).assertEqual('#555555');
     });
+
+    it('boundary: top_area_weather_hint_bar_should_keep_identity_for_repeated_true_input', 0, () => {
+      // Arrange
+      const visible = true;
+
+      // Act
+      const first = shouldShowIndexTopAreaWeatherHintBar(visible);
+      const second = shouldShowIndexTopAreaWeatherHintBar(visible);
+
+      // Assert
+      expect(first).assertTrue();
+      expect(second).assertTrue();
+    });
+
+    it('combined: top_area_weather_hint_bar_should_return_expected_visible_count_for_boolean_matrix', 0, () => {
+      // Arrange
+      const flags: boolean[] = [true, true, false, false, true];
+
+      // Act
+      const visibleCount = flags.filter((flag) => shouldShowIndexTopAreaWeatherHintBar(flag)).length;
+
+      // Assert
+      expect(visibleCount).assertEqual(3);
+    });
   });
 }
 
