@@ -194,6 +194,26 @@ describe('unit_test_case_generator_autofill_ai_service', () => {
     expect(result).toEqual({ statusCode: 201, body: '{"ok":true}' });
   });
 
+  it('boundary: post_json_should_use_explicit_port_when_upstream_url_contains_port', async () => {
+    const service = buildService();
+    let optionsSnapshot: RequestOptionsSnapshot | null = null;
+    jest.spyOn(https, 'request').mockImplementation(((options: RequestOptionsSnapshot, callback: (res: EventEmitter & { statusCode?: number }) => void) => {
+      optionsSnapshot = options;
+      const response = new EventEmitter() as EventEmitter & { statusCode?: number };
+      response.statusCode = 200;
+      callback(response);
+      response.emit('end');
+      return new MockRequest() as any;
+    }) as any);
+
+    await (service as any).postJson('https://example.com:8443/ai', '{}', config.aiUpstreamKey);
+
+    expect(optionsSnapshot).not.toBeNull();
+    const explicitPort = optionsSnapshot!;
+    expect(explicitPort.port).toBe(8443);
+    expect(explicitPort.path).toBe('/ai');
+  });
+
   it('boundary: post_json_should_default_status_code_to_500_when_upstream_response_has_no_status', async () => {
     const service = buildService();
     jest.spyOn(https, 'request').mockImplementation((((_options: RequestOptionsSnapshot, callback: (res: EventEmitter & { statusCode?: number }) => void) => {
@@ -234,8 +254,15 @@ describe('unit_test_case_generator_autofill_ai_service', () => {
   it('combined: post_json_should_reject_timeout_once_and_destroy_request', async () => {
     const service = buildService();
     const request = new MockRequest();
-    jest.spyOn(https, 'request').mockImplementation((((_options: RequestOptionsSnapshot, _callback: (res: EventEmitter & { statusCode?: number }) => void) => {
-      setImmediate(() => request.emit('timeout'));
+    const response = new EventEmitter() as EventEmitter & { statusCode?: number };
+    response.statusCode = 200;
+    jest.spyOn(https, 'request').mockImplementation((((_options: RequestOptionsSnapshot, callback: (res: EventEmitter & { statusCode?: number }) => void) => {
+      callback(response);
+      setImmediate(() => {
+        request.emit('timeout');
+        response.emit('data', '{"late":true}');
+        response.emit('end');
+      });
       return request as any;
     })) as any);
 

@@ -44,6 +44,17 @@ describe('AiController', () => {
     expect(result).toEqual({ ok: true });
   });
 
+  it('boundary: chat_completions_should_fallback_message_count_to_zero_when_messages_missing', async () => {
+    const { controller, aiService } = buildController();
+    const dto = {} as AiChatCompletionsDto;
+    aiService.chatCompletions.mockResolvedValue({ ok: 'missing-messages' });
+
+    const result = await controller.chatCompletions(dto);
+
+    expect(aiService.chatCompletions).toHaveBeenCalledWith(dto);
+    expect(result).toEqual({ ok: 'missing-messages' });
+  });
+
   it('invalid: chat_completions_should_rethrow_error_instance_from_service', async () => {
     const { controller, aiService } = buildController();
     const dto = makeDto();
