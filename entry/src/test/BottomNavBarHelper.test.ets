@@ -67,6 +67,14 @@ class GlobalBottomNavUIContextImplTest implements GlobalBottomNavUIContextTest {
   }
 }
 
+class BottomNavTouchEventTest {
+  type: TouchType = TouchType.Down;
+
+  constructor(type: TouchType) {
+    this.type = type;
+  }
+}
+
 interface GlobalBottomNavBarParamsTest {
   currentTab?: AppNavTab;
   showCenterFab?: boolean;
@@ -94,6 +102,7 @@ interface GlobalBottomNavBarPrivateTest {
   safeReplaceUrl(options: BottomNavRouteOptionsTest, routeLabel: string): Promise<void>;
   navigateTo(tab: AppNavTab): Promise<void>;
   setTabPressed(tab: AppNavTab, pressed: boolean): void;
+  onTabTouch(tab: AppNavTab, event: BottomNavTouchEventTest): void;
   handleTabTap(tab: AppNavTab): void;
   initialRender(): void;
 }
@@ -506,6 +515,25 @@ export default function bottomNavBarHelperTest() {
       expect(plan.shouldNavigate).assertFalse();
       expect(plan.nextTransitionTab).assertEqual('');
       expect(plan.nextNavLocked).assertTrue();
+    });
+
+    it('boundary: global_bottom_nav_on_tab_touch_should_press_and_release_tab', 0, () => {
+      // Arrange
+      const page = new GlobalBottomNavBar(undefined, {} as LocalStorage) as Object as GlobalBottomNavBarPrivateTest;
+      const routedUrls: string[] = [];
+      const fakeRouter = new GlobalBottomNavRouterImplTest(routedUrls);
+      const fakeUiContext = new GlobalBottomNavUIContextImplTest(fakeRouter);
+      page.getUIContext = (): GlobalBottomNavUIContextTest => fakeUiContext;
+
+      // Act
+      page.onTabTouch('trash', new BottomNavTouchEventTest(TouchType.Down));
+      const pressed = page.pressedTab;
+      page.onTabTouch('trash', new BottomNavTouchEventTest(TouchType.Up));
+      const released = page.pressedTab;
+
+      // Assert
+      expect(pressed).assertEqual('trash');
+      expect(released).assertEqual('');
     });
   });
 }
