@@ -618,5 +618,55 @@ export default function eventItemViewHelperTest() {
       expect(page.formatCommuteTime(event.pre_travel_min)).assertEqual('16h 39m');
       expect(page.isManualInputPopupShow).assertTrue();
     });
+
+    it('boundary: event_item_start_display_should_prefer_computed_time_over_fixed_time', 0, () => {
+      // Arrange
+      const computedTime = '10:20';
+      const fixedStartTime = '09:30';
+      // Act
+      const display = resolveEventItemStartTimeDisplay(computedTime, fixedStartTime);
+      // Assert
+      expect(display).assertEqual('10:20');
+    });
+
+    it('combined: event_item_actual_range_meta_should_estimate_end_from_actual_start_and_duration', 0, () => {
+      // Arrange
+      const actualStart = new Date(2026, 3, 23, 8, 15).getTime();
+      const duration = 75;
+      const planRange = '08:00-09:00';
+      // Act
+      const meta = resolveEventItemActualRangeMeta(actualStart, 0, 0, 0, duration, planRange);
+      // Assert
+      expect(meta.isEstimated).assertTrue();
+      expect(meta.text.indexOf('08:15') >= 0).assertTrue();
+      expect(meta.text.indexOf('09:30') >= 0).assertTrue();
+    });
+
+    it('boundary: event_item_companion_future_pending_event_should_use_dimmed_default_state', 0, () => {
+      // Arrange
+      const eventId = 10;
+      const currentEventId = 20;
+      // Act
+      const opacity = resolveEventItemCompanionOpacity(true, eventId, currentEventId, EventEntity.STATE_PENDING, 0);
+      const label = resolveEventItemCompanionStateLabel(EventEntity.STATE_PENDING, 0, eventId, currentEventId);
+      // Assert
+      expect(opacity).assertEqual(0.55);
+      expect(label).assertEqual('FUTURE');
+    });
+
+    it('conflict: event_item_theme_color_should_use_keyword_palette_for_food_and_hotel_names', 0, () => {
+      // Arrange
+      const defaultPrimary = '#123456';
+      // Act
+      const foodLight = resolveEventItemThemeColor(0, 0, '晚餐', 'light', defaultPrimary);
+      const foodDark = resolveEventItemThemeColor(0, 0, '晚餐', 'dark', defaultPrimary);
+      const hotelLight = resolveEventItemThemeColor(0, 0, '酒店入住', 'light', defaultPrimary);
+      const hotelDark = resolveEventItemThemeColor(0, 0, '酒店入住', 'dark', defaultPrimary);
+      // Assert
+      expect(foodLight).assertEqual('#FF9800');
+      expect(foodDark).assertEqual('#FFB85C');
+      expect(hotelLight).assertEqual('#7B1FA2');
+      expect(hotelDark).assertEqual('#B889E0');
+    });
   });
 }

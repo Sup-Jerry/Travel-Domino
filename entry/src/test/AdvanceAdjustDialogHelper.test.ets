@@ -257,5 +257,56 @@ export default function advanceAdjustDialogHelperTest() {
       // Assert
       expect(threw).assertFalse();
     });
+
+    it('boundary: advance_adjust_time_to_minutes_should_clamp_hour_and_minute_overflows', 0, () => {
+      // Arrange
+      const overflowTime = '99:88';
+      const negativeTime = '-1:-5';
+      // Act
+      const overflowMinutes = advanceAdjustTimeToMinutes(overflowTime);
+      const negativeMinutes = advanceAdjustTimeToMinutes(negativeTime);
+      // Assert
+      expect(overflowMinutes).assertEqual(23 * 60 + 59);
+      expect(negativeMinutes).assertEqual(0);
+    });
+
+    it('boundary: advance_adjust_minutes_to_time_should_floor_decimal_and_wrap_next_day', 0, () => {
+      // Arrange
+      const minutes = (24 * 60) + 61.8;
+      // Act
+      const time = advanceAdjustMinutesToTime(minutes);
+      // Assert
+      expect(time).assertEqual('01:01');
+    });
+
+    it('combined: advance_adjust_selection_should_remove_id_without_mutating_source_set', 0, () => {
+      // Arrange
+      const selectedIds = new Set<number>([3, 7]);
+      // Act
+      const nextSelectedIds = toggleAdvanceAdjustSelection(selectedIds, 7, false);
+      // Assert
+      expect(nextSelectedIds.has(7)).assertFalse();
+      expect(nextSelectedIds.has(3)).assertTrue();
+      expect(selectedIds.has(7)).assertTrue();
+    });
+
+    it('boundary: advance_adjust_selected_ids_should_return_empty_set_for_empty_candidates', 0, () => {
+      // Arrange
+      const candidates: AdvanceAdjustCandidate[] = [];
+      // Act
+      const selectedIds = resolveAdvanceAdjustSelectedIds(candidates);
+      // Assert
+      expect(selectedIds.size).assertEqual(0);
+    });
+
+    it('conflict: advance_adjust_default_start_should_not_move_before_day_start', 0, () => {
+      // Arrange
+      const currentStart = '00:10';
+      const forcedGap = 45;
+      // Act
+      const target = resolveAdvanceAdjustDefaultStartTime(currentStart, forcedGap);
+      // Assert
+      expect(target).assertEqual('00:00');
+    });
   });
 }

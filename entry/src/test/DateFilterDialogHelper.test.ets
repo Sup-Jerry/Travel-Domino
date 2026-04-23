@@ -2,6 +2,7 @@ import { describe, it, expect } from '@ohos/hypium';
 import {
   DateFilterDialog,
   getDateFilterDialogActions,
+  getDateFilterDialogOptions,
   isDateFilterDialogActionSupported
 } from '../main/ets/pages/components/dialogs/DateFilterDialog';
 
@@ -78,6 +79,36 @@ export default function dateFilterDialogHelperTest() {
 
       // Assert
       expect(threw).assertFalse();
+    });
+
+    it('combined: date_filter_options_should_map_one_to_one_with_actions', 0, () => {
+      // Arrange
+      // Act
+      const options = getDateFilterDialogOptions();
+      const actions = getDateFilterDialogActions();
+      // Assert
+      expect(options.length).assertEqual(actions.length);
+      expect(options[0].action).assertEqual(actions[0]);
+      expect(options[1].action).assertEqual(actions[1]);
+      expect(options[2].action).assertEqual(actions[2]);
+    });
+
+    it('boundary: date_filter_options_should_keep_non_empty_titles_and_descriptions', 0, () => {
+      // Arrange
+      // Act
+      const options = getDateFilterDialogOptions();
+      const allTextReady = options.every((item) => item.title.trim().length > 0 && item.description.trim().length > 0);
+      // Assert
+      expect(allTextReady).assertTrue();
+    });
+
+    it('invalid: date_filter_supported_check_should_reject_case_changed_action', 0, () => {
+      // Arrange
+      const action = 'SHOW_ALL';
+      // Act
+      const supported = isDateFilterDialogActionSupported(action);
+      // Assert
+      expect(supported).assertFalse();
     });
   });
 }

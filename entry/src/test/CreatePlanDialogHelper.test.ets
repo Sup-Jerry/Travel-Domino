@@ -89,5 +89,23 @@ export default function createPlanDialogHelperTest() {
       // Assert
       expect(threw).assertFalse();
     });
+
+    it('boundary: create_plan_should_allow_title_after_trimming_outer_spaces', 0, () => {
+      // Arrange
+      const title = '  上海周末  ';
+      // Act
+      const canCreate = canCreatePlanWithTitle(title);
+      // Assert
+      expect(canCreate).assertTrue();
+    });
+
+    it('boundary: create_plan_date_text_should_format_leap_day_without_zero_padding', 0, () => {
+      // Arrange
+      const date = new Date(2028, 1, 29);
+      // Act
+      const dateText = formatCreatePlanDateText(date);
+      // Assert
+      expect(dateText).assertEqual('2028/2/29');
+    });
   });
 }

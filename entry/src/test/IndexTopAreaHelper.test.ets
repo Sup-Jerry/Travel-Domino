@@ -1,6 +1,9 @@
 import { describe, it, expect } from '@ohos/hypium';
 import { EventEntity } from '../main/ets/model/entity/EventEntity';
 import { IndexTopArea, shouldShowIndexTopAreaWeatherHintBar } from '../main/ets/pages/index/IndexTopArea';
+import { TravelPlanItem } from '../main/ets/model/interface/IStandardEvent';
+import { IndexToolbarTheme } from '../main/ets/pages/index/IndexToolbar';
+import { IndexWeatherHintTheme } from '../main/ets/pages/index/IndexWeatherHintBar';
 
 interface IndexTopAreaParamsTest {
   planTitle?: string;
@@ -19,6 +22,20 @@ interface IndexTopAreaParamsTest {
   scoreLines?: string[];
   events?: EventEntity[];
   backlogExpanded?: boolean;
+  dividerColor?: string;
+  toolbarTheme?: IndexToolbarTheme;
+  weatherTheme?: IndexWeatherHintTheme;
+  onBack?: () => void;
+  onOpenSettings?: () => void;
+  onEnterCompanion?: () => void;
+  onRefreshWeather?: () => void;
+  onToggleHint?: () => void;
+  onToggleScore?: () => void;
+  onHintPopupVisibleChange?: (visible: boolean) => void;
+  onScorePopupVisibleChange?: (visible: boolean) => void;
+  onToggleBacklogExpand?: () => void;
+  onMoveToSchedule?: (item: TravelPlanItem) => void;
+  onMoveAllToSchedule?: () => void;
 }
 
 interface IndexTopAreaPrivateTest {
@@ -38,6 +55,20 @@ interface IndexTopAreaPrivateTest {
   scoreLines: string[];
   events: EventEntity[];
   backlogExpanded: boolean;
+  dividerColor: string;
+  toolbarTheme: IndexToolbarTheme;
+  weatherTheme: IndexWeatherHintTheme;
+  onBack: () => void;
+  onOpenSettings: () => void;
+  onEnterCompanion: () => void;
+  onRefreshWeather: () => void;
+  onToggleHint: () => void;
+  onToggleScore: () => void;
+  onHintPopupVisibleChange: (visible: boolean) => void;
+  onScorePopupVisibleChange: (visible: boolean) => void;
+  onToggleBacklogExpand: () => void;
+  onMoveToSchedule: (item: TravelPlanItem) => void;
+  onMoveAllToSchedule: () => void;
   setInitiallyProvidedValue(params: IndexTopAreaParamsTest): void;
   updateStateVars(params: IndexTopAreaParamsTest): void;
   initialRender(): void;
@@ -183,6 +214,128 @@ export default function indexTopAreaHelperTest() {
 
       // Assert
       expect(threw).assertFalse();
+    });
+
+    it('combined: top_area_state_sync_should_cover_generated_prop_update_and_callbacks', 0, () => {
+      // Arrange
+      const page = new IndexTopArea(undefined, {} as LocalStorage) as Object as IndexTopAreaPrivateTest;
+      const event = buildTopAreaEvent(9);
+      let callCount = 0;
+      let lastHintVisible = false;
+      let lastScoreVisible = false;
+      const toolbarTheme: IndexToolbarTheme = {
+        primary: '#111111',
+        textTertiary: '#222222',
+        cardBgSoft: '#333333',
+        textPrimary: '#444444'
+      };
+      const weatherTheme: IndexWeatherHintTheme = {
+        primary: '#555555',
+        textPrimary: '#666666',
+        cardBgSoft: '#777777'
+      };
+      const nextToolbarTheme: IndexToolbarTheme = {
+        primary: '#111111',
+        textTertiary: '#222222',
+        cardBgSoft: '#333333',
+        textPrimary: '#444444'
+      };
+      const nextWeatherTheme: IndexWeatherHintTheme = {
+        primary: '#555555',
+        textPrimary: '#666666',
+        cardBgSoft: '#777777'
+      };
+
+      // Act
+      page.setInitiallyProvidedValue({
+        planTitle: 'init',
+        strategyMode: 1,
+        currentStrategyExplanation: 'explain',
+        isCompanionMode: false,
+        isArchived: false,
+        weatherFeatureEnabled: true,
+        weatherLoading: false,
+        weatherHintVisible: true,
+        weatherSuggestionText: 'suggest',
+        weatherRouteScore: 80,
+        hintPopupVisible: true,
+        scorePopupVisible: false,
+        hintLines: ['h'],
+        scoreLines: ['s'],
+        events: [event],
+        backlogExpanded: true,
+        dividerColor: '#888888',
+        toolbarTheme: toolbarTheme,
+        weatherTheme: weatherTheme,
+        onBack: () => { callCount += 1; },
+        onOpenSettings: () => { callCount += 1; },
+        onEnterCompanion: () => { callCount += 1; },
+        onRefreshWeather: () => { callCount += 1; },
+        onToggleHint: () => { callCount += 1; },
+        onToggleScore: () => { callCount += 1; },
+        onHintPopupVisibleChange: (visible: boolean) => {
+          lastHintVisible = visible;
+          callCount += 1;
+        },
+        onScorePopupVisibleChange: (visible: boolean) => {
+          lastScoreVisible = visible;
+          callCount += 1;
+        },
+        onToggleBacklogExpand: () => { callCount += 1; },
+        onMoveToSchedule: (_item: TravelPlanItem) => { callCount += 1; },
+        onMoveAllToSchedule: () => { callCount += 1; }
+      });
+      page.onBack();
+      page.onOpenSettings();
+      page.onEnterCompanion();
+      page.onRefreshWeather();
+      page.onToggleHint();
+      page.onToggleScore();
+      page.onHintPopupVisibleChange(true);
+      page.onScorePopupVisibleChange(true);
+      page.onToggleBacklogExpand();
+      page.onMoveToSchedule(event as Object as TravelPlanItem);
+      page.onMoveAllToSchedule();
+      page.updateStateVars({
+        planTitle: 'next',
+        strategyMode: 2,
+        currentStrategyExplanation: 'next_explain',
+        isCompanionMode: true,
+        isArchived: true,
+        weatherFeatureEnabled: false,
+        weatherLoading: true,
+        weatherHintVisible: false,
+        weatherSuggestionText: '',
+        weatherRouteScore: -1,
+        hintPopupVisible: false,
+        scorePopupVisible: true,
+        hintLines: [],
+        scoreLines: ['score'],
+        events: [],
+        backlogExpanded: false,
+        dividerColor: '#999999',
+        toolbarTheme: nextToolbarTheme,
+        weatherTheme: nextWeatherTheme
+      });
+
+      // Assert
+      expect(callCount).assertEqual(11);
+      expect(lastHintVisible).assertTrue();
+      expect(lastScoreVisible).assertTrue();
+      expect(page.planTitle).assertEqual('next');
+      expect(page.strategyMode).assertEqual(2);
+      expect(page.currentStrategyExplanation).assertEqual('next_explain');
+      expect(page.isCompanionMode).assertTrue();
+      expect(page.isArchived).assertTrue();
+      expect(page.weatherFeatureEnabled).assertFalse();
+      expect(page.weatherLoading).assertTrue();
+      expect(page.weatherHintVisible).assertFalse();
+      expect(page.scorePopupVisible).assertTrue();
+      expect(page.events.length).assertEqual(0);
+      expect(page.backlogExpanded).assertFalse();
+      expect(page.dividerColor).assertEqual('#999999');
+      expect(page.toolbarTheme.primary).assertEqual('#111111');
+      expect(page.weatherTheme.primary).assertEqual('#555555');
     });
   });
 }

@@ -93,5 +93,24 @@ export default function dateConflictDialogHelperTest() {
       // Assert
       expect(threw).assertFalse();
     });
+
+    it('boundary: date_conflict_description_should_preserve_blank_date_slots', 0, () => {
+      // Arrange
+      const conflictDate = '';
+      const planStart = '';
+      // Act
+      const text = getDateConflictDescription(conflictDate, planStart);
+      // Assert
+      expect(text).assertEqual('conflictDate=;planStart=');
+    });
+
+    it('boundary: date_conflict_plan_start_option_should_show_for_positive_timestamp', 0, () => {
+      // Arrange
+      const planStartDate = 1;
+      // Act
+      const show = shouldShowDateConflictPlanStartOption(planStartDate);
+      // Assert
+      expect(show).assertTrue();
+    });
   });
 }

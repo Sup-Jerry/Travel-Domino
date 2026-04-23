@@ -88,5 +88,26 @@ export default function conflictSelectionDialogHelperTest() {
       // Assert
       expect(threw).assertFalse();
     });
+
+    it('boundary: conflict_selection_gap_prompt_should_preserve_negative_gap_value', 0, () => {
+      // Arrange
+      const gapMinutes = -5;
+      // Act
+      const prompt = getConflictSelectionGapPrompt(gapMinutes);
+      // Assert
+      expect(prompt.indexOf('-5') >= 0).assertTrue();
+    });
+
+    it('combined: conflict_selection_advance_flag_should_be_direct_boolean_passthrough', 0, () => {
+      // Arrange
+      const enabled = true;
+      const disabled = false;
+      // Act
+      const useEnabled = shouldUseConflictAdvanceAdjust(enabled);
+      const useDisabled = shouldUseConflictAdvanceAdjust(disabled);
+      // Assert
+      expect(useEnabled).assertTrue();
+      expect(useDisabled).assertFalse();
+    });
   });
 }

@@ -1,6 +1,7 @@
 import { describe, it, expect } from '@ohos/hypium';
 import {
   IndexToolbar,
+  IndexToolbarTheme,
   resolveIndexToolbarDisplayTitle,
   shouldShowIndexToolbarModeExplanation,
   shouldShowIndexToolbarModeTag,
@@ -15,6 +16,11 @@ interface IndexToolbarParamsTest {
   isArchived?: boolean;
   weatherFeatureEnabled?: boolean;
   weatherLoading?: boolean;
+  theme?: IndexToolbarTheme;
+  onBack?: () => void;
+  onOpenSettings?: () => void;
+  onEnterCompanion?: () => void;
+  onRefreshWeather?: () => void;
 }
 
 interface IndexToolbarPrivateTest {
@@ -25,6 +31,11 @@ interface IndexToolbarPrivateTest {
   isArchived: boolean;
   weatherFeatureEnabled: boolean;
   weatherLoading: boolean;
+  theme: IndexToolbarTheme;
+  onBack: () => void;
+  onOpenSettings: () => void;
+  onEnterCompanion: () => void;
+  onRefreshWeather: () => void;
   setInitiallyProvidedValue(params: IndexToolbarParamsTest): void;
   updateStateVars(params: IndexToolbarParamsTest): void;
   initialRender(): void;
@@ -153,6 +164,66 @@ export default function indexToolbarHelperTest() {
 
       // Assert
       expect(threw).assertFalse();
+    });
+
+    it('combined: toolbar_state_sync_should_cover_generated_prop_update_and_callbacks', 0, () => {
+      // Arrange
+      const page = new IndexToolbar(undefined, {} as LocalStorage) as Object as IndexToolbarPrivateTest;
+      let callCount = 0;
+      const initTheme: IndexToolbarTheme = {
+        primary: '#111111',
+        textTertiary: '#222222',
+        cardBgSoft: '#333333',
+        textPrimary: '#444444'
+      };
+      const nextTheme: IndexToolbarTheme = {
+        primary: '#AAAAAA',
+        textTertiary: '#BBBBBB',
+        cardBgSoft: '#CCCCCC',
+        textPrimary: '#DDDDDD'
+      };
+
+      // Act
+      page.setInitiallyProvidedValue({
+        planTitle: 'init_title',
+        strategyMode: 1,
+        currentStrategyExplanation: 'init_explain',
+        isCompanionMode: false,
+        isArchived: false,
+        weatherFeatureEnabled: true,
+        weatherLoading: false,
+        theme: initTheme,
+        onBack: () => { callCount += 1; },
+        onOpenSettings: () => { callCount += 1; },
+        onEnterCompanion: () => { callCount += 1; },
+        onRefreshWeather: () => { callCount += 1; }
+      });
+      page.onBack();
+      page.onOpenSettings();
+      page.onEnterCompanion();
+      page.onRefreshWeather();
+      page.updateStateVars({
+        planTitle: 'next_title',
+        strategyMode: -1,
+        currentStrategyExplanation: 'next_explain',
+        isCompanionMode: true,
+        isArchived: true,
+        weatherFeatureEnabled: false,
+        weatherLoading: true,
+        theme: nextTheme
+      });
+
+      // Assert
+      expect(callCount).assertEqual(4);
+      expect(page.planTitle).assertEqual('next_title');
+      expect(page.strategyMode).assertEqual(-1);
+      expect(page.currentStrategyExplanation).assertEqual('next_explain');
+      expect(page.isCompanionMode).assertTrue();
+      expect(page.isArchived).assertTrue();
+      expect(page.weatherFeatureEnabled).assertFalse();
+      expect(page.weatherLoading).assertTrue();
+      expect(page.theme.primary).assertEqual('#AAAAAA');
+      expect(page.theme.textPrimary).assertEqual('#DDDDDD');
     });
   });
 }
