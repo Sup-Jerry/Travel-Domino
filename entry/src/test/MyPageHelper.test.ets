@@ -27,6 +27,8 @@ interface MyPagePrivateTest {
   usernameDraft: string;
   profileReady: boolean;
   effectiveTheme: string;
+  aboutToAppear(): void;
+  refreshUserState(): Promise<void>;
   initialRender(): void;
   normalizeAndValidateUsername(rawValue: string): string;
   openUsernameEditor(): void;
@@ -231,6 +233,21 @@ export default function myPageHelperTest() {
       // Assert
       expect(page.showUsernameEditor).assertTrue();
       expect(page.usernameDraft).assertEqual('Bob');
+    });
+
+    it('boundary: my_page_about_to_appear_should_reset_ready_and_keep_loading_refresh_guarded', 0, async () => {
+      // Arrange
+      const page = createMyPagePrivateForTest();
+      page.profileReady = true;
+      page.loadingProfile = true;
+
+      // Act
+      page.aboutToAppear();
+      await page.refreshUserState();
+
+      // Assert
+      expect(page.profileReady).assertFalse();
+      expect(page.loadingProfile).assertTrue();
     });
   });
 }
