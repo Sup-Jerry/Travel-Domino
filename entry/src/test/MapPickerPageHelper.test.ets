@@ -41,7 +41,11 @@ interface MapPickerPagePrivateTest {
   mapRuntimeChecked: boolean;
   mapRuntimeError: string;
   searchToken: number;
+  addressDebounceTimer: number;
   effectiveTheme: string;
+  onMapReady(): void;
+  scheduleFetchAddress(lat: number, lng: number): void;
+  fetchAddress(lat: number, lng: number): Promise<void>;
   scheduleSearch(value: string): void;
   searchNow(): void;
   runSearch(keyword: string): Promise<void>;
@@ -473,6 +477,40 @@ export default function mapPickerPageHelperTest() {
       // Assert
       expect(uiContext.router.backCount).assertEqual(1);
       expect(raw.indexOf('saved address') >= 0).assertTrue();
+    });
+
+    it('boundary: map_picker_on_map_ready_should_return_when_map_missing', 0, () => {
+      // Arrange
+      const page = createMapPickerPageForTest() as MapPickerPagePrivateTest;
+      page.currentAddress = 'before_ready';
+
+      // Act
+      page.onMapReady();
+
+      // Assert
+      expect(page.currentAddress).assertEqual('before_ready');
+    });
+
+    it('regression: map_picker_schedule_fetch_address_should_replace_pending_timer_without_fetching_immediately', 0, () => {
+      // Arrange
+      const page = createMapPickerPageForTest() as MapPickerPagePrivateTest;
+      let fetchCount = 0;
+      Reflect.set(page as Object, 'fetchAddress', async (_lat: number, _lng: number): Promise<void> => {
+        fetchCount += 1;
+      });
+
+      // Act
+      page.scheduleFetchAddress(30.1, 120.2);
+      const firstTimer = page.addressDebounceTimer;
+      page.scheduleFetchAddress(30.2, 120.3);
+      const secondTimer = page.addressDebounceTimer;
+      clearTimeout(secondTimer);
+      page.addressDebounceTimer = -1;
+
+      // Assert
+      expect(firstTimer > 0).assertTrue();
+      expect(secondTimer > 0).assertTrue();
+      expect(fetchCount).assertEqual(0);
     });
   });
 }
