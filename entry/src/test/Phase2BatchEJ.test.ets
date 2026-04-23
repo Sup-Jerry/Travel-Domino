@@ -176,6 +176,14 @@ function resetTrafficEngineEJ(): TrafficEnginePrivateForEJ {
   return TrafficEngine.getInstance() as Object as TrafficEnginePrivateForEJ;
 }
 
+interface AiResponseParserPrivateForEJ {
+  pickArrayFromObject(parsed: Object): AiParserItem[] | null;
+}
+
+class AiParserObjectRecordForEJ {
+  items: AiParserItem[] = [];
+}
+
 export default function phase2BatchEJTest() {
   describe('phase2BatchEJTest', () => {
     it('normal: ai_parser_should_pick_first_array_from_unknown_object_key', 0, () => {
@@ -186,6 +194,23 @@ export default function phase2BatchEJTest() {
       // Assert
       expect(items.length).assertEqual(1);
       expect(items[0].name).assertEqual('museum');
+    });
+
+    it('normal: ai_parser_private_pick_array_should_return_preferred_items_array', 0, () => {
+      // Arrange
+      const parser = AiResponseParser as Object as AiResponseParserPrivateForEJ;
+      const record = new AiParserObjectRecordForEJ();
+      record.items = [{
+        name: 'picked',
+        duration: 35,
+        ai_reasoning: 'r',
+        type: 0
+      }];
+      // Act
+      const items = parser.pickArrayFromObject(record);
+      // Assert
+      expect(items !== null).assertTrue();
+      expect((items as AiParserItem[])[0].name).assertEqual('picked');
     });
 
     it('boundary: ai_parser_line_text_should_infer_food_type_when_type_missing', 0, () => {
