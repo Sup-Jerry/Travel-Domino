@@ -1,11 +1,20 @@
 import { describe, expect, it } from '@ohos/hypium';
 import { EventEntity } from '../main/ets/model/entity/EventEntity';
 import { TimelinePlanStateManager, ITimelinePlanStateHost } from '../main/ets/viewmodel/managers/TimelinePlanStateManager';
-import { PlanStatus } from '../main/ets/domain/statemachine/PlanStatus';
+import { PlanStatus, TransitionTriggerSource } from '../main/ets/domain/statemachine/PlanStatus';
 import { PlanStateMachine } from '../main/ets/domain/statemachine/PlanStateMachine';
 import { WeatherFacade } from '../main/ets/domain/services/WeatherFacade';
 import { WeatherSuggestion, WeatherStageType } from '../main/ets/domain/services/WeatherModels';
 import { ScheduleOrchestrator } from '../main/ets/viewmodel/internal/ScheduleOrchestrator';
+import {
+  ExecutionContext,
+  GetPlanStatusResult,
+  PlanTransitionEvent,
+  StateEvaluationInput,
+  TransitionResult,
+  UpdateExecutionContextCommand
+} from '../main/ets/domain/statemachine/ExecutionContext';
+import { LocationChangeEvent } from '../main/ets/domain/statemachine/StateEventBus';
 
 class CompanionContextSnapshot {
   runtimeState: 'IDLE' | 'READY' | 'ACTIVE' | 'PAUSED' | 'GAP' = 'IDLE';
@@ -106,6 +115,159 @@ class FakeTimelinePlanStateHost implements ITimelinePlanStateHost {
   }
 }
 
+class FakePlanStateMachineForPlanStateTest {
+  status: PlanStatus = PlanStatus.DRAFT;
+  transitionUnsubscribeCount: number = 0;
+  locationUnsubscribeCount: number = 0;
+  evaluateCount: number = 0;
+  updateContextCount: number = 0;
+  recoveryReasons: string[] = [];
+  lastDistance: number = -1;
+  transitionListener: ((event: PlanTransitionEvent) => void) | null = null;
+  locationListener: ((event: LocationChangeEvent) => void) | null = null;
+  context: ExecutionContext | null = null;
+
+  getPlanStatus(planId: string): GetPlanStatusResult {
+    return {
+      planId: planId,
+      status: this.status,
+      isAutoStarted: false
+    };
+  }
+
+  subscribePlanTransition(_planId: string, listener: (event: PlanTransitionEvent) => void): () => void {
+    this.transitionListener = listener;
+    return () => {
+      this.transitionUnsubscribeCount += 1;
+      this.transitionListener = null;
+    };
+  }
+
+  subscribeLocationChange(_planId: string, listener: (event: LocationChangeEvent) => void): () => void {
+    this.locationListener = listener;
+    return () => {
+      this.locationUnsubscribeCount += 1;
+      this.locationListener = null;
+    };
+  }
+
+  buildEvaluationInput(planId: string, _events: EventEntity[], now: number): StateEvaluationInput {
+    return {
+      planId: planId,
+      currentStatus: this.status,
+      now: now,
+      locationPermissionGranted: true,
+      userClickedStart: false,
+      userClickedPause: false,
+      userClickedResume: false,
+      userClickedCancel: false,
+      hasReachedFirstNode: false,
+      motionDetected: false,
+      allNodesCompleted: false,
+      isPlanExpired: false
+    };
+  }
+
+  evaluateAndApply(_input: StateEvaluationInput): TransitionResult | null {
+    this.evaluateCount += 1;
+    return null;
+  }
+
+  updateExecutionContext(command: UpdateExecutionContextCommand): ExecutionContext {
+    this.updateContextCount += 1;
+    this.lastDistance = command.distanceToFirstNodeMeters ?? -1;
+    const next: ExecutionContext = {
+      planId: command.planId,
+      status: this.status,
+      plannedStartTime: 0,
+      plannedEndTime: 0,
+      completedNodeIds: [],
+      skippedNodeIds: [],
+      isAutoStarted: false,
+      isPaused: false,
+      lastKnownLatitude: command.lastKnownLatitude,
+      lastKnownLongitude: command.lastKnownLongitude,
+      lastKnownSpeed: command.lastKnownSpeed,
+      lastKnownAccuracy: command.lastKnownAccuracy,
+      distanceToFirstNodeMeters: command.distanceToFirstNodeMeters,
+      updatedAt: command.updatedAt
+    };
+    this.context = next;
+    return next;
+  }
+
+  getExecutionContext(_planId: string): ExecutionContext | null {
+    return this.context;
+  }
+
+  markRecovery(_planId: string, _success: boolean, reason: string): void {
+    this.recoveryReasons.push(reason);
+  }
+
+  pauseExecution(planId: string): TransitionResult {
+    return this.transition(planId, PlanStatus.PAUSED, 'pause_by_user');
+  }
+
+  resumeExecution(planId: string): TransitionResult {
+    return this.transition(planId, PlanStatus.IN_PROGRESS, 'resume_by_user');
+  }
+
+  confirmPlan(planId: string): TransitionResult {
+    return this.transition(planId, PlanStatus.CONFIRMED, 'confirm_plan');
+  }
+
+  completeExecution(planId: string): TransitionResult {
+    return this.transition(planId, PlanStatus.COMPLETED, 'complete_execution');
+  }
+
+  emitTransition(toStatus: PlanStatus): void {
+    if (!this.transitionListener) {
+      return;
+    }
+    this.status = toStatus;
+    this.transitionListener({
+      planId: '10',
+      fromStatus: PlanStatus.DRAFT,
+      toStatus: toStatus,
+      triggerSource: TransitionTriggerSource.USER_ACTION,
+      triggerReason: 'test_emit',
+      timestamp: Date.now()
+    });
+  }
+
+  emitLocation(): void {
+    if (!this.locationListener) {
+      return;
+    }
+    this.locationListener({
+      planId: '10',
+      latitude: 30,
+      longitude: 120,
+      distanceMeters: 10,
+      timestamp: Date.now()
+    });
+  }
+
+  private transition(planId: string, toStatus: PlanStatus, reason: string): TransitionResult {
+    const fromStatus = this.status;
+    this.status = toStatus;
+    return {
+      success: true,
+      planId: planId,
+      fromStatus: fromStatus,
+      toStatus: toStatus,
+      event: {
+        planId: planId,
+        fromStatus: fromStatus,
+        toStatus: toStatus,
+        triggerSource: TransitionTriggerSource.USER_ACTION,
+        triggerReason: reason,
+        timestamp: Date.now()
+      }
+    };
+  }
+}
+
 export default function timelinePlanStateManagerTest() {
   describe('timelinePlanStateManagerTest', () => {
     it('normal: update_plan_date_should_persist_and_refresh_runtime_views', 0, async () => {
@@ -186,6 +348,115 @@ export default function timelinePlanStateManagerTest() {
       expect(resumed).assertFalse();
       expect(host.recalculateCount).assertEqual(0);
       expect(host.executionWeatherAppliedSummary).assertEqual('');
+    });
+
+    it('normal: bind_and_unbind_should_wire_transition_and_location_callbacks', 0, () => {
+      // Arrange
+      const host = new FakeTimelinePlanStateHost();
+      host.weatherFeatureEnabled = true;
+      host.executionWeatherEnabled = true;
+      const machine = new FakePlanStateMachineForPlanStateTest();
+      machine.status = PlanStatus.CONFIRMED;
+      host.planStateMachine = machine as Object as PlanStateMachine;
+      const manager = new TimelinePlanStateManager(host);
+
+      // Act
+      manager.bindPlanState(host.planId);
+      machine.emitTransition(PlanStatus.IN_PROGRESS);
+      machine.emitLocation();
+      manager.unbindPlanState();
+
+      // Assert
+      expect(host.currentPlanStatus).assertEqual(PlanStatus.IN_PROGRESS);
+      expect(host.startSchedulerCount > 0).assertTrue();
+      expect(machine.evaluateCount > 0).assertTrue();
+      expect(machine.transitionUnsubscribeCount).assertEqual(1);
+      expect(machine.locationUnsubscribeCount).assertEqual(1);
+    });
+
+    it('boundary: bind_plan_state_should_ignore_non_positive_plan_id', 0, () => {
+      // Arrange
+      const host = new FakeTimelinePlanStateHost();
+      const machine = new FakePlanStateMachineForPlanStateTest();
+      host.planStateMachine = machine as Object as PlanStateMachine;
+      const manager = new TimelinePlanStateManager(host);
+
+      // Act
+      manager.bindPlanState(0);
+
+      // Assert
+      expect(machine.transitionListener === null).assertTrue();
+      expect(machine.locationListener === null).assertTrue();
+    });
+
+    it('combined: location_samples_should_ignore_invalid_values_and_track_motion_distance', 0, () => {
+      // Arrange
+      const host = new FakeTimelinePlanStateHost();
+      const machine = new FakePlanStateMachineForPlanStateTest();
+      host.planStateMachine = machine as Object as PlanStateMachine;
+      const manager = new TimelinePlanStateManager(host);
+
+      // Act
+      manager.onLocationSampleForStateMachine(Number.NaN, 120, 1, 5, 1000);
+      manager.onLocationSampleForStateMachine(30, 120, 1, 5, 1000);
+      manager.onLocationSampleForStateMachine(30.002, 120.002, 2, 6, 2000);
+      manager.onLocationSampleForStateMachine(30.004, 120.004, 3, 7, 3000);
+      manager.onLocationSampleForStateMachine(30.006, 120.006, 4, 8, 4000);
+
+      // Assert
+      expect(machine.updateContextCount).assertEqual(4);
+      expect(machine.lastDistance > 0).assertTrue();
+      expect(machine.context?.lastKnownSpeed).assertEqual(4);
+      expect(machine.context?.lastKnownAccuracy).assertEqual(8);
+    });
+
+    it('regression: recover_missing_runtime_context_should_mark_rebuild_and_evaluate', 0, () => {
+      // Arrange
+      const host = new FakeTimelinePlanStateHost();
+      const machine = new FakePlanStateMachineForPlanStateTest();
+      host.planStateMachine = machine as Object as PlanStateMachine;
+      const manager = new TimelinePlanStateManager(host);
+
+      // Act
+      manager.recoverPlanRuntimeState();
+
+      // Assert
+      expect(machine.recoveryReasons[0]).assertEqual('context_missing');
+      expect(machine.recoveryReasons[1]).assertEqual('context_rebuild');
+      expect(machine.evaluateCount).assertEqual(1);
+    });
+
+    it('normal: resume_success_should_update_weather_hint_and_recalculate', 0, () => {
+      // Arrange
+      const host = new FakeTimelinePlanStateHost();
+      const machine = new FakePlanStateMachineForPlanStateTest();
+      machine.status = PlanStatus.PAUSED;
+      host.planStateMachine = machine as Object as PlanStateMachine;
+      const manager = new TimelinePlanStateManager(host);
+
+      // Act
+      const resumed = manager.resumeCurrentExecution();
+
+      // Assert
+      expect(resumed).assertTrue();
+      expect(host.currentPlanStatus).assertEqual(PlanStatus.IN_PROGRESS);
+      expect(host.recalculateCount).assertEqual(1);
+      expect(host.executionWeatherLevel).assertEqual('NOTICE');
+      expect(host.executionWeatherHint.length > 0).assertTrue();
+    });
+
+    it('normal: rename_plan_should_persist_and_update_host_name', 0, async () => {
+      // Arrange
+      const host = new FakeTimelinePlanStateHost();
+      const manager = new TimelinePlanStateManager(host);
+
+      // Act
+      await manager.renamePlan('renamed_plan');
+
+      // Assert
+      expect(host.persistNameCalls).assertEqual(1);
+      expect(host.persistedName).assertEqual('renamed_plan');
+      expect(host.planName).assertEqual('renamed_plan');
     });
   });
 }
