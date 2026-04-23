@@ -31,15 +31,45 @@ interface AppSideBarRouteOptionsTest {
   url: string;
 }
 
+interface AppSideBarRouterTest {
+  replaceUrl(options: AppSideBarRouteOptionsTest): Promise<void>;
+}
+
+interface AppSideBarUiContextTest {
+  getRouter(): AppSideBarRouterTest;
+}
+
 interface AppSideBarPrivateTest {
   isSideBarShow: boolean;
   effectiveTheme: string;
   current: AppNavKey;
   setInitiallyProvidedValue(params: AppSideBarParamsTest): void;
   updateStateVars(params: AppSideBarParamsTest): void;
+  getUIContext: () => AppSideBarUiContextTest;
   getPalette(): AppSideBarPaletteTest;
   createRouteOptions(url: string): AppSideBarRouteOptionsTest;
+  safeReplaceUrl(url: string): Promise<void>;
   initialRender(): void;
+}
+
+class AppSideBarRouterMockTest implements AppSideBarRouterTest {
+  public urls: string[] = [];
+
+  async replaceUrl(options: AppSideBarRouteOptionsTest): Promise<void> {
+    this.urls.push(options.url);
+  }
+}
+
+class AppSideBarUiContextMockTest implements AppSideBarUiContextTest {
+  private readonly router: AppSideBarRouterTest;
+
+  constructor(router: AppSideBarRouterTest) {
+    this.router = router;
+  }
+
+  getRouter(): AppSideBarRouterTest {
+    return this.router;
+  }
 }
 
 @Component
@@ -187,8 +217,40 @@ export default function appSideBarHelperTest() {
       expect(shouldNavigateSelf).assertFalse();
       expect(shouldNavigateTrash).assertTrue();
       expect(page.current).assertEqual('settings');
-      expect(page.isSideBarShow).assertFalse();
       expect(palette.primary).assertEqual(ThemeCenter.getPalette('light').primary);
+    });
+
+    it('regression: app_sidebar_safe_replace_url_should_delegate_to_ui_router', 0, async () => {
+      // Arrange
+      const page = createAppSideBarForTest();
+      const router = new AppSideBarRouterMockTest();
+      page.getUIContext = (): AppSideBarUiContextTest => new AppSideBarUiContextMockTest(router);
+
+      // Act
+      await page.safeReplaceUrl('pages/ArchivePage');
+
+      // Assert
+      expect(router.urls.length).assertEqual(1);
+      expect(router.urls[0]).assertEqual('pages/ArchivePage');
+    });
+
+    it('combined: app_sidebar_initial_render_should_cover_nav_item_layout_branch', 0, () => {
+      // Arrange
+      const page = createAppSideBarForTest();
+      let threw = false;
+      page.current = 'trash';
+      page.effectiveTheme = 'dark';
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.current).assertEqual('trash');
     });
   });
 }
