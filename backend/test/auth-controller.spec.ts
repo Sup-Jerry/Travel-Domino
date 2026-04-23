@@ -99,6 +99,43 @@ describe('AuthController', () => {
     expect(authService.updateAvatar).toHaveBeenCalledWith('', dto);
   });
 
+  it('boundary: updateAvatar should fallback to empty authorization when header missing', async () => {
+    const { controller, authService } = buildController();
+    const dto: UpdateAvatarDto = {
+      imageDataUrl: 'data:image/png;base64,BBBB',
+      mimeType: 'image/png'
+    };
+    authService.updateAvatar.mockResolvedValue({ ok: true });
+
+    const result = await controller.updateAvatar(dto, undefined as unknown as string);
+
+    expect(authService.updateAvatar).toHaveBeenCalledWith('', dto);
+    expect(result).toEqual({ ok: true });
+  });
+
+  it('conflict: socialLogin should rethrow non-error rejection with empty provider fallback', async () => {
+    const { controller, authService } = buildController();
+    const dto = {
+      providerType: '',
+      credential: {},
+      deviceInfo: { deviceId: 'd', deviceName: 'n', platform: 'p' }
+    } as SocialLoginDto;
+    authService.socialLogin.mockRejectedValue('raw_failure');
+
+    await expect(controller.socialLogin(dto, undefined as unknown as string)).rejects.toBe('raw_failure');
+  });
+
+  it('boundary: updateUsernameCompat should fallback to empty authorization when header missing', async () => {
+    const { controller, authService } = buildController();
+    const dto: UpdateUsernameDto = { username: 'compat_name' };
+    authService.updateUsername.mockResolvedValue({ ok: 'compat' });
+
+    const result = await controller.updateUsernameCompat(dto, undefined as unknown as string);
+
+    expect(authService.updateUsername).toHaveBeenCalledWith('', dto);
+    expect(result).toEqual({ ok: 'compat' });
+  });
+
   it('combined: should apply header/ip fallbacks across guest-social-me flow', async () => {
     // Arrange
     const { controller, authService } = buildController();
