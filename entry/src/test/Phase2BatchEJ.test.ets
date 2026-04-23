@@ -17,6 +17,8 @@ import { ITimelineWeatherHost, TimelineWeatherService } from '../main/ets/domain
 import { TrafficEngine } from '../main/ets/infrastructure/services/TrafficEngine';
 import { DriveStrategy, LocationInfo } from '../main/ets/model/interface/IMapService';
 import { ArrivalReminderCoordinator } from '../main/ets/infrastructure/services/ArrivalReminderCoordinator';
+import { PreferenceManager } from '../main/ets/common/utils/PreferenceManager';
+import { AmapService } from '../main/ets/infrastructure/services/AmapService';
 
 class StrategyDataForEJ implements ComposableStrategy {
   density: DensityLevel = DensityLevel.MEDIUM;
@@ -122,6 +124,7 @@ class WeatherFacadeMockForEJ {
 
 class WeatherSchedulerMockForEJ {
   startCalls: number = 0;
+  stopCalls: number = 0;
   lastCallback: (() => void) | null = null;
 
   start(_intervalMs: number, callback: () => void): void {
@@ -130,8 +133,48 @@ class WeatherSchedulerMockForEJ {
   }
 
   stop(): void {
-    return;
+    this.stopCalls += 1;
   }
+}
+
+class PreferenceManagerMockForEJ {
+  featureEnabled: boolean = true;
+  preference: WeatherUserPreference = new UserPreferenceDataForEJ();
+  setFeatureEnabledCalls: boolean[] = [];
+  setPreferenceCalls: WeatherUserPreference[] = [];
+
+  async setWeatherFeatureEnabled(enabled: boolean): Promise<void> {
+    this.setFeatureEnabledCalls.push(enabled);
+    this.featureEnabled = enabled;
+  }
+
+  async setWeatherUserPreference(preference: WeatherUserPreference): Promise<void> {
+    this.setPreferenceCalls.push(preference);
+    this.preference = preference;
+  }
+
+  async getWeatherUserPreference(): Promise<WeatherUserPreference> {
+    return this.preference;
+  }
+
+  async isWeatherFeatureEnabled(): Promise<boolean> {
+    return this.featureEnabled;
+  }
+}
+
+class PreferenceManagerThrowingMockForEJ {
+  async getWeatherUserPreference(): Promise<WeatherUserPreference> {
+    throw new Error('pref_failed');
+  }
+
+  async isWeatherFeatureEnabled(): Promise<boolean> {
+    return false;
+  }
+}
+
+class GeocodeResultForEJ {
+  lat: number = 31.240;
+  lng: number = 121.490;
 }
 
 class WeatherBundleForEJ {
@@ -277,6 +320,132 @@ export default function phase2BatchEJTest() {
       bundle.scheduler.lastCallback?.();
       // Assert
       expect(executionRefreshCalls).assertEqual(1);
+    });
+
+    it('normal: weather_service_should_stop_scheduler_and_clear_runtime_when_feature_disabled', 0, async () => {
+      // Arrange
+      const bundle = createWeatherBundleEJ();
+      const preferenceManager = new PreferenceManagerMockForEJ();
+      const originalGetInstance = Reflect.get(PreferenceManager as Object, 'getInstance') as () => Object;
+      const event = new EventEntity();
+      event.id = 91;
+      bundle.host.events = [event];
+      bundle.host.executionWeatherEnabled = true;
+      bundle.host.executionWeatherHint = 'storm';
+      bundle.host.executionWeatherCurrentText = 'rain';
+      bundle.host.executionWeatherScore = 42;
+      bundle.host.executionWeatherSuggestions = [{} as WeatherSuggestion];
+      Reflect.set(PreferenceManager as Object, 'getInstance', (): Object => preferenceManager as Object);
+
+      // Act
+      try {
+        await bundle.service.setWeatherFeatureEnabled(false);
+      } finally {
+        Reflect.set(PreferenceManager as Object, 'getInstance', originalGetInstance);
+      }
+
+      // Assert
+      expect(preferenceManager.setFeatureEnabledCalls.length).assertEqual(1);
+      expect(bundle.scheduler.stopCalls).assertEqual(1);
+      expect(bundle.host.weatherFeatureEnabled).assertFalse();
+      expect(bundle.host.executionWeatherEnabled).assertFalse();
+      expect(bundle.host.executionWeatherHint).assertEqual('');
+      expect(bundle.host.executionWeatherScore).assertEqual(-1);
+      expect(bundle.host.executionWeatherSuggestions.length).assertEqual(0);
+      expect(bundle.host.events.length).assertEqual(1);
+    });
+
+    it('boundary: weather_service_should_refresh_preference_state_and_restart_scheduler_when_feature_enabled', 0, async () => {
+      // Arrange
+      const bundle = createWeatherBundleEJ();
+      const preferenceManager = new PreferenceManagerMockForEJ();
+      const originalGetInstance = Reflect.get(PreferenceManager as Object, 'getInstance') as () => Object;
+      let refreshPlanningCalls = 0;
+      preferenceManager.featureEnabled = true;
+      preferenceManager.preference = {
+        heatSensitivity: 2,
+        rainSensitivity: 0,
+        weatherRiskTolerance: 1
+      };
+      bundle.facade.policy.pollIntervalMs = 2_000;
+      Reflect.set(PreferenceManager as Object, 'getInstance', (): Object => preferenceManager as Object);
+      Reflect.set(bundle.service as Object, 'refreshPlanningWeather', async (): Promise<void> => {
+        refreshPlanningCalls += 1;
+      });
+
+      // Act
+      try {
+        await bundle.service.setWeatherFeatureEnabled(true);
+        await bundle.service.updateWeatherUserPreference({
+          heatSensitivity: 2,
+          rainSensitivity: 0,
+          weatherRiskTolerance: 1
+        });
+      } finally {
+        Reflect.set(PreferenceManager as Object, 'getInstance', originalGetInstance);
+      }
+
+      // Assert
+      expect(preferenceManager.setFeatureEnabledCalls[0]).assertTrue();
+      expect(preferenceManager.setPreferenceCalls.length).assertEqual(1);
+      expect(bundle.host.weatherFeatureEnabled).assertTrue();
+      expect(bundle.host.weatherUserPreference.heatSensitivity).assertEqual(2);
+      expect(bundle.scheduler.startCalls > 0).assertTrue();
+      expect(refreshPlanningCalls).assertEqual(1);
+    });
+
+    it('invalid: weather_service_reload_preference_should_fallback_and_clear_when_manager_throws', 0, async () => {
+      // Arrange
+      const bundle = createWeatherBundleEJ();
+      const originalGetInstance = Reflect.get(PreferenceManager as Object, 'getInstance') as () => Object;
+      bundle.host.weatherFeatureEnabled = false;
+      bundle.host.executionWeatherHint = 'old_hint';
+      Reflect.set(PreferenceManager as Object, 'getInstance', (): Object => new PreferenceManagerThrowingMockForEJ() as Object);
+
+      // Act
+      try {
+        await bundle.service.reloadWeatherUserPreference();
+      } finally {
+        Reflect.set(PreferenceManager as Object, 'getInstance', originalGetInstance);
+      }
+
+      // Assert
+      expect(bundle.host.weatherFeatureEnabled).assertTrue();
+      expect(bundle.host.weatherUserPreference.heatSensitivity).assertEqual(1);
+      expect(bundle.host.weatherUserPreference.rainSensitivity).assertEqual(1);
+      expect(bundle.host.weatherUserPreference.weatherRiskTolerance).assertEqual(1);
+    });
+
+    it('combined: weather_service_coordinate_helpers_should_cover_base_empty_name_and_geocode_hit_paths', 0, async () => {
+      // Arrange
+      const bundle = createWeatherBundleEJ();
+      const originalGetGeocode = Reflect.get(AmapService as Object, 'getGeocode') as (name: string) => Promise<Object | null>;
+      Reflect.set(AmapService as Object, 'getGeocode', async (name: string): Promise<Object | null> => {
+        if (name === 'Bund') {
+          return new GeocodeResultForEJ() as Object;
+        }
+        return null;
+      });
+
+      // Act
+      try {
+        const base = await bundle.service.resolveCoordinatesForPlaceName('Base', 30.2, 120.1);
+        const emptyName = await bundle.service.resolveCoordinatesForPlaceName('   ', undefined, undefined, 'add', 22.3, 113.9);
+        const geocoded = await bundle.service.resolveCoordinatesForPlaceName('Bund', 0, 0);
+
+        // Assert
+        expect(bundle.service.isCoordinateMissingForWeather(0, 0)).assertTrue();
+        expect(bundle.service.isValidCoordinate(31.24, 121.49)).assertTrue();
+        expect(bundle.service.isExecutionWeatherStage()).assertTrue();
+        expect(base.latitude).assertEqual(30.2);
+        expect(base.longitude).assertEqual(120.1);
+        expect(emptyName.latitude).assertEqual(22.3);
+        expect(emptyName.longitude).assertEqual(113.9);
+        expect(geocoded.latitude).assertEqual(31.24);
+        expect(geocoded.longitude).assertEqual(121.49);
+      } finally {
+        Reflect.set(AmapService as Object, 'getGeocode', originalGetGeocode);
+      }
     });
 
     it('normal: traffic_engine_private_mark_transient_failure_should_record_guard_window', 0, () => {
