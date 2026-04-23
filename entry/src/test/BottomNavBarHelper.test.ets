@@ -479,5 +479,33 @@ export default function bottomNavBarHelperTest() {
       // Assert
       expect(threw).assertFalse();
     });
+
+    it('boundary: bottom_nav_tap_plan_should_clear_transition_and_unlock_on_same_tab', 0, () => {
+      // Arrange
+      const current: AppNavTab = 'archive';
+      const target: AppNavTab = 'archive';
+
+      // Act
+      const plan = resolveBottomNavTapPlan(current, target, true);
+
+      // Assert
+      expect(plan.shouldNavigate).assertFalse();
+      expect(plan.nextTransitionTab).assertEqual('');
+      expect(plan.nextNavLocked).assertFalse();
+    });
+
+    it('combined: bottom_nav_tap_plan_should_keep_lock_when_blocked_by_nav_locked', 0, () => {
+      // Arrange
+      const current: AppNavTab = 'home';
+      const target: AppNavTab = 'trash';
+
+      // Act
+      const plan = resolveBottomNavTapPlan(current, target, true);
+
+      // Assert
+      expect(plan.shouldNavigate).assertFalse();
+      expect(plan.nextTransitionTab).assertEqual('');
+      expect(plan.nextNavLocked).assertTrue();
+    });
   });
 }

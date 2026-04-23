@@ -1,5 +1,65 @@
 import { describe, it, expect } from '@ohos/hypium';
-import { AppNavKey, getAppSideBarRouteByKey, shouldAppSideBarNavigate } from '../main/ets/pages/components/views/AppSideBar';
+import { ThemeCenter } from '../main/ets/common/utils/ThemeCenter';
+import {
+  AppSideBar,
+  AppNavKey,
+  createAppSideBarRouteOptions,
+  getAppSideBarRouteByKey,
+  shouldAppSideBarNavigate
+} from '../main/ets/pages/components/views/AppSideBar';
+
+interface AppSideBarParamsTest {
+  isSideBarShow?: boolean;
+}
+
+interface AppSideBarHostPrivateTest {
+  __isSideBarShow: Object;
+}
+
+interface AppSideBarCtorParamsTest {
+  isSideBarShow: Object;
+}
+
+interface AppSideBarPaletteTest {
+  primary?: Object;
+  textPrimary?: Object;
+  divider?: Object;
+  pageBg?: Object;
+}
+
+interface AppSideBarRouteOptionsTest {
+  url: string;
+}
+
+interface AppSideBarPrivateTest {
+  isSideBarShow: boolean;
+  effectiveTheme: string;
+  current: AppNavKey;
+  setInitiallyProvidedValue(params: AppSideBarParamsTest): void;
+  updateStateVars(params: AppSideBarParamsTest): void;
+  getPalette(): AppSideBarPaletteTest;
+  createRouteOptions(url: string): AppSideBarRouteOptionsTest;
+  initialRender(): void;
+}
+
+@Component
+struct AppSideBarHostTest {
+  @State isSideBarShow: boolean = true;
+
+  build() {
+    AppSideBar({
+      isSideBarShow: $isSideBarShow
+    });
+  }
+}
+
+function createAppSideBarForTest(): AppSideBarPrivateTest {
+  const host = new AppSideBarHostTest(undefined, {} as LocalStorage) as Object as AppSideBarHostPrivateTest;
+  const params: AppSideBarCtorParamsTest = {
+    isSideBarShow: host.__isSideBarShow
+  };
+  return new AppSideBar(host as Object, params as Object as LocalStorage) as Object as AppSideBarPrivateTest;
+}
 
 export default function appSideBarHelperTest() {
   describe('unit_test_case_generator_autofill_AppSideBarHelper', () => {
@@ -61,6 +121,74 @@ export default function appSideBarHelperTest() {
       // Assert
       expect(route).assertEqual('pages/SettingsPage');
       expect(shouldNavigate).assertTrue();
+    });
+
+    it('boundary: app_sidebar_route_options_should_wrap_url_verbatim', 0, () => {
+      // Arrange
+      const url = 'pages/ArchivePage';
+      // Act
+      const options = createAppSideBarRouteOptions(url);
+      // Assert
+      expect(options.url).assertEqual(url);
+    });
+
+    it('combined: app_sidebar_route_options_should_keep_stable_urls_across_calls', 0, () => {
+      // Arrange
+      const route = getAppSideBarRouteByKey('trash');
+      // Act
+      const first = createAppSideBarRouteOptions(route);
+      const second = createAppSideBarRouteOptions(route);
+      // Assert
+      expect(first.url).assertEqual('pages/TrashPage');
+      expect(second.url).assertEqual(first.url);
+    });
+
+    it('normal: app_sidebar_instance_should_sync_link_state_and_palette', 0, () => {
+      // Arrange
+      const page = createAppSideBarForTest();
+      page.setInitiallyProvidedValue({ isSideBarShow: true });
+      page.updateStateVars({ isSideBarShow: true });
+
+      // Act
+      const initialShow = page.isSideBarShow;
+      page.isSideBarShow = false;
+      page.effectiveTheme = 'dark';
+      page.current = 'archive';
+      const palette = page.getPalette();
+      const routeOptions = page.createRouteOptions(getAppSideBarRouteByKey('archive'));
+
+      // Assert
+      expect(initialShow).assertTrue();
+      expect(page.isSideBarShow).assertFalse();
+      expect(page.current).assertEqual('archive');
+      expect(routeOptions.url).assertEqual('pages/ArchivePage');
+      expect(palette.primary).assertEqual(ThemeCenter.getPalette('dark').primary);
+      expect(palette.textPrimary).assertEqual(ThemeCenter.getPalette('dark').textPrimary);
+      expect(palette.divider).assertEqual(ThemeCenter.getPalette('dark').divider);
+      expect(palette.pageBg).assertEqual(ThemeCenter.getPalette('dark').pageBg);
+    });
+
+    it('boundary: app_sidebar_settings_state_should_keep_route_and_navigation_contract', 0, () => {
+      // Arrange
+      const page = createAppSideBarForTest();
+      page.setInitiallyProvidedValue({ isSideBarShow: false });
+      page.updateStateVars({ isSideBarShow: false });
+      page.current = 'settings';
+      page.effectiveTheme = 'light';
+
+      // Act
+      const route = getAppSideBarRouteByKey(page.current);
+      const shouldNavigateSelf = shouldAppSideBarNavigate(page.current, 'settings');
+      const shouldNavigateTrash = shouldAppSideBarNavigate(page.current, 'trash');
+      const palette = page.getPalette();
+
+      // Assert
+      expect(route).assertEqual('pages/SettingsPage');
+      expect(shouldNavigateSelf).assertFalse();
+      expect(shouldNavigateTrash).assertTrue();
+      expect(page.current).assertEqual('settings');
+      expect(page.isSideBarShow).assertFalse();
+      expect(palette.primary).assertEqual(ThemeCenter.getPalette('light').primary);
     });
   });
 }
