@@ -13,6 +13,7 @@ import {
 interface AiReplanPreviewDialogPrivateTest {
   preview: AiReplanPreviewResult;
   effectiveTheme: string;
+  buildStrategyLabel(mode: number): string;
   initialRender(): void;
 }
 
@@ -118,6 +119,19 @@ export default function aiReplanPreviewDialogHelperTest() {
       // Assert
       expect(summary.indexOf('3') >= 0).assertTrue();
       expect(summary.indexOf('休闲') >= 0).assertTrue();
+    });
+
+    it('boundary: ai_replan_preview_dialog_private_strategy_label_should_delegate_modes', 0, () => {
+      // Arrange
+      const page = new AiReplanPreviewDialog(undefined, {} as LocalStorage) as Object as AiReplanPreviewDialogPrivateTest;
+
+      // Act
+      const customLabel = page.buildStrategyLabel(-1);
+      const defaultLabel = page.buildStrategyLabel(0);
+
+      // Assert
+      expect(customLabel).assertEqual('自定义');
+      expect(defaultLabel).assertEqual('默认');
     });
 
     it('combined: ai_replan_preview_dialog_initial_render_should_support_item_list_branch', 0, () => {
