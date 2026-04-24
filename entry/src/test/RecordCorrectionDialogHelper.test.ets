@@ -1,9 +1,20 @@
 import { describe, it, expect } from '@ohos/hypium';
+import { EventEntity } from '../main/ets/model/entity/EventEntity';
 import {
+  RecordCorrectionDialog,
   resolveRecordCorrectionBaseTime,
   resolveRecordCorrectionSubmitEndTs,
   shouldRecordCorrectionHasEndTime
 } from '../main/ets/pages/components/dialogs/RecordCorrectionDialog';
+
+interface RecordCorrectionDialogPrivateTest {
+  event: EventEntity | null;
+  startTime: Date;
+  endTime: Date;
+  hasEndTime: boolean;
+  aboutToAppear(): void;
+  initialRender(): void;
+}
 
 export default function recordCorrectionDialogHelperTest() {
   describe('unit_test_case_generator_autofill_RecordCorrectionDialogHelper', () => {
@@ -71,6 +82,47 @@ export default function recordCorrectionDialogHelperTest() {
       // Assert
       expect(base).assertEqual(123);
       expect(submitEnd).assertEqual(456);
+    });
+
+    it('normal: record_correction_dialog_initial_render_should_support_event_with_end_time', 0, () => {
+      // Arrange
+      const page = new RecordCorrectionDialog(undefined, {} as LocalStorage) as Object as RecordCorrectionDialogPrivateTest;
+      const event = new EventEntity('museum', 1);
+      let threw = false;
+
+      // Act
+      event.actual_start_time = new Date(2026, 3, 12, 9, 0, 0, 0).getTime();
+      event.actual_end_time = new Date(2026, 3, 12, 10, 30, 0, 0).getTime();
+      event.dynamic_start_time = new Date(2026, 3, 12, 8, 50, 0, 0).getTime();
+      page.event = event;
+      page.aboutToAppear();
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(page.hasEndTime).assertTrue();
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: record_correction_dialog_initial_render_should_support_missing_event_branch', 0, () => {
+      // Arrange
+      const page = new RecordCorrectionDialog(undefined, {} as LocalStorage) as Object as RecordCorrectionDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.event = null;
+      page.aboutToAppear();
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
   });
 }

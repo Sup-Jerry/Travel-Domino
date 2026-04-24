@@ -1,8 +1,15 @@
 import { describe, it, expect } from '@ohos/hypium';
 import {
   canStartPlanJsonImport,
-  normalizePlanJsonImportInput
+  normalizePlanJsonImportInput,
+  PlanJsonImportDialog
 } from '../main/ets/pages/components/dialogs/PlanJsonImportDialog';
+
+interface PlanJsonImportDialogPrivateTest {
+  inputJson: string;
+  importing: boolean;
+  initialRender(): void;
+}
 
 export default function planJsonImportDialogHelperTest() {
   describe('unit_test_case_generator_autofill_PlanJsonImportDialogHelper', () => {
@@ -60,6 +67,42 @@ export default function planJsonImportDialogHelperTest() {
       // Assert
       expect(normalized).assertEqual('abc');
       expect(canStart).assertTrue();
+    });
+
+    it('normal: plan_json_import_dialog_initial_render_should_support_idle_input_branch', 0, () => {
+      // Arrange
+      const page = new PlanJsonImportDialog(undefined, {} as LocalStorage) as Object as PlanJsonImportDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.inputJson = '{\"schemaVersion\":1}';
+      page.importing = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: plan_json_import_dialog_initial_render_should_support_importing_progress_branch', 0, () => {
+      // Arrange
+      const page = new PlanJsonImportDialog(undefined, {} as LocalStorage) as Object as PlanJsonImportDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.inputJson = '{\"schemaVersion\":1}';
+      page.importing = true;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
   });
 }

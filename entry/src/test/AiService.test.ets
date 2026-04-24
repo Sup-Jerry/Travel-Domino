@@ -1,5 +1,10 @@
 import { describe, it, expect } from '@ohos/hypium';
-import { AiService, AiRawItem } from '../main/ets/infrastructure/services/AiService';
+import { AiService, AiGenerateRequest, AiRawItem } from '../main/ets/infrastructure/services/AiService';
+import { AiDailyPoiRangeConfig } from '../main/ets/common/utils/PreferenceManager';
+
+interface AiServiceObjectBodyTest {
+  message: string;
+}
 
 export default function aiServiceTest() {
   describe('aiServiceTest', () => {
@@ -418,6 +423,255 @@ export default function aiServiceTest() {
       const days = AiService.resolveRequestedDaysFromPrompt(prompt);
       // Assert
       expect(days).assertEqual(30);
+    });
+  });
+
+  describe('unit_test_case_generator_autofill_AiServiceSanitizeAndErrors', () => {
+    it('normal: parse_should_clamp_duration_by_type_and_fallback_unknown_type', 0, () => {
+      // Arrange
+      const content = '[' +
+        '{"name":"food_low","duration":5,"ai_reasoning":"r","type":1},' +
+        '{"name":"hotel_high","duration":999,"ai_reasoning":"r","type":2},' +
+        '{"name":"unknown_type","duration":3,"ai_reasoning":"","type":9}' +
+        ']';
+
+      // Act
+      const items = AiService.parseItemsForTest(content);
+
+      // Assert
+      expect(items.length).assertEqual(3);
+      expect(items[0].duration).assertEqual(20);
+      expect(items[1].duration).assertEqual(720);
+      expect(items[2].type).assertEqual(0);
+      expect(items[2].duration).assertEqual(30);
+    });
+
+    it('boundary: resolve_requested_days_should_parse_chinese_ten_forms_and_clamp_large_values', 0, () => {
+      // Arrange
+      const tenDays = '\u5341\u65e5';
+      const twentyDays = '\u4e8c\u5341\u5929';
+      const thirtyOneDays = '\u4e09\u5341\u4e00\u5929';
+      const twoDays = '\u4e24\u65e5';
+
+      // Act
+      const ten = AiService.resolveRequestedDaysFromPrompt(tenDays);
+      const twenty = AiService.resolveRequestedDaysFromPrompt(twentyDays);
+      const clamped = AiService.resolveRequestedDaysFromPrompt(thirtyOneDays);
+      const two = AiService.resolveRequestedDaysFromPrompt(twoDays);
+
+      // Assert
+      expect(ten).assertEqual(10);
+      expect(twenty).assertEqual(20);
+      expect(clamped).assertEqual(30);
+      expect(two).assertEqual(2);
+    });
+
+    it('normal: parse_model_response_should_accept_object_text_content_and_choice_text_fallback', 0, () => {
+      // Arrange
+      const objectContent = '{"choices":[{"message":{"content":{"text":"[{\\"name\\":\\"object_text\\",\\"duration\\":45,\\"ai_reasoning\\":\\"r\\",\\"type\\":1}]"}}}]}';
+      const choiceText = '{"choices":[{"text":"[{\\"name\\":\\"choice_text\\",\\"duration\\":50,\\"ai_reasoning\\":\\"r\\",\\"type\\":0}]"}]}';
+
+      // Act
+      const objectItems = AiService.parseModelResponseForTest(objectContent);
+      const choiceItems = AiService.parseModelResponseForTest(choiceText);
+
+      // Assert
+      expect(objectItems.length).assertEqual(1);
+      expect(objectItems[0].name).assertEqual('object_text');
+      expect(objectItems[0].type).assertEqual(1);
+      expect(choiceItems.length).assertEqual(1);
+      expect(choiceItems[0].name).assertEqual('choice_text');
+    });
+
+    it('boundary: resolve_strategy_range_should_cover_leisure_and_custom_density', 0, () => {
+      // Arrange
+      const leisureRequest: AiGenerateRequest = {
+        userPrompt: '2\u5929',
+        strategyMode: 2
+      };
+      const customRequest: AiGenerateRequest = {
+        userPrompt: '2\u5929',
+        strategyMode: 0,
+        customStrategy: {
+          density: 2,
+          pace: 2,
+          preference: 1,
+          energy: 2
+        }
+      };
+
+      // Act
+      const leisureMin = AiService.resolveStrategyMinItemsForTest(leisureRequest);
+      const leisureMax = AiService.resolveStrategyMaxItemsForTest(leisureRequest);
+      const customMin = AiService.resolveStrategyMinItemsForTest(customRequest);
+      const customMax = AiService.resolveStrategyMaxItemsForTest(customRequest);
+
+      // Assert
+      expect(leisureMin).assertEqual(6);
+      expect(leisureMax).assertEqual(10);
+      expect(customMin).assertEqual(12);
+      expect(customMax).assertEqual(16);
+    });
+
+    it('boundary: resolve_configured_range_and_generation_requirement_should_cover_private_strategy_paths', 0, () => {
+      // Arrange
+      const config: AiDailyPoiRangeConfig = {
+        defaultMin: 4,
+        defaultMax: 7,
+        soldierMin: 8,
+        soldierMax: 12,
+        leisureMin: 2,
+        leisureMax: 5
+      };
+      const request: AiGenerateRequest = {
+        userPrompt: '3\u5929\u9152\u5e97\u4f4f\u5bbf',
+        strategyMode: 1
+      };
+
+      // Act
+      const soldierRange = AiService.resolveConfiguredRangeForTest(1, config);
+      const leisureRange = AiService.resolveConfiguredRangeForTest(2, config);
+      const defaultRange = AiService.resolveConfiguredRangeForTest(0, config);
+      const requirement = AiService.resolveGenerationRequirementForTest(request);
+
+      // Assert
+      expect(soldierRange[0]).assertEqual(8);
+      expect(soldierRange[1]).assertEqual(12);
+      expect(leisureRange[0]).assertEqual(2);
+      expect(leisureRange[1]).assertEqual(5);
+      expect(defaultRange[0]).assertEqual(4);
+      expect(defaultRange[1]).assertEqual(7);
+      expect(requirement[0]).assertEqual(3);
+      expect(requirement[5]).assertEqual(1);
+    });
+
+    it('invalid: parse_model_response_should_fail_when_content_segments_have_no_text', 0, () => {
+      // Arrange
+      const response = '{"choices":[{"message":{"content":[{"type":"image"},{"content":"   "}]}}]}';
+
+      // Act
+      let message = '';
+      try {
+        AiService.parseModelResponseForTest(response);
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
+      }
+
+      // Assert
+      expect(message.length > 0).assertTrue();
+    });
+
+    it('invalid: generate_with_strategy_should_filter_hotel_and_dedupe_when_partial_allowed', 0, async () => {
+      // Arrange
+      let callCount = 0;
+      AiService.setRequesterForTest(async () => {
+        callCount += 1;
+        return {
+          responseCode: 200,
+          result: '{"choices":[{"message":{"content":"[{\\\"name\\\":\\\"A\\\",\\\"duration\\\":90,\\\"ai_reasoning\\\":\\\"r\\\",\\\"type\\\":0},{\\\"name\\\":\\\" a \\\",\\\"duration\\\":80,\\\"ai_reasoning\\\":\\\"r\\\",\\\"type\\\":0},{\\\"name\\\":\\\"hotel_x\\\",\\\"duration\\\":600,\\\"ai_reasoning\\\":\\\"r\\\",\\\"type\\\":2},{\\\"name\\\":\\\"B\\\",\\\"duration\\\":40,\\\"ai_reasoning\\\":\\\"r\\\",\\\"type\\\":1}]"}}]}'
+        };
+      });
+
+      // Act
+      let items: AiRawItem[] = [];
+      try {
+        items = await AiService.generateItineraryWithStrategy({
+          userPrompt: '2\u5929 scenic only',
+          strategyMode: 0,
+          allowPartialResult: true
+        });
+      } finally {
+        AiService.setRequesterForTest(null);
+      }
+
+      // Assert
+      expect(callCount).assertEqual(2);
+      expect(items.length).assertEqual(2);
+      expect(items.some((item: AiRawItem) => item.type === 2)).assertFalse();
+      expect(items[0].name).assertEqual('A');
+      expect(items[1].name).assertEqual('B');
+    });
+
+    it('conflict: generate_with_strategy_should_cap_hotels_to_requested_days_when_accommodation_allowed', 0, async () => {
+      // Arrange
+      AiService.setRequesterForTest(async () => {
+        return {
+          responseCode: 200,
+          result: '{"choices":[{"message":{"content":"[{\\\"name\\\":\\\"hotel_1\\\",\\\"duration\\\":600,\\\"ai_reasoning\\\":\\\"r\\\",\\\"type\\\":2},{\\\"name\\\":\\\"hotel_2\\\",\\\"duration\\\":610,\\\"ai_reasoning\\\":\\\"r\\\",\\\"type\\\":2},{\\\"name\\\":\\\"hotel_3\\\",\\\"duration\\\":620,\\\"ai_reasoning\\\":\\\"r\\\",\\\"type\\\":2},{\\\"name\\\":\\\"spot_1\\\",\\\"duration\\\":90,\\\"ai_reasoning\\\":\\\"r\\\",\\\"type\\\":0},{\\\"name\\\":\\\"spot_2\\\",\\\"duration\\\":90,\\\"ai_reasoning\\\":\\\"r\\\",\\\"type\\\":0}]"}}]}'
+        };
+      });
+
+      // Act
+      let items: AiRawItem[] = [];
+      try {
+        items = await AiService.generateItineraryWithStrategy({
+          userPrompt: '2\u5929 hotel trip',
+          strategyMode: 0,
+          allowPartialResult: true
+        });
+      } finally {
+        AiService.setRequesterForTest(null);
+      }
+      const hotelCount = items.filter((item: AiRawItem) => item.type === 2).length;
+
+      // Assert
+      expect(items.length).assertEqual(4);
+      expect(hotelCount).assertEqual(2);
+    });
+
+    it('regression: td-20260422-generate_with_strategy_should_not_retry_on_insufficient_balance', 0, async () => {
+      // Arrange
+      let callCount = 0;
+      AiService.setRequesterForTest(async () => {
+        callCount += 1;
+        return {
+          responseCode: 402,
+          result: '{"message":"AI_DEEPSEEK_INSUFFICIENT_BALANCE"}'
+        };
+      });
+
+      // Act
+      let message = '';
+      try {
+        await AiService.generateItineraryWithStrategy({
+          userPrompt: '1\u5929',
+          strategyMode: 0
+        });
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
+      } finally {
+        AiService.setRequesterForTest(null);
+      }
+
+      // Assert
+      expect(callCount).assertEqual(1);
+      expect(message.length > 0).assertTrue();
+      expect(message.indexOf('AI') >= 0).assertTrue();
+    });
+
+    it('combined: generate_itinerary_should_map_non_200_object_body_to_user_facing_error', 0, async () => {
+      // Arrange
+      const body: AiServiceObjectBodyTest = { message: 'AI_DEEPSEEK_SERVER_ERROR' };
+      AiService.setRequesterForTest(async () => {
+        return {
+          responseCode: 500,
+          result: body as Object
+        };
+      });
+
+      // Act
+      let message = '';
+      try {
+        await AiService.generateItinerary('1\u5929');
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
+      } finally {
+        AiService.setRequesterForTest(null);
+      }
+
+      // Assert
+      expect(message.length > 0).assertTrue();
+      expect(message.indexOf('AI') >= 0).assertTrue();
     });
   });
 }

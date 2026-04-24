@@ -1,14 +1,165 @@
 import { describe, it, expect } from '@ohos/hypium';
+import { AppStorageKeys } from '../main/ets/common/constants/AppStorageKeys';
+import { PlanItem } from '../main/ets/infrastructure/persistence/PlanRepositoryImpl';
 import { TravelPlanItem } from '../main/ets/model/interface/IStandardEvent';
 import {
   buildPlanListShareEventItems,
   canPlanListRepromptPermission,
+  createPlanListPageForTest,
   resolvePlanListShareCategory,
   resolvePlanListShareEndTime,
   resolvePlanListShareIcon,
   resolvePlanListShareStartTime,
   sortPlanListShareEvents
 } from '../main/ets/pages/PlanListPage';
+
+interface PlanListPaletteTest {
+  textPrimary: Object;
+  pageBg: Object;
+}
+
+interface PlanListPagePrivateTest {
+  planList: PlanItem[];
+  isRefreshing: boolean;
+  effectiveTheme: string;
+  getThemePalette(): PlanListPaletteTest;
+  canRepromptPermission(now: number, lastPromptAt: number, hasPromptedBefore: boolean): boolean;
+  convertToShareEvents(events: TravelPlanItem[]): Object[];
+  sortEventsForShare(events: TravelPlanItem[]): TravelPlanItem[];
+  consumeNotificationNavRoute(): void;
+  loadPlans(): Promise<void>;
+  handlePullRefresh(): Promise<void>;
+  executeArchive(planId: number): Promise<void>;
+  executeSoftDelete(planId: number): Promise<void>;
+  handleHardDelete(item: PlanItem): void;
+  initialRender(): void;
+}
+
+class PlanListRouteParamsTest {
+  planId: number = 0;
+  title: string = '';
+  isNewPlan: boolean = false;
+  reminderEventId: number = -1;
+  forceCompanionMode: boolean = false;
+}
+
+class PlanListRouteOptionsTest {
+  url: string = '';
+  params: PlanListRouteParamsTest = new PlanListRouteParamsTest();
+}
+
+class PlanListRouterMockTest {
+  pushedUrls: string[] = [];
+  replacedUrls: string[] = [];
+
+  pushUrl(options: PlanListRouteOptionsTest): void {
+    this.pushedUrls.push(options.url);
+  }
+
+  replaceUrl(options: PlanListRouteOptionsTest): Promise<void> {
+    this.replacedUrls.push(options.url);
+    return Promise.resolve();
+  }
+}
+
+class PlanListAlertButtonTest {
+  value: string = '';
+  action: () => void = () => {};
+}
+
+class PlanListAlertOptionsTest {
+  title: string = '';
+  message: string = '';
+  autoCancel: boolean = true;
+  primaryButton: PlanListAlertButtonTest = new PlanListAlertButtonTest();
+  secondaryButton: PlanListAlertButtonTest = new PlanListAlertButtonTest();
+}
+
+class PlanListHostContextMockTest {
+}
+
+class PlanListUiContextMockTest {
+  router: PlanListRouterMockTest = new PlanListRouterMockTest();
+  alertCount: number = 0;
+  lastAlert: PlanListAlertOptionsTest | null = null;
+
+  getRouter(): PlanListRouterMockTest {
+    return this.router;
+  }
+
+  getHostContext(): PlanListHostContextMockTest {
+    return new PlanListHostContextMockTest();
+  }
+
+  showAlertDialog(options: PlanListAlertOptionsTest): void {
+    this.alertCount += 1;
+    this.lastAlert = options;
+  }
+}
+
+class PlanListNotificationPayloadTest {
+  planId: number = 0;
+  eventId: number = 0;
+  forceCompanionMode: boolean = false;
+}
+
+class PlanListPromptStateTest {
+  notifyPrompted: boolean = false;
+  locationPrompted: boolean = false;
+}
+
+class PlanListPlanServiceMockTest {
+  visiblePlans: PlanItem[] = [];
+  archiveIds: number[] = [];
+  softDeleteIds: number[] = [];
+  hardDeleteIds: number[] = [];
+  arrivalCheckReasons: string[] = [];
+  stopArrivalEngineCount: number = 0;
+
+  async loadVisiblePlans(): Promise<PlanItem[]> {
+    return this.visiblePlans;
+  }
+
+  async archivePlan(planId: number): Promise<void> {
+    this.archiveIds.push(planId);
+  }
+
+  async softDeletePlan(planId: number): Promise<void> {
+    this.softDeleteIds.push(planId);
+  }
+
+  async hardDeletePlan(planId: number): Promise<void> {
+    this.hardDeleteIds.push(planId);
+  }
+
+  async requestArrivalCheckNow(reason: string): Promise<void> {
+    this.arrivalCheckReasons.push(reason);
+  }
+
+  stopArrivalEngine(): void {
+    this.stopArrivalEngineCount += 1;
+  }
+
+  async getArrivalPromptState(_context: Object): Promise<PlanListPromptStateTest> {
+    return new PlanListPromptStateTest();
+  }
+
+  async isNotificationEnabled(): Promise<boolean> {
+    return true;
+  }
+
+  async isLocationPermissionGranted(): Promise<boolean> {
+    return true;
+  }
+}
+
+class PlanListArrivalCoordinatorMockTest {
+  consumeCount: number = 0;
+
+  consumeOnHome(_options: Object): void {
+    this.consumeCount += 1;
+  }
+}
 
 function buildShareEvent(): TravelPlanItem {
   const item = {} as TravelPlanItem;
@@ -17,6 +168,15 @@ function buildShareEvent(): TravelPlanItem {
   item.priority = 0;
   item.lockStatus = 0;
   item.type = 'NORMAL';
+  return item;
+}
+
+function buildPlanListPlanForTest(id: number, title: string): PlanItem {
+  const item = {} as PlanItem;
+  item.id = id;
+  item.title = title;
+  item.startDate = 1710000000000;
+  item.createdAt = 1710000000000;
   return item;
 }
 
@@ -178,6 +338,209 @@ export default function planListPageHelperTest() {
       expect(items[0].endTime).assertEqual('08:30');
       expect(items[1].name).assertEqual('late');
       expect(items[1].endTime).assertEqual('11:00');
+    });
+
+    it('boundary: plan_list_reprompt_should_allow_first_prompt_even_when_cooldown_not_met', 0, () => {
+      // Arrange
+      const now = 1000;
+      const lastPromptAt = 2000;
+      const cooldownMs = 10 * 60 * 1000;
+      // Act
+      const allowed = canPlanListRepromptPermission(now, lastPromptAt, false, cooldownMs);
+      // Assert
+      expect(allowed).assertTrue();
+    });
+
+    it('boundary: plan_list_share_start_should_use_computed_time_when_fixed_time_missing', 0, () => {
+      // Arrange
+      const event = buildShareEvent();
+      event.fixedStartTime = '';
+      event.computedStartTime = '18:45';
+      // Act
+      const start = resolvePlanListShareStartTime(event);
+      // Assert
+      expect(start).assertEqual('18:45');
+    });
+
+    it('regression: plan_list_share_sort_should_not_mutate_source_order', 0, () => {
+      // Arrange
+      const first = buildShareEvent();
+      first.name = 'first';
+      first.dayOffset = 2;
+      first.sortOrder = 1;
+      const second = buildShareEvent();
+      second.name = 'second';
+      second.dayOffset = 0;
+      second.sortOrder = 1;
+      const source: TravelPlanItem[] = [first, second];
+      // Act
+      const sorted = sortPlanListShareEvents(source);
+      // Assert
+      expect(sorted[0].name).assertEqual('second');
+      expect(source[0].name).assertEqual('first');
+    });
+
+    it('combined: plan_list_share_item_should_floor_fractional_duration_and_day_offset', 0, () => {
+      // Arrange
+      const event = buildShareEvent();
+      event.name = 'fractional';
+      event.dayOffset = 2.8;
+      event.duration = 95.9;
+      event.fixedStartTime = '07:10';
+      // Act
+      const items = buildPlanListShareEventItems([event]);
+      // Assert
+      expect(items[0].dayOffset).assertEqual(2);
+      expect(items[0].duration).assertEqual(1.6);
+      expect(items[0].endTime).assertEqual('08:45');
+    });
+
+    it('normal: plan_list_instance_should_convert_sort_and_palette_without_service_dependency', 0, () => {
+      // Arrange
+      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
+      const early = buildShareEvent();
+      const late = buildShareEvent();
+      early.name = 'early';
+      early.dayOffset = 0;
+      early.sortOrder = 1;
+      late.name = 'late';
+      late.dayOffset = 1;
+      late.sortOrder = 0;
+      page.effectiveTheme = 'dark';
+
+      // Act
+      const sorted = page.sortEventsForShare([late, early]);
+      const shareItems = page.convertToShareEvents([late, early]);
+      const canPrompt = page.canRepromptPermission(2000, 1000, true);
+      const palette = page.getThemePalette();
+
+      // Assert
+      expect(sorted[0].name).assertEqual('early');
+      expect(shareItems.length).assertEqual(2);
+      expect(canPrompt).assertFalse();
+      expect(palette.textPrimary !== undefined).assertTrue();
+    });
+
+    it('boundary: plan_list_instance_should_consume_empty_and_invalid_notification_payload_safely', 0, () => {
+      // Arrange
+      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
+      const uiContext = new PlanListUiContextMockTest();
+      Reflect.set(page as Object, 'getUIContext', (): PlanListUiContextMockTest => uiContext);
+
+      // Act
+      AppStorage.setOrCreate(AppStorageKeys.NOTIFICATION_NAV_PAYLOAD, '');
+      page.consumeNotificationNavRoute();
+      AppStorage.setOrCreate(AppStorageKeys.NOTIFICATION_NAV_PAYLOAD, '{bad_json');
+      page.consumeNotificationNavRoute();
+      const cleared = AppStorage.get<string>(AppStorageKeys.NOTIFICATION_NAV_PAYLOAD) ?? 'x';
+
+      // Assert
+      expect(uiContext.router.pushedUrls.length).assertEqual(0);
+      expect(cleared).assertEqual('');
+    });
+
+    it('regression: plan_list_instance_should_route_notification_to_existing_plan_and_clear_payload', 0, () => {
+      // Arrange
+      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
+      const uiContext = new PlanListUiContextMockTest();
+      const payload = new PlanListNotificationPayloadTest();
+      payload.planId = 42;
+      payload.eventId = 7;
+      payload.forceCompanionMode = true;
+      page.planList = [buildPlanListPlanForTest(42, 'route plan')];
+      Reflect.set(page as Object, 'getUIContext', (): PlanListUiContextMockTest => uiContext);
+      AppStorage.setOrCreate(AppStorageKeys.NOTIFICATION_NAV_PAYLOAD, JSON.stringify(payload));
+
+      // Act
+      page.consumeNotificationNavRoute();
+      const cleared = AppStorage.get<string>(AppStorageKeys.NOTIFICATION_NAV_PAYLOAD) ?? 'x';
+
+      // Assert
+      expect(uiContext.router.pushedUrls.length).assertEqual(1);
+      expect(uiContext.router.pushedUrls[0]).assertEqual('pages/Index');
+      expect(cleared).assertEqual('');
+    });
+
+    it('combined: plan_list_instance_should_render_list_and_open_hard_delete_alert', 0, () => {
+      // Arrange
+      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
+      const uiContext = new PlanListUiContextMockTest();
+      const plan = buildPlanListPlanForTest(77, 'render plan');
+      page.planList = [plan];
+      page.isRefreshing = false;
+      Reflect.set(page as Object, 'getUIContext', (): PlanListUiContextMockTest => uiContext);
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+      page.handleHardDelete(plan);
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(uiContext.alertCount).assertEqual(1);
+      expect(uiContext.lastAlert !== null).assertTrue();
+    });
+
+    it('normal: plan_list_instance_load_and_execute_mutations_should_use_injected_plan_service', 0, async () => {
+      // Arrange
+      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
+      const service = new PlanListPlanServiceMockTest();
+      service.visiblePlans = [buildPlanListPlanForTest(91, 'loaded')];
+      Reflect.set(page as Object, 'planService', service as Object);
+
+      // Act
+      await page.loadPlans();
+      await page.executeArchive(91);
+      await page.executeSoftDelete(91);
+
+      // Assert
+      expect(page.planList.length).assertEqual(1);
+      expect(page.planList[0].title).assertEqual('loaded');
+      expect(service.archiveIds.length).assertEqual(1);
+      expect(service.softDeleteIds.length).assertEqual(1);
+    });
+
+    it('boundary: plan_list_instance_pull_refresh_should_ignore_reentrant_refresh', 0, async () => {
+      // Arrange
+      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
+      const service = new PlanListPlanServiceMockTest();
+      const coordinator = new PlanListArrivalCoordinatorMockTest();
+      page.isRefreshing = true;
+      Reflect.set(page as Object, 'planService', service as Object);
+      Reflect.set(page as Object, 'arrivalCoordinator', coordinator as Object);
+
+      // Act
+      await page.handlePullRefresh();
+
+      // Assert
+      expect(service.arrivalCheckReasons.length).assertEqual(0);
+      expect(coordinator.consumeCount).assertEqual(0);
+      expect(page.isRefreshing).assertTrue();
+    });
+
+    it('combined: plan_list_instance_pull_refresh_should_reload_check_arrival_and_reset_flag', 0, async () => {
+      // Arrange
+      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
+      const service = new PlanListPlanServiceMockTest();
+      const coordinator = new PlanListArrivalCoordinatorMockTest();
+      service.visiblePlans = [buildPlanListPlanForTest(92, 'refresh')];
+      page.isRefreshing = false;
+      page.planList = [];
+      Reflect.set(page as Object, 'planService', service as Object);
+      Reflect.set(page as Object, 'arrivalCoordinator', coordinator as Object);
+
+      // Act
+      await page.handlePullRefresh();
+
+      // Assert
+      expect(page.isRefreshing).assertFalse();
+      expect(page.planList.length).assertEqual(1);
+      expect(service.arrivalCheckReasons.length).assertEqual(1);
+      expect(coordinator.consumeCount).assertEqual(1);
     });
   });
 }

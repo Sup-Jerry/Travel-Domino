@@ -1,9 +1,24 @@
 import { describe, it, expect } from '@ohos/hypium';
 import {
+  PlanSettingsDialog,
   getPlanSettingsActions,
   isPlanSettingsActionSupported,
   isWeatherPreferenceLevelValid
 } from '../main/ets/pages/components/dialogs/PlanSettingsDialog';
+
+interface PlanSettingsWeatherPreferenceTest {
+  heatSensitivity: number;
+  rainSensitivity: number;
+  weatherRiskTolerance: number;
+}
+
+interface PlanSettingsDialogPrivateTest {
+  weatherUserPreference: PlanSettingsWeatherPreferenceTest;
+  weatherPreference: PlanSettingsWeatherPreferenceTest;
+  effectiveTheme: string;
+  aboutToAppear(): void;
+  initialRender(): void;
+}
 
 export default function planSettingsDialogHelperTest() {
   describe('unit_test_case_generator_autofill_PlanSettingsDialogHelper', () => {
@@ -62,6 +77,52 @@ export default function planSettingsDialogHelperTest() {
       // Assert
       expect(supported).assertTrue();
       expect(validLevel).assertTrue();
+    });
+
+    it('normal: plan_settings_dialog_initial_render_should_support_weather_preference_branch', 0, () => {
+      // Arrange
+      const page = new PlanSettingsDialog(undefined, {} as LocalStorage) as Object as PlanSettingsDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.weatherUserPreference = {
+        heatSensitivity: 2,
+        rainSensitivity: 1,
+        weatherRiskTolerance: 0
+      };
+      page.aboutToAppear();
+      page.effectiveTheme = 'dark';
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: plan_settings_dialog_initial_render_should_support_default_preference_branch', 0, () => {
+      // Arrange
+      const page = new PlanSettingsDialog(undefined, {} as LocalStorage) as Object as PlanSettingsDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.weatherUserPreference = {
+        heatSensitivity: 0,
+        rainSensitivity: 0,
+        weatherRiskTolerance: 2
+      };
+      page.aboutToAppear();
+      page.effectiveTheme = 'light';
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
   });
 }

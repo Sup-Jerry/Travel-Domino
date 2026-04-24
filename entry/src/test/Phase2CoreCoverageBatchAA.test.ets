@@ -3,6 +3,35 @@ import { PlanRepositoryImpl } from '../main/ets/infrastructure/persistence/PlanR
 import { RdbHelper } from '../main/ets/common/utils/RdbHelper';
 import { EventEntity } from '../main/ets/model/entity/EventEntity';
 
+class FakePredicatesForAA {
+  public readonly tableName: string;
+  public readonly clauses: string[] = [];
+
+  constructor(tableName: string) {
+    this.tableName = tableName;
+  }
+
+  equalTo(column: string, value: Object): FakePredicatesForAA {
+    this.clauses.push(`eq:${column}:${String(value)}`);
+    return this;
+  }
+
+  and(): FakePredicatesForAA {
+    this.clauses.push('and');
+    return this;
+  }
+
+  greaterThan(column: string, value: Object): FakePredicatesForAA {
+    this.clauses.push(`gt:${column}:${String(value)}`);
+    return this;
+  }
+
+  lessThanOrEqualTo(column: string, value: Object): FakePredicatesForAA {
+    this.clauses.push(`lte:${column}:${String(value)}`);
+    return this;
+  }
+}
+
 class FakeResultSetForAA {
   private readonly ids: number[];
   private cursor: number = -1;
@@ -41,6 +70,7 @@ class FakeRdbStoreForAA {
   deleteShouldThrow: boolean = false;
   queryResult: FakeResultSetForAA = new FakeResultSetForAA([]);
   lastUpdateValueBucket: Object | null = null;
+  lastUpdatePredicates: Object | null = null;
 
   beginTransaction(): void {
     this.beginTxCount++;
@@ -57,6 +87,7 @@ class FakeRdbStoreForAA {
   async update(valueBucket: Object, _predicates: Object): Promise<number> {
     this.updateCount++;
     this.lastUpdateValueBucket = valueBucket;
+    this.lastUpdatePredicates = _predicates;
     if (this.updateShouldThrow) {
       throw new Error('update_failed_aa');
     }
@@ -79,11 +110,13 @@ class FakeRdbStoreForAA {
 class StaticHooksForAA {
   private readonly originGetInstance: Object;
   private readonly originClearActiveRuntimeEventsForPlan: Object;
+  private readonly originPredicates: Object;
 
   constructor() {
     this.originGetInstance = Reflect.get(RdbHelper, 'getInstance') as Object;
     this.originClearActiveRuntimeEventsForPlan =
       Reflect.get(PlanRepositoryImpl as Object, 'clearActiveRuntimeEventsForPlan') as Object;
+    this.originPredicates = Reflect.get(Reflect.get(globalThis, 'relationalStore') as Object, 'RdbPredicates') as Object;
   }
 
   setGetInstance(fn: () => Object): void {
@@ -94,9 +127,14 @@ class StaticHooksForAA {
     Reflect.set(PlanRepositoryImpl as Object, 'clearActiveRuntimeEventsForPlan', fn);
   }
 
+  useFakePredicates(): void {
+    Reflect.set(Reflect.get(globalThis, 'relationalStore') as Object, 'RdbPredicates', FakePredicatesForAA);
+  }
+
   restore(): void {
     Reflect.set(RdbHelper, 'getInstance', this.originGetInstance);
     Reflect.set(PlanRepositoryImpl as Object, 'clearActiveRuntimeEventsForPlan', this.originClearActiveRuntimeEventsForPlan);
+    Reflect.set(Reflect.get(globalThis, 'relationalStore') as Object, 'RdbPredicates', this.originPredicates);
   }
 }
 
@@ -250,6 +288,103 @@ export default function phase2CoreCoverageBatchAATest() {
       // Assert
       expect(deletedRows).assertEqual(0);
       expect(dirty.length).assertEqual(0);
+    });
+
+    it('normal: clear_active_runtime_events_should_reset_runtime_columns', 0, async () => {
+      // Arrange
+      const store = new FakeRdbStoreForAA();
+      const hooks = new StaticHooksForAA();
+      hooks.useFakePredicates();
+      // Act
+      await getPrivateClearActiveForAA()(store as Object, 31);
+      hooks.restore();
+      const bucket = store.lastUpdateValueBucket as Object;
+      // Assert
+      expect(store.updateCount).assertEqual(1);
+      expect(Reflect.get(bucket, EventEntity.ACTUAL_START_TIME) as number).assertEqual(0);
+      expect(Reflect.get(bucket, EventEntity.ACTUAL_END_TIME) as number).assertEqual(0);
+      expect(Reflect.get(bucket, EventEntity.COMPLETION_STATUS) as number).assertEqual(EventEntity.STATE_PENDING);
+    });
+
+    it('boundary: clear_active_runtime_events_should_filter_by_exact_plan_id', 0, async () => {
+      // Arrange
+      const store = new FakeRdbStoreForAA();
+      const hooks = new StaticHooksForAA();
+      hooks.useFakePredicates();
+      // Act
+      await getPrivateClearActiveForAA()(store as Object, 1);
+      hooks.restore();
+      const predicates = store.lastUpdatePredicates as FakePredicatesForAA;
+      // Assert
+      expect(predicates.tableName).assertEqual(EventEntity.TABLE_NAME);
+      expect(predicates.clauses.indexOf(`eq:${EventEntity.PLAN_ID}:1`) >= 0).assertTrue();
+    });
+
+    it('invalid: clear_active_runtime_events_should_propagate_update_failure', 0, async () => {
+      // Arrange
+      const store = new FakeRdbStoreForAA();
+      store.updateShouldThrow = true;
+      const hooks = new StaticHooksForAA();
+      hooks.useFakePredicates();
+      let thrown = '';
+      // Act
+      try {
+        await getPrivateClearActiveForAA()(store as Object, 32);
+      } catch (err) {
+        const e = err as Error;
+        thrown = e.message;
+      }
+      hooks.restore();
+      // Assert
+      expect(thrown).assertEqual('update_failed_aa');
+      expect(store.updateCount).assertEqual(1);
+    });
+
+    it('conflict: clear_active_runtime_events_should_only_target_active_pending_started_events', 0, async () => {
+      // Arrange
+      const store = new FakeRdbStoreForAA();
+      const hooks = new StaticHooksForAA();
+      hooks.useFakePredicates();
+      // Act
+      await getPrivateClearActiveForAA()(store as Object, 33);
+      hooks.restore();
+      const predicates = store.lastUpdatePredicates as FakePredicatesForAA;
+      // Assert
+      expect(predicates.clauses.indexOf(`eq:${EventEntity.STATUS}:1`) >= 0).assertTrue();
+      expect(predicates.clauses.indexOf(`eq:${EventEntity.COMPLETION_STATUS}:${EventEntity.STATE_PENDING}`) >= 0).assertTrue();
+      expect(predicates.clauses.indexOf(`gt:${EventEntity.ACTUAL_START_TIME}:0`) >= 0).assertTrue();
+      expect(predicates.clauses.indexOf(`lte:${EventEntity.ACTUAL_END_TIME}:0`) >= 0).assertTrue();
+    });
+
+    it('regression: td-20260422-clear-active-should_keep_predicate_chain_order_stable', 0, async () => {
+      // Arrange
+      const store = new FakeRdbStoreForAA();
+      const hooks = new StaticHooksForAA();
+      hooks.useFakePredicates();
+      // Act
+      await getPrivateClearActiveForAA()(store as Object, 34);
+      hooks.restore();
+      const predicates = store.lastUpdatePredicates as FakePredicatesForAA;
+      // Assert
+      expect(predicates.clauses[0]).assertEqual(`eq:${EventEntity.PLAN_ID}:34`);
+      expect(predicates.clauses[1]).assertEqual('and');
+      expect(predicates.clauses[2]).assertEqual(`eq:${EventEntity.STATUS}:1`);
+    });
+
+    it('combined: clear_active_runtime_events_should_build_full_runtime_reset_update', 0, async () => {
+      // Arrange
+      const store = new FakeRdbStoreForAA();
+      const hooks = new StaticHooksForAA();
+      hooks.useFakePredicates();
+      // Act
+      await getPrivateClearActiveForAA()(store as Object, 35);
+      hooks.restore();
+      const bucket = store.lastUpdateValueBucket as Object;
+      const predicates = store.lastUpdatePredicates as FakePredicatesForAA;
+      // Assert
+      expect(Object.keys(bucket).length).assertEqual(3);
+      expect(predicates.clauses.length).assertEqual(9);
+      expect(predicates.clauses[predicates.clauses.length - 1]).assertEqual(`lte:${EventEntity.ACTUAL_END_TIME}:0`);
     });
   });
 }

@@ -547,3 +547,7 @@ struct SettingsGeneralPage {
     .backgroundColor(this.getThemePalette().pageBg);
   }
 }
+
+export function createSettingsGeneralPageForTest(): Object {
+  return new SettingsGeneralPage(undefined, {} as LocalStorage);
+}

@@ -1,4 +1,5 @@
 import { AppConfigService } from '../src/config/app-config.service';
+import * as fs from 'fs';
 
 describe('unit_test_case_generator_autofill_app_config_service', () => {
   const ORIGINAL_ENV = process.env;
@@ -133,5 +134,52 @@ describe('unit_test_case_generator_autofill_app_config_service', () => {
     // Assert
     expect(readUrl).toThrow('AI_UPSTREAM_URL is required');
     expect(readKey).toThrow('AI_UPSTREAM_KEY is required');
+  });
+
+  it('boundary: app_config_should_ignore_invalid_local_env_lines_and_keep_first_value', () => {
+    const existsSpy = jest.spyOn(fs, 'existsSync')
+      .mockImplementation((filePath: fs.PathLike) => String(filePath).endsWith('.env'));
+    const readSpy = jest.spyOn(fs, 'readFileSync')
+      .mockReturnValue('INVALID_LINE\n=EMPTY_KEY\nJWT_SECRET = first_secret\nJWT_SECRET=second_secret\nAI_UPSTREAM_MODEL=   \n');
+
+    const localEnv = (AppConfigService as any).loadLocalEnv() as Map<string, string>;
+
+    expect(localEnv.get('JWT_SECRET')).toBe('first_secret');
+    expect(localEnv.has('INVALID_LINE')).toBe(false);
+    expect(localEnv.has('')).toBe(false);
+    expect(localEnv.get('AI_UPSTREAM_MODEL')).toBe('');
+
+    existsSpy.mockRestore();
+    readSpy.mockRestore();
+  });
+
+  it('boundary: app_config_should_use_explicit_fallback_when_read_env_called_without_second_arg', () => {
+    const service = new AppConfigService() as unknown as {
+      readEnv(key: string): string;
+    };
+
+    const value = service.readEnv('MISSING_ENV_KEY');
+
+    expect(value).toBe('');
+  });
+
+  it('boundary: app_config_should_fallback_model_when_config_value_is_blank_after_trim', () => {
+    (AppConfigService as any).localEnv = new Map<string, string>([['AI_UPSTREAM_MODEL', '   ']]);
+    const service = new AppConfigService();
+
+    expect(service.aiUpstreamModel).toBe('deepseek-chat');
+  });
+
+  it('boundary: app_config_should_prefer_non_empty_local_env_over_process_env', () => {
+    (AppConfigService as any).localEnv = new Map<string, string>([
+      ['JWT_SECRET', 'local_secret'],
+      ['AI_UPSTREAM_KEY', 'local_ai_key']
+    ]);
+    process.env.JWT_SECRET = 'process_secret';
+    process.env.AI_UPSTREAM_KEY = 'process_ai_key';
+    const service = new AppConfigService();
+
+    expect(service.jwtSecret).toBe('local_secret');
+    expect(service.aiUpstreamKey).toBe('local_ai_key');
   });
 });

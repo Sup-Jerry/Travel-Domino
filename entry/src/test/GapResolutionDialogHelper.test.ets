@@ -71,5 +71,48 @@ export default function gapResolutionDialogHelperTest() {
       expect(label).assertEqual('体验升级');
       expect(hasPositive).assertTrue();
     });
+
+    it('boundary: gap_resolution_tier_should_return_gold_label_at_150_minutes', 0, () => {
+      // Arrange
+      const min = 150;
+      const trigger = 30;
+      // Act
+      const color = resolveGapTierColor(min, trigger);
+      const label = resolveGapTierLabel(min, trigger);
+      // Assert
+      expect(color).assertEqual('#FFB800');
+      expect(label).assertEqual('黄金重排');
+    });
+
+    it('boundary: gap_resolution_tier_should_return_blue_label_at_90_minutes', 0, () => {
+      // Arrange
+      const min = 90;
+      const trigger = 30;
+      // Act
+      const color = resolveGapTierColor(min, trigger);
+      const label = resolveGapTierLabel(min, trigger);
+      // Assert
+      expect(color).assertEqual('#007DFF');
+      expect(label).assertEqual('体验升级');
+    });
+
+    it('invalid: gap_resolution_tier_color_should_return_empty_below_trigger', 0, () => {
+      // Arrange
+      const min = 29;
+      const trigger = 30;
+      // Act
+      const color = resolveGapTierColor(min, trigger);
+      // Assert
+      expect(color).assertEqual('');
+    });
+
+    it('combined: gap_resolution_positive_allocation_should_accept_positive_fraction', 0, () => {
+      // Arrange
+      const values = [0, 0.5, -1];
+      // Act
+      const positive = hasPositiveAllocationValues(values);
+      // Assert
+      expect(positive).assertTrue();
+    });
   });
 }

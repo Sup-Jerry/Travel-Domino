@@ -8,7 +8,9 @@ import {
   getEventItemTravelModeIcon,
   resolveEventItemCompanionOpacity,
   resolveEventItemCompanionStateLabel,
+  resolveEventItemActualRangeMeta,
   resolveEventItemConflictGapMinutes,
+  resolveEventItemForecastRange,
   resolveEventItemPlanRange,
   resolveEventItemStartTimeDisplay,
   resolveEventItemThemeColor
@@ -92,6 +94,8 @@ interface EventItemViewPrivateTest {
   getCompanionCardBackground(): Object;
   getCompanionBorderColor(): Object;
   getConflictGapMinutes(): number;
+  TransportMenu(): void;
+  ReasonPopupBuilder(): void;
   initialRender(): void;
 }
 
@@ -190,6 +194,57 @@ export default function eventItemViewHelperTest() {
       const range = resolveEventItemPlanRange(computedTime, fixedStartTime, duration);
       // Assert
       expect(range).assertEqual('09:00-10:30');
+    });
+
+    it('normal: event_item_forecast_range_should_prefer_dynamic_range_when_both_bounds_present', 0, () => {
+      // Arrange
+      const dynamicStart = new Date(2026, 3, 19, 8, 10, 0, 0).getTime();
+      const dynamicEnd = new Date(2026, 3, 19, 9, 40, 0, 0).getTime();
+      const planRange = '08:00-09:30';
+
+      // Act
+      const range = resolveEventItemForecastRange(dynamicStart, dynamicEnd, planRange);
+
+      // Assert
+      expect(range).assertEqual('08:10-09:40');
+    });
+
+    it('boundary: event_item_forecast_range_should_fallback_to_plan_when_one_dynamic_bound_missing', 0, () => {
+      // Arrange
+      const dynamicStart = new Date(2026, 3, 19, 8, 10, 0, 0).getTime();
+      const dynamicEnd = 0;
+      const planRange = '08:00-09:30';
+
+      // Act
+      const range = resolveEventItemForecastRange(dynamicStart, dynamicEnd, planRange);
+
+      // Assert
+      expect(range).assertEqual(planRange);
+    });
+
+    it('combined: event_item_actual_range_meta_should_cover_actual_estimated_dynamic_and_plan_fallbacks', 0, () => {
+      // Arrange
+      const actualStart = new Date(2026, 3, 19, 10, 0, 0, 0).getTime();
+      const actualEnd = new Date(2026, 3, 19, 11, 0, 0, 0).getTime();
+      const dynamicStart = new Date(2026, 3, 19, 10, 15, 0, 0).getTime();
+      const dynamicEnd = new Date(2026, 3, 19, 11, 15, 0, 0).getTime();
+      const planRange = '10:00-11:00';
+
+      // Act
+      const exact = resolveEventItemActualRangeMeta(actualStart, actualEnd, 0, 0, 60, planRange);
+      const estimatedFromActualStart = resolveEventItemActualRangeMeta(actualStart, 0, 0, 0, 45, planRange);
+      const estimatedFromDynamic = resolveEventItemActualRangeMeta(0, 0, dynamicStart, dynamicEnd, 60, planRange);
+      const fallback = resolveEventItemActualRangeMeta(0, 0, 0, 0, 60, planRange);
+
+      // Assert
+      expect(exact.text).assertEqual('10:00-11:00');
+      expect(exact.isEstimated).assertFalse();
+      expect(estimatedFromActualStart.text).assertEqual('10:00-10:45');
+      expect(estimatedFromActualStart.isEstimated).assertTrue();
+      expect(estimatedFromDynamic.text).assertEqual('10:15-11:15');
+      expect(estimatedFromDynamic.isEstimated).assertTrue();
+      expect(fallback.text).assertEqual(planRange);
+      expect(fallback.isEstimated).assertTrue();
     });
 
     it('boundary: event_item_start_display_should_fallback_to_placeholder_when_both_times_empty', 0, () => {
@@ -490,6 +545,155 @@ export default function eventItemViewHelperTest() {
       let threw = false;
       try {
         page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('invalid: event_item_view_initial_render_should_support_no_transit_branch', 0, () => {
+      // Arrange
+      const page = new EventItemView(undefined, {} as LocalStorage) as Object as EventItemViewPrivateTest;
+      const event = buildEventItemTestEvent(2);
+      event.pre_travel_min = DomainConstants.COMMUTE_NO_TRANSIT;
+      event.travel_mode = 3;
+      event.note = '';
+      page.setInitiallyProvidedValue({
+        event: event,
+        index: 2,
+        totalCount: 4,
+        showTravelIndicator: true,
+        isCompanionMode: false,
+        companionCurrentEventId: -1,
+        showWeather: true
+      });
+      page.effectiveTheme = 'dark';
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.getTravelModeIcon(event.travel_mode)).assertEqual('🚇');
+    });
+
+    it('combined: event_item_view_initial_render_should_support_fallback_commute_and_manual_popup_branch', 0, () => {
+      // Arrange
+      const page = new EventItemView(undefined, {} as LocalStorage) as Object as EventItemViewPrivateTest;
+      const event = buildEventItemTestEvent(1);
+      event.pre_travel_min = DomainConstants.COMMUTE_FALLBACK_UNKNOWN;
+      event.travel_mode = 2;
+      event.transit_warning = false;
+      event.ai_reasoning = '';
+      event.weather_text = '';
+      event.weather_temperature = 0;
+      page.setInitiallyProvidedValue({
+        event: event,
+        index: 1,
+        totalCount: 2,
+        showTravelIndicator: true,
+        isCompanionMode: true,
+        companionCurrentEventId: 99,
+        showWeather: true
+      });
+      page.companionTimeDisplayMode = 1;
+      page.isManualInputPopupShow = true;
+      page.tempCommuteVal = '33';
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.formatCommuteTime(event.pre_travel_min)).assertEqual('16h 39m');
+      expect(page.isManualInputPopupShow).assertTrue();
+    });
+
+    it('boundary: event_item_start_display_should_prefer_computed_time_over_fixed_time', 0, () => {
+      // Arrange
+      const computedTime = '10:20';
+      const fixedStartTime = '09:30';
+      // Act
+      const display = resolveEventItemStartTimeDisplay(computedTime, fixedStartTime);
+      // Assert
+      expect(display).assertEqual('10:20');
+    });
+
+    it('combined: event_item_actual_range_meta_should_estimate_end_from_actual_start_and_duration', 0, () => {
+      // Arrange
+      const actualStart = new Date(2026, 3, 23, 8, 15).getTime();
+      const duration = 75;
+      const planRange = '08:00-09:00';
+      // Act
+      const meta = resolveEventItemActualRangeMeta(actualStart, 0, 0, 0, duration, planRange);
+      // Assert
+      expect(meta.isEstimated).assertTrue();
+      expect(meta.text.indexOf('08:15') >= 0).assertTrue();
+      expect(meta.text.indexOf('09:30') >= 0).assertTrue();
+    });
+
+    it('boundary: event_item_companion_future_pending_event_should_use_dimmed_default_state', 0, () => {
+      // Arrange
+      const eventId = 10;
+      const currentEventId = 20;
+      // Act
+      const opacity = resolveEventItemCompanionOpacity(true, eventId, currentEventId, EventEntity.STATE_PENDING, 0);
+      const label = resolveEventItemCompanionStateLabel(EventEntity.STATE_PENDING, 0, eventId, currentEventId);
+      // Assert
+      expect(opacity).assertEqual(0.55);
+      expect(label).assertEqual('FUTURE');
+    });
+
+    it('conflict: event_item_theme_color_should_use_keyword_palette_for_food_and_hotel_names', 0, () => {
+      // Arrange
+      const defaultPrimary = '#123456';
+      // Act
+      const foodLight = resolveEventItemThemeColor(0, 0, '晚餐', 'light', defaultPrimary);
+      const foodDark = resolveEventItemThemeColor(0, 0, '晚餐', 'dark', defaultPrimary);
+      const hotelLight = resolveEventItemThemeColor(0, 0, '酒店入住', 'light', defaultPrimary);
+      const hotelDark = resolveEventItemThemeColor(0, 0, '酒店入住', 'dark', defaultPrimary);
+      // Assert
+      expect(foodLight).assertEqual('#FF9800');
+      expect(foodDark).assertEqual('#FFB85C');
+      expect(hotelLight).assertEqual('#7B1FA2');
+      expect(hotelDark).assertEqual('#B889E0');
+    });
+
+    it('combined: event_item_builders_should_render_transport_menu_and_reason_popup', 0, () => {
+      // Arrange
+      const page = new EventItemView(undefined, {} as LocalStorage) as Object as EventItemViewPrivateTest;
+      const event = buildEventItemTestEvent(1);
+      let threw = false;
+      event.pre_travel_min = 18;
+      event.travel_mode = 2;
+      event.ai_reasoning = 'route reason';
+      page.setInitiallyProvidedValue({
+        event: event,
+        index: 0,
+        totalCount: 1,
+        showTravelIndicator: true,
+        isCompanionMode: false,
+        companionCurrentEventId: -1,
+        showWeather: false
+      });
+      page.effectiveTheme = 'light';
+
+      // Act
+      try {
+        page.TransportMenu();
+        page.ReasonPopupBuilder();
       } catch (_error) {
         threw = true;
       }

@@ -1,8 +1,20 @@
 ﻿import { describe, it, expect } from '@ohos/hypium';
 import {
   getSuggestionApplyButtonLabel,
+  getSuggestionBackButtonLabel,
+  SuggestionDialog,
   shouldShowSuggestionSummary
 } from '../main/ets/pages/components/dialogs/SuggestionDialog';
+
+interface SuggestionDialogPrivateTest {
+  itemName: string;
+  conflictName: string;
+  targetTime: string;
+  suggestedTime: string;
+  detailMsg: string;
+  summaryText: string;
+  initialRender(): void;
+}
 
 export default function suggestionDialogHelperTest() {
   describe('unit_test_case_generator_autofill_SuggestionDialogHelper', () => {
@@ -60,6 +72,57 @@ export default function suggestionDialogHelperTest() {
       // Assert
       expect(labelA).assertEqual(labelB);
       expect(show).assertFalse();
+    });
+    it('normal: suggestion_dialog_back_label_should_stay_non_empty', 0, () => {
+      // Arrange
+      // Act
+      const label = getSuggestionBackButtonLabel();
+      // Assert
+      expect(label.length > 0).assertTrue();
+    });
+
+    it('combined: suggestion_dialog_initial_render_should_support_summary_branch', 0, () => {
+      // Arrange
+      const page = new SuggestionDialog(undefined, {} as LocalStorage) as Object as SuggestionDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.itemName = 'museum';
+      page.conflictName = 'breakfast';
+      page.targetTime = '10:00';
+      page.suggestedTime = '10:30';
+      page.detailMsg = 'delay preview';
+      page.summaryText = 'summary preview';
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: suggestion_dialog_initial_render_should_support_generated_text_branch', 0, () => {
+      // Arrange
+      const page = new SuggestionDialog(undefined, {} as LocalStorage) as Object as SuggestionDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.itemName = 'museum';
+      page.conflictName = 'breakfast';
+      page.targetTime = '10:00';
+      page.suggestedTime = '10:30';
+      page.detailMsg = 'detail preview';
+      page.summaryText = '';
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
   });
 }

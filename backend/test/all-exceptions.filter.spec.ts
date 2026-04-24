@@ -1,4 +1,4 @@
-import { ArgumentsHost, BadRequestException } from '@nestjs/common';
+import { ArgumentsHost, BadRequestException, HttpException } from '@nestjs/common';
 import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
 
 function buildHost(response: {
@@ -103,5 +103,50 @@ describe('unit_test_case_generator_autofill_all_exceptions_filter', () => {
     // Assert
     expect(status).toHaveBeenNthCalledWith(1, 500);
     expect(status).toHaveBeenNthCalledWith(2, 400);
+  });
+
+  it('boundary: filter_should_fallback_to_exception_message_when_http_response_message_missing', () => {
+    const filter = new AllExceptionsFilter();
+    const json = jest.fn();
+    const status = jest.fn().mockReturnValue({ json });
+    const host = buildHost({ status });
+    const exception = new HttpException({}, 418);
+
+    filter.catch(exception, host);
+
+    expect(status).toHaveBeenCalledWith(418);
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'Http Exception'
+    }));
+  });
+
+  it('invalid: filter_should_handle_non_error_primitive_and_missing_request_metadata', () => {
+    const filter = new AllExceptionsFilter();
+    const json = jest.fn();
+    const status = jest.fn().mockReturnValue({ json });
+    const host = buildHost({ status }, {});
+
+    filter.catch('primitive_failure', host);
+
+    expect(status).toHaveBeenCalledWith(500);
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      code: 500,
+      message: 'internal_error'
+    }));
+  });
+
+  it('boundary: filter_should_fallback_unknown_text_when_exception_is_nullish', () => {
+    const filter = new AllExceptionsFilter();
+    const json = jest.fn();
+    const status = jest.fn().mockReturnValue({ json });
+    const host = buildHost({ status }, {});
+
+    filter.catch(undefined, host);
+
+    expect(status).toHaveBeenCalledWith(500);
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      code: 500,
+      message: 'internal_error'
+    }));
   });
 });

@@ -3,7 +3,7 @@ import { ThemeCenter } from '../common/utils/ThemeCenter';
 import { common } from '@kit.AbilityKit';
 import { promptAction } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { HuaweiCredential } from '../domain/auth/AuthTypes';
+import { HuaweiCredential, UserSession } from '../domain/auth/AuthTypes';
 import { AuthFacade } from '../infrastructure/auth/AuthFacade';
 import { SessionManager } from '../infrastructure/auth/SessionManager';
 import { HuaweiAccountLoginButton } from './components/auth/HuaweiAccountLoginButton';
@@ -98,6 +98,10 @@ export function resolveMyPageRemoteAvatarUrl(
   return safeAuthAvatarUrl;
 }
 
+export function shouldMyPageUseImmediateGuestProfile(hasSession: boolean, isGuest: boolean): boolean {
+  return hasSession && isGuest;
+}
+
 @Entry
 @Component
 struct MyPage {
@@ -148,6 +152,7 @@ struct MyPage {
     if (this.loadingProfile) {
       return;
     }
+    const startedAt = Date.now();
     const quickSession = SessionManager.getInstance().load();
     hilog.info(
       MyPage.LOG_DOMAIN,
@@ -163,7 +168,37 @@ struct MyPage {
     }
     this.loadingProfile = true;
     try {
+      if (shouldMyPageUseImmediateGuestProfile(quickSession !== null && quickSession !== undefined, quickSession?.isGuest === true)) {
+        const guestSession = quickSession as UserSession;
+        this.isGuestUser = true;
+        this.userName = DEFAULT_USER_NAME;
+        this.currentUserId = guestSession.accountId || guestSession.userId || 'guest_local';
+        this.currentRemoteAvatarUrl = '';
+        this.useDefaultAvatar = false;
+        this.profileReady = true;
+        hilog.info(
+          MyPage.LOG_DOMAIN,
+          MyPage.LOG_TAG,
+          `[PROFILE_TRACE][page] guest_quick_ready elapsedMs=${Date.now() - startedAt}, userId=${this.currentUserId}`
+        );
+        if (this.avatarService) {
+          const avatarStartedAt = Date.now();
+          const avatarProfile = await this.avatarService.loadAvatarProfile(this.currentUserId, this.currentRemoteAvatarUrl);
+          this.avatarDisplayUri = this.avatarService.resolveDisplayUri(avatarProfile);
+          hilog.info(
+            MyPage.LOG_DOMAIN,
+            MyPage.LOG_TAG,
+            `[PROFILE_TRACE][page] guest_avatar_loaded elapsedMs=${Date.now() - avatarStartedAt}, totalMs=${Date.now() - startedAt}`
+          );
+        }
+        return;
+      }
       const profile = await this.authFacade.getCurrentUserProfile(DEFAULT_USER_NAME);
+      hilog.info(
+        MyPage.LOG_DOMAIN,
+        MyPage.LOG_TAG,
+        `[PROFILE_TRACE][page] profile_loaded elapsedMs=${Date.now() - startedAt}, profileGuest=${profile.isGuest ? 1 : 0}`
+      );
       const sessionAccountId = SessionManager.getInstance().getCurrentAccountId();
       this.isGuestUser = profile.isGuest;
       this.userName = profile.nickname;
@@ -173,7 +208,14 @@ struct MyPage {
 
       const accountId = String(sessionAccountId || profile.accountId || '').trim();
       if (!profile.isGuest && accountId.length > 0) {
+        const bootstrapStartedAt = Date.now();
+        hilog.info(MyPage.LOG_DOMAIN, MyPage.LOG_TAG, `[PROFILE_TRACE][page] cloud_bootstrap_start accountId=${accountId}`);
         const cloudProfile = await profileViewModel.bootstrap(accountId);
+        hilog.info(
+          MyPage.LOG_DOMAIN,
+          MyPage.LOG_TAG,
+          `[PROFILE_TRACE][page] cloud_bootstrap_done elapsedMs=${Date.now() - bootstrapStartedAt}, state=${profileViewModel.getState()}`
+        );
         this.showProfileBootstrapHint(accountId, profileViewModel.getState());
         if (cloudProfile) {
           this.userName = cloudProfile.username || this.userName;
@@ -214,7 +256,7 @@ struct MyPage {
       hilog.info(
         MyPage.LOG_DOMAIN,
         MyPage.LOG_TAG,
-        `[PROFILE_TRACE][page] refresh_done ready=1 isGuest=${this.isGuestUser ? 1 : 0} userId=${this.currentUserId}`
+        `[PROFILE_TRACE][page] refresh_done ready=1 isGuest=${this.isGuestUser ? 1 : 0} userId=${this.currentUserId}, elapsedMs=${Date.now() - startedAt}`
       );
     }
   }
@@ -580,4 +622,8 @@ struct MyPage {
     .height('100%')
     .backgroundColor(this.getThemePalette().pageBg);
   }
+}
+
+export function createMyPageForTest(): Object {
+  return new MyPage(undefined, {} as LocalStorage);
 }

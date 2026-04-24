@@ -1081,9 +1081,10 @@ export default function phase2BatchAPTest() {
       const hooks = new AppStartupCoordinatorHooksAP();
       const coordinator = AppStartupCoordinator.getInstance();
       const internal = coordinator as Object as AppStartupCoordinatorInternalAP;
+      const originSilentWithTimeout = internal.silentLoginWithTimeout;
       const fake = new FakeAuthFacadeAP();
       fake.result = buildAuthResultAP(true, 0, 'ok', LoginStatus.AUTHENTICATED);
-      Reflect.set(coordinator as Object, 'authFacade', fake);
+      Reflect.set(internal as Object, 'silentLoginWithTimeout', async (): Promise<AuthResult<UserSession>> => fake.silentLogin());
       internal.startupAuthInFlight = null;
       try {
         const result = await coordinator.checkStartupAuth();
@@ -1091,6 +1092,7 @@ export default function phase2BatchAPTest() {
         expect(result.success).assertTrue();
         expect(result.status).assertEqual(LoginStatus.AUTHENTICATED);
       } finally {
+        Reflect.set(internal as Object, 'silentLoginWithTimeout', originSilentWithTimeout);
         hooks.restore();
       }
       done();

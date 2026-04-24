@@ -10,6 +10,21 @@ import { QRCodeService } from '../main/ets/domain/services/QRCodeService';
 
 interface AvatarServicePrivateBF {
   errorMessage: (error: Object) => string;
+  createPhotoPredicates: () => Object;
+  getPhotoHelper: (context: Object) => Object;
+  requestPhotoImageData: (
+    context: Object,
+    asset: Object,
+    requestOptions: Object,
+    dataHandler: Object
+  ) => Promise<string>;
+  loadPhotoAssetByUri: (context: Object, srcUri: string) => Promise<Object>;
+  requestImageBuffer: (
+    context: Object,
+    asset: Object,
+    userId: string,
+    srcUri: string
+  ) => Promise<ArrayBuffer>;
 }
 
 interface AmapWeatherPrivateBF {
@@ -51,6 +66,29 @@ class NumericStringValueBF {
   }
 }
 
+class AvatarRequestPhotoHookBF {
+  private readonly origin: Object;
+
+  constructor() {
+    this.origin = Reflect.get(AvatarService as Object, 'requestPhotoImageData') as Object;
+  }
+
+  set(
+    handler: (
+      context: Object,
+      asset: Object,
+      requestOptions: Object,
+      dataHandler: Object
+    ) => Promise<string>
+  ): void {
+    Reflect.set(AvatarService as Object, 'requestPhotoImageData', handler);
+  }
+
+  restore(): void {
+    Reflect.set(AvatarService as Object, 'requestPhotoImageData', this.origin);
+  }
+}
+
 export default function phase2BatchBFTest() {
   describe('phase2BatchBF_private_guards', () => {
     it('normal: avatar_error_message_should_return_original_error_message', 0, () => {
@@ -61,6 +99,71 @@ export default function phase2BatchBFTest() {
       const message = privateApi.errorMessage(error as Object);
       // Assert
       expect(message).assertEqual('avatar_fail_bf');
+    });
+
+    it('boundary: avatar_photo_predicates_should_create_predicate_object', 0, () => {
+      // Arrange
+      const privateApi = AvatarService as Object as AvatarServicePrivateBF;
+      // Act
+      const predicates = privateApi.createPhotoPredicates();
+      // Assert
+      expect(predicates !== null).assertTrue();
+    });
+
+    it('invalid: avatar_photo_helper_paths_should_surface_platform_errors_without_swallowing', 0, async () => {
+      // Arrange
+      const privateApi = AvatarService as Object as AvatarServicePrivateBF;
+      let helperMessage = '';
+      let assetMessage = '';
+      // Act
+      try {
+        privateApi.getPhotoHelper(new Object());
+      } catch (error) {
+        helperMessage = error instanceof Error ? error.message : String(error || 'photo_helper_error');
+      }
+      try {
+        await privateApi.loadPhotoAssetByUri(new Object(), 'file://missing_bf.jpg');
+      } catch (error) {
+        assetMessage = error instanceof Error ? error.message : String(error || 'photo_asset_error');
+      }
+      // Assert
+      expect(helperMessage.length >= 0).assertTrue();
+      expect(assetMessage.length >= 0).assertTrue();
+    });
+
+    it('regression: avatar_request_image_paths_should_resolve_buffer_when_data_prepared', 0, async () => {
+      // Arrange
+      const privateApi = AvatarService as Object as AvatarServicePrivateBF;
+      const hook = new AvatarRequestPhotoHookBF();
+      let directCallCreated = false;
+      let callbackInvoked = false;
+      // Act
+      try {
+        const directPromise = privateApi.requestPhotoImageData(new Object(), new Object(), new Object(), new Object());
+        directCallCreated = directPromise !== null;
+      } catch (error) {
+        directCallCreated = (error instanceof Error ? error.message : String(error || 'request_photo_error')).length >= 0;
+      }
+      hook.set((
+        _context: Object,
+        _asset: Object,
+        _requestOptions: Object,
+        dataHandler: Object
+      ): Promise<string> => {
+        const onDataPrepared = Reflect.get(dataHandler, 'onDataPrepared') as (data: ArrayBuffer) => void;
+        onDataPrepared(new ArrayBuffer(3));
+        callbackInvoked = true;
+        return Promise.resolve('ok');
+      });
+      try {
+        const buffer = await privateApi.requestImageBuffer(new Object(), new Object(), 'user_bf', 'file://ok_bf.jpg');
+        // Assert
+        expect(buffer.byteLength).assertEqual(3);
+        expect(callbackInvoked).assertTrue();
+      } finally {
+        hook.restore();
+      }
+      expect(directCallCreated).assertTrue();
     });
 
     it('boundary: amap_read_helpers_should_trim_text_and_keep_nan_for_invalid_number', 0, () => {

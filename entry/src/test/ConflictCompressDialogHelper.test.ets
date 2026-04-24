@@ -1,12 +1,28 @@
 import { describe, it, expect } from '@ohos/hypium';
 import {
   canConflictCompressConfirm,
+  ConflictCompressDialog,
   ConflictCompressAffectedItem,
   resolveConflictCompressPreviewNewDuration,
   resolveConflictCompressPreviewReduced,
   resolveConflictCompressRemainingGap,
   shouldShowConflictCompressOverload
 } from '../main/ets/pages/components/dialogs/ConflictCompressDialog';
+import {
+  CompressionPlan,
+  CompressionSelectionContext
+} from '../main/ets/viewmodel/TimelineViewModel';
+
+interface ConflictCompressDialogPrivateTest {
+  targetIndex: number;
+  targetTime: string;
+  targetName: string;
+  context: CompressionSelectionContext | null;
+  selectedIds: Set<number>;
+  previewPlan: CompressionPlan | null;
+  safeShowToast(message: string, duration?: number): void;
+  initialRender(): void;
+}
 
 class MockAffectedItem implements ConflictCompressAffectedItem {
   index: number = 0;
@@ -141,6 +157,101 @@ export default function conflictCompressDialogHelperTest() {
       expect(newVal).assertEqual(30);
       expect(reduced).assertEqual(20);
       expect(gap).assertEqual(12);
+    });
+
+    it('boundary: conflict_compress_dialog_safe_show_toast_should_support_optional_duration', 0, () => {
+      // Arrange
+      const page = new ConflictCompressDialog(undefined, {} as LocalStorage) as Object as ConflictCompressDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      try {
+        page.safeShowToast('compress toast');
+        page.safeShowToast('compress toast timed', 1200);
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('normal: conflict_compress_dialog_initial_render_should_support_selectable_preview_branch', 0, () => {
+      // Arrange
+      const page = new ConflictCompressDialog(undefined, {} as LocalStorage) as Object as ConflictCompressDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.targetIndex = 2;
+      page.targetTime = '10:30';
+      page.targetName = '博物馆';
+      page.context = {
+        targetIndex: 2,
+        targetTime: '10:30',
+        neededGapMinutes: 30,
+        naturalArrivalMinutes: 650,
+        chainStartIndex: 0,
+        candidates: [
+          { id: 1, index: 0, name: '早餐', oldVal: 60, minAllowed: 30, maxReducible: 30, isRigid: false, selectable: true },
+          { id: 2, index: 1, name: '地铁', oldVal: 35, minAllowed: 35, maxReducible: 0, isRigid: true, selectable: false, disabledReason: '刚性地点不可压缩' }
+        ]
+      };
+      page.selectedIds = new Set<number>([1]);
+      page.previewPlan = {
+        status: 'COMPRESS_CONFIRM',
+        msg: 'ok',
+        affectedItems: [{ index: 0, name: '早餐', oldVal: 60, newVal: 40 }],
+        remainingGapMinutes: 0,
+        capacityMinutes: 30,
+        mode: 'RATIO'
+      };
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: conflict_compress_dialog_initial_render_should_support_overload_branch', 0, () => {
+      // Arrange
+      const page = new ConflictCompressDialog(undefined, {} as LocalStorage) as Object as ConflictCompressDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.targetIndex = 3;
+      page.targetTime = '12:00';
+      page.targetName = '午餐';
+      page.context = {
+        targetIndex: 3,
+        targetTime: '12:00',
+        neededGapMinutes: 45,
+        naturalArrivalMinutes: 735,
+        chainStartIndex: 1,
+        candidates: [
+          { id: 11, index: 1, name: '景点A', oldVal: 50, minAllowed: 30, maxReducible: 20, isRigid: false, selectable: true }
+        ]
+      };
+      page.selectedIds = new Set<number>([11]);
+      page.previewPlan = {
+        status: 'OVERLOAD',
+        msg: 'overload',
+        affectedItems: [{ index: 1, name: '景点A', oldVal: 50, newVal: 30 }],
+        remainingGapMinutes: 25,
+        capacityMinutes: 20,
+        suggestedTime: '12:25',
+        mode: 'EQUAL'
+      };
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
   });
 }

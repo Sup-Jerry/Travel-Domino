@@ -1,12 +1,51 @@
 import { describe, it, expect } from '@ohos/hypium';
+import { PlanItem } from '../main/ets/infrastructure/persistence/PlanRepositoryImpl';
 import {
+  createPlanSearchPageForTest,
+  isPlanSearchCacheFresh,
   isPlanSearchTrashPlan,
   normalizePlanSearchKeyword,
   resolvePlanSearchCacheKey,
+  resolvePlanSearchResultText,
   resolvePlanSearchStateColor,
   resolvePlanSearchStateLabel,
   shouldPlanSearchLoadMore
 } from '../main/ets/pages/PlanSearchPage';
+
+interface PlanSearchPagePrivateTest {
+  keyword: string;
+  resultList: PlanItem[];
+  searching: boolean;
+  loadingMore: boolean;
+  hasMore: boolean;
+  loaded: boolean;
+  queryToken: number;
+  effectiveTheme: string;
+  initialRender(): void;
+  getPlanStateLabel(item: PlanItem): string;
+  getPlanStateColor(item: PlanItem): string;
+  SearchHeader(): void;
+}
+
+function createPlanSearchPagePrivateForTest(): PlanSearchPagePrivateTest {
+  return createPlanSearchPageForTest() as PlanSearchPagePrivateTest;
+}
+
+function buildPlanSearchItemForTest(
+  id: number,
+  title: string,
+  status: number,
+  deleteTime: number = 0
+): PlanItem {
+  return {
+    id: id,
+    title: title,
+    createdAt: new Date(2026, 3, 22, 8, 0, 0, 0).getTime(),
+    startDate: new Date(2026, 4, id, 8, 0, 0, 0).getTime(),
+    status: status,
+    deleteTime: deleteTime
+  };
+}
 
 export default function planSearchPageHelperTest() {
   describe('unit_test_case_generator_autofill_PlanSearchPageHelper', () => {
@@ -76,6 +115,178 @@ export default function planSearchPageHelperTest() {
       const allowLoadMore = shouldPlanSearchLoadMore(loaded, searching, loadingMore, hasMore);
       // Assert
       expect(allowLoadMore).assertTrue();
+    });
+
+    it('combined: plan_search_load_more_guard_should_block_each_unready_flag', 0, () => {
+      // Arrange
+      // Act
+      const notLoaded = shouldPlanSearchLoadMore(false, false, false, true);
+      const searchingNow = shouldPlanSearchLoadMore(true, true, false, true);
+      const alreadyLoadingMore = shouldPlanSearchLoadMore(true, false, true, true);
+      const noMore = shouldPlanSearchLoadMore(true, false, false, false);
+
+      // Assert
+      expect(notLoaded).assertFalse();
+      expect(searchingNow).assertFalse();
+      expect(alreadyLoadingMore).assertFalse();
+      expect(noMore).assertFalse();
+    });
+
+    it('boundary: plan_search_cache_key_should_lowercase_trimmed_keyword', 0, () => {
+      // Arrange
+      const rawKeyword = '  BeiJing  ';
+
+      // Act
+      const cacheKey = resolvePlanSearchCacheKey(rawKeyword);
+
+      // Assert
+      expect(cacheKey).assertEqual('beijing');
+    });
+
+    it('conflict: plan_search_state_color_should_prioritize_trash_over_active_status', 0, () => {
+      // Arrange
+      const activeStatus = 1;
+      const deleteTime = 1;
+
+      // Act
+      const color = resolvePlanSearchStateColor(activeStatus, deleteTime);
+      const isTrash = isPlanSearchTrashPlan(deleteTime);
+
+      // Assert
+      expect(isTrash).assertTrue();
+      expect(color).assertEqual('#D03D3D');
+    });
+
+    it('boundary: plan_search_cache_fresh_should_reject_invalid_or_reverse_time', 0, () => {
+      // Arrange
+      const cachedAt = 1000;
+      const ttlMs = 3000;
+
+      // Act
+      const fresh = isPlanSearchCacheFresh(cachedAt, 4000, ttlMs);
+      const expired = isPlanSearchCacheFresh(cachedAt, 4001, ttlMs);
+      const reverse = isPlanSearchCacheFresh(5000, 4000, ttlMs);
+      const invalid = isPlanSearchCacheFresh(Number.NaN, 4000, ttlMs);
+
+      // Assert
+      expect(fresh).assertTrue();
+      expect(expired).assertFalse();
+      expect(reverse).assertFalse();
+      expect(invalid).assertFalse();
+    });
+
+    it('boundary: plan_search_cache_fresh_should_reject_negative_cached_time_and_invalid_ttl', 0, () => {
+      // Arrange
+      // Act
+      const negativeCached = isPlanSearchCacheFresh(-1, 1000, 3000);
+      const invalidTtl = isPlanSearchCacheFresh(1000, 2000, Number.NaN);
+
+      // Assert
+      expect(negativeCached).assertFalse();
+      expect(invalidTtl).assertFalse();
+    });
+
+    it('combined: plan_search_result_text_should_prioritize_searching_and_loading_states', 0, () => {
+      // Arrange
+      const searching = true;
+      const loadingMore = true;
+
+      // Act
+      const searchingText = resolvePlanSearchResultText(searching, loadingMore, 9);
+      const loadingMoreText = resolvePlanSearchResultText(false, loadingMore, 5.9);
+      const normalText = resolvePlanSearchResultText(false, false, -1);
+
+      // Assert
+      expect(searchingText).assertEqual('搜索中...');
+      expect(loadingMoreText).assertEqual('结果 5 条（加载更多中）');
+      expect(normalText).assertEqual('结果 0 条');
+    });
+
+    it('normal: plan_search_page_should_render_loaded_result_list', 0, () => {
+      // Arrange
+      const page = createPlanSearchPagePrivateForTest();
+      const active = buildPlanSearchItemForTest(1, 'Shanghai Trip', 1);
+      const archived = buildPlanSearchItemForTest(2, 'Archived Trip', 2);
+      page.loaded = true;
+      page.searching = false;
+      page.loadingMore = false;
+      page.hasMore = true;
+      page.resultList = [active, archived];
+      page.keyword = 'trip';
+      page.effectiveTheme = 'light';
+
+      // Act
+      const activeLabel = page.getPlanStateLabel(active);
+      const archivedColor = page.getPlanStateColor(archived);
+      page.initialRender();
+
+      // Assert
+      expect(activeLabel).assertEqual('规划');
+      expect(archivedColor).assertEqual('#7A8699');
+      expect(page.resultList.length).assertEqual(2);
+    });
+
+    it('boundary: plan_search_page_should_render_empty_loaded_state', 0, () => {
+      // Arrange
+      const page = createPlanSearchPagePrivateForTest();
+      page.loaded = true;
+      page.searching = false;
+      page.loadingMore = false;
+      page.hasMore = false;
+      page.resultList = [];
+      page.keyword = 'missing';
+      page.effectiveTheme = 'dark';
+
+      // Act
+      page.SearchHeader();
+      page.initialRender();
+
+      // Assert
+      expect(page.loaded).assertTrue();
+      expect(page.resultList.length).assertEqual(0);
+    });
+
+    it('combined: plan_search_page_should_render_loading_more_and_trash_state', 0, () => {
+      // Arrange
+      const page = createPlanSearchPagePrivateForTest();
+      const trash = buildPlanSearchItemForTest(3, 'Deleted Trip', 2, 123456);
+      page.loaded = true;
+      page.searching = false;
+      page.loadingMore = true;
+      page.hasMore = true;
+      page.resultList = [trash];
+      page.keyword = 'deleted';
+      page.effectiveTheme = 'light';
+
+      // Act
+      const label = page.getPlanStateLabel(trash);
+      const color = page.getPlanStateColor(trash);
+      page.initialRender();
+
+      // Assert
+      expect(label).assertEqual('回收站');
+      expect(color).assertEqual('#D03D3D');
+      expect(page.loadingMore).assertTrue();
+    });
+
+    it('combined: plan_search_page_should_render_searching_state_with_existing_results', 0, () => {
+      // Arrange
+      const page = createPlanSearchPagePrivateForTest();
+      page.loaded = false;
+      page.searching = true;
+      page.loadingMore = false;
+      page.hasMore = false;
+      page.resultList = [buildPlanSearchItemForTest(4, 'Searching Trip', 1)];
+      page.keyword = 'searching';
+      page.effectiveTheme = 'dark';
+
+      // Act
+      page.SearchHeader();
+      page.initialRender();
+
+      // Assert
+      expect(page.searching).assertTrue();
+      expect(page.resultList.length).assertEqual(1);
     });
   });
 }
