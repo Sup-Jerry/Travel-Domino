@@ -117,6 +117,29 @@ function createDialogGZ(uiContext: PermissionUiContextGZ): AddItemDialogPrivateG
 
 export default function phase2BatchGZTest() {
   describe('unit_test_case_generator_autofill_Phase2BatchGZ_add_item_permission', () => {
+    it('boundary: add_item_permission_should_return_false_when_user_cancels_pre_permission_dialog', 0,
+      async (done: Function) => {
+        const hooks = new AbilityKitHooksGZ();
+        const uiContext = new PermissionUiContextGZ();
+        uiContext.setActionMode('primary');
+        const manager = new AccessManagerMockGZ();
+        manager.grantStatus = -1;
+        hooks.setAccessManager(manager);
+        hooks.setBundleInfoResolver(async (): Promise<BundleInfoGZ> => {
+          const appInfo: AppInfoGZ = { accessTokenId: 1024 };
+          const info: BundleInfoGZ = { appInfo: appInfo };
+          return info;
+        });
+        const page = createDialogGZ(uiContext);
+
+        const allowed = await page.checkAndRequestPermission();
+
+        expect(allowed).assertFalse();
+        expect(uiContext.toastMessages.length).assertEqual(0);
+        hooks.restore();
+        done();
+      });
+
     it('normal: add_item_permission_should_return_true_when_location_already_granted', 0, async (done: Function) => {
       const hooks = new AbilityKitHooksGZ();
       const uiContext = new PermissionUiContextGZ();
