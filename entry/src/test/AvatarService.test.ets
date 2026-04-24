@@ -53,11 +53,46 @@ interface AvatarServicePrivateStatic {
   safeUserId(raw: string): string;
   ensureProfile(profile: AvatarProfile, userId: string): AvatarProfile;
   errorMessage(error: Object): string;
+  requestPhotoImageData(
+    context: Object,
+    asset: Object,
+    requestOptions: Object,
+    dataHandler: Object
+  ): Promise<string>;
+  requestImageBuffer(
+    context: Object,
+    asset: Object,
+    userId: string,
+    srcUri: string
+  ): Promise<ArrayBuffer>;
 }
 
 class ThrowingUploader implements AvatarUploadPort {
   async uploadAvatar(_input: AvatarUploadInput): Promise<AvatarUploadResult> {
     throw new Error('upload_boom');
+  }
+}
+
+class AvatarRequestPhotoHook {
+  private readonly origin: Object;
+
+  constructor() {
+    this.origin = Reflect.get(AvatarService as Object, 'requestPhotoImageData') as Object;
+  }
+
+  set(
+    handler: (
+      context: Object,
+      asset: Object,
+      requestOptions: Object,
+      dataHandler: Object
+    ) => Promise<string>
+  ): void {
+    Reflect.set(AvatarService as Object, 'requestPhotoImageData', handler);
+  }
+
+  restore(): void {
+    Reflect.set(AvatarService as Object, 'requestPhotoImageData', this.origin);
   }
 }
 
@@ -214,6 +249,64 @@ export default function avatarServiceTest() {
       expect(String(ensured.userId)).assertEqual('guest_local');
       expect(String(ensured.uploadState)).assertEqual('EMPTY');
       expect(errorMessage).assertEqual('unknown_error');
+    });
+
+    it('invalid: request_image_buffer_should_reject_when_callback_returns_empty_data', 0, async (done: () => void) => {
+      // Arrange
+      const privateApi = AvatarService as Object as AvatarServicePrivateStatic;
+      const hook = new AvatarRequestPhotoHook();
+      let message = '';
+
+      hook.set((
+        _context: Object,
+        _asset: Object,
+        _requestOptions: Object,
+        dataHandler: Object
+      ): Promise<string> => {
+        const onDataPrepared = Reflect.get(dataHandler, 'onDataPrepared') as (data: ArrayBuffer) => void;
+        onDataPrepared(new ArrayBuffer(0));
+        return Promise.resolve('ok');
+      });
+
+      // Act
+      try {
+        await privateApi.requestImageBuffer(new Object(), new Object(), 'user_empty', 'file://empty.jpg');
+      } catch (error) {
+        message = error instanceof Error ? error.message : String(error || '');
+      } finally {
+        hook.restore();
+      }
+
+      // Assert
+      expect(message).assertEqual('avatar_image_data_empty');
+      done();
+    });
+
+    it('conflict: request_image_buffer_should_reject_when_request_api_promise_fails', 0, async (done: () => void) => {
+      // Arrange
+      const privateApi = AvatarService as Object as AvatarServicePrivateStatic;
+      const hook = new AvatarRequestPhotoHook();
+      let message = '';
+
+      hook.set((
+        _context: Object,
+        _asset: Object,
+        _requestOptions: Object,
+        _dataHandler: Object
+      ): Promise<string> => Promise.reject(new Error('request_fail')));
+
+      // Act
+      try {
+        await privateApi.requestImageBuffer(new Object(), new Object(), 'user_reject', 'file://reject.jpg');
+      } catch (error) {
+        message = error instanceof Error ? error.message : String(error || '');
+      } finally {
+        hook.restore();
+      }
+
+      // Assert
+      expect(message).assertEqual('request_fail');
+      done();
     });
   });
 }
