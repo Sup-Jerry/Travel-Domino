@@ -112,4 +112,14 @@ describe('unit_test_case_generator_autofill_pg_service', () => {
     expect(queryResult.rowCount).toBe(2);
     expect(clientQuery).toHaveBeenCalledWith('update t set x=$1', [1]);
   });
+
+  it('boundary: pg_service_query_should_default_params_to_empty_array_when_omitted', async () => {
+    const service = new PgService(new AppConfigService());
+    const query = jest.fn<Promise<MockQueryResult>, [string, unknown[]]>().mockResolvedValue({ rowCount: 0, rows: [] });
+    (service as unknown as { pool: { query: typeof query } }).pool = { query };
+
+    await service.query('select now()');
+
+    expect(query).toHaveBeenCalledWith('select now()', []);
+  });
 });

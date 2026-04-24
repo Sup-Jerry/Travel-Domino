@@ -134,4 +134,19 @@ describe('unit_test_case_generator_autofill_all_exceptions_filter', () => {
       message: 'internal_error'
     }));
   });
+
+  it('boundary: filter_should_fallback_unknown_text_when_exception_is_nullish', () => {
+    const filter = new AllExceptionsFilter();
+    const json = jest.fn();
+    const status = jest.fn().mockReturnValue({ json });
+    const host = buildHost({ status }, {});
+
+    filter.catch(undefined, host);
+
+    expect(status).toHaveBeenCalledWith(500);
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      code: 500,
+      message: 'internal_error'
+    }));
+  });
 });
