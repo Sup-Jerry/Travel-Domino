@@ -5,15 +5,36 @@ import {
   shouldShowDateConflictPlanStartOption
 } from '../main/ets/pages/components/dialogs/DateConflictDialog';
 
+class DialogControllerMockDateConflict {
+  close(): void {
+  }
+}
+
 interface DateConflictDialogPrivateTest {
+  controller?: DialogControllerMockDateConflict;
   conflictDateStr: string;
   planStartDateStr: string;
   planStartDate: number;
   initialRender(): void;
+  setController(controller: DialogControllerMockDateConflict): void;
 }
 
 export default function dateConflictDialogHelperTest() {
   describe('unit_test_case_generator_autofill_DateConflictDialogHelper', () => {
+    it('combined: date_conflict_dialog_set_controller_should_replace_controller_reference', 0, () => {
+      // Arrange
+      const page = new DateConflictDialog(undefined, {} as LocalStorage) as Object as DateConflictDialogPrivateTest;
+      const first = new DialogControllerMockDateConflict();
+      const second = new DialogControllerMockDateConflict();
+      page.controller = first;
+
+      // Act
+      page.setController(second);
+
+      // Assert
+      expect(page.controller === second).assertTrue();
+    });
+
     it('normal: date_conflict_description_should_include_both_dates', 0, () => {
       // Arrange
       const conflictDate = '05-01';

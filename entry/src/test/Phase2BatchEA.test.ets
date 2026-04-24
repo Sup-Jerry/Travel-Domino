@@ -1,10 +1,17 @@
 import { describe, expect, it } from '@ohos/hypium';
 import { PlanJsonExportDialog } from '../main/ets/pages/components/dialogs/PlanJsonExportDialog';
 
+class DialogControllerMockEA {
+  close(): void {
+  }
+}
+
 interface PlanJsonExportDialogPrivateEA {
+  controller?: DialogControllerMockEA;
   jsonText: string;
   safeShowToast(message: string): void;
   copyJson(): Promise<void>;
+  setController(controller: DialogControllerMockEA): void;
 }
 
 function createPlanJsonExportDialogEA(): PlanJsonExportDialogPrivateEA {
@@ -13,6 +20,20 @@ function createPlanJsonExportDialogEA(): PlanJsonExportDialogPrivateEA {
 
 export default function phase2BatchEATest() {
   describe('phase2BatchEATest', () => {
+    it('combined: plan_json_export_set_controller_should_replace_controller_reference', 0, () => {
+      // Arrange
+      const page = createPlanJsonExportDialogEA();
+      const first = new DialogControllerMockEA();
+      const second = new DialogControllerMockEA();
+      page.controller = first;
+
+      // Act
+      page.setController(second);
+
+      // Assert
+      expect(page.controller === second).assertTrue();
+    });
+
     it('normal: plan_json_export_safe_show_toast_should_swallow_runtime_toast_result', 0, () => {
       // Arrange
       const page = createPlanJsonExportDialogEA();

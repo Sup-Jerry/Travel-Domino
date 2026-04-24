@@ -18,6 +18,7 @@ interface PlanJsonImportDialogPrivateEB {
   onImport: (jsonText: string, cancelToken: PlanJsonImportCancelToken) => Promise<void>;
   safeShowToast(message: string): void;
   doImport(): Promise<void>;
+  setController(controller: DialogControllerMockEB): void;
 }
 
 function createPlanJsonImportDialogEB(controller: DialogControllerMockEB): PlanJsonImportDialogPrivateEB {
@@ -28,6 +29,19 @@ function createPlanJsonImportDialogEB(controller: DialogControllerMockEB): PlanJ
 
 export default function phase2BatchEBTest() {
   describe('phase2BatchEBTest', () => {
+    it('combined: plan_json_import_set_controller_should_replace_controller_reference', 0, () => {
+      // Arrange
+      const first = new DialogControllerMockEB();
+      const second = new DialogControllerMockEB();
+      const page = createPlanJsonImportDialogEB(first);
+
+      // Act
+      page.setController(second);
+
+      // Assert
+      expect(page.controller === second).assertTrue();
+    });
+
     it('normal: plan_json_import_safe_show_toast_should_swallow_runtime_toast_result', 0, () => {
       // Arrange
       const page = createPlanJsonImportDialogEB(new DialogControllerMockEB());

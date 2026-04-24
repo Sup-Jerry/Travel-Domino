@@ -17,6 +17,7 @@ interface RenameDialogPrivateED {
   onConfirm: (newName: string) => void;
   aboutToAppear(): void;
   initialRender(): void;
+  setController(controller: DialogControllerMockED): void;
 }
 
 interface TipDialogPrivateED {
@@ -27,6 +28,7 @@ interface TipDialogPrivateED {
   isChecked: boolean;
   onConfirm: () => void;
   initialRender(): void;
+  setController(controller: DialogControllerMockED): void;
 }
 
 function createRenameDialogED(controller: DialogControllerMockED): RenameDialogPrivateED {
@@ -43,6 +45,19 @@ function createTipDialogED(controller: DialogControllerMockED): TipDialogPrivate
 
 export default function phase2BatchEDTest() {
   describe('phase2BatchEDTest', () => {
+    it('combined: rename_dialog_set_controller_should_replace_controller_reference', 0, () => {
+      // Arrange
+      const first = new DialogControllerMockED();
+      const second = new DialogControllerMockED();
+      const page = createRenameDialogED(first);
+
+      // Act
+      page.setController(second);
+
+      // Assert
+      expect(page.controller === second).assertTrue();
+    });
+
     it('normal: rename_dialog_about_to_appear_should_copy_initial_name', 0, () => {
       // Arrange
       const page = createRenameDialogED(new DialogControllerMockED());
@@ -117,6 +132,19 @@ export default function phase2BatchEDTest() {
       // Assert
       expect(threw).assertFalse();
       expect(confirmed).assertFalse();
+    });
+
+    it('combined: tip_dialog_set_controller_should_replace_controller_reference', 0, () => {
+      // Arrange
+      const first = new DialogControllerMockED();
+      const second = new DialogControllerMockED();
+      const page = createTipDialogED(first);
+
+      // Act
+      page.setController(second);
+
+      // Assert
+      expect(page.controller === second).assertTrue();
     });
 
     it('conflict: tip_dialog_initial_render_should_support_checked_choice', 0, () => {
