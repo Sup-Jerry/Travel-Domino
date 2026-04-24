@@ -5,6 +5,12 @@ import { ThemeCenter } from '../main/ets/common/utils/ThemeCenter';
 import { AuthFacade } from '../main/ets/infrastructure/auth/AuthFacade';
 import { ProfileViewModel } from '../main/ets/viewmodel/ProfileViewModel';
 import { RdbHelper } from '../main/ets/common/utils/RdbHelper';
+import { TrafficEngine } from '../main/ets/infrastructure/services/TrafficEngine';
+import { AmapService } from '../main/ets/infrastructure/services/AmapService';
+import { DateUtil } from '../main/ets/common/utils/DateUtil';
+import { AppConfig } from '../main/ets/common/utils/AppConfig';
+import { MapsInitializer, MapViewManager } from '@amap/amap_lbs_map3d';
+import { bundleManager } from '@kit.AbilityKit';
 
 class StartupDataGJ {
   accountId: string = '';
@@ -28,6 +34,10 @@ class StartupCoordinatorMockGJ {
 
 class AbilityContextGJ {
   tag: string = 'ctx_gj';
+
+  getApplicationContext(): Object {
+    return this;
+  }
 }
 
 class AbilityConfigGJ {
@@ -135,10 +145,74 @@ class ThemeHookStateGJ {
   }
 }
 
+class SignatureInfoGJ {
+  appId: string = 'app_id_gj';
+}
+
+class BundleInfoGJ {
+  name: string = 'bundle_gj';
+  signatureInfo: SignatureInfoGJ = new SignatureInfoGJ();
+}
+
+class TrafficEngineMockGJ {
+  initializeCount: number = 0;
+  lastContext: Object | null = null;
+
+  initialize(context: Object): void {
+    this.initializeCount += 1;
+    this.lastContext = context;
+  }
+}
+
+class MapViewManagerMockGJ {
+  callback: ((mapview?: Object, mapViewName?: string) => void) | null = null;
+
+  registerMapViewCreatedCallback(callback: (mapview?: Object, mapViewName?: string) => void): void {
+    this.callback = callback;
+  }
+}
+
+class AppStorageMockGJ {
+  calls: string[] = [];
+
+  setOrCreate(key: string, _value: Object): void {
+    this.calls.push(key);
+  }
+}
+
+class EmptyWantGJ {
+  uri: string = '';
+}
+
+class EmptyLaunchParamGJ {
+  tag: string = 'launch_gj';
+}
+
+class MapViewTokenGJ {
+  tag: string = 'map_gj';
+}
+
 class AbilityHostGJ {
   context: AbilityContextGJ = new AbilityContextGJ();
   currentThemeMode: string = 'light';
   startupCoordinator: StartupCoordinatorMockGJ = new StartupCoordinatorMockGJ();
+  initThemeModeCount: number = 0;
+  bootstrapUserContextCount: number = 0;
+  handleNotificationLaunchWantCount: number = 0;
+
+  initThemeMode(): Promise<void> {
+    this.initThemeModeCount += 1;
+    return Promise.resolve();
+  }
+
+  bootstrapUserContext(): Promise<void> {
+    this.bootstrapUserContextCount += 1;
+    return Promise.resolve();
+  }
+
+  handleNotificationLaunchWant(_want: Object): void {
+    this.handleNotificationLaunchWantCount += 1;
+  }
 
   runInitThemeMode(): Promise<void> {
     return invokeEntryAbilityMethodGJ(initThemeModeGJ, this);
@@ -154,6 +228,10 @@ class AbilityHostGJ {
 
   runOnConfigurationUpdate(config: AbilityConfigGJ): void {
     invokeEntryAbilityMethodGJ(onConfigurationUpdateGJ, this, config);
+  }
+
+  runOnCreate(want: Object, launchParam: Object): void {
+    invokeEntryAbilityMethodGJ(onCreateGJ, this, want, launchParam);
   }
 }
 
@@ -179,6 +257,7 @@ function flushAsyncGJ(): Promise<void> {
 
 const initThemeModeGJ = getEntryAbilityMethodGJ<(this: AbilityHostGJ) => Promise<void>>('initThemeMode');
 const bootstrapUserContextGJ = getEntryAbilityMethodGJ<(this: AbilityHostGJ) => Promise<void>>('bootstrapUserContext');
+const onCreateGJ = getEntryAbilityMethodGJ<(this: AbilityHostGJ, want: Object, launchParam: Object) => void>('onCreate');
 const onWindowStageCreateGJ = getEntryAbilityMethodGJ<(this: AbilityHostGJ, stage: WindowStageMockGJ) => void>('onWindowStageCreate');
 const onConfigurationUpdateGJ = getEntryAbilityMethodGJ<(this: AbilityHostGJ, config: AbilityConfigGJ) => void>('onConfigurationUpdate');
 
@@ -337,6 +416,76 @@ export default function phase2BatchGJTest() {
       Reflect.set(ThemeCenter as Object, 'normalizeThemeMode', normalizeOrigin);
       Reflect.set(ThemeCenter as Object, 'resolveEffectiveTheme', resolveOrigin);
       Reflect.set(ThemeCenter as Object, 'syncThemeToStorage', syncOrigin);
+    });
+
+    it('combined: entry_ability_on_create_should_initialize_runtime_and_register_map_callback', 0, async () => {
+      const host = new AbilityHostGJ();
+      const trafficEngineMock = new TrafficEngineMockGJ();
+      const mapViewManagerMock = new MapViewManagerMockGJ();
+      const appStorageMock = new AppStorageMockGJ();
+      const trafficOrigin = Reflect.get(TrafficEngine as Object, 'getInstance') as Object;
+      const amapBindOrigin = Reflect.get(AmapService as Object, 'bindRuntimeContext') as Object;
+      const boundaryOrigin = Reflect.get(DateUtil as Object, 'logBoundarySelfCheck') as Object;
+      const validateOrigin = Reflect.get(AppConfig as Object, 'validateAmapSdkConfig') as Object;
+      const setApiKeyOrigin = Reflect.get(MapsInitializer as Object, 'setApiKey') as Object;
+      const privacyShowOrigin = Reflect.get(MapsInitializer as Object, 'updatePrivacyShow') as Object;
+      const privacyAgreeOrigin = Reflect.get(MapsInitializer as Object, 'updatePrivacyAgree') as Object;
+      const mapViewManagerOrigin = Reflect.get(MapViewManager as Object, 'getInstance') as Object;
+      const appStorageOrigin = Reflect.get(globalThis as Object, 'AppStorage') as Object;
+      let boundRuntimeContext: Object | null = null;
+      let sdkKeySet: string = '';
+      let privacyShowCount: number = 0;
+      let privacyAgreeCount: number = 0;
+      let boundaryCount: number = 0;
+
+      Reflect.set(TrafficEngine as Object, 'getInstance', (): TrafficEngineMockGJ => trafficEngineMock);
+      Reflect.set(AmapService as Object, 'bindRuntimeContext', (context: Object): void => {
+        boundRuntimeContext = context;
+      });
+      Reflect.set(DateUtil as Object, 'logBoundarySelfCheck', (): void => {
+        boundaryCount += 1;
+      });
+      Reflect.set(AppConfig as Object, 'validateAmapSdkConfig', (): void => {
+      });
+      Reflect.set(MapsInitializer as Object, 'setApiKey', (apiKey: string): void => {
+        sdkKeySet = apiKey;
+      });
+      Reflect.set(MapsInitializer as Object, 'updatePrivacyShow', (): void => {
+        privacyShowCount += 1;
+      });
+      Reflect.set(MapsInitializer as Object, 'updatePrivacyAgree', (): void => {
+        privacyAgreeCount += 1;
+      });
+      Reflect.set(MapViewManager as Object, 'getInstance', (): MapViewManagerMockGJ => mapViewManagerMock);
+      Reflect.set(globalThis as Object, 'AppStorage', appStorageMock);
+
+      host.runOnCreate(new EmptyWantGJ() as Object, new EmptyLaunchParamGJ() as Object);
+      if (mapViewManagerMock.callback) {
+        mapViewManagerMock.callback(undefined, 'empty_gj');
+        mapViewManagerMock.callback(new MapViewTokenGJ() as Object, 'created_gj');
+      }
+      await flushAsyncGJ();
+
+      expect(host.initThemeModeCount).assertEqual(1);
+      expect(host.bootstrapUserContextCount).assertEqual(1);
+      expect(host.handleNotificationLaunchWantCount).assertEqual(1);
+      expect(trafficEngineMock.initializeCount).assertEqual(1);
+      expect(boundRuntimeContext === host.context).assertTrue();
+      expect(boundaryCount).assertEqual(1);
+      expect(privacyShowCount).assertEqual(1);
+      expect(privacyAgreeCount).assertEqual(1);
+      expect(sdkKeySet.length >= 0).assertTrue();
+      expect(mapViewManagerMock.callback !== null).assertTrue();
+
+      Reflect.set(TrafficEngine as Object, 'getInstance', trafficOrigin);
+      Reflect.set(AmapService as Object, 'bindRuntimeContext', amapBindOrigin);
+      Reflect.set(DateUtil as Object, 'logBoundarySelfCheck', boundaryOrigin);
+      Reflect.set(AppConfig as Object, 'validateAmapSdkConfig', validateOrigin);
+      Reflect.set(MapsInitializer as Object, 'setApiKey', setApiKeyOrigin);
+      Reflect.set(MapsInitializer as Object, 'updatePrivacyShow', privacyShowOrigin);
+      Reflect.set(MapsInitializer as Object, 'updatePrivacyAgree', privacyAgreeOrigin);
+      Reflect.set(MapViewManager as Object, 'getInstance', mapViewManagerOrigin);
+      Reflect.set(globalThis as Object, 'AppStorage', appStorageOrigin);
     });
   });
 }
