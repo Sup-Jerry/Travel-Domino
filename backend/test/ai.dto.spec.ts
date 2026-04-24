@@ -84,4 +84,15 @@ describe('Ai DTO Validation', () => {
 
     expect(properties).toEqual(['max_tokens', 'response_format', 'stream', 'temperature']);
   });
+
+  it('boundary: should_allow_max_tokens_at_upper_limit', async () => {
+    const dto = plainToInstance(AiChatCompletionsDto, {
+      messages: [makeMessage()],
+      max_tokens: 8192
+    });
+
+    const errors = await validate(dto);
+
+    expect(errors).toEqual([]);
+  });
 });

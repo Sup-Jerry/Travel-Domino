@@ -75,5 +75,18 @@ describe('SocialService', () => {
     expect(second).toBe('B:code-b');
     expect(third).toBe('C:id-c');
   });
+
+  it('boundary: verifyCredential should fallback_to_id_token_when_other_ids_missing', async () => {
+    // Arrange
+    const service = new SocialService();
+
+    // Act
+    const result = await service.verifyCredential('HUAWEI', {
+      idToken: '  id-token-only  '
+    });
+
+    // Assert
+    expect(result).toBe('HUAWEI:id-token-only');
+  });
 });
 
