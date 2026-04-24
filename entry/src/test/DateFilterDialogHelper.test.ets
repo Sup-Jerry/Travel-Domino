@@ -6,12 +6,33 @@ import {
   isDateFilterDialogActionSupported
 } from '../main/ets/pages/components/dialogs/DateFilterDialog';
 
+class DialogControllerMockDateFilter {
+  close(): void {
+  }
+}
+
 interface DateFilterDialogPrivateTest {
+  controller?: DialogControllerMockDateFilter;
   initialRender(): void;
+  setController(controller: DialogControllerMockDateFilter): void;
 }
 
 export default function dateFilterDialogHelperTest() {
   describe('unit_test_case_generator_autofill_DateFilterDialogHelper', () => {
+    it('combined: date_filter_dialog_set_controller_should_replace_controller_reference', 0, () => {
+      // Arrange
+      const page = new DateFilterDialog(undefined, {} as LocalStorage) as Object as DateFilterDialogPrivateTest;
+      const first = new DialogControllerMockDateFilter();
+      const second = new DialogControllerMockDateFilter();
+      page.controller = first;
+
+      // Act
+      page.setController(second);
+
+      // Assert
+      expect(page.controller === second).assertTrue();
+    });
+
     it('normal: date_filter_actions_should_include_show_all', 0, () => {
       // Arrange
       // Act

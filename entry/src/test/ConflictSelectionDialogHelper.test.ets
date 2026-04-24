@@ -5,13 +5,34 @@ import {
   shouldUseConflictAdvanceAdjust
 } from '../main/ets/pages/components/dialogs/ConflictSelectionDialog';
 
+class DialogControllerMockConflictSelection {
+  close(): void {
+  }
+}
+
 interface ConflictSelectionDialogPrivateTest {
+  controller?: DialogControllerMockConflictSelection;
   gapMinutes: number;
   initialRender(): void;
+  setController(controller: DialogControllerMockConflictSelection): void;
 }
 
 export default function conflictSelectionDialogHelperTest() {
   describe('unit_test_case_generator_autofill_ConflictSelectionDialogHelper', () => {
+    it('combined: conflict_selection_dialog_set_controller_should_replace_controller_reference', 0, () => {
+      // Arrange
+      const page = new ConflictSelectionDialog(undefined, {} as LocalStorage) as Object as ConflictSelectionDialogPrivateTest;
+      const first = new DialogControllerMockConflictSelection();
+      const second = new DialogControllerMockConflictSelection();
+      page.controller = first;
+
+      // Act
+      page.setController(second);
+
+      // Assert
+      expect(page.controller === second).assertTrue();
+    });
+
     it('normal: conflict_selection_gap_prompt_should_include_minutes', 0, () => {
       // Arrange
       const gapMinutes = 25;

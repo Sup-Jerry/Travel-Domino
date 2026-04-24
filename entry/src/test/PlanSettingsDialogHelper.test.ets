@@ -6,6 +6,11 @@ import {
   isWeatherPreferenceLevelValid
 } from '../main/ets/pages/components/dialogs/PlanSettingsDialog';
 
+class DialogControllerMockPlanSettings {
+  close(): void {
+  }
+}
+
 interface PlanSettingsWeatherPreferenceTest {
   heatSensitivity: number;
   rainSensitivity: number;
@@ -13,15 +18,31 @@ interface PlanSettingsWeatherPreferenceTest {
 }
 
 interface PlanSettingsDialogPrivateTest {
+  controller?: DialogControllerMockPlanSettings;
   weatherUserPreference: PlanSettingsWeatherPreferenceTest;
   weatherPreference: PlanSettingsWeatherPreferenceTest;
   effectiveTheme: string;
   aboutToAppear(): void;
   initialRender(): void;
+  setController(controller: DialogControllerMockPlanSettings): void;
 }
 
 export default function planSettingsDialogHelperTest() {
   describe('unit_test_case_generator_autofill_PlanSettingsDialogHelper', () => {
+    it('combined: plan_settings_dialog_set_controller_should_replace_controller_reference', 0, () => {
+      // Arrange
+      const page = new PlanSettingsDialog(undefined, {} as LocalStorage) as Object as PlanSettingsDialogPrivateTest;
+      const first = new DialogControllerMockPlanSettings();
+      const second = new DialogControllerMockPlanSettings();
+      page.controller = first;
+
+      // Act
+      page.setController(second);
+
+      // Assert
+      expect(page.controller === second).assertTrue();
+    });
+
     it('normal: plan_settings_actions_should_include_share', 0, () => {
       // Arrange
       // Act

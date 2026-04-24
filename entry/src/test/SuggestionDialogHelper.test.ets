@@ -6,7 +6,13 @@ import {
   shouldShowSuggestionSummary
 } from '../main/ets/pages/components/dialogs/SuggestionDialog';
 
+class DialogControllerMockSuggestion {
+  close(): void {
+  }
+}
+
 interface SuggestionDialogPrivateTest {
+  controller?: DialogControllerMockSuggestion;
   itemName: string;
   conflictName: string;
   targetTime: string;
@@ -14,10 +20,25 @@ interface SuggestionDialogPrivateTest {
   detailMsg: string;
   summaryText: string;
   initialRender(): void;
+  setController(controller: DialogControllerMockSuggestion): void;
 }
 
 export default function suggestionDialogHelperTest() {
   describe('unit_test_case_generator_autofill_SuggestionDialogHelper', () => {
+    it('combined: suggestion_dialog_set_controller_should_replace_controller_reference', 0, () => {
+      // Arrange
+      const page = new SuggestionDialog(undefined, {} as LocalStorage) as Object as SuggestionDialogPrivateTest;
+      const first = new DialogControllerMockSuggestion();
+      const second = new DialogControllerMockSuggestion();
+      page.controller = first;
+
+      // Act
+      page.setController(second);
+
+      // Assert
+      expect(page.controller === second).assertTrue();
+    });
+
     it('normal: suggestion_dialog_should_show_summary_when_non_empty', 0, () => {
       // Arrange
       const summaryText = 'plan adjust 10:30';

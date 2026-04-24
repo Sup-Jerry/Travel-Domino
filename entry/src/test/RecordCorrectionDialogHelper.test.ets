@@ -7,17 +7,38 @@ import {
   shouldRecordCorrectionHasEndTime
 } from '../main/ets/pages/components/dialogs/RecordCorrectionDialog';
 
+class DialogControllerMockRecordCorrection {
+  close(): void {
+  }
+}
+
 interface RecordCorrectionDialogPrivateTest {
+  controller?: DialogControllerMockRecordCorrection;
   event: EventEntity | null;
   startTime: Date;
   endTime: Date;
   hasEndTime: boolean;
   aboutToAppear(): void;
   initialRender(): void;
+  setController(controller: DialogControllerMockRecordCorrection): void;
 }
 
 export default function recordCorrectionDialogHelperTest() {
   describe('unit_test_case_generator_autofill_RecordCorrectionDialogHelper', () => {
+    it('combined: record_correction_dialog_set_controller_should_replace_controller_reference', 0, () => {
+      // Arrange
+      const page = new RecordCorrectionDialog(undefined, {} as LocalStorage) as Object as RecordCorrectionDialogPrivateTest;
+      const first = new DialogControllerMockRecordCorrection();
+      const second = new DialogControllerMockRecordCorrection();
+      page.controller = first;
+
+      // Act
+      page.setController(second);
+
+      // Assert
+      expect(page.controller === second).assertTrue();
+    });
+
     it('normal: record_correction_base_time_should_use_actual_start_first', 0, () => {
       // Arrange
       const actualStart = 100;
