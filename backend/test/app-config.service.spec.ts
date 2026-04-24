@@ -169,4 +169,17 @@ describe('unit_test_case_generator_autofill_app_config_service', () => {
 
     expect(service.aiUpstreamModel).toBe('deepseek-chat');
   });
+
+  it('boundary: app_config_should_prefer_non_empty_local_env_over_process_env', () => {
+    (AppConfigService as any).localEnv = new Map<string, string>([
+      ['JWT_SECRET', 'local_secret'],
+      ['AI_UPSTREAM_KEY', 'local_ai_key']
+    ]);
+    process.env.JWT_SECRET = 'process_secret';
+    process.env.AI_UPSTREAM_KEY = 'process_ai_key';
+    const service = new AppConfigService();
+
+    expect(service.jwtSecret).toBe('local_secret');
+    expect(service.aiUpstreamKey).toBe('local_ai_key');
+  });
 });
