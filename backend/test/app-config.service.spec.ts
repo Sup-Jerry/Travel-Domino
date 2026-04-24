@@ -170,6 +170,13 @@ describe('unit_test_case_generator_autofill_app_config_service', () => {
     expect(service.aiUpstreamModel).toBe('deepseek-chat');
   });
 
+  it('boundary: app_config_should_trim_non_empty_ai_upstream_model_value', () => {
+    (AppConfigService as any).localEnv = new Map<string, string>([['AI_UPSTREAM_MODEL', '  deepseek-reasoner  ']]);
+    const service = new AppConfigService();
+
+    expect(service.aiUpstreamModel).toBe('deepseek-reasoner');
+  });
+
   it('boundary: app_config_should_prefer_non_empty_local_env_over_process_env', () => {
     (AppConfigService as any).localEnv = new Map<string, string>([
       ['JWT_SECRET', 'local_secret'],

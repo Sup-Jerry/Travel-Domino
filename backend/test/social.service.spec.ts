@@ -88,5 +88,18 @@ describe('SocialService', () => {
     // Assert
     expect(result).toBe('HUAWEI:id-token-only');
   });
+
+  it('boundary: verifyCredential should_keep_colon_prefix_when_provider_type_is_empty', async () => {
+    // Arrange
+    const service = new SocialService();
+
+    // Act
+    const result = await service.verifyCredential('', {
+      openId: 'open-with-empty-provider'
+    });
+
+    // Assert
+    expect(result).toBe(':open-with-empty-provider');
+  });
 });
 
