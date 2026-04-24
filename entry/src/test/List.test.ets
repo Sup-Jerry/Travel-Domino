@@ -365,6 +365,7 @@ import phase2BatchGITest from './Phase2BatchGI.test';
 import phase2BatchGJTest from './Phase2BatchGJ.test';
 import phase2BatchGKTest from './Phase2BatchGK.test';
 import phase2BatchGLTest from './Phase2BatchGL.test';
+import phase2BatchGMTest from './Phase2BatchGM.test';
 
 const registeredSuiteNames: string[] = [
   'LocalUnit',
@@ -733,6 +734,7 @@ const registeredSuiteNames: string[] = [
   'Phase2BatchGJ',
   'Phase2BatchGK',
   'Phase2BatchGL',
+  'Phase2BatchGM',
 ];
 
 function containsSuite(name: string): boolean {
@@ -1123,6 +1125,7 @@ export default function testsuite() {
   phase2BatchGJTest();
   phase2BatchGKTest();
   phase2BatchGLTest();
+  phase2BatchGMTest();
 
   describe('listTest', () => {
     it('normal: list_should_keep_core_test_modules_registered', 0, () => {
