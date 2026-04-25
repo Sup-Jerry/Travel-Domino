@@ -1,5 +1,6 @@
 ﻿import { describe, it, expect } from '@ohos/hypium';
 import {
+  SettingSwitchItem,
   SettingCategoryItem,
   SettingSelectItem,
   SettingsSubPageHeader,
@@ -10,6 +11,33 @@ import {
   resolveSettingSelectValueText,
   shouldShowSettingSwitchLoading
 } from '../main/ets/pages/components/views/SettingsItems';
+
+interface SettingSwitchItemParamsTest {
+  title?: string;
+  desc?: string;
+  loading?: boolean;
+  checked?: boolean;
+  onToggle?: (value: boolean) => void;
+}
+
+interface SettingSwitchItemHostPrivateTest {
+  __checked: Object;
+}
+
+interface SettingSwitchItemCtorParamsTest {
+  checked: Object;
+}
+
+interface SettingSwitchItemPrivateTest {
+  title: string;
+  desc: string;
+  loading: boolean;
+  checked: boolean;
+  onToggle: (value: boolean) => void;
+  setInitiallyProvidedValue(params: SettingSwitchItemParamsTest): void;
+  updateStateVars(params: SettingSwitchItemParamsTest): void;
+  initialRender(): void;
+}
 
 interface SettingSelectItemParamsTest {
   title?: string;
@@ -56,6 +84,25 @@ interface SettingsSubPageHeaderPrivateTest {
   updateStateVars(params: SettingsSubPageHeaderParamsTest): void;
   getPalette(): Object;
   initialRender(): void;
+}
+
+@Component
+struct SettingSwitchItemHostTest {
+  @State checked: boolean = true;
+
+  build() {
+    SettingSwitchItem({
+      checked: $checked
+    });
+  }
+}
+
+function createSettingSwitchItemForTest(): SettingSwitchItemPrivateTest {
+  const host = new SettingSwitchItemHostTest(undefined, {} as LocalStorage) as Object as SettingSwitchItemHostPrivateTest;
+  const params: SettingSwitchItemCtorParamsTest = {
+    checked: host.__checked
+  };
+  return new SettingSwitchItem(host as Object, params as Object as LocalStorage) as Object as SettingSwitchItemPrivateTest;
 }
 
 export default function settingsItemsHelperTest() {
@@ -134,6 +181,41 @@ export default function settingsItemsHelperTest() {
       expect(selectState.trailingText).assertEqual('>');
       expect(headerState.title).assertEqual('通用设置');
       expect(headerState.backLabel).assertEqual('\u8FD4\u56DE');
+    });
+
+    it('normal: settings_switch_item_update_state_vars_should_sync_link_checked', 0, () => {
+      // Arrange
+      const page = createSettingSwitchItemForTest();
+      let toggled = false;
+      let toggleValue = false;
+      let threw = false;
+
+      // Act
+      page.setInitiallyProvidedValue({
+        title: '归档提示',
+        desc: '切换归档提醒',
+        loading: false,
+        onToggle: (value: boolean) => {
+          toggled = true;
+          toggleValue = value;
+        }
+      });
+      page.updateStateVars({
+        checked: false,
+        title: '删除提示'
+      });
+      try {
+        page.initialRender();
+        page.onToggle(true);
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.title).assertEqual('删除提示');
+      expect(toggled).assertTrue();
+      expect(toggleValue).assertTrue();
     });
 
     it('normal: settings_select_item_initial_render_should_support_value_branch', 0, () => {
@@ -223,3 +305,4 @@ export default function settingsItemsHelperTest() {
     });
   });
 }
+

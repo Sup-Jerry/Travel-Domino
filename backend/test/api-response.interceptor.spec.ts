@@ -112,4 +112,15 @@ describe('unit_test_case_generator_autofill_api_response_interceptor', () => {
     expect(result.data).toBeNull();
     expect(result.requestId.startsWith('req_')).toBe(true);
   });
+
+  it('boundary: interceptor_should_keep_string_zero_request_id_header', async () => {
+    // Arrange
+    const interceptor = new ApiResponseInterceptor();
+    const context = buildContext('0');
+    const next: CallHandler = { handle: () => of({ ok: true }) };
+    // Act
+    const result = await firstValueFrom(interceptor.intercept(context, next)) as { requestId: string };
+    // Assert
+    expect(result.requestId).toBe('0');
+  });
 });
