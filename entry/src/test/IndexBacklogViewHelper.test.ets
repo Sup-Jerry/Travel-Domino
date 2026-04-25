@@ -1,9 +1,27 @@
 import { describe, it, expect } from '@ohos/hypium';
 import { EventEntity } from '../main/ets/model/entity/EventEntity';
+import { TravelPlanItem } from '../main/ets/model/interface/IStandardEvent';
 import {
+  IndexBacklogView,
   resolveIndexBacklogItems,
   shouldIncludeIndexBacklogEvent
 } from '../main/ets/pages/index/IndexBacklogView';
+
+interface IndexBacklogViewParamsTest {
+  events?: EventEntity[];
+  isExpanded?: boolean;
+  dividerColor?: string;
+}
+
+interface IndexBacklogViewPrivateTest {
+  events: EventEntity[];
+  isExpanded: boolean;
+  dividerColor: string;
+  onToggleExpand: () => void;
+  onMoveToSchedule: (item: TravelPlanItem) => void;
+  onMoveAllToSchedule: () => void;
+  updateStateVars(params: IndexBacklogViewParamsTest): void;
+}
 
 export default function indexBacklogViewHelperTest() {
   describe('unit_test_case_generator_autofill_IndexBacklogViewHelper', () => {
@@ -109,6 +127,31 @@ export default function indexBacklogViewHelperTest() {
       expect(items.length).assertEqual(2);
       expect(items[0].id).assertEqual(1);
       expect(items[1].id).assertEqual(3);
+    });
+
+    it('combined: index_backlog_update_state_vars_should_replace_events_and_display_state', 0, () => {
+      // Arrange
+      const page = new IndexBacklogView(undefined, {} as LocalStorage) as Object as IndexBacklogViewPrivateTest;
+      const nextEvent = new EventEntity();
+      nextEvent.id = 9;
+      nextEvent.name = 'night_market';
+      nextEvent.status = 0;
+      page.events = [];
+      page.isExpanded = false;
+      page.dividerColor = '#E7EDF5';
+
+      // Act
+      page.updateStateVars({
+        events: [nextEvent],
+        isExpanded: true,
+        dividerColor: '#111111'
+      });
+
+      // Assert
+      expect(page.events.length).assertEqual(1);
+      expect(page.events[0].name).assertEqual('night_market');
+      expect(page.isExpanded).assertTrue();
+      expect(page.dividerColor).assertEqual('#111111');
     });
   });
 }

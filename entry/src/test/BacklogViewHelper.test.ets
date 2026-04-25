@@ -161,5 +161,21 @@ export default function backlogViewHelperTest() {
       expect(state.showMoveAllButton).assertTrue();
       expect(state.showEmptyState).assertFalse();
     });
+
+    it('combined: backlog_update_state_vars_should_replace_items_and_expand_flag', 0, () => {
+      // Arrange
+      const page = new BacklogView(undefined, {} as LocalStorage) as Object as BacklogViewPrivateTest;
+      const nextItems: BacklogItemTest[] = [{ id: 7, name: 'aquarium' }];
+      page.items = [];
+      page.isExpanded = false;
+
+      // Act
+      page.updateStateVars({ items: nextItems, isExpanded: true });
+
+      // Assert
+      expect(page.items.length).assertEqual(1);
+      expect(page.items[0].name).assertEqual('aquarium');
+      expect(page.isExpanded).assertTrue();
+    });
   });
 }
