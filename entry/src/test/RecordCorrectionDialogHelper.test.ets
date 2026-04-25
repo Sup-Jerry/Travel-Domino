@@ -21,6 +21,11 @@ interface RecordCorrectionDialogPrivateTest {
   aboutToAppear(): void;
   initialRender(): void;
   setController(controller: DialogControllerMockRecordCorrection): void;
+  updateStateVars(params: RecordCorrectionDialogParamsTest): void;
+}
+
+interface RecordCorrectionDialogParamsTest {
+  event?: EventEntity | null;
 }
 
 export default function recordCorrectionDialogHelperTest() {
@@ -37,6 +42,24 @@ export default function recordCorrectionDialogHelperTest() {
 
       // Assert
       expect(page.controller === second).assertTrue();
+    });
+
+    it('combined: record_correction_dialog_update_state_vars_should_replace_event_reference', 0, () => {
+      // Arrange
+      const page = new RecordCorrectionDialog(undefined, {} as LocalStorage) as Object as RecordCorrectionDialogPrivateTest;
+      const firstEvent = new EventEntity('museum', 1);
+      const secondEvent = new EventEntity('hotel', 2);
+      firstEvent.actual_start_time = new Date(2026, 3, 12, 9, 0, 0, 0).getTime();
+      secondEvent.actual_start_time = new Date(2026, 3, 13, 14, 30, 0, 0).getTime();
+      page.event = firstEvent;
+
+      // Act
+      page.updateStateVars({ event: secondEvent });
+      page.aboutToAppear();
+
+      // Assert
+      expect(page.event !== null).assertTrue();
+      expect(page.startTime.getTime()).assertEqual(secondEvent.actual_start_time);
     });
 
     it('normal: record_correction_base_time_should_use_actual_start_first', 0, () => {
