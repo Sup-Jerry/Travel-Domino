@@ -75,5 +75,31 @@ describe('SocialService', () => {
     expect(second).toBe('B:code-b');
     expect(third).toBe('C:id-c');
   });
+
+  it('boundary: verifyCredential should fallback_to_id_token_when_other_ids_missing', async () => {
+    // Arrange
+    const service = new SocialService();
+
+    // Act
+    const result = await service.verifyCredential('HUAWEI', {
+      idToken: '  id-token-only  '
+    });
+
+    // Assert
+    expect(result).toBe('HUAWEI:id-token-only');
+  });
+
+  it('boundary: verifyCredential should_keep_colon_prefix_when_provider_type_is_empty', async () => {
+    // Arrange
+    const service = new SocialService();
+
+    // Act
+    const result = await service.verifyCredential('', {
+      openId: 'open-with-empty-provider'
+    });
+
+    // Assert
+    expect(result).toBe(':open-with-empty-provider');
+  });
 });
 

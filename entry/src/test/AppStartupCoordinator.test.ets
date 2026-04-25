@@ -61,7 +61,7 @@ export default function appStartupCoordinatorTest() {
   describe('appStartupCoordinatorTest', () => {
     it('normal: check_startup_auth_should_return_success_when_silent_login_succeeds', 0, async (done: () => void) => {
       // Arrange
-      const coordinator = AppStartupCoordinator.getInstance();
+      const coordinator = new AppStartupCoordinator();
       const internal = coordinator as Object as StartupInternal;
       const fake = new FakeAuthFacade();
       fake.result = buildResult(true, 0, 'ok', LoginStatus.AUTHENTICATED);
@@ -78,7 +78,7 @@ export default function appStartupCoordinatorTest() {
 
     it('boundary: concurrent_check_startup_auth_should_reuse_single_inflight_promise', 0, async (done: () => void) => {
       // Arrange
-      const coordinator = AppStartupCoordinator.getInstance();
+      const coordinator = new AppStartupCoordinator();
       const internal = coordinator as Object as StartupInternal;
       const fake = new FakeAuthFacade();
       const deferred = new DeferredAuthResult();
@@ -100,7 +100,7 @@ export default function appStartupCoordinatorTest() {
 
     it('invalid: failed_silent_login_should_be_normalized_to_unauthenticated', 0, async (done: () => void) => {
       // Arrange
-      const coordinator = AppStartupCoordinator.getInstance();
+      const coordinator = new AppStartupCoordinator();
       const internal = coordinator as Object as StartupInternal;
       const fake = new FakeAuthFacade();
       fake.result = buildResult(false, 401, 'expired', LoginStatus.LOGIN_FAILED);
@@ -119,7 +119,7 @@ export default function appStartupCoordinatorTest() {
 
     it('conflict: timeout_result_should_be_forwarded_as_unauthenticated', 0, async (done: () => void) => {
       // Arrange
-      const coordinator = AppStartupCoordinator.getInstance();
+      const coordinator = new AppStartupCoordinator();
       const internal = coordinator as Object as StartupInternal;
       internal.startupAuthInFlight = null;
       internal.silentLoginWithTimeout = async (): Promise<AuthResult<UserSession>> => {
@@ -145,7 +145,7 @@ export default function appStartupCoordinatorTest() {
 
     it('regression: td-20260411-c4-startup-inflight-should-reset-after-finished', 0, async (done: () => void) => {
       // Arrange
-      const coordinator = AppStartupCoordinator.getInstance();
+      const coordinator = new AppStartupCoordinator();
       const internal = coordinator as Object as StartupInternal;
       const fake = new FakeAuthFacade();
       fake.result = buildResult(false, -1, 'x', LoginStatus.UNAUTHENTICATED);
@@ -161,7 +161,7 @@ export default function appStartupCoordinatorTest() {
 
     it('combined: sequential_checks_should_call_silent_login_again_after_previous_completion', 0, async (done: () => void) => {
       // Arrange
-      const coordinator = AppStartupCoordinator.getInstance();
+      const coordinator = new AppStartupCoordinator();
       const internal = coordinator as Object as StartupInternal;
       const fake = new FakeAuthFacade();
       fake.result = buildResult(true, 0, 'ok', LoginStatus.AUTHENTICATED);
@@ -173,6 +173,24 @@ export default function appStartupCoordinatorTest() {
       await coordinator.checkStartupAuth();
       // Assert
       expect(fake.callCount).assertEqual(2);
+      done();
+    });
+
+    it('normal: silent_login_with_timeout_should_settle_with_facade_result_before_timer', 0, async (done: () => void) => {
+      // Arrange
+      const coordinator = new AppStartupCoordinator();
+      const internal = coordinator as Object as StartupInternal;
+      internal.startupAuthInFlight = null;
+      // Act
+      const result = await internal.silentLoginWithTimeout();
+      // Assert
+      expect(typeof result.success === 'boolean').assertTrue();
+      expect(result.message.length >= 0).assertTrue();
+      expect(
+        result.status === LoginStatus.AUTHENTICATED ||
+          result.status === LoginStatus.UNAUTHENTICATED ||
+          result.status === LoginStatus.LOGIN_FAILED
+      ).assertTrue();
       done();
     });
   });

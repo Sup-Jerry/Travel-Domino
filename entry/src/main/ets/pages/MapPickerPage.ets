@@ -704,6 +704,10 @@ struct MapPickerPage {
   }
 }
 
+export function createMapPickerPageForTest(): Object {
+  return new MapPickerPage(undefined, {} as LocalStorage);
+}
+
 
 
 

@@ -117,5 +117,23 @@ describe('RiskService', () => {
     // Assert
     expect(pending).toEqual({ providerType: 'HUAWEI', providerUid: 'uid-2' });
   });
+
+  it('boundary: checkSmsRateLimit_should_generate_risk_prefixed_counter_id_on_first_insert', async () => {
+    // Arrange
+    const { service, pg } = buildService(async (sql: string) => {
+      if (sql.includes('select')) {
+        return { rowCount: 0, rows: [] };
+      }
+      return { rowCount: 1, rows: [] };
+    });
+
+    // Act
+    await service.checkSmsRateLimit('13800000001', '127.0.0.2', 'device-risk-prefix');
+
+    // Assert
+    const insertCall = pg.query.mock.calls.find((call: unknown[]) => String(call[0]).includes('insert into risk_counter'));
+    expect(insertCall).toBeDefined();
+    expect(String(insertCall?.[1]?.[0] || '').startsWith('risk_')).toBe(true);
+  });
 });
 

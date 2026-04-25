@@ -28,7 +28,7 @@ interface GeneratedObjectLiteralInterface_1 {
   lng: number;
 }
 
-class MapPickerRouteParams {
+export class MapPickerRouteParams {
   lat: number;
   lng: number;
   planId: number;

@@ -94,5 +94,29 @@ describe('AuditService', () => {
     expect(secondParams[2]).toBe('ACT_2');
     expect(thirdParams[3]).toBe(JSON.stringify({ idx: 3, tags: ['a'] }));
   });
+
+  it('boundary: write should generate log_id_with_expected_prefix', async () => {
+    // Arrange
+    const { service, pg } = buildService();
+
+    // Act
+    await service.write('LOGIN_OK', 'u_prefix', { ok: true });
+
+    // Assert
+    const params = pg.query.mock.calls[0][1];
+    expect(String(params[0]).startsWith('log_')).toBe(true);
+  });
+
+  it('boundary: write should keep_empty_action_type_without_coercion', async () => {
+    // Arrange
+    const { service, pg } = buildService();
+
+    // Act
+    await service.write('', 'u_empty_action', { ok: true });
+
+    // Assert
+    const params = pg.query.mock.calls[0][1];
+    expect(params[2]).toBe('');
+  });
 });
 
