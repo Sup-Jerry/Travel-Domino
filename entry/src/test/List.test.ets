@@ -386,6 +386,7 @@ import phase2BatchHDTest from './Phase2BatchHD.test';
 import phase2BatchHETest from './Phase2BatchHE.test';
 import phase2BatchHFTest from './Phase2BatchHF.test';
 import phase2BatchHGTest from './Phase2BatchHG.test';
+import phase2BatchHHTest from './Phase2BatchHH.test';
 
 const registeredSuiteNames: string[] = [
   'LocalUnit',
@@ -775,6 +776,7 @@ const registeredSuiteNames: string[] = [
   'Phase2BatchHE',
   'Phase2BatchHF',
   'Phase2BatchHG',
+  'Phase2BatchHH',
   'Phase2BatchGW',
 ];
 
@@ -1187,6 +1189,7 @@ export default function testsuite() {
   phase2BatchHETest();
   phase2BatchHFTest();
   phase2BatchHGTest();
+  phase2BatchHHTest();
   phase2BatchGWTest();
 
   describe('listTest', () => {

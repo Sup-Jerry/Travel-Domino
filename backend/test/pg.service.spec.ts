@@ -133,4 +133,14 @@ describe('unit_test_case_generator_autofill_pg_service', () => {
     expect(service.pool.options?.max).toBe(7);
     expect(service.pool.options?.connectionString).toBe(config.databaseUrl);
   });
+
+  it('boundary: pg_service_constructor_should_fallback_when_pool_size_is_zero_string', async () => {
+    process.env.PG_POOL_SIZE = '0';
+    const config = new AppConfigService();
+    const service = new PgService(config) as unknown as {
+      pool: { options?: { max?: number } };
+    };
+
+    expect(service.pool.options?.max).toBe(10);
+  });
 });
