@@ -1,8 +1,20 @@
 import { describe, it, expect } from '@ohos/hypium';
+import { IndexBottomBar } from '../main/ets/pages/index/IndexBottomBar';
 import {
   shouldEnableIndexBottomBarAdd,
   shouldEnableIndexBottomBarAi
 } from '../main/ets/pages/index/IndexBottomBar';
+
+interface IndexBottomBarParamsTest {
+  aiEnabled?: boolean;
+  addEnabled?: boolean;
+}
+
+interface IndexBottomBarPrivateTest {
+  aiEnabled: boolean;
+  addEnabled: boolean;
+  updateStateVars(params: IndexBottomBarParamsTest): void;
+}
 
 export default function indexBottomBarHelperTest() {
   describe('unit_test_case_generator_autofill_IndexBottomBarHelper', () => {
@@ -104,6 +116,23 @@ export default function indexBottomBarHelperTest() {
       // Assert
       expect(aiResult).assertTrue();
       expect(addResult).assertTrue();
+    });
+
+    it('combined: index_bottom_bar_update_state_vars_should_replace_button_flags', 0, () => {
+      // Arrange
+      const page = new IndexBottomBar(undefined, {} as LocalStorage) as Object as IndexBottomBarPrivateTest;
+      page.aiEnabled = true;
+      page.addEnabled = true;
+
+      // Act
+      page.updateStateVars({
+        aiEnabled: false,
+        addEnabled: false
+      });
+
+      // Assert
+      expect(page.aiEnabled).assertFalse();
+      expect(page.addEnabled).assertFalse();
     });
   });
 }
