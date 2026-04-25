@@ -29,6 +29,9 @@ interface AdvanceAdjustDialogPrivateTest {
   selectedIds: Set<number>;
   targetStartTime: string;
   preview: AdvanceAdjustPreview | null;
+  timeToMinutes(time: string): number;
+  minutesToTime(minutes: number): string;
+  toggleOne(id: number, checked: boolean): void;
   initialRender(): void;
   setController(controller: DialogControllerMockAdvanceAdjust): void;
 }
@@ -74,6 +77,25 @@ export default function advanceAdjustDialogHelperTest() {
 
       // Assert
       expect(page.controller === second).assertTrue();
+    });
+
+    it('combined: advance_adjust_dialog_private_wrappers_should_convert_time_and_toggle_selection', 0, () => {
+      // Arrange
+      const page = new AdvanceAdjustDialog(undefined, {} as LocalStorage) as Object as AdvanceAdjustDialogPrivateTest;
+      page.context = null;
+      page.selectedIds = new Set<number>([3, 7]);
+
+      // Act
+      const minutes = page.timeToMinutes('08:30');
+      const time = page.minutesToTime(125);
+      page.toggleOne(7, false);
+      page.toggleOne(9, true);
+
+      // Assert
+      expect(minutes).assertEqual(510);
+      expect(time).assertEqual('02:05');
+      expect(page.selectedIds.has(7)).assertFalse();
+      expect(page.selectedIds.has(9)).assertTrue();
     });
 
     it('normal: advance_adjust_should_parse_valid_time_to_minutes', 0, () => {
