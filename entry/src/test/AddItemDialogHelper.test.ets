@@ -3,6 +3,7 @@ import { ThemeCenter } from '../main/ets/common/utils/ThemeCenter';
 import { AppConfig } from '../main/ets/common/utils/AppConfig';
 import {
   AddItemDialog,
+  MapPickerRouteParams,
   isAddItemMapPickerEnabled,
   isAddItemCoordinateValid,
   resolveAddItemScopedStorageKey,
@@ -183,6 +184,25 @@ export default function addItemDialogHelperTest() {
       // Assert
       expect(enabled).assertTrue();
       expect(disabled).assertFalse();
+    });
+
+    it('normal: map_picker_route_params_constructor_should_assign_all_fields', 0, () => {
+      // Arrange
+      const lat = 34.3416;
+      const lng = 108.9398;
+      const planId = 18;
+      const centerSource = 'existing';
+      const queryName = 'Clock Tower';
+
+      // Act
+      const params = new MapPickerRouteParams(lat, lng, planId, centerSource, queryName);
+
+      // Assert
+      expect(params.lat).assertEqual(lat);
+      expect(params.lng).assertEqual(lng);
+      expect(params.planId).assertEqual(planId);
+      expect(params.centerSource).assertEqual(centerSource);
+      expect(params.queryName).assertEqual(queryName);
     });
   });
 
