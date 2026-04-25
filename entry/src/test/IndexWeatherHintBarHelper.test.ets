@@ -156,6 +156,29 @@ export default function indexWeatherHintBarHelperTest() {
       // Assert
       expect(threw).assertFalse();
     });
+
+    it('combined: weather_hint_bar_update_state_vars_should_replace_visibility_and_lines', 0, () => {
+      // Arrange
+      const page = new IndexWeatherHintBar(undefined, {} as LocalStorage) as Object as IndexWeatherHintBarPrivateTest;
+      page.visible = false;
+      page.routeScore = -1;
+      page.hintLines = [];
+      page.scoreLines = [];
+
+      // Act
+      page.updateStateVars({
+        visible: true,
+        routeScore: 66,
+        hintLines: ['rain', 'wind'],
+        scoreLines: ['score']
+      });
+
+      // Assert
+      expect(page.visible).assertTrue();
+      expect(page.routeScore).assertEqual(66);
+      expect(page.hintLines.length).assertEqual(2);
+      expect(page.scoreLines[0]).assertEqual('score');
+    });
   });
 }
 

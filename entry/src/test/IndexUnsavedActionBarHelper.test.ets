@@ -10,7 +10,14 @@ interface IndexUnsavedActionBarPrivateTest {
   isVisible: boolean;
   marginBottom: number;
   theme: IndexUnsavedActionTheme;
+  updateStateVars(params: IndexUnsavedActionBarParamsTest): void;
   initialRender(): void;
+}
+
+interface IndexUnsavedActionBarParamsTest {
+  isVisible?: boolean;
+  marginBottom?: number;
+  theme?: IndexUnsavedActionTheme;
 }
 
 export default function indexUnsavedActionBarHelperTest() {
@@ -147,6 +154,28 @@ export default function indexUnsavedActionBarHelperTest() {
       expect(first.divider).assertEqual(second.divider);
       expect(first.primary).assertEqual(second.primary);
       expect(first.cardBg).assertEqual(second.cardBg);
+    });
+
+    it('combined: unsaved_action_bar_update_state_vars_should_replace_visibility_and_spacing', 0, () => {
+      // Arrange
+      const page = new IndexUnsavedActionBar(undefined, {} as LocalStorage) as Object as IndexUnsavedActionBarPrivateTest;
+      const nextTheme = getDefaultIndexUnsavedActionTheme();
+      nextTheme.primary = '#123456';
+      page.isVisible = false;
+      page.marginBottom = 96;
+      page.theme = getDefaultIndexUnsavedActionTheme();
+
+      // Act
+      page.updateStateVars({
+        isVisible: true,
+        marginBottom: 48,
+        theme: nextTheme
+      });
+
+      // Assert
+      expect(page.isVisible).assertTrue();
+      expect(page.marginBottom).assertEqual(48);
+      expect(page.theme.primary).assertEqual('#123456');
     });
   });
 }

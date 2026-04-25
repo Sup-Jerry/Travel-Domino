@@ -10,7 +10,14 @@ interface IndexBacklogSectionPrivateTest {
   items: TravelPlanItem[];
   isExpanded: boolean;
   dividerColor: string;
+  updateStateVars(params: IndexBacklogSectionParamsTest): void;
   initialRender(): void;
+}
+
+interface IndexBacklogSectionParamsTest {
+  items?: TravelPlanItem[];
+  isExpanded?: boolean;
+  dividerColor?: string;
 }
 
 export default function indexBacklogSectionHelperTest() {
@@ -109,6 +116,28 @@ export default function indexBacklogSectionHelperTest() {
       const second = getDefaultIndexBacklogSectionDividerColor();
       // Assert
       expect(first).assertEqual(second);
+    });
+
+    it('combined: backlog_section_update_state_vars_should_replace_items_expand_and_divider', 0, () => {
+      // Arrange
+      const page = new IndexBacklogSection(undefined, {} as LocalStorage) as Object as IndexBacklogSectionPrivateTest;
+      const nextItems: TravelPlanItem[] = [{ id: 11, name: 'tower' } as TravelPlanItem];
+      page.items = [];
+      page.isExpanded = false;
+      page.dividerColor = '#E7EDF5';
+
+      // Act
+      page.updateStateVars({
+        items: nextItems,
+        isExpanded: true,
+        dividerColor: '#101010'
+      });
+
+      // Assert
+      expect(page.items.length).assertEqual(1);
+      expect(page.items[0].name).assertEqual('tower');
+      expect(page.isExpanded).assertTrue();
+      expect(page.dividerColor).assertEqual('#101010');
     });
   });
 }
