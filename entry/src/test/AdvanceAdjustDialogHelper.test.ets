@@ -17,13 +17,20 @@ import {
   AdvanceAdjustPreview
 } from '../main/ets/viewmodel/TimelineViewModel';
 
+class DialogControllerMockAdvanceAdjust {
+  close(): void {
+  }
+}
+
 interface AdvanceAdjustDialogPrivateTest {
+  controller?: DialogControllerMockAdvanceAdjust;
   targetName: string;
   context: AdvanceAdjustContext | null;
   selectedIds: Set<number>;
   targetStartTime: string;
   preview: AdvanceAdjustPreview | null;
   initialRender(): void;
+  setController(controller: DialogControllerMockAdvanceAdjust): void;
 }
 
 class AdvanceAdjustCandidateTest implements AdvanceAdjustCandidate {
@@ -55,6 +62,20 @@ function buildAdvanceAdjustCandidateTest(
 
 export default function advanceAdjustDialogHelperTest() {
   describe('unit_test_case_generator_autofill_AdvanceAdjustDialogHelper', () => {
+    it('combined: advance_adjust_dialog_set_controller_should_replace_controller_reference', 0, () => {
+      // Arrange
+      const page = new AdvanceAdjustDialog(undefined, {} as LocalStorage) as Object as AdvanceAdjustDialogPrivateTest;
+      const first = new DialogControllerMockAdvanceAdjust();
+      const second = new DialogControllerMockAdvanceAdjust();
+      page.controller = first;
+
+      // Act
+      page.setController(second);
+
+      // Assert
+      expect(page.controller === second).assertTrue();
+    });
+
     it('normal: advance_adjust_should_parse_valid_time_to_minutes', 0, () => {
       // Arrange
       const time = '08:30';

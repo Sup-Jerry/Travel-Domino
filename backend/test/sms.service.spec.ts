@@ -122,4 +122,18 @@ describe('SmsService', () => {
     // Assert
     expect(result.channel).toBe('   ');
   });
+
+  it('boundary: sendCode should_keep_string_zero_provider_value', async () => {
+    // Arrange
+    const service = new SmsService();
+    process.env.SMS_PROVIDER = '0';
+    jest.spyOn(Math, 'random').mockReturnValue(0.4);
+    jest.spyOn(Date, 'now').mockReturnValue(1_710_000_070_000);
+
+    // Act
+    const result = await service.sendCode('13500000000', '+86', 'LOGIN');
+
+    // Assert
+    expect(result.channel).toBe('0');
+  });
 });

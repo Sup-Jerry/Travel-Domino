@@ -5,14 +5,35 @@ import {
   PlanImportDialog
 } from '../main/ets/pages/components/dialogs/PlanImportDialog';
 
+class DialogControllerMockPlanImport {
+  close(): void {
+  }
+}
+
 interface PlanImportDialogPrivateTest {
+  controller?: DialogControllerMockPlanImport;
   inputJson: string;
   importing: boolean;
   initialRender(): void;
+  setController(controller: DialogControllerMockPlanImport): void;
 }
 
 export default function planImportDialogHelperTest() {
   describe('unit_test_case_generator_autofill_PlanImportDialogHelper', () => {
+    it('combined: plan_import_dialog_set_controller_should_replace_controller_reference', 0, () => {
+      // Arrange
+      const page = new PlanImportDialog(undefined, {} as LocalStorage) as Object as PlanImportDialogPrivateTest;
+      const first = new DialogControllerMockPlanImport();
+      const second = new DialogControllerMockPlanImport();
+      page.controller = first;
+
+      // Act
+      page.setController(second);
+
+      // Assert
+      expect(page.controller === second).assertTrue();
+    });
+
     it('normal: plan_import_should_classify_deep_link_payload', 0, () => {
       // Arrange
       const payload = 'travelapp://import?data=abc';

@@ -15,6 +15,11 @@ import {
   PreferenceType
 } from '../main/ets/domain/strategy/TravelStrategyDimensions';
 
+class DialogControllerMockAiInput {
+  close(): void {
+  }
+}
+
 interface AiInputDialogPaletteTest {
   textPrimary: Object;
   primary: Object;
@@ -31,6 +36,7 @@ interface AiInputDialogParamsTest {
 }
 
 interface AiInputDialogPrivateTest {
+  controller?: DialogControllerMockAiInput;
   hasAiHistory: boolean;
   currentStrategyMode: number;
   initialPrompt: string;
@@ -55,6 +61,7 @@ interface AiInputDialogPrivateTest {
   loadRecommendation(): Promise<void>;
   getLoadingText(): string;
   initialRender(): void;
+  setController(controller: DialogControllerMockAiInput): void;
 }
 
 function buildAiStrategy(
@@ -73,6 +80,20 @@ function buildAiStrategy(
 
 export default function aiInputDialogHelperTest() {
   describe('unit_test_case_generator_autofill_AiInputDialogHelper', () => {
+    it('combined: ai_input_dialog_set_controller_should_replace_controller_reference', 0, () => {
+      // Arrange
+      const page = new AiInputDialog(undefined, {} as LocalStorage) as Object as AiInputDialogPrivateTest;
+      const first = new DialogControllerMockAiInput();
+      const second = new DialogControllerMockAiInput();
+      page.controller = first;
+
+      // Act
+      page.setController(second);
+
+      // Assert
+      expect(page.controller === second).assertTrue();
+    });
+
     it('normal: ai_input_strategy_mode_should_keep_valid_builtin_mode', 0, () => {
       // Arrange
       const mode = 2;

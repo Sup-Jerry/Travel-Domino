@@ -13,7 +13,13 @@ import {
   CompressionSelectionContext
 } from '../main/ets/viewmodel/TimelineViewModel';
 
+class DialogControllerMockConflictCompress {
+  close(): void {
+  }
+}
+
 interface ConflictCompressDialogPrivateTest {
+  controller?: DialogControllerMockConflictCompress;
   targetIndex: number;
   targetTime: string;
   targetName: string;
@@ -22,6 +28,7 @@ interface ConflictCompressDialogPrivateTest {
   previewPlan: CompressionPlan | null;
   safeShowToast(message: string, duration?: number): void;
   initialRender(): void;
+  setController(controller: DialogControllerMockConflictCompress): void;
 }
 
 class MockAffectedItem implements ConflictCompressAffectedItem {
@@ -38,6 +45,20 @@ function buildAffectedItem(index: number, newVal: number): ConflictCompressAffec
 
 export default function conflictCompressDialogHelperTest() {
   describe('unit_test_case_generator_autofill_ConflictCompressDialogHelper', () => {
+    it('combined: conflict_compress_dialog_set_controller_should_replace_controller_reference', 0, () => {
+      // Arrange
+      const page = new ConflictCompressDialog(undefined, {} as LocalStorage) as Object as ConflictCompressDialogPrivateTest;
+      const first = new DialogControllerMockConflictCompress();
+      const second = new DialogControllerMockConflictCompress();
+      page.controller = first;
+
+      // Act
+      page.setController(second);
+
+      // Assert
+      expect(page.controller === second).assertTrue();
+    });
+
     it('normal: conflict_compress_confirm_should_pass_with_positive_selection', 0, () => {
       // Arrange
       const selectedCount = 2;

@@ -10,11 +10,18 @@ import {
   AiReplanPreviewResult
 } from '../main/ets/domain/timeline/services/TimelineAiService';
 
+class DialogControllerMockAiReplanPreview {
+  close(): void {
+  }
+}
+
 interface AiReplanPreviewDialogPrivateTest {
+  controller?: DialogControllerMockAiReplanPreview;
   preview: AiReplanPreviewResult;
   effectiveTheme: string;
   buildStrategyLabel(mode: number): string;
   initialRender(): void;
+  setController(controller: DialogControllerMockAiReplanPreview): void;
 }
 
 class AiReplanPreviewItemTest implements AiReplanPreviewItem {
@@ -35,6 +42,20 @@ function buildAiReplanPreviewItemTest(name: string, itemType: number, duration: 
 
 export default function aiReplanPreviewDialogHelperTest() {
   describe('unit_test_case_generator_autofill_AiReplanPreviewDialogHelper', () => {
+    it('combined: ai_replan_preview_dialog_set_controller_should_replace_controller_reference', 0, () => {
+      // Arrange
+      const page = new AiReplanPreviewDialog(undefined, {} as LocalStorage) as Object as AiReplanPreviewDialogPrivateTest;
+      const first = new DialogControllerMockAiReplanPreview();
+      const second = new DialogControllerMockAiReplanPreview();
+      page.controller = first;
+
+      // Act
+      page.setController(second);
+
+      // Assert
+      expect(page.controller === second).assertTrue();
+    });
+
     it('normal: ai_replan_should_map_food_item_type_label', 0, () => {
       // Arrange
       const itemType = 1;

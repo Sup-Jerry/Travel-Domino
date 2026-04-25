@@ -5,15 +5,36 @@ import {
   formatCreatePlanDateText
 } from '../main/ets/pages/components/dialogs/CreatePlanDialog';
 
+class DialogControllerMockCreatePlan {
+  close(): void {
+  }
+}
+
 interface CreatePlanDialogPrivateTest {
+  controller?: DialogControllerMockCreatePlan;
   title: string;
   selectedDate: Date;
   effectiveTheme: string;
   initialRender(): void;
+  setController(controller: DialogControllerMockCreatePlan): void;
 }
 
 export default function createPlanDialogHelperTest() {
   describe('unit_test_case_generator_autofill_CreatePlanDialogHelper', () => {
+    it('combined: create_plan_dialog_set_controller_should_replace_controller_reference', 0, () => {
+      // Arrange
+      const page = new CreatePlanDialog(undefined, {} as LocalStorage) as Object as CreatePlanDialogPrivateTest;
+      const first = new DialogControllerMockCreatePlan();
+      const second = new DialogControllerMockCreatePlan();
+      page.controller = first;
+
+      // Act
+      page.setController(second);
+
+      // Assert
+      expect(page.controller === second).assertTrue();
+    });
+
     it('normal: create_plan_should_allow_non_empty_title', 0, () => {
       // Arrange
       const title = '东京攻略';
