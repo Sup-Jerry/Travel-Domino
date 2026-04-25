@@ -3,12 +3,13 @@ import {
   canConflictCompressConfirm,
   ConflictCompressDialog,
   ConflictCompressAffectedItem,
-  resolveConflictCompressPreviewNewDuration,
   resolveConflictCompressPreviewReduced,
+  resolveConflictCompressPreviewNewDuration,
   resolveConflictCompressRemainingGap,
   shouldShowConflictCompressOverload
 } from '../main/ets/pages/components/dialogs/ConflictCompressDialog';
 import {
+  CompressionSelectionCandidate,
   CompressionPlan,
   CompressionSelectionContext
 } from '../main/ets/viewmodel/TimelineViewModel';
@@ -24,9 +25,17 @@ interface ConflictCompressDialogPrivateTest {
   targetTime: string;
   targetName: string;
   context: CompressionSelectionContext | null;
+  mode: 'RATIO' | 'EQUAL';
   selectedIds: Set<number>;
   previewPlan: CompressionPlan | null;
   safeShowToast(message: string, duration?: number): void;
+  getSelectableCandidates(): CompressionSelectionCandidate[];
+  isAllSelected(): boolean;
+  toggleSelectAll(next: boolean): void;
+  toggleOne(candidate: CompressionSelectionCandidate, checked: boolean): void;
+  getPreviewNewDuration(candidate: CompressionSelectionCandidate): number;
+  getPreviewReduced(candidate: CompressionSelectionCandidate): number;
+  getRemainingGap(): number;
   initialRender(): void;
   setController(controller: DialogControllerMockConflictCompress): void;
 }
@@ -57,6 +66,79 @@ export default function conflictCompressDialogHelperTest() {
 
       // Assert
       expect(page.controller === second).assertTrue();
+    });
+
+    it('combined: conflict_compress_dialog_private_helpers_should_track_selection_and_preview', 0, () => {
+      // Arrange
+      const page = new ConflictCompressDialog(undefined, {} as LocalStorage) as Object as ConflictCompressDialogPrivateTest;
+      const selectableCandidate = {
+        id: 1,
+        index: 0,
+        name: '早餐',
+        oldVal: 60,
+        minAllowed: 30,
+        maxReducible: 30,
+        isRigid: false,
+        selectable: true
+      } as CompressionSelectionCandidate;
+      const rigidCandidate = {
+        id: 2,
+        index: 1,
+        name: '通勤',
+        oldVal: 35,
+        minAllowed: 35,
+        maxReducible: 0,
+        isRigid: true,
+        selectable: false,
+        disabledReason: '刚性'
+      } as CompressionSelectionCandidate;
+      page.context = {
+        targetIndex: 2,
+        targetTime: '10:30',
+        neededGapMinutes: 30,
+        naturalArrivalMinutes: 650,
+        chainStartIndex: 0,
+        candidates: [selectableCandidate, rigidCandidate]
+      };
+      page.selectedIds = new Set<number>();
+      page.mode = 'RATIO';
+      page.previewPlan = {
+        status: 'OVERLOAD',
+        msg: 'overload',
+        affectedItems: [{ index: 0, name: '早餐', oldVal: 60, newVal: 40 }],
+        remainingGapMinutes: 5,
+        capacityMinutes: 30,
+        suggestedTime: '10:35',
+        mode: 'RATIO'
+      };
+
+      // Act
+      const selectable = page.getSelectableCandidates();
+      page.toggleSelectAll(true);
+      const allSelected = page.isAllSelected();
+      page.toggleOne(rigidCandidate, true);
+      page.toggleOne(selectableCandidate, false);
+      page.previewPlan = {
+        status: 'OVERLOAD',
+        msg: 'overload',
+        affectedItems: [{ index: 0, name: '早餐', oldVal: 60, newVal: 40 }],
+        remainingGapMinutes: 5,
+        capacityMinutes: 30,
+        suggestedTime: '10:35',
+        mode: 'RATIO'
+      };
+      const previewNewDuration = page.getPreviewNewDuration(selectableCandidate);
+      const reduced = page.getPreviewReduced(selectableCandidate);
+      const remainingGap = page.getRemainingGap();
+
+      // Assert
+      expect(selectable.length).assertEqual(1);
+      expect(allSelected).assertTrue();
+      expect(page.selectedIds.has(2)).assertFalse();
+      expect(page.selectedIds.has(1)).assertFalse();
+      expect(previewNewDuration).assertEqual(40);
+      expect(reduced).assertEqual(20);
+      expect(remainingGap).assertEqual(5);
     });
 
     it('normal: conflict_compress_confirm_should_pass_with_positive_selection', 0, () => {

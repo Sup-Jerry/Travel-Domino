@@ -19,6 +19,7 @@ interface AiReplanPreviewDialogPrivateTest {
   controller?: DialogControllerMockAiReplanPreview;
   preview: AiReplanPreviewResult;
   effectiveTheme: string;
+  buildItemTypeLabel(itemType: number): string;
   buildStrategyLabel(mode: number): string;
   initialRender(): void;
   setController(controller: DialogControllerMockAiReplanPreview): void;
@@ -153,6 +154,19 @@ export default function aiReplanPreviewDialogHelperTest() {
       // Assert
       expect(customLabel).assertEqual('自定义');
       expect(defaultLabel).assertEqual('默认');
+    });
+
+    it('combined: ai_replan_preview_dialog_private_item_and_strategy_label_should_delegate', 0, () => {
+      // Arrange
+      const page = new AiReplanPreviewDialog(undefined, {} as LocalStorage) as Object as AiReplanPreviewDialogPrivateTest;
+
+      // Act
+      const hotelLabel = page.buildItemTypeLabel(2);
+      const specialLabel = page.buildStrategyLabel(1);
+
+      // Assert
+      expect(hotelLabel).assertEqual('住宿');
+      expect(specialLabel).assertEqual('特种兵');
     });
 
     it('combined: ai_replan_preview_dialog_initial_render_should_support_item_list_branch', 0, () => {

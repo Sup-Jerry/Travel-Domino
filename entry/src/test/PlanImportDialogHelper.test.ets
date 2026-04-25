@@ -4,9 +4,13 @@ import {
   classifyPlanImportPayload,
   PlanImportDialog
 } from '../main/ets/pages/components/dialogs/PlanImportDialog';
+import { PlanJsonImportCancelToken } from '../main/ets/infrastructure/services/PlanImportExportService';
 
 class DialogControllerMockPlanImport {
+  closeCount: number = 0;
+
   close(): void {
+    this.closeCount += 1;
   }
 }
 
@@ -14,6 +18,9 @@ interface PlanImportDialogPrivateTest {
   controller?: DialogControllerMockPlanImport;
   inputJson: string;
   importing: boolean;
+  onImport: (jsonText: string, cancelToken: PlanJsonImportCancelToken) => Promise<void>;
+  safeShowToast(message: string): void;
+  doImport(): Promise<void>;
   initialRender(): void;
   setController(controller: DialogControllerMockPlanImport): void;
 }
@@ -32,6 +39,44 @@ export default function planImportDialogHelperTest() {
 
       // Assert
       expect(page.controller === second).assertTrue();
+    });
+
+    it('combined: plan_import_dialog_do_import_should_handle_empty_and_plain_payload', 0, async () => {
+      // Arrange
+      const page = new PlanImportDialog(undefined, {} as LocalStorage) as Object as PlanImportDialogPrivateTest;
+      let importedJson = '';
+      const controller = new DialogControllerMockPlanImport();
+      page.controller = controller;
+      page.onImport = async (jsonText: string, _cancelToken: PlanJsonImportCancelToken): Promise<void> => {
+        importedJson = jsonText;
+      };
+
+      // Act
+      page.inputJson = '   ';
+      await page.doImport();
+      page.inputJson = '{"schemaVersion":1}';
+      await page.doImport();
+
+      // Assert
+      expect(importedJson).assertEqual('{"schemaVersion":1}');
+      expect(controller.closeCount).assertEqual(1);
+      expect(page.importing).assertFalse();
+    });
+
+    it('boundary: plan_import_dialog_safe_show_toast_should_not_throw', 0, () => {
+      // Arrange
+      const page = new PlanImportDialog(undefined, {} as LocalStorage) as Object as PlanImportDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      try {
+        page.safeShowToast('toast');
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
 
     it('normal: plan_import_should_classify_deep_link_payload', 0, () => {
