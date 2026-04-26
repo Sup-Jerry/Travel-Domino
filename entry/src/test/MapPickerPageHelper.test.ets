@@ -41,6 +41,7 @@ interface MapPickerPagePrivateTest {
   mapRuntimeChecked: boolean;
   mapRuntimeError: string;
   searchToken: number;
+  searchDebounceTimer: number;
   addressDebounceTimer: number;
   effectiveTheme: string;
   onMapReady(): void;
@@ -511,6 +512,48 @@ export default function mapPickerPageHelperTest() {
       expect(firstTimer > 0).assertTrue();
       expect(secondTimer > 0).assertTrue();
       expect(fetchCount).assertEqual(0);
+    });
+
+    it('regression: td-20260426-map_picker_schedule_search_should_fire_debounce_callback', 0, async (done: () => void) => {
+      // Arrange
+      const page = createMapPickerPageForTest() as MapPickerPagePrivateTest;
+      let receivedKeyword = '';
+      Reflect.set(page as Object, 'runSearch', async (keyword: string): Promise<void> => {
+        receivedKeyword = keyword;
+      });
+
+      // Act
+      page.scheduleSearch('  museum  ');
+      setTimeout(() => {
+        // Assert
+        expect(receivedKeyword).assertEqual('museum');
+        expect(page.searchDebounceTimer > 0).assertTrue();
+        done();
+      }, 360);
+    });
+
+    it('regression: td-20260426-map_picker_schedule_fetch_address_should_fire_debounce_callback', 0, async (done: () => void) => {
+      // Arrange
+      const page = createMapPickerPageForTest() as MapPickerPagePrivateTest;
+      let callCount = 0;
+      let recordedLat = 0;
+      let recordedLng = 0;
+      Reflect.set(page as Object, 'fetchAddress', async (lat: number, lng: number): Promise<void> => {
+        callCount += 1;
+        recordedLat = lat;
+        recordedLng = lng;
+      });
+
+      // Act
+      page.scheduleFetchAddress(30.1, 120.2);
+      setTimeout(() => {
+        // Assert
+        expect(callCount).assertEqual(1);
+        expect(recordedLat).assertEqual(30.1);
+        expect(recordedLng).assertEqual(120.2);
+        expect(page.addressDebounceTimer).assertEqual(-1);
+        done();
+      }, 380);
     });
   });
 }
