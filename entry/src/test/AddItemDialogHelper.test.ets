@@ -74,6 +74,7 @@ interface AddItemDialogPrivateTest {
     preTravel?: number, isHardLock?: boolean, note?: string, isMustVisit?: boolean, lat?: number,
     lng?: number) => Promise<void>;
   onDateChangedRecommendTime: (dayOffset: number, currentTime: string) => string;
+  setController(controller: Object): void;
   setInitiallyProvidedValue(params: AddItemDialogParamsTest): void;
   updateStateVars(params: AddItemDialogParamsTest): void;
   getPalette(): AddItemDialogPaletteTest;
@@ -386,6 +387,20 @@ export default function addItemDialogHelperTest() {
       expect(currentSchedule).assertTrue();
       expect(currentGeocoding).assertTrue();
       expect(threw).assertFalse();
+    });
+
+    it('regression: td-20260426-add_item_dialog_set_controller_should_replace_reference', 0, () => {
+      // Arrange
+      const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateTest;
+      const first = new AddItemDialogControllerMockTest() as Object;
+      const second = new AddItemDialogControllerMockTest() as Object;
+      page.controller = first;
+
+      // Act
+      page.setController(second);
+
+      // Assert
+      expect(page.controller).assertEqual(second);
     });
 
     it('boundary: add_item_mode_should_treat_whitespace_name_as_new_schedule_item', 0, () => {
