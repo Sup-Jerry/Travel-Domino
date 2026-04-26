@@ -37,6 +37,7 @@ interface MapPickerPagePrivateTest {
   searchPanelVisible: boolean;
   centerHint: string;
   storageScopePlanId: number;
+  hasPresetCoordinate: boolean;
   mapRuntimeReady: boolean;
   mapRuntimeChecked: boolean;
   mapRuntimeError: string;
@@ -55,6 +56,20 @@ interface MapPickerPagePrivateTest {
   confirmSelection(): void;
   getThemePalette(): MapPickerPagePaletteTest;
   initialRender(): void;
+}
+
+interface MapPickerCameraTargetTest {
+  latitude: number;
+  longitude: number;
+}
+
+interface MapPickerCameraPositionTest {
+  target?: MapPickerCameraTargetTest;
+}
+
+interface MapPickerCameraListenerTest {
+  onCameraChange?: (position: MapPickerCameraPositionTest) => void;
+  onCameraChangeFinish?: (position: MapPickerCameraPositionTest) => void;
 }
 
 class MapPickerPoiSearchItemRenderTest {
@@ -93,6 +108,29 @@ class MapPickerUiContextMockTest {
 
   getHostContext(): Object {
     return new MapPickerHostContextMockTest();
+  }
+}
+
+class MapPickerMapMockTest {
+  public myLocationEnabled: boolean = false;
+  public myLocationStyle: Object | null = null;
+  public moveCameraCount: number = 0;
+  public listener: MapPickerCameraListenerTest | null = null;
+
+  setMyLocationEnabled(enabled: boolean): void {
+    this.myLocationEnabled = enabled;
+  }
+
+  setMyLocationStyle(style: Object): void {
+    this.myLocationStyle = style;
+  }
+
+  moveCamera(_update: Object): void {
+    this.moveCameraCount += 1;
+  }
+
+  setOnCameraChangeListener(listener: Object): void {
+    this.listener = listener as MapPickerCameraListenerTest;
   }
 }
 
@@ -490,6 +528,36 @@ export default function mapPickerPageHelperTest() {
 
       // Assert
       expect(page.currentAddress).assertEqual('before_ready');
+    });
+
+    it('combined: map_picker_on_map_ready_should_handle_camera_change_callbacks', 0, () => {
+      // Arrange
+      const page = createMapPickerPageForTest() as MapPickerPagePrivateTest;
+      const map = new MapPickerMapMockTest();
+      let scheduledLat = 0;
+      let scheduledLng = 0;
+      Reflect.set(page as Object, 'map', map);
+      Reflect.set(page as Object, 'scheduleFetchAddress', (lat: number, lng: number): void => {
+        scheduledLat = lat;
+        scheduledLng = lng;
+      });
+      page.hasPresetCoordinate = false;
+
+      // Act
+      page.onMapReady();
+      const listener = map.listener as MapPickerCameraListenerTest;
+      listener.onCameraChange?.({ target: { latitude: 31.23, longitude: 121.47 } });
+      listener.onCameraChangeFinish?.({ target: { latitude: 31.23, longitude: 121.47 } });
+
+      // Assert
+      expect(map.myLocationEnabled).assertTrue();
+      expect(map.myLocationStyle !== null).assertTrue();
+      expect(listener !== null).assertTrue();
+      expect(page.isDragging).assertFalse();
+      expect(page.currentLat).assertEqual(31.23);
+      expect(page.currentLng).assertEqual(121.47);
+      expect(scheduledLat).assertEqual(31.23);
+      expect(scheduledLng).assertEqual(121.47);
     });
 
     it('regression: map_picker_schedule_fetch_address_should_replace_pending_timer_without_fetching_immediately', 0, () => {
