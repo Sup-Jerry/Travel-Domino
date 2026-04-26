@@ -20,6 +20,7 @@ interface GapResolutionDialogPrivateTest {
   currentGap: EventEntity | null;
   gapList: EventEntity[];
   candidates: EventEntity[];
+  setController(controller: GapDialogControllerMockTest): void;
   aboutToAppear(): void;
   refreshGaps(): void;
   selectGap(item: EventEntity): void;
@@ -130,6 +131,9 @@ function invokeGapDialogMethodForTest<THost, TResult, TArgs extends (Object | nu
 const gapAboutToAppearTest = getGapDialogMethodForTest<(this: GapDialogHostTest) => void>('aboutToAppear');
 const gapRefreshGapsTest = getGapDialogMethodForTest<(this: GapDialogHostTest) => void>('refreshGaps');
 const gapSelectGapTest = getGapDialogMethodForTest<(this: GapDialogHostTest, item: EventEntity) => void>('selectGap');
+const gapSetControllerTest = getGapDialogMethodForTest<
+  (this: GapDialogHostTest, controller: GapDialogControllerMockTest) => void
+>('setController');
 const gapGetPreviewTest = getGapDialogMethodForTest<(this: GapDialogHostTest, item: EventEntity) => GapPreviewTest>('getPreview');
 const gapGetTierColorTest = getGapDialogMethodForTest<(this: GapDialogHostTest, min: number) => string>('getTierColor');
 const gapGetTierLabelTest = getGapDialogMethodForTest<(this: GapDialogHostTest, min: number) => string>('getTierLabel');
@@ -154,6 +158,10 @@ class GapDialogHostTest implements GapResolutionDialogPrivateTest {
 
   constructor(vm: GapVmMockTest) {
     this.vm = vm;
+  }
+
+  setController(controller: GapDialogControllerMockTest): void {
+    invokeGapDialogMethodForTest(gapSetControllerTest, this, controller);
   }
 
   aboutToAppear(): void {
@@ -274,6 +282,21 @@ export default function gapResolutionDialogThresholdsTest() {
       expect(color).assertEqual('#4CAF50');
       expect(label).assertEqual('\u6548\u7387\u8865\u5168');
       expect(hasPositive).assertTrue();
+    });
+
+    it('combined: gap_dialog_set_controller_should_replace_controller_reference', 0, () => {
+      // Arrange
+      const vm = new GapVmMockTest();
+      const dialog = createGapDialogForTest(vm);
+      const first = new GapDialogControllerMockTest();
+      const second = new GapDialogControllerMockTest();
+      dialog.controller = first;
+
+      // Act
+      dialog.setController(second);
+
+      // Assert
+      expect(dialog.controller === second).assertTrue();
     });
 
     it('normal: gap_dialog_should_auto_select_single_gap_and_build_preview', 0, () => {
