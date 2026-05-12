@@ -421,6 +421,34 @@ export default function mapPickerPageHelperTest() {
       expect(page.searchResults.length).assertEqual(0);
     });
 
+    it('regression: map_picker_instance_should_render_ready_branch_with_search_panel_and_results', 0, () => {
+      // Arrange
+      const page = createMapPickerPageForTest() as MapPickerPagePrivateTest;
+      const poi = new MapPickerPoiSearchItemRenderTest();
+      page.mapRuntimeReady = true;
+      page.mapRuntimeChecked = true;
+      page.currentAddress = 'ready address';
+      page.searchKeyword = 'tower';
+      page.searching = false;
+      page.searchPanelVisible = true;
+      page.searchResults = [poi];
+      page.centerHint = 'hint text';
+      page.effectiveTheme = 'dark';
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.mapRuntimeReady).assertTrue();
+      expect(page.searchResults.length).assertEqual(1);
+    });
+
     it('normal: map_picker_instance_run_search_should_apply_latest_results', 0, async () => {
       // Arrange
       const page = createMapPickerPageForTest() as MapPickerPagePrivateTest;
