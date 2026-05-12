@@ -94,6 +94,14 @@ interface CompanionViewUiContextTest {
   getHostContext(): Object;
 }
 
+interface CompanionAbilityStartCallbackTest {
+  onError?: () => void;
+}
+
+interface CompanionViewHostContextTest {
+  startAbilityByType(type: string, wantParam: Record<string, Object>, callback: CompanionAbilityStartCallbackTest): Promise<void>;
+}
+
 interface CompanionViewScrollerTest {
   scrollToIndex(index: number, smooth: boolean, align: Object): void;
 }
@@ -168,6 +176,7 @@ interface CompanionViewPrivateTest {
   safeBottomInset: number;
   safeLeftInset: number;
   safeRightInset: number;
+  toastMessages: string[];
   weatherExpanded: boolean;
   showWeatherScorePopup: boolean;
   showWeatherHintPopup: boolean;
@@ -241,7 +250,7 @@ interface CompanionViewPrivateTest {
 class CompanionViewUiContextMockTest implements CompanionViewUiContextTest {
   public alertCount: number = 0;
   public lastAlert?: CompanionAlertDialogOptionsTest;
-  private readonly hostContext: Object = new CompanionViewHostContextMockTest() as Object;
+  public readonly hostContext: CompanionViewHostContextMockTest = new CompanionViewHostContextMockTest();
 
   animateTo(_options: Object, action: () => void): void {
     action();
@@ -257,7 +266,30 @@ class CompanionViewUiContextMockTest implements CompanionViewUiContextTest {
   }
 }
 
-class CompanionViewHostContextMockTest {}
+class CompanionViewHostContextMockTest implements CompanionViewHostContextTest {
+  public startAbilityCalls: number = 0;
+  public lastType: string = '';
+  public lastWantParam?: Record<string, Object>;
+  public triggerErrorCallback: boolean = false;
+  public rejectStartAbility: boolean = false;
+
+  startAbilityByType(
+    type: string,
+    wantParam: Record<string, Object>,
+    callback: CompanionAbilityStartCallbackTest
+  ): Promise<void> {
+    this.startAbilityCalls += 1;
+    this.lastType = type;
+    this.lastWantParam = wantParam;
+    if (this.triggerErrorCallback && callback.onError) {
+      callback.onError();
+    }
+    if (this.rejectStartAbility) {
+      return Promise.reject(new Error('unsupported_navigation'));
+    }
+    return Promise.resolve();
+  }
+}
 
 class CompanionViewScrollerMockTest implements CompanionViewScrollerTest {
   public indices: number[] = [];
@@ -1032,6 +1064,59 @@ export default function companionViewHelperTest() {
       expect(page.safeRightInset).assertEqual(4);
       expect(palette.pageBg).assertEqual(ThemeCenter.getPalette('dark').pageBg);
       expect(palette.textPrimary).assertEqual(ThemeCenter.getPalette('dark').textPrimary);
+    });
+
+    it('regression: companion_view_start_navigation_should_toast_when_ability_callback_reports_error', 0, () => {
+      // Arrange
+      const target = buildCompanionRuntimeEvent(1091, 'nav_error_target', 'PENDING', 'Error Road');
+      target.latitude = 31.23;
+      target.longitude = 121.47;
+      const vm = new CompanionViewVmMockTest();
+      vm.orderedEvents = [target];
+      vm.companionContext = buildCompanionContext('READY', null, target);
+      const uiContext = new CompanionViewUiContextMockTest();
+      uiContext.hostContext.triggerErrorCallback = true;
+      const page = createCompanionViewInstance(vm as Object as TimelineViewModel);
+      const toastMessages: string[] = [];
+      setCompanionViewUiContextForTest(page, uiContext);
+      Reflect.set(page as Object, 'safeShowToast', (message: string): void => {
+        toastMessages.push(message);
+      });
+
+      // Act
+      page.startNavigation(target);
+
+      // Assert
+      expect(uiContext.hostContext.startAbilityCalls).assertEqual(1);
+      expect(uiContext.hostContext.lastType).assertEqual('navigation');
+      expect(uiContext.hostContext.lastWantParam?.['destinationName']).assertEqual(String(target.name));
+      expect(toastMessages[0]).assertEqual('鎷夎捣瀵艰埅澶辫触');
+    });
+
+    it('regression: companion_view_start_navigation_should_toast_when_start_ability_rejects', 0, async () => {
+      // Arrange
+      const target = buildCompanionRuntimeEvent(1092, 'nav_reject_target', 'PENDING', 'Reject Road');
+      target.latitude = 22.54;
+      target.longitude = 114.05;
+      const vm = new CompanionViewVmMockTest();
+      vm.orderedEvents = [target];
+      vm.companionContext = buildCompanionContext('READY', null, target);
+      const uiContext = new CompanionViewUiContextMockTest();
+      uiContext.hostContext.rejectStartAbility = true;
+      const page = createCompanionViewInstance(vm as Object as TimelineViewModel);
+      const toastMessages: string[] = [];
+      setCompanionViewUiContextForTest(page, uiContext);
+      Reflect.set(page as Object, 'safeShowToast', (message: string): void => {
+        toastMessages.push(message);
+      });
+
+      // Act
+      page.startNavigation(target);
+      await Promise.resolve();
+
+      // Assert
+      expect(uiContext.hostContext.startAbilityCalls).assertEqual(1);
+      expect(toastMessages[0]).assertEqual('当前设备不支持系统导航');
     });
   });
 
