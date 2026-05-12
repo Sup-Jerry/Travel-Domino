@@ -159,3 +159,7 @@ struct SettingsAdvancedPage {
     .backgroundColor(this.getThemePalette().pageBg);
   }
 }
+
+export function createSettingsAdvancedPageForTest(): Object {
+  return new SettingsAdvancedPage(undefined, {} as LocalStorage);
+}

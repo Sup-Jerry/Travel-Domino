@@ -108,4 +108,32 @@ describe('SmsService', () => {
     expect(second.expiredAt).toBeGreaterThan(first.expiredAt);
     expect(first.codeHash).not.toBe(second.codeHash);
   });
+
+  it('boundary: sendCode should_keep_whitespace_provider_value_without_trimming', async () => {
+    // Arrange
+    const service = new SmsService();
+    process.env.SMS_PROVIDER = '   ';
+    jest.spyOn(Math, 'random').mockReturnValue(0.3);
+    jest.spyOn(Date, 'now').mockReturnValue(1_710_000_060_000);
+
+    // Act
+    const result = await service.sendCode('13600000000', '+86', 'LOGIN');
+
+    // Assert
+    expect(result.channel).toBe('   ');
+  });
+
+  it('boundary: sendCode should_keep_string_zero_provider_value', async () => {
+    // Arrange
+    const service = new SmsService();
+    process.env.SMS_PROVIDER = '0';
+    jest.spyOn(Math, 'random').mockReturnValue(0.4);
+    jest.spyOn(Date, 'now').mockReturnValue(1_710_000_070_000);
+
+    // Act
+    const result = await service.sendCode('13500000000', '+86', 'LOGIN');
+
+    // Assert
+    expect(result.channel).toBe('0');
+  });
 });

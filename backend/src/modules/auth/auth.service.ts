@@ -218,7 +218,7 @@ export class AuthService {
     const accessToken = jwt.sign(payload, this.config.jwtSecret, { expiresIn: this.config.authAccessTtlSeconds });
     const refreshToken = jwt.sign({ ...payload, kind: 'refresh' }, this.config.jwtSecret, { expiresIn: this.config.authRefreshTtlSeconds });
 
-    const execute = queryExecutor || ((sql: string, params: unknown[] = []) => this.pg.query(sql, params));
+    const execute = queryExecutor || ((sql: string, params?: unknown[]) => this.pg.query(sql, params as unknown[]));
     await execute(
       `insert into user_session(session_id,user_id,device_id,device_name,platform,access_token,refresh_token,issued_at,expire_at,refresh_expire_at,status,login_method,last_active_time,ip)
        values($1,$2,$3,$4,$5,$6,$7,now(),$8,$9,'ACTIVE',$10,now(),$11)`,
@@ -262,7 +262,7 @@ export class AuthService {
   }
 
   private async loadProfile(userId: string, queryExecutor?: QueryExecutor): Promise<AuthProfile> {
-    const execute = queryExecutor || ((sql: string, params: unknown[] = []) => this.pg.query(sql, params));
+    const execute = queryExecutor || ((sql: string, params?: unknown[]) => this.pg.query(sql, params as unknown[]));
     const res = await execute(
       `select
          ua.user_id,

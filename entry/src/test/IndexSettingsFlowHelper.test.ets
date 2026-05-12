@@ -1,9 +1,10 @@
 import { describe, it, expect } from '@ohos/hypium';
 import { TimelineDatePolicy } from '../main/ets/domain/policy/TimelineDatePolicy';
 import { WeatherUserPreference } from '../main/ets/domain/services/WeatherModels';
+import { PlanImportExportService } from '../main/ets/infrastructure/services/PlanImportExportService';
 import { EventEntity } from '../main/ets/model/entity/EventEntity';
 import { IndexSettingsFlowDeps, IndexSettingsFlowHelper } from '../main/ets/pages/index/IndexSettingsFlowHelper';
-import { SettingsCallbacks, ShareDialogCallbacks } from '../main/ets/pages/index/IndexDialogManager';
+import { IndexDialogManager, SettingsCallbacks, ShareDialogCallbacks } from '../main/ets/pages/index/IndexDialogManager';
 import { TimelineViewModel } from '../main/ets/viewmodel/TimelineViewModel';
 
 class DialogControllerMock {
@@ -259,6 +260,114 @@ export default function indexSettingsFlowHelperTest() {
       );
       expect((deps.shareCallbacks as ShareDialogCallbacks).compressedJson).assertEqual('{"ok":true}');
       done();
+    });
+
+    it('combined: default_flow_deps_should_delegate_to_dialog_manager_and_export_service', 0, async (done: Function) => {
+      // Arrange
+      const vm = new SettingsFlowVmMock();
+      const uiContext = new UiContextMock() as Object as UIContext;
+      const controller = new DialogControllerMock();
+      const renameController = new DialogControllerMock();
+      const shareController = new DialogControllerMock();
+      const events: EventEntity[] = [
+        buildShareEvent(1, 1, 0, 0),
+        buildShareEvent(2, 1, 0, 1)
+      ];
+      const originalCreateSettings = Reflect.get(IndexDialogManager as Object, 'createSettingsController') as Object;
+      const originalOpenPlanDatePicker = Reflect.get(IndexDialogManager as Object, 'openPlanDatePicker') as Object;
+      const originalCreateRename = Reflect.get(IndexDialogManager as Object, 'createRenameController') as Object;
+      const originalCreateShare = Reflect.get(IndexDialogManager as Object, 'createShareController') as Object;
+      const originalExport = Reflect.get(PlanImportExportService as Object, 'exportPlanToJson') as Object;
+      let renameHit = '';
+      let rescheduleHit = -1;
+      let settingsCallbacks: SettingsCallbacks = {
+        onRename: () => {},
+        onReschedule: () => {},
+        onShare: () => {},
+        weatherUserPreference: new WeatherPreferenceMock(),
+        onWeatherPreferenceChange: async (_preference: WeatherUserPreference): Promise<void> => {}
+      };
+      let shareCallbacks: ShareDialogCallbacks = {
+        planId: 0,
+        planTitle: '',
+        startDate: 0,
+        endDate: 0,
+        totalDays: 0,
+        totalEvents: 0,
+        compressedJson: ''
+      };
+
+      Reflect.set(IndexDialogManager as Object, 'createSettingsController', (callbacks: SettingsCallbacks): Object => {
+        settingsCallbacks = callbacks;
+        return controller as Object;
+      });
+      Reflect.set(
+        IndexDialogManager as Object,
+        'openPlanDatePicker',
+        (_ctx: UIContext, _planStartDate: number, onAccept: (dateMs: number) => void): void => {
+          onAccept(24680);
+        }
+      );
+      Reflect.set(
+        IndexDialogManager as Object,
+        'createRenameController',
+        (_initName: string, onConfirm: (newName: string) => void): Object => {
+          onConfirm('renamed_default');
+          return renameController as Object;
+        }
+      );
+      Reflect.set(IndexDialogManager as Object, 'createShareController', (callbacks: ShareDialogCallbacks): Object => {
+        shareCallbacks = callbacks;
+        return shareController as Object;
+      });
+      Reflect.set(
+        PlanImportExportService as Object,
+        'exportPlanToJson',
+        async (_planId: number): Promise<string> => '{"delegated":true}'
+      );
+
+      try {
+        // Act
+        IndexSettingsFlowHelper.openSettingsDialog({
+          uiContext: uiContext,
+          vm: vm as Object as TimelineViewModel,
+          onRename: () => {},
+          onReschedule: (dateMs: number) => {
+            rescheduleHit = dateMs;
+          },
+          onShare: async () => {},
+          onWeatherPreferenceError: () => {}
+        });
+        settingsCallbacks.onReschedule();
+        await new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => {
+          setTimeout(() => resolve(), 130);
+        });
+        IndexSettingsFlowHelper.openRenameDialog('origin_default', (newName: string) => {
+          renameHit = newName;
+        });
+        const shareDialog = await IndexSettingsFlowHelper.openShareDialog({
+          planId: 77,
+          planTitle: 'default_share',
+          planStartDate: vm.planStartDate,
+          events: events
+        });
+
+        // Assert
+        expect(controller.openCount).assertEqual(1);
+        expect(renameController.openCount).assertEqual(1);
+        expect((shareDialog as Object) !== null).assertTrue();
+        expect(shareController.openCount).assertEqual(1);
+        expect(renameHit).assertEqual('renamed_default');
+        expect(rescheduleHit).assertEqual(24680);
+        expect(shareCallbacks.compressedJson).assertEqual('{"delegated":true}');
+        done();
+      } finally {
+        Reflect.set(IndexDialogManager as Object, 'createSettingsController', originalCreateSettings);
+        Reflect.set(IndexDialogManager as Object, 'openPlanDatePicker', originalOpenPlanDatePicker);
+        Reflect.set(IndexDialogManager as Object, 'createRenameController', originalCreateRename);
+        Reflect.set(IndexDialogManager as Object, 'createShareController', originalCreateShare);
+        Reflect.set(PlanImportExportService as Object, 'exportPlanToJson', originalExport);
+      }
     });
   });
 }

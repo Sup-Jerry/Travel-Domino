@@ -1,12 +1,67 @@
 import { describe, it, expect } from '@ohos/hypium';
+import { EventEntity } from '../main/ets/model/entity/EventEntity';
 import {
+  RecordCorrectionDialog,
   resolveRecordCorrectionBaseTime,
   resolveRecordCorrectionSubmitEndTs,
   shouldRecordCorrectionHasEndTime
 } from '../main/ets/pages/components/dialogs/RecordCorrectionDialog';
 
+class DialogControllerMockRecordCorrection {
+  close(): void {
+  }
+}
+
+interface RecordCorrectionDialogPrivateTest {
+  controller?: DialogControllerMockRecordCorrection;
+  event: EventEntity | null;
+  startTime: Date;
+  endTime: Date;
+  hasEndTime: boolean;
+  aboutToAppear(): void;
+  initialRender(): void;
+  setController(controller: DialogControllerMockRecordCorrection): void;
+  updateStateVars(params: RecordCorrectionDialogParamsTest): void;
+}
+
+interface RecordCorrectionDialogParamsTest {
+  event?: EventEntity | null;
+}
+
 export default function recordCorrectionDialogHelperTest() {
   describe('unit_test_case_generator_autofill_RecordCorrectionDialogHelper', () => {
+    it('combined: record_correction_dialog_set_controller_should_replace_controller_reference', 0, () => {
+      // Arrange
+      const page = new RecordCorrectionDialog(undefined, {} as LocalStorage) as Object as RecordCorrectionDialogPrivateTest;
+      const first = new DialogControllerMockRecordCorrection();
+      const second = new DialogControllerMockRecordCorrection();
+      page.controller = first;
+
+      // Act
+      page.setController(second);
+
+      // Assert
+      expect(page.controller === second).assertTrue();
+    });
+
+    it('combined: record_correction_dialog_update_state_vars_should_replace_event_reference', 0, () => {
+      // Arrange
+      const page = new RecordCorrectionDialog(undefined, {} as LocalStorage) as Object as RecordCorrectionDialogPrivateTest;
+      const firstEvent = new EventEntity('museum', 1);
+      const secondEvent = new EventEntity('hotel', 2);
+      firstEvent.actual_start_time = new Date(2026, 3, 12, 9, 0, 0, 0).getTime();
+      secondEvent.actual_start_time = new Date(2026, 3, 13, 14, 30, 0, 0).getTime();
+      page.event = firstEvent;
+
+      // Act
+      page.updateStateVars({ event: secondEvent });
+      page.aboutToAppear();
+
+      // Assert
+      expect(page.event !== null).assertTrue();
+      expect(page.startTime.getTime()).assertEqual(secondEvent.actual_start_time);
+    });
+
     it('normal: record_correction_base_time_should_use_actual_start_first', 0, () => {
       // Arrange
       const actualStart = 100;
@@ -71,6 +126,47 @@ export default function recordCorrectionDialogHelperTest() {
       // Assert
       expect(base).assertEqual(123);
       expect(submitEnd).assertEqual(456);
+    });
+
+    it('normal: record_correction_dialog_initial_render_should_support_event_with_end_time', 0, () => {
+      // Arrange
+      const page = new RecordCorrectionDialog(undefined, {} as LocalStorage) as Object as RecordCorrectionDialogPrivateTest;
+      const event = new EventEntity('museum', 1);
+      let threw = false;
+
+      // Act
+      event.actual_start_time = new Date(2026, 3, 12, 9, 0, 0, 0).getTime();
+      event.actual_end_time = new Date(2026, 3, 12, 10, 30, 0, 0).getTime();
+      event.dynamic_start_time = new Date(2026, 3, 12, 8, 50, 0, 0).getTime();
+      page.event = event;
+      page.aboutToAppear();
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(page.hasEndTime).assertTrue();
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: record_correction_dialog_initial_render_should_support_missing_event_branch', 0, () => {
+      // Arrange
+      const page = new RecordCorrectionDialog(undefined, {} as LocalStorage) as Object as RecordCorrectionDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.event = null;
+      page.aboutToAppear();
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
   });
 }

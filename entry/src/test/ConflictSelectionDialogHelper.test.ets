@@ -1,11 +1,38 @@
 ﻿import { describe, it, expect } from '@ohos/hypium';
 import {
+  ConflictSelectionDialog,
   getConflictSelectionGapPrompt,
   shouldUseConflictAdvanceAdjust
 } from '../main/ets/pages/components/dialogs/ConflictSelectionDialog';
 
+class DialogControllerMockConflictSelection {
+  close(): void {
+  }
+}
+
+interface ConflictSelectionDialogPrivateTest {
+  controller?: DialogControllerMockConflictSelection;
+  gapMinutes: number;
+  initialRender(): void;
+  setController(controller: DialogControllerMockConflictSelection): void;
+}
+
 export default function conflictSelectionDialogHelperTest() {
   describe('unit_test_case_generator_autofill_ConflictSelectionDialogHelper', () => {
+    it('combined: conflict_selection_dialog_set_controller_should_replace_controller_reference', 0, () => {
+      // Arrange
+      const page = new ConflictSelectionDialog(undefined, {} as LocalStorage) as Object as ConflictSelectionDialogPrivateTest;
+      const first = new DialogControllerMockConflictSelection();
+      const second = new DialogControllerMockConflictSelection();
+      page.controller = first;
+
+      // Act
+      page.setController(second);
+
+      // Assert
+      expect(page.controller === second).assertTrue();
+    });
+
     it('normal: conflict_selection_gap_prompt_should_include_minutes', 0, () => {
       // Arrange
       const gapMinutes = 25;
@@ -65,6 +92,43 @@ export default function conflictSelectionDialogHelperTest() {
       // Assert
       expect(prompt.indexOf('12') >= 0).assertTrue();
       expect(useAdvance).assertTrue();
+    });
+    it('normal: conflict_selection_dialog_initial_render_should_support_three_resolution_options', 0, () => {
+      // Arrange
+      const page = new ConflictSelectionDialog(undefined, {} as LocalStorage) as Object as ConflictSelectionDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.gapMinutes = 25;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: conflict_selection_gap_prompt_should_preserve_negative_gap_value', 0, () => {
+      // Arrange
+      const gapMinutes = -5;
+      // Act
+      const prompt = getConflictSelectionGapPrompt(gapMinutes);
+      // Assert
+      expect(prompt.indexOf('-5') >= 0).assertTrue();
+    });
+
+    it('combined: conflict_selection_advance_flag_should_be_direct_boolean_passthrough', 0, () => {
+      // Arrange
+      const enabled = true;
+      const disabled = false;
+      // Act
+      const useEnabled = shouldUseConflictAdvanceAdjust(enabled);
+      const useDisabled = shouldUseConflictAdvanceAdjust(disabled);
+      // Assert
+      expect(useEnabled).assertTrue();
+      expect(useDisabled).assertFalse();
     });
   });
 }

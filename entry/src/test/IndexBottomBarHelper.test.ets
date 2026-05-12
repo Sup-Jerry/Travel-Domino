@@ -1,8 +1,20 @@
 import { describe, it, expect } from '@ohos/hypium';
+import { IndexBottomBar } from '../main/ets/pages/index/IndexBottomBar';
 import {
   shouldEnableIndexBottomBarAdd,
   shouldEnableIndexBottomBarAi
 } from '../main/ets/pages/index/IndexBottomBar';
+
+interface IndexBottomBarParamsTest {
+  aiEnabled?: boolean;
+  addEnabled?: boolean;
+}
+
+interface IndexBottomBarPrivateTest {
+  aiEnabled: boolean;
+  addEnabled: boolean;
+  updateStateVars(params: IndexBottomBarParamsTest): void;
+}
 
 export default function indexBottomBarHelperTest() {
   describe('unit_test_case_generator_autofill_IndexBottomBarHelper', () => {
@@ -76,6 +88,51 @@ export default function indexBottomBarHelperTest() {
 
       // Assert
       expect(enabledCount).assertEqual(3);
+    });
+
+    it('boundary: bottom_bar_helpers_should_keep_both_buttons_disabled_when_flags_false', 0, () => {
+      // Arrange
+      const ai = false;
+      const add = false;
+
+      // Act
+      const aiResult = shouldEnableIndexBottomBarAi(ai);
+      const addResult = shouldEnableIndexBottomBarAdd(add);
+
+      // Assert
+      expect(aiResult).assertFalse();
+      expect(addResult).assertFalse();
+    });
+
+    it('combined: bottom_bar_helpers_should_keep_both_buttons_enabled_when_flags_true', 0, () => {
+      // Arrange
+      const ai = true;
+      const add = true;
+
+      // Act
+      const aiResult = shouldEnableIndexBottomBarAi(ai);
+      const addResult = shouldEnableIndexBottomBarAdd(add);
+
+      // Assert
+      expect(aiResult).assertTrue();
+      expect(addResult).assertTrue();
+    });
+
+    it('combined: index_bottom_bar_update_state_vars_should_replace_button_flags', 0, () => {
+      // Arrange
+      const page = new IndexBottomBar(undefined, {} as LocalStorage) as Object as IndexBottomBarPrivateTest;
+      page.aiEnabled = true;
+      page.addEnabled = true;
+
+      // Act
+      page.updateStateVars({
+        aiEnabled: false,
+        addEnabled: false
+      });
+
+      // Assert
+      expect(page.aiEnabled).assertFalse();
+      expect(page.addEnabled).assertFalse();
     });
   });
 }

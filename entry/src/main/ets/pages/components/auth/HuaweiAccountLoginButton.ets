@@ -100,3 +100,7 @@ export struct HuaweiAccountLoginButton {
       .height(48);
   }
 }
+
+export function createHuaweiAccountLoginButtonForTest(): Object {
+  return new HuaweiAccountLoginButton(undefined, {} as LocalStorage);
+}

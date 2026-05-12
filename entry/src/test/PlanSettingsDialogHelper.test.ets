@@ -1,12 +1,48 @@
 import { describe, it, expect } from '@ohos/hypium';
 import {
+  PlanSettingsDialog,
   getPlanSettingsActions,
   isPlanSettingsActionSupported,
   isWeatherPreferenceLevelValid
 } from '../main/ets/pages/components/dialogs/PlanSettingsDialog';
 
+class DialogControllerMockPlanSettings {
+  close(): void {
+  }
+}
+
+interface PlanSettingsWeatherPreferenceTest {
+  heatSensitivity: number;
+  rainSensitivity: number;
+  weatherRiskTolerance: number;
+}
+
+interface PlanSettingsDialogPrivateTest {
+  controller?: DialogControllerMockPlanSettings;
+  weatherUserPreference: PlanSettingsWeatherPreferenceTest;
+  weatherPreference: PlanSettingsWeatherPreferenceTest;
+  effectiveTheme: string;
+  aboutToAppear(): void;
+  initialRender(): void;
+  setController(controller: DialogControllerMockPlanSettings): void;
+}
+
 export default function planSettingsDialogHelperTest() {
   describe('unit_test_case_generator_autofill_PlanSettingsDialogHelper', () => {
+    it('combined: plan_settings_dialog_set_controller_should_replace_controller_reference', 0, () => {
+      // Arrange
+      const page = new PlanSettingsDialog(undefined, {} as LocalStorage) as Object as PlanSettingsDialogPrivateTest;
+      const first = new DialogControllerMockPlanSettings();
+      const second = new DialogControllerMockPlanSettings();
+      page.controller = first;
+
+      // Act
+      page.setController(second);
+
+      // Assert
+      expect(page.controller === second).assertTrue();
+    });
+
     it('normal: plan_settings_actions_should_include_share', 0, () => {
       // Arrange
       // Act
@@ -62,6 +98,52 @@ export default function planSettingsDialogHelperTest() {
       // Assert
       expect(supported).assertTrue();
       expect(validLevel).assertTrue();
+    });
+
+    it('normal: plan_settings_dialog_initial_render_should_support_weather_preference_branch', 0, () => {
+      // Arrange
+      const page = new PlanSettingsDialog(undefined, {} as LocalStorage) as Object as PlanSettingsDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.weatherUserPreference = {
+        heatSensitivity: 2,
+        rainSensitivity: 1,
+        weatherRiskTolerance: 0
+      };
+      page.aboutToAppear();
+      page.effectiveTheme = 'dark';
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: plan_settings_dialog_initial_render_should_support_default_preference_branch', 0, () => {
+      // Arrange
+      const page = new PlanSettingsDialog(undefined, {} as LocalStorage) as Object as PlanSettingsDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.weatherUserPreference = {
+        heatSensitivity: 0,
+        rainSensitivity: 0,
+        weatherRiskTolerance: 2
+      };
+      page.aboutToAppear();
+      page.effectiveTheme = 'light';
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
   });
 }

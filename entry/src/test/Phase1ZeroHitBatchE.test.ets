@@ -144,17 +144,19 @@ class AbilityContextMock {
   public destinationLongitude: number = 0;
   public startCallCount: number = 0;
   public shouldRejectStart: boolean = false;
+  public startCallback?: common.AbilityStartCallback;
 
   startAbilityByType(
     type: string,
     params: Record<string, Object>,
-    _callback: common.AbilityStartCallback
+    callback: common.AbilityStartCallback
   ): Promise<void> {
     this.startCallCount += 1;
     this.startType = type;
     this.destinationName = String(params['destinationName'] ?? '');
     this.destinationLatitude = Number(params['destinationLatitude'] ?? 0);
     this.destinationLongitude = Number(params['destinationLongitude'] ?? 0);
+    this.startCallback = callback;
     if (this.shouldRejectStart) {
       return Promise.reject(new Error('start_failed'));
     }
@@ -428,6 +430,24 @@ export default function phase1ZeroHitBatchETest() {
       expect(reached).assertTrue();
       expect(abilityContext.startCallCount).assertEqual(1);
       done();
+    });
+
+    it('regression: navigation_start_should_register_and_execute_error_callback', 0, () => {
+      // Arrange
+      const abilityContext = new AbilityContextMock();
+
+      // Act
+      NavigationHelper.startNavigation(
+        abilityContext as Object as common.UIAbilityContext,
+        'museum',
+        32.0,
+        118.0
+      );
+      (abilityContext.startCallback as common.AbilityStartCallback).onError(500, 'nav_failed', 'panel_error');
+
+      // Assert
+      expect(abilityContext.startCallCount).assertEqual(1);
+      expect((abilityContext.startCallback as Object) !== null).assertTrue();
     });
   });
 }
