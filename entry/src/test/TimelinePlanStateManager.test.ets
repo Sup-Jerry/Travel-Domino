@@ -268,6 +268,44 @@ class FakePlanStateMachineForPlanStateTest {
   }
 }
 
+class IntervalHooksForPlanStateTest {
+  private readonly originSetInterval: Object;
+  private readonly originClearInterval: Object;
+  private readonly callbacks: Map<number, () => void> = new Map<number, () => void>();
+  private nextId: number = 1;
+
+  constructor() {
+    this.originSetInterval = Reflect.get(globalThis, 'setInterval') as Object;
+    this.originClearInterval = Reflect.get(globalThis, 'clearInterval') as Object;
+  }
+
+  public install(): void {
+    Reflect.set(globalThis, 'setInterval', (callback: () => void, _intervalMs: number): number => {
+      const timerId = this.nextId;
+      this.nextId += 1;
+      this.callbacks.set(timerId, callback);
+      return timerId;
+    });
+    Reflect.set(globalThis, 'clearInterval', (timerId: number): void => {
+      this.callbacks.delete(timerId);
+    });
+  }
+
+  public latestTimerId(): number {
+    return this.nextId - 1;
+  }
+
+  public trigger(timerId: number): void {
+    const callback = this.callbacks.get(timerId);
+    callback?.();
+  }
+
+  public restore(): void {
+    Reflect.set(globalThis, 'setInterval', this.originSetInterval);
+    Reflect.set(globalThis, 'clearInterval', this.originClearInterval);
+  }
+}
+
 export default function timelinePlanStateManagerTest() {
   describe('timelinePlanStateManagerTest', () => {
     it('normal: update_plan_date_should_persist_and_refresh_runtime_views', 0, async () => {
@@ -372,6 +410,27 @@ export default function timelinePlanStateManagerTest() {
       expect(machine.evaluateCount > 0).assertTrue();
       expect(machine.transitionUnsubscribeCount).assertEqual(1);
       expect(machine.locationUnsubscribeCount).assertEqual(1);
+    });
+
+    it('boundary: bind_plan_state_timer_should_trigger_runtime_evaluation_callback', 0, () => {
+      // Arrange
+      const hooks = new IntervalHooksForPlanStateTest();
+      hooks.install();
+      const host = new FakeTimelinePlanStateHost();
+      const machine = new FakePlanStateMachineForPlanStateTest();
+      host.planStateMachine = machine as Object as PlanStateMachine;
+      const manager = new TimelinePlanStateManager(host);
+
+      // Act
+      manager.bindPlanState(host.planId);
+      const evaluateCountBeforeTick = machine.evaluateCount;
+      hooks.trigger(hooks.latestTimerId());
+      manager.unbindPlanState();
+      hooks.restore();
+
+      // Assert
+      expect(evaluateCountBeforeTick >= 1).assertTrue();
+      expect(machine.evaluateCount).assertEqual(evaluateCountBeforeTick + 1);
     });
 
     it('boundary: bind_plan_state_should_ignore_non_positive_plan_id', 0, () => {
