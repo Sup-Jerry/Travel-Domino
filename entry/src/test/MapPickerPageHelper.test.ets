@@ -449,6 +449,56 @@ export default function mapPickerPageHelperTest() {
       expect(page.searchResults.length).assertEqual(1);
     });
 
+    it('boundary: map_picker_instance_should_render_ready_branch_loading_panel_when_searching', 0, () => {
+      // Arrange
+      const page = createMapPickerPageForTest() as MapPickerPagePrivateTest;
+      page.mapRuntimeReady = true;
+      page.mapRuntimeChecked = true;
+      page.searchKeyword = 'tower';
+      page.searching = true;
+      page.searchPanelVisible = true;
+      page.searchResults = [];
+      page.currentAddress = 'loading address';
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.searching).assertTrue();
+      expect(page.searchResults.length).assertEqual(0);
+    });
+
+    it('conflict: map_picker_instance_should_render_ready_branch_empty_panel_when_keyword_has_no_matches', 0, () => {
+      // Arrange
+      const page = createMapPickerPageForTest() as MapPickerPagePrivateTest;
+      page.mapRuntimeReady = true;
+      page.mapRuntimeChecked = true;
+      page.searchKeyword = 'missing place';
+      page.searching = false;
+      page.searchPanelVisible = true;
+      page.searchResults = [];
+      page.currentAddress = 'empty address';
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.searching).assertFalse();
+      expect(page.searchKeyword).assertEqual('missing place');
+    });
+
     it('normal: map_picker_instance_run_search_should_apply_latest_results', 0, async () => {
       // Arrange
       const page = createMapPickerPageForTest() as MapPickerPagePrivateTest;
