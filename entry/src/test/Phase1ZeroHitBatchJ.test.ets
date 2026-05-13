@@ -20,6 +20,10 @@ class KeyValuePayload {
   k: string = 'v';
 }
 
+class HttpResponseLikeJ {
+  result: string = '';
+}
+
 class AuthHttpHooksJ {
   private readonly originRequest: Object;
 
@@ -152,6 +156,32 @@ export default function phase1ZeroHitBatchJTest() {
       expect(postError).assertEqual('mock_POST /auth/test-post_fail');
       expect(getError).assertEqual('mock_GET /auth/test-get_fail');
       expect(patchError).assertEqual('mock_PATCH /auth/test-patch_fail');
+    });
+
+    it('normal: auth_api_client_post_should_hit_success_response_logging_path', 0, async () => {
+      // Arrange
+      const client = new AuthApiClient();
+      const hooks = new AuthHttpHooksJ();
+      hooks.setRequest(async (): Promise<Object> => {
+        const response = new HttpResponseLikeJ();
+        response.result = '{"code":0,"message":"ok","requestId":"r-success","data":"payload"}';
+        return Promise.resolve(response);
+      });
+
+      // Act
+      let envelope: ApiEnvelopeLike | null = null;
+      try {
+        envelope = await client.post<string>('/auth/test-success', new KeyValuePayload(), '');
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(envelope !== null).assertTrue();
+      expect((envelope as ApiEnvelopeLike).code).assertEqual(0);
+      expect((envelope as ApiEnvelopeLike).message).assertEqual('ok');
+      expect((envelope as ApiEnvelopeLike).requestId).assertEqual('r-success');
+      expect((envelope as ApiEnvelopeLike).data).assertEqual('payload');
     });
   });
 }
