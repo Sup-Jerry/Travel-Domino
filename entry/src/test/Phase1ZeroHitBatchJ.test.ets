@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@ohos/hypium';
 import { AuthApiClient } from '../main/ets/infrastructure/auth/AuthApiClient';
+import { HttpRequestHelper } from '../main/ets/infrastructure/adapters/HttpRequestHelper';
 
 interface ApiEnvelopeLike {
   code: number;
@@ -17,6 +18,24 @@ class DummyObject {
 
 class KeyValuePayload {
   k: string = 'v';
+}
+
+class AuthHttpHooksJ {
+  private readonly originRequest: Object;
+
+  constructor() {
+    this.originRequest = Reflect.get(HttpRequestHelper as Object, 'request') as Object;
+  }
+
+  setRequest(
+    fn: (ownerTag: string, requestName: string, url: string, options: Object) => Promise<Object>
+  ): void {
+    Reflect.set(HttpRequestHelper as Object, 'request', fn);
+  }
+
+  restore(): void {
+    Reflect.set(HttpRequestHelper as Object, 'request', this.originRequest);
+  }
 }
 
 function getParseBody(client: AuthApiClient): ParseBodyFn {
@@ -105,23 +124,34 @@ export default function phase1ZeroHitBatchJTest() {
     it('combined: auth_api_client_post_get_patch_should_be_callable_and_fail_as_error_messages', 0, async () => {
       // Arrange
       const client = new AuthApiClient();
+      const hooks = new AuthHttpHooksJ();
+      hooks.setRequest(async (_ownerTag: string, requestName: string): Promise<Object> => {
+        return Promise.reject(new Error(`mock_${requestName}_fail`));
+      });
+      let postError = '';
+      let getError = '';
+      let patchError = '';
       // Act
-      const postError = await captureErrorMessage(async (): Promise<Object> => {
-        await client.post<Object>('/auth/test-post', new KeyValuePayload(), '');
-        return new DummyObject();
-      });
-      const getError = await captureErrorMessage(async (): Promise<Object> => {
-        await client.get<Object>('/auth/test-get', 'token');
-        return new DummyObject();
-      });
-      const patchError = await captureErrorMessage(async (): Promise<Object> => {
-        await client.patch<Object>('/auth/test-patch', new KeyValuePayload(), 'token');
-        return new DummyObject();
-      });
+      try {
+        postError = await captureErrorMessage(async (): Promise<Object> => {
+          await client.post<Object>('/auth/test-post', new KeyValuePayload(), '');
+          return new DummyObject();
+        });
+        getError = await captureErrorMessage(async (): Promise<Object> => {
+          await client.get<Object>('/auth/test-get', 'token');
+          return new DummyObject();
+        });
+        patchError = await captureErrorMessage(async (): Promise<Object> => {
+          await client.patch<Object>('/auth/test-patch', new KeyValuePayload(), 'token');
+          return new DummyObject();
+        });
+      } finally {
+        hooks.restore();
+      }
       // Assert
-      expect(postError.length > 0).assertTrue();
-      expect(getError.length > 0).assertTrue();
-      expect(patchError.length > 0).assertTrue();
+      expect(postError).assertEqual('mock_POST /auth/test-post_fail');
+      expect(getError).assertEqual('mock_GET /auth/test-get_fail');
+      expect(patchError).assertEqual('mock_PATCH /auth/test-patch_fail');
     });
   });
 }
