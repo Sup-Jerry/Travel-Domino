@@ -307,6 +307,10 @@ class CompanionWindowMockTest implements CompanionWindowLikeTest {
   }
 }
 
+class CompanionAvoidAreaOptionsMockTest {}
+
+class CompanionWindowSizeMockTest {}
+
 function createCompanionViewInstance(vm: TimelineViewModel, isShow: boolean = true): CompanionViewPrivateTest {
   const overlayParams: IndexCompanionOverlayParamsTest = {
     vm,
@@ -1748,6 +1752,29 @@ export default function companionViewHelperTest() {
       expect(page.safeBottomInset).assertEqual(0);
       expect(page.safeLeftInset).assertEqual(0);
       expect(page.safeRightInset).assertEqual(0);
+    });
+
+    it('combined: companion_view_window_callbacks_should_delegate_to_safe_area_refresh', 0, () => {
+      // Arrange
+      const vm = new CompanionViewVmMockTest();
+      const page = createCompanionViewInstance(vm as Object as TimelineViewModel);
+      const refreshMarks: string[] = [];
+      const avoidAreaChange = Reflect.get(page as Object, 'onWindowAvoidAreaChange') as
+        ((options?: Object) => void) | undefined;
+      const windowSizeChange = Reflect.get(page as Object, 'onWindowSizeChange') as
+        ((size?: Object) => void) | undefined;
+      Reflect.set(page as Object, 'updateSafeAreaInsets', (): void => {
+        refreshMarks.push('refresh');
+      });
+
+      // Act
+      avoidAreaChange?.(new CompanionAvoidAreaOptionsMockTest() as Object);
+      windowSizeChange?.(new CompanionWindowSizeMockTest() as Object);
+
+      // Assert
+      expect(typeof avoidAreaChange).assertEqual('function');
+      expect(typeof windowSizeChange).assertEqual('function');
+      expect(refreshMarks.length).assertEqual(2);
     });
 
     it('combined: index_companion_overlay_initial_render_should_support_visible_overlay_branch', 0, () => {
