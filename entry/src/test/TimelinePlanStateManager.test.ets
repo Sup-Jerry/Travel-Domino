@@ -485,6 +485,29 @@ export default function timelinePlanStateManagerTest() {
       expect(machine.evaluateCount).assertEqual(1);
     });
 
+    it('regression: bind_plan_state_should_complete_plan_when_all_scheduled_events_are_completed', 0, () => {
+      // Arrange
+      const host = new FakeTimelinePlanStateHost();
+      const machine = new FakePlanStateMachineForPlanStateTest();
+      const first = new EventEntity();
+      first.status = 1;
+      first.completion_status = EventEntity.STATE_COMPLETED;
+      const second = new EventEntity();
+      second.status = 1;
+      second.completion_status = EventEntity.STATE_COMPLETED;
+      host.events = [first, second];
+      host.planStateMachine = machine as Object as PlanStateMachine;
+      const manager = new TimelinePlanStateManager(host);
+
+      // Act
+      manager.bindPlanState(host.planId);
+      manager.unbindPlanState();
+
+      // Assert
+      expect(host.currentPlanStatus).assertEqual(PlanStatus.COMPLETED);
+      expect(machine.status).assertEqual(PlanStatus.COMPLETED);
+    });
+
     it('normal: resume_success_should_update_weather_hint_and_recalculate', 0, () => {
       // Arrange
       const host = new FakeTimelinePlanStateHost();
