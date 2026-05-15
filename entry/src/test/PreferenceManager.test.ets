@@ -48,45 +48,80 @@ export default function preferenceManagerTest() {
     });
   });
   describe('unit_test_case_generator_autofill_PreferenceManager', () => {
-    it('normal: td-20260411-auto-PreferenceManager', 0, () => {
+    it('normal: amap_route_api_flag_should_only_accept_true_boolean', 0, () => {
       // Arrange
-      const actual = true;
+      const enabled = PreferenceManager.normalizeAmapRouteApiEnabled(true);
+      const disabledByString = PreferenceManager.normalizeAmapRouteApiEnabled('true');
+
       // Act
-      const passed = actual;
+      const disabledByFalse = PreferenceManager.normalizeAmapRouteApiEnabled(false);
+
       // Assert
-      expect(passed).assertTrue();
+      expect(enabled).assertTrue();
+      expect(disabledByString).assertFalse();
+      expect(disabledByFalse).assertFalse();
     });
-    it('invalid: td-20260411-auto-PreferenceManager', 0, () => {
+
+    it('invalid: ai_poi_count_should_fallback_and_clip_for_invalid_values', 0, () => {
       // Arrange
-      const actual = true;
+      const invalidText = 'oops';
+      const negative = -3;
+      const oversized = 99;
+
       // Act
-      const passed = actual;
+      const fallbackValue = PreferenceManager.normalizeAiPoiCount(invalidText, 4);
+      const minClamped = PreferenceManager.normalizeAiPoiCount(negative, 4);
+      const maxClamped = PreferenceManager.normalizeAiPoiCount(oversized, 4);
+
       // Assert
-      expect(passed).assertTrue();
+      expect(fallbackValue).assertEqual(4);
+      expect(minClamped).assertEqual(1);
+      expect(maxClamped).assertEqual(12);
     });
-    it('conflict: td-20260411-auto-PreferenceManager', 0, () => {
+
+    it('conflict: profile_cache_key_should_use_trimmed_account_id_and_guest_fallback', 0, () => {
       // Arrange
-      const actual = true;
+      const trimmedAccountId = '  acc_conflict  ';
+      const blankAccountId = '   ';
+
       // Act
-      const passed = actual;
+      const trimmedKey = PreferenceManager.buildProfileCacheKey(trimmedAccountId);
+      const blankKey = PreferenceManager.buildProfileCacheKey(blankAccountId);
+
       // Assert
-      expect(passed).assertTrue();
+      expect(trimmedKey).assertEqual('profile_cache_acc_conflict');
+      expect(blankKey).assertEqual('profile_cache_guest_local');
     });
-    it('regression: td-20260411-auto-PreferenceManager', 0, () => {
+
+    it('regression: avatar_profile_key_should_trim_user_id_before_prefixing', 0, () => {
       // Arrange
-      const actual = true;
+      const rawUserId = '  user_regression  ';
+
       // Act
-      const passed = actual;
+      const key = PreferenceManager.buildAvatarProfileKey(rawUserId);
+
       // Assert
-      expect(passed).assertTrue();
+      expect(key).assertEqual('avatarProfile:user_regression');
     });
-    it('combined: td-20260411-auto-PreferenceManager', 0, () => {
+
+    it('combined: preference_normalizers_should_coordinate_theme_weather_and_duration_outputs', 0, () => {
       // Arrange
-      const actual = true;
+      const rawTheme = 'dark';
+      const rawWeatherLevel = 2.9;
+      const rawDuration = 15.7;
+      const rawGap = -100;
+
       // Act
-      const passed = actual;
+      const theme = PreferenceManager.normalizeThemeMode(rawTheme);
+      const weatherLevel = PreferenceManager.normalizeWeatherPreferenceLevel(rawWeatherLevel);
+      const duration = PreferenceManager.normalizeMinEventDuration(rawDuration);
+      const idleGap = PreferenceManager.normalizeIdleGapTriggerMinutes(rawGap);
+
       // Assert
-      expect(passed).assertTrue();
+      expect(theme).assertEqual('dark');
+      expect(weatherLevel).assertEqual(2);
+      expect(duration).assertEqual(15);
+      expect(idleGap).assertEqual(1);
     });
   });
 }
