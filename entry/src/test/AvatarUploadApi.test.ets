@@ -57,45 +57,176 @@ export default function avatarUploadApiTest() {
     });
   });
   describe('unit_test_case_generator_autofill_AvatarUploadApi', () => {
-    it('boundary: td-20260411-auto-AvatarUploadApi', 0, () => {
+    it('boundary: upload_api_should_default_mime_type_when_input_missing', 0, async (done: () => void) => {
       // Arrange
-      const actual = true;
+      let capturedMimeType = '';
+      const uploader = new AvatarUploadApi({
+        getAccessToken: (): string => 'token_boundary',
+        encodeFileToDataUrl: (_fileUriText: string, mimeType: string): string => {
+          capturedMimeType = mimeType;
+          return 'data:image/jpeg;base64,AA==';
+        },
+        updateAvatar: async (_accessToken: string, _imageDataUrl: string, mimeType: string): Promise<AuthApiResponse<UpdateAvatarResult>> => {
+          capturedMimeType = mimeType;
+          const data = new UpdateAvatarResult();
+          const response = new AuthApiResponse<UpdateAvatarResult>(data);
+          response.code = 0;
+          return response;
+        },
+        now: (): number => 1001
+      });
+      const input = new AvatarUploadInput();
+      input.userId = 'u_boundary';
+      input.fileUri = 'file://avatar-boundary.jpg';
+      input.mimeType = '';
+
       // Act
-      const passed = actual;
+      const result = await uploader.uploadAvatar(input);
+
       // Assert
-      expect(passed).assertTrue();
+      expect(String(result.status)).assertEqual('SYNCED');
+      expect(capturedMimeType).assertEqual('image/jpeg');
+      done();
     });
-    it('invalid: td-20260411-auto-AvatarUploadApi', 0, () => {
+
+    it('invalid: upload_api_should_return_local_only_when_gateway_returns_non_zero_code', 0, async (done: () => void) => {
       // Arrange
-      const actual = true;
+      const uploader = new AvatarUploadApi({
+        getAccessToken: (): string => 'token_invalid',
+        encodeFileToDataUrl: (_fileUriText: string, _mimeType: string): string => 'data:image/jpeg;base64,BB==',
+        updateAvatar: async (): Promise<AuthApiResponse<UpdateAvatarResult>> => {
+          const data = new UpdateAvatarResult();
+          const response = new AuthApiResponse<UpdateAvatarResult>(data);
+          response.code = 409;
+          response.message = 'avatar_conflict';
+          return response;
+        },
+        now: (): number => 1002
+      });
+      const input = new AvatarUploadInput();
+      input.userId = 'u_invalid';
+      input.fileUri = 'file://avatar-invalid.jpg';
+
       // Act
-      const passed = actual;
+      const result = await uploader.uploadAvatar(input);
+
       // Assert
-      expect(passed).assertTrue();
+      expect(String(result.status)).assertEqual('LOCAL_ONLY');
+      expect(String(result.errorCode || '')).assertEqual('409');
+      done();
     });
-    it('conflict: td-20260411-auto-AvatarUploadApi', 0, () => {
+
+    it('conflict: upload_api_should_keep_distinct_request_ids_for_back_to_back_calls', 0, async (done: () => void) => {
       // Arrange
-      const actual = true;
+      const uploader = new AvatarUploadApi({
+        getAccessToken: (): string => 'token_conflict',
+        encodeFileToDataUrl: (_fileUriText: string, _mimeType: string): string => 'data:image/jpeg;base64,CC==',
+        updateAvatar: async (): Promise<AuthApiResponse<UpdateAvatarResult>> => {
+          const data = new UpdateAvatarResult();
+          const response = new AuthApiResponse<UpdateAvatarResult>(data);
+          response.code = 0;
+          return response;
+        },
+        now: (() => {
+          let current = 2000;
+          return (): number => {
+            current += 1;
+            return current;
+          };
+        })()
+      });
+      const first = new AvatarUploadInput();
+      first.userId = 'u_conflict_1';
+      first.fileUri = 'file://avatar-1.jpg';
+      const second = new AvatarUploadInput();
+      second.userId = 'u_conflict_2';
+      second.fileUri = 'file://avatar-2.jpg';
+
       // Act
-      const passed = actual;
+      const firstResult = await uploader.uploadAvatar(first);
+      const secondResult = await uploader.uploadAvatar(second);
+
       // Assert
-      expect(passed).assertTrue();
+      expect(String(firstResult.status)).assertEqual('SYNCED');
+      expect(String(secondResult.status)).assertEqual('SYNCED');
+      expect(String(firstResult.requestId)).assertEqual('avatar_req_2001');
+      expect(String(secondResult.requestId)).assertEqual('avatar_req_2002');
+      done();
     });
-    it('regression: td-20260411-auto-AvatarUploadApi', 0, () => {
+
+    it('regression: upload_api_should_wrap_encode_exception_as_upload_exception', 0, async (done: () => void) => {
       // Arrange
-      const actual = true;
+      const uploader = new AvatarUploadApi({
+        getAccessToken: (): string => 'token_regression',
+        encodeFileToDataUrl: (): string => {
+          throw new Error('encode_failed');
+        },
+        now: (): number => 1003
+      });
+      const input = new AvatarUploadInput();
+      input.userId = 'u_regression';
+      input.fileUri = 'file://avatar-regression.jpg';
+
       // Act
-      const passed = actual;
+      const result = await uploader.uploadAvatar(input);
+
       // Assert
-      expect(passed).assertTrue();
+      expect(String(result.status)).assertEqual('LOCAL_ONLY');
+      expect(String(result.errorCode || '')).assertEqual('UPLOAD_EXCEPTION');
+      expect(String(result.requestId)).assertEqual('avatar_req_1003');
+      done();
     });
-    it('combined: td-20260411-auto-AvatarUploadApi', 0, () => {
+
+    it('combined: upload_api_should_mix_sync_failure_and_session_failure_across_multiple_calls', 0, async (done: () => void) => {
       // Arrange
-      const actual = true;
+      let hasToken = true;
+      let gatewayCalls = 0;
+      const uploader = new AvatarUploadApi({
+        getAccessToken: (): string => hasToken ? 'token_combined' : '',
+        encodeFileToDataUrl: (_fileUriText: string, _mimeType: string): string => 'data:image/jpeg;base64,DD==',
+        updateAvatar: async (): Promise<AuthApiResponse<UpdateAvatarResult>> => {
+          gatewayCalls += 1;
+          const data = new UpdateAvatarResult();
+          const response = new AuthApiResponse<UpdateAvatarResult>(data);
+          response.code = gatewayCalls === 1 ? 0 : 503;
+          if (response.code === 0) {
+            data.avatarUrl = 'https://example.com/combined.jpg';
+          }
+          return response;
+        },
+        now: (() => {
+          let current = 3000;
+          return (): number => {
+            current += 10;
+            return current;
+          };
+        })()
+      });
+      const first = new AvatarUploadInput();
+      first.userId = 'u_combined_1';
+      first.fileUri = 'file://avatar-combined-1.jpg';
+      const second = new AvatarUploadInput();
+      second.userId = 'u_combined_2';
+      second.fileUri = 'file://avatar-combined-2.jpg';
+      const third = new AvatarUploadInput();
+      third.userId = 'u_combined_3';
+      third.fileUri = 'file://avatar-combined-3.jpg';
+
       // Act
-      const passed = actual;
+      const firstResult = await uploader.uploadAvatar(first);
+      const secondResult = await uploader.uploadAvatar(second);
+      hasToken = false;
+      const thirdResult = await uploader.uploadAvatar(third);
+
       // Assert
-      expect(passed).assertTrue();
+      expect(String(firstResult.status)).assertEqual('SYNCED');
+      expect(String(firstResult.remoteUrl || '')).assertEqual('https://example.com/combined.jpg');
+      expect(String(secondResult.status)).assertEqual('LOCAL_ONLY');
+      expect(String(secondResult.errorCode || '')).assertEqual('503');
+      expect(String(thirdResult.status)).assertEqual('LOCAL_ONLY');
+      expect(String(thirdResult.errorCode || '')).assertEqual('NO_SESSION');
+      expect(gatewayCalls).assertEqual(2);
+      done();
     });
 
     it('invalid: upload_api_error_message_should_return_unknown_for_non_error_input', 0, () => {
