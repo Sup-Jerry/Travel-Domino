@@ -4,7 +4,7 @@ import { TimelinePlanStateManager, ITimelinePlanStateHost } from '../main/ets/vi
 import { PlanStatus, TransitionTriggerSource } from '../main/ets/domain/statemachine/PlanStatus';
 import { PlanStateMachine } from '../main/ets/domain/statemachine/PlanStateMachine';
 import { WeatherFacade } from '../main/ets/domain/services/WeatherFacade';
-import { WeatherSuggestion, WeatherStageType } from '../main/ets/domain/services/WeatherModels';
+import { WeatherSchedulePolicy, WeatherSuggestion, WeatherStageType } from '../main/ets/domain/services/WeatherModels';
 import { ScheduleOrchestrator } from '../main/ets/viewmodel/internal/ScheduleOrchestrator';
 import {
   ExecutionContext,
@@ -41,6 +41,7 @@ class FakeTimelinePlanStateHost implements ITimelinePlanStateHost {
 
   startSchedulerCount: number = 0;
   stopSchedulerCount: number = 0;
+  refreshExecutionWeatherCount: number = 0;
   recalculateCount: number = 0;
   realtimeCount: number = 0;
   regenerateCount: number = 0;
@@ -50,6 +51,8 @@ class FakeTimelinePlanStateHost implements ITimelinePlanStateHost {
   persistNameCalls: number = 0;
   persistedDate: number = 0;
   persistedName: string = '';
+  lastRefreshTrigger: 'ENTER_EXECUTION' | 'LOCATION_CHANGE' | 'TIMER' | 'MANUAL' | '' = '';
+  lastRefreshStage: WeatherStageType = 'PLANNING';
 
   resolveCurrentWeatherStage(): WeatherStageType {
     return 'PLANNING';
@@ -65,9 +68,12 @@ class FakeTimelinePlanStateHost implements ITimelinePlanStateHost {
 
   async refreshExecutionWeather(
     _forceRefresh?: boolean,
-    _trigger?: 'ENTER_EXECUTION' | 'LOCATION_CHANGE' | 'TIMER' | 'MANUAL',
-    _stage?: WeatherStageType
+    trigger?: 'ENTER_EXECUTION' | 'LOCATION_CHANGE' | 'TIMER' | 'MANUAL',
+    stage?: WeatherStageType
   ): Promise<void> {
+    this.refreshExecutionWeatherCount += 1;
+    this.lastRefreshTrigger = trigger ?? '';
+    this.lastRefreshStage = stage ?? 'PLANNING';
     return;
   }
 
@@ -112,6 +118,24 @@ class FakeTimelinePlanStateHost implements ITimelinePlanStateHost {
   async persistPlanName(_planId: number, name: string): Promise<void> {
     this.persistNameCalls += 1;
     this.persistedName = name;
+  }
+}
+
+class NoLocationTriggerWeatherFacade extends WeatherFacade {
+  public resolveSchedulePolicy(_stage: WeatherStageType): WeatherSchedulePolicy {
+    return {
+      stage: 'READY',
+      pollIntervalMs: 60000,
+      allowLocationTrigger: false,
+      allowManualBypass: true,
+      forceRefreshOnEnter: false
+    };
+  }
+}
+
+class ReadyStageTimelinePlanStateHost extends FakeTimelinePlanStateHost {
+  resolveCurrentWeatherStage(): WeatherStageType {
+    return 'READY';
   }
 }
 
@@ -539,6 +563,80 @@ export default function timelinePlanStateManagerTest() {
       expect(host.persistNameCalls).assertEqual(1);
       expect(host.persistedName).assertEqual('renamed_plan');
       expect(host.planName).assertEqual('renamed_plan');
+    });
+
+    it('boundary: completed_transition_should_stop_scheduler_and_clear_execution_weather_cache', 0, () => {
+      // Arrange
+      const host = new FakeTimelinePlanStateHost();
+      host.weatherFeatureEnabled = true;
+      host.executionWeatherHint = 'cached_hint';
+      host.executionWeatherSuggestions = [{} as WeatherSuggestion];
+      const machine = new FakePlanStateMachineForPlanStateTest();
+      machine.status = PlanStatus.CONFIRMED;
+      host.planStateMachine = machine as Object as PlanStateMachine;
+      const manager = new TimelinePlanStateManager(host);
+
+      // Act
+      manager.bindPlanState(host.planId);
+      machine.emitTransition(PlanStatus.COMPLETED);
+      manager.unbindPlanState();
+
+      // Assert
+      expect(host.currentPlanStatus).assertEqual(PlanStatus.COMPLETED);
+      expect(host.stopSchedulerCount > 0).assertTrue();
+      expect(host.executionWeatherHint).assertEqual('');
+      expect(host.executionWeatherSuggestions.length).assertEqual(0);
+    });
+
+    it('conflict: location_change_should_not_refresh_execution_weather_when_policy_disables_location_trigger', 0, () => {
+      // Arrange
+      const host = new ReadyStageTimelinePlanStateHost();
+      host.weatherFeatureEnabled = true;
+      host.executionWeatherEnabled = true;
+      host.weatherFacade = new NoLocationTriggerWeatherFacade();
+      const machine = new FakePlanStateMachineForPlanStateTest();
+      machine.status = PlanStatus.READY;
+      host.planStateMachine = machine as Object as PlanStateMachine;
+      const manager = new TimelinePlanStateManager(host);
+
+      // Act
+      manager.bindPlanState(host.planId);
+      machine.emitLocation();
+      manager.unbindPlanState();
+
+      // Assert
+      expect(host.refreshExecutionWeatherCount).assertEqual(0);
+      expect(host.lastRefreshTrigger).assertEqual('');
+    });
+
+    it('regression: recover_plan_runtime_state_should_mark_expired_and_partial_context_before_restore', 0, () => {
+      // Arrange
+      const host = new FakeTimelinePlanStateHost();
+      const machine = new FakePlanStateMachineForPlanStateTest();
+      machine.status = PlanStatus.PAUSED;
+      machine.context = {
+        planId: `${host.planId}`,
+        status: PlanStatus.PAUSED,
+        plannedStartTime: Date.now() - 10 * 60 * 1000,
+        plannedEndTime: Date.now() - 5 * 60 * 1000,
+        currentNodeId: '',
+        completedNodeIds: [],
+        skippedNodeIds: [],
+        isAutoStarted: false,
+        isPaused: true,
+        updatedAt: Date.now() - 1000
+      } as ExecutionContext;
+      host.planStateMachine = machine as Object as PlanStateMachine;
+      const manager = new TimelinePlanStateManager(host);
+
+      // Act
+      manager.recoverPlanRuntimeState();
+
+      // Assert
+      expect(machine.recoveryReasons.includes('context_expired')).assertTrue();
+      expect(machine.recoveryReasons.includes('context_partial')).assertTrue();
+      expect(machine.recoveryReasons.includes('context_restored')).assertTrue();
+      expect(host.currentPlanStatus).assertEqual(PlanStatus.PAUSED);
     });
   });
 }
