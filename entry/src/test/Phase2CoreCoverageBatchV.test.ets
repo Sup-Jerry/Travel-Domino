@@ -177,17 +177,26 @@ class ActiveSnapshotForV {
 
 class StaticHooksForV {
   private readonly originFindGlobalActiveEvent: Object;
+  private readonly originUpdateFields: Object;
 
   constructor() {
     this.originFindGlobalActiveEvent = Reflect.get(EventRepositoryImpl, 'findGlobalActiveEvent') as Object;
+    this.originUpdateFields = Reflect.get(EventRepositoryImpl, 'updateFields') as Object;
   }
 
   setFindGlobalActiveEvent(fn: (excludeEventId: number) => Promise<Object | null>): void {
     Reflect.set(EventRepositoryImpl, 'findGlobalActiveEvent', fn);
   }
 
+  setUpdateFields(
+    fn: (id: number, fields: Object[], planId: number) => Promise<void>
+  ): void {
+    Reflect.set(EventRepositoryImpl, 'updateFields', fn);
+  }
+
   restore(): void {
     Reflect.set(EventRepositoryImpl, 'findGlobalActiveEvent', this.originFindGlobalActiveEvent);
+    Reflect.set(EventRepositoryImpl, 'updateFields', this.originUpdateFields);
   }
 }
 
@@ -316,6 +325,110 @@ export default function phase2CoreCoverageBatchVTest() {
       expect(skipTarget.completion_status).assertEqual(EventEntity.STATE_SKIPPED);
       expect(bundle.host.latestReflowHint !== null).assertTrue();
       expect(bundle.host.checkinCount).assertEqual(1);
+    });
+
+    it('normal: timeline_execution_record_start_and_checkout_should_recalculate_and_replace_events_array', 0, async () => {
+      // Arrange
+      const bundle = createBundleForV();
+      const target = createEventForV(30, 'flow_v');
+      bundle.host.events = [target];
+      const beforeStartEvents = bundle.host.events;
+
+      // Act
+      await bundle.service.recordStartTime(target);
+      const afterStartEvents = bundle.host.events;
+      await bundle.service.checkOutEvent(target);
+      const afterEndEvents = bundle.host.events;
+
+      // Assert
+      expect(target.actual_start_time > 0).assertTrue();
+      expect(target.actual_end_time > 0).assertTrue();
+      expect(bundle.host.recalculateCallCount >= 0).assertTrue();
+      expect(beforeStartEvents === afterStartEvents).assertFalse();
+      expect(afterStartEvents === afterEndEvents).assertFalse();
+    });
+
+    it('boundary: timeline_execution_update_actual_time_should_persist_zero_start_without_starting_plan', 0, async () => {
+      // Arrange
+      const bundle = createBundleForV();
+      const hooks = new StaticHooksForV();
+      const target = createEventForV(31, 'zero_start_v');
+      target.actual_start_time = Date.now() - 5_000;
+      bundle.host.events = [target];
+      let updatedId = -1;
+      let updatedPlanId = -1;
+      let updatedFieldName = '';
+      let updatedFieldValue = -1;
+      hooks.setUpdateFields(async (id: number, fields: Object[], planId: number): Promise<void> => {
+        updatedId = id;
+        updatedPlanId = planId;
+        updatedFieldName = String(Reflect.get(fields[0], 'column') ?? '');
+        updatedFieldValue = Number(Reflect.get(fields[0], 'value') ?? -1);
+      });
+
+      try {
+        // Act
+        const ok = await bundle.service.updateActualTime(target.id, 'actual_start_time', 0);
+
+        // Assert
+        expect(ok).assertTrue();
+        expect(updatedId).assertEqual(target.id);
+        expect(updatedPlanId).assertEqual(bundle.host.planId);
+        expect(updatedFieldName).assertEqual('actual_start_time');
+        expect(updatedFieldValue).assertEqual(0);
+        expect(target.actual_start_time).assertEqual(0);
+        expect(bundle.host.planStateMachine.startCount).assertEqual(0);
+      } finally {
+        hooks.restore();
+      }
+    });
+
+    it('invalid: timeline_execution_update_actual_time_should_reject_when_archived_or_mutation_locked', 0, async () => {
+      // Arrange
+      const archivedBundle = createBundleForV();
+      const archivedTarget = createEventForV(32, 'archived_v');
+      archivedBundle.host.events = [archivedTarget];
+      archivedBundle.host.isArchived = true;
+      const lockedBundle = createBundleForV();
+      const lockedTarget = createEventForV(33, 'locked_v');
+      lockedBundle.host.events = [lockedTarget];
+      lockedBundle.host.actualTimeMutationInFlight = true;
+
+      // Act
+      const archivedOk = await archivedBundle.service.updateActualTime(archivedTarget.id, 'actual_start_time', Date.now());
+      const lockedOk = await lockedBundle.service.updateActualTime(lockedTarget.id, 'actual_end_time', Date.now());
+
+      // Assert
+      expect(archivedOk).assertFalse();
+      expect(lockedOk).assertFalse();
+      expect(archivedBundle.host.transitionCallCount).assertEqual(0);
+      expect(lockedBundle.host.transitionCallCount).assertEqual(0);
+    });
+
+    it('combined: timeline_execution_update_actual_time_should_start_plan_and_emit_notification_for_started_event', 0, async () => {
+      // Arrange
+      const bundle = createBundleForV();
+      const target = createEventForV(34, 'startable_v');
+      const nextPending = createEventForV(35, 'next_started_v');
+      nextPending.dynamic_start_time = Date.now() + 15 * 60 * 1000;
+      bundle.host.events = [target, nextPending];
+      const hooks = new StaticHooksForV();
+      hooks.setFindGlobalActiveEvent(async (_excludeEventId: number): Promise<Object | null> => null);
+
+      try {
+        // Act
+        const ok = await bundle.service.updateActualTime(target.id, 'actual_start_time', Date.now());
+
+        // Assert
+        expect(ok).assertTrue();
+        expect(bundle.host.planStateMachine.startCount).assertEqual(1);
+        expect(bundle.host.currentPlanStatus).assertEqual(PlanStatus.IN_PROGRESS);
+        expect(bundle.host.reminderFacade.callCount).assertEqual(1);
+        expect(bundle.host.latestReflowHint !== null).assertTrue();
+        expect(bundle.host.scheduleChangedCount).assertEqual(1);
+      } finally {
+        hooks.restore();
+      }
     });
   });
 }
