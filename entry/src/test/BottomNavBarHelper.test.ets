@@ -535,5 +535,45 @@ export default function bottomNavBarHelperTest() {
       expect(pressed).assertEqual('trash');
       expect(released).assertEqual('');
     });
+
+    it('boundary: global_bottom_nav_navigate_to_should_noop_for_current_tab', 0, async () => {
+      // Arrange
+      const page = new GlobalBottomNavBar(undefined, {} as LocalStorage) as Object as GlobalBottomNavBarPrivateTest;
+      const routedUrls: string[] = [];
+      const fakeRouter = new GlobalBottomNavRouterImplTest(routedUrls);
+      const fakeUiContext = new GlobalBottomNavUIContextImplTest(fakeRouter);
+      page.getUIContext = (): GlobalBottomNavUIContextTest => fakeUiContext;
+      page.currentTab = 'home';
+      let searchCount = 0;
+      page.onSearchTap = async (): Promise<void> => {
+        searchCount += 1;
+      };
+
+      // Act
+      await page.navigateTo('home');
+
+      // Assert
+      expect(routedUrls.length).assertEqual(0);
+      expect(searchCount).assertEqual(0);
+    });
+
+    it('combined: global_bottom_nav_on_tab_touch_should_release_pressed_tab_on_cancel', 0, () => {
+      // Arrange
+      const page = new GlobalBottomNavBar(undefined, {} as LocalStorage) as Object as GlobalBottomNavBarPrivateTest;
+      const routedUrls: string[] = [];
+      const fakeRouter = new GlobalBottomNavRouterImplTest(routedUrls);
+      const fakeUiContext = new GlobalBottomNavUIContextImplTest(fakeRouter);
+      page.getUIContext = (): GlobalBottomNavUIContextTest => fakeUiContext;
+
+      // Act
+      page.onTabTouch('archive', new BottomNavTouchEventTest(TouchType.Down));
+      const pressed = page.pressedTab;
+      page.onTabTouch('archive', new BottomNavTouchEventTest(TouchType.Cancel));
+      const released = page.pressedTab;
+
+      // Assert
+      expect(pressed).assertEqual('archive');
+      expect(released).assertEqual('');
+    });
   });
 }
