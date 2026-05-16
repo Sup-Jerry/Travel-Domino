@@ -377,5 +377,45 @@ export default function gapResolutionDialogHelperTest() {
       expect(dialog.strategy).assertEqual('SMART');
       expect(dialog.selectedIds.has(candidate.id)).assertTrue();
     });
+
+    it('boundary: gap_resolution_select_gap_should_replace_previous_gap_and_clear_stale_selection', 0, () => {
+      // Arrange
+      const vm = new GapVmMockHelper();
+      const dialog = createDialogHelper(vm);
+      const oldGap = buildGapEventHelper(601, 'old-gap', 40, '2026-05-16 09:00');
+      const newGap = buildGapEventHelper(602, 'new-gap', 120, '2026-05-16 14:00');
+      const candidateA = buildGapEventHelper(603, 'aquarium', 0, '2026-05-16 14:30', 35);
+      const candidateB = buildGapEventHelper(604, 'library', 0, '2026-05-16 15:30', 25);
+      vm.distributionCoordinator.candidatesByGapId.set(oldGap.id, [candidateA]);
+      vm.distributionCoordinator.candidatesByGapId.set(newGap.id, [candidateB]);
+      dialog.selectGap(oldGap);
+      dialog.selectedIds = new Set<number>([candidateA.id]);
+
+      // Act
+      dialog.selectGap(newGap);
+
+      // Assert
+      expect(dialog.currentGap?.id ?? -1).assertEqual(newGap.id);
+      expect(dialog.candidates.length).assertEqual(1);
+      expect(dialog.candidates[0].id).assertEqual(candidateB.id);
+      expect(dialog.selectedIds.size).assertEqual(0);
+    });
+
+    it('regression: td-20260516-gap-resolution-tier-thresholds-should-keep-gold-blue-green-split', 0, () => {
+      // Arrange
+      const trigger = 30;
+
+      // Act
+      const goldColor = resolveGapTierColor(150, trigger);
+      const blueColor = resolveGapTierColor(149, trigger);
+      const greenLabel = resolveGapTierLabel(30, trigger);
+      const emptyLabel = resolveGapTierLabel(29, trigger);
+
+      // Assert
+      expect(goldColor).assertEqual('#FFB800');
+      expect(blueColor).assertEqual('#007DFF');
+      expect(greenLabel).assertEqual('\u6548\u7387\u8865\u5168');
+      expect(emptyLabel).assertEqual('');
+    });
   });
 }

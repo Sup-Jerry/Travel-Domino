@@ -6,7 +6,10 @@ import {
 } from '../main/ets/pages/components/dialogs/ConflictSelectionDialog';
 
 class DialogControllerMockConflictSelection {
+  closeCount: number = 0;
+
   close(): void {
+    this.closeCount += 1;
   }
 }
 
@@ -14,7 +17,21 @@ interface ConflictSelectionDialogPrivateTest {
   controller?: DialogControllerMockConflictSelection;
   gapMinutes: number;
   initialRender(): void;
+  build(): void;
   setController(controller: DialogControllerMockConflictSelection): void;
+  OptionCard: (
+    icon: string,
+    title: string,
+    desc: string,
+    bg: string,
+    color: string,
+    action: () => void
+  ) => void;
+  onDelayY: () => void;
+  onCompressX: () => void;
+  onShiftSameDay: () => void;
+  onAdvanceAdjust: () => void;
+  onCancel: () => void;
 }
 
 export default function conflictSelectionDialogHelperTest() {
@@ -172,5 +189,6 @@ export default function conflictSelectionDialogHelperTest() {
       expect(prompt.indexOf('180') >= 0).assertTrue();
       expect(shouldUseConflictAdvanceAdjust(true)).assertTrue();
     });
+
   });
 }

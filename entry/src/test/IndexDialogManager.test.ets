@@ -660,5 +660,53 @@ export default function indexDialogManagerTest() {
         expect(typeof Reflect.get(controllers[i], 'open')).assertEqual('function');
       }
     });
+
+    it('boundary: open_single_date_filter_picker_should_use_plan_start_date_for_dialog_defaults', 0, async (done: Function) => {
+      // Arrange
+      const uiContext = new PickerUiContextMock();
+      const planStartDate = new Date(2026, 5, 2, 0, 0, 0, 0).getTime();
+
+      // Act
+      IndexDialogManager.openSingleDateFilterPicker(
+        uiContext as Object as UIContext,
+        planStartDate,
+        (_dateMs: number): void => {}
+      );
+      await new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => {
+        setTimeout(() => resolve(), 130);
+      });
+
+      // Assert
+      expect(uiContext.showCount).assertEqual(1);
+      expect(uiContext.dialogs[0].start.getTime()).assertEqual(planStartDate);
+      expect(uiContext.dialogs[0].selected.getTime()).assertEqual(planStartDate);
+      expect(uiContext.dialogs[0].end.getTime()).assertEqual(4102416000000);
+      done();
+    });
+
+    it('combined: open_range_end_date_picker_should_keep_start_date_as_dialog_contract_before_accept', 0, () => {
+      // Arrange
+      const uiContext = new PickerUiContextMock();
+      const startDate = new Date(2026, 6, 8, 0, 0, 0, 0);
+      let acceptedStartMs = -1;
+      let acceptedEndMs = -1;
+
+      // Act
+      IndexDialogManager.openRangeEndDatePicker(
+        uiContext as Object as UIContext,
+        startDate,
+        (startMs: number, endMs: number): void => {
+          acceptedStartMs = startMs;
+          acceptedEndMs = endMs;
+        }
+      );
+
+      // Assert
+      expect(uiContext.showCount).assertEqual(1);
+      expect(uiContext.dialogs[0].start.getTime()).assertEqual(startDate.getTime());
+      expect(uiContext.dialogs[0].selected.getTime()).assertEqual(startDate.getTime());
+      expect(acceptedStartMs).assertEqual(-1);
+      expect(acceptedEndMs).assertEqual(-1);
+    });
   });
 }
