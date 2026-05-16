@@ -519,5 +519,125 @@ export default function indexLifecycleHelperTest() {
       expect(startAdaptCount).assertEqual(1);
       done();
     });
+
+    it('conflict: handle_about_to_appear_should_fallback_to_forced_companion_when_reminder_id_invalid', 0, async (done: Function) => {
+      // Arrange
+      const vm = new LifecycleVmMock();
+      const routeParams = new RouteParamsMock();
+      routeParams.planId = 19;
+      routeParams.autoStartFromReminder = true;
+      routeParams.forceCompanionMode = true;
+      routeParams.reminderEventId = 0;
+      let companionModeCount = 0;
+      let tryStartCount = 0;
+
+      // Act
+      IndexLifecycleHelper.handleAboutToAppear({
+        uiContext: new UiContextMock(routeParams) as Object as UIContext,
+        vm: vm as Object as TimelineViewModel,
+        onSetCurrentPlanId: (_planId: number) => {},
+        onSetManualWeatherRefresh: (_value: boolean) => {},
+        onRefreshUnsavedFlag: () => {},
+        onSetPlanTitle: (_title: string) => {},
+        onBindReminderSubscriptions: () => {},
+        onSetStrategyMode: (_mode: number) => {},
+        onLoadStrategyExplanation: () => {},
+        onSetCompanionMode: (_value: boolean) => {
+          companionModeCount += 1;
+        },
+        onTryStartEvent: async (_eventId: number) => {
+          tryStartCount += 1;
+          return true;
+        },
+        onStartArrivalReminderEngine: () => {},
+        onStartStrategyAdaptationCheck: () => {},
+        onInitBacklogExpandedState: async (_planId: number, _isNewPlan: boolean) => {},
+        onLoadDataError: (_reason: string) => {}
+      });
+      await new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => {
+        setTimeout(() => resolve(), 30);
+      });
+
+      // Assert
+      expect(companionModeCount).assertEqual(1);
+      expect(tryStartCount).assertEqual(0);
+      done();
+    });
+
+    it('boundary: handle_about_to_appear_should_pass_false_when_is_new_plan_absent', 0, async (done: Function) => {
+      // Arrange
+      const vm = new LifecycleVmMock();
+      const routeParams = new RouteParamsMock();
+      routeParams.planId = 20;
+      let initPlanId = -1;
+      let initIsNewPlan = true;
+
+      // Act
+      IndexLifecycleHelper.handleAboutToAppear({
+        uiContext: new UiContextMock(routeParams) as Object as UIContext,
+        vm: vm as Object as TimelineViewModel,
+        onSetCurrentPlanId: (_planId: number) => {},
+        onSetManualWeatherRefresh: (_value: boolean) => {},
+        onRefreshUnsavedFlag: () => {},
+        onSetPlanTitle: (_title: string) => {},
+        onBindReminderSubscriptions: () => {},
+        onSetStrategyMode: (_mode: number) => {},
+        onLoadStrategyExplanation: () => {},
+        onSetCompanionMode: (_value: boolean) => {},
+        onTryStartEvent: async (_eventId: number) => true,
+        onStartArrivalReminderEngine: () => {},
+        onStartStrategyAdaptationCheck: () => {},
+        onInitBacklogExpandedState: async (planId: number, isNewPlan: boolean) => {
+          initPlanId = planId;
+          initIsNewPlan = isNewPlan;
+        },
+        onLoadDataError: (_reason: string) => {}
+      });
+      await new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => {
+        setTimeout(() => resolve(), 30);
+      });
+
+      // Assert
+      expect(initPlanId).assertEqual(20);
+      expect(initIsNewPlan).assertFalse();
+      done();
+    });
+
+    it('regression: handle_about_to_appear_should_use_default_title_when_title_is_empty_string', 0, async (done: Function) => {
+      // Arrange
+      const vm = new LifecycleVmMock();
+      const routeParams = new RouteParamsMock();
+      routeParams.planId = 21;
+      routeParams.title = '';
+      let planTitle = '';
+
+      // Act
+      IndexLifecycleHelper.handleAboutToAppear({
+        uiContext: new UiContextMock(routeParams) as Object as UIContext,
+        vm: vm as Object as TimelineViewModel,
+        onSetCurrentPlanId: (_planId: number) => {},
+        onSetManualWeatherRefresh: (_value: boolean) => {},
+        onRefreshUnsavedFlag: () => {},
+        onSetPlanTitle: (title: string) => {
+          planTitle = title;
+        },
+        onBindReminderSubscriptions: () => {},
+        onSetStrategyMode: (_mode: number) => {},
+        onLoadStrategyExplanation: () => {},
+        onSetCompanionMode: (_value: boolean) => {},
+        onTryStartEvent: async (_eventId: number) => true,
+        onStartArrivalReminderEngine: () => {},
+        onStartStrategyAdaptationCheck: () => {},
+        onInitBacklogExpandedState: async (_planId: number, _isNewPlan: boolean) => {},
+        onLoadDataError: (_reason: string) => {}
+      });
+      await new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => {
+        setTimeout(() => resolve(), 30);
+      });
+
+      // Assert
+      expect(planTitle).assertEqual('行程详情');
+      done();
+    });
   });
 }

@@ -297,6 +297,69 @@ export default function companionSearchPageHelperTest() {
       expect(palette.companionCardBg).assertEqual(ThemeCenter.getPalette('dark').companionCardBg);
       expect(palette.primary).assertEqual(ThemeCenter.getPalette('dark').primary);
     });
+
+    it('combined: search_page_render_should_support_hidden_to_visible_result_transition_with_updated_callbacks', 0, () => {
+      // Arrange
+      const page = new CompanionSearchPage(undefined, {} as LocalStorage) as Object as CompanionSearchPagePrivateTest;
+      const initialEvent = buildSearchEvent(6, 'hidden');
+      const nextEvent = buildSearchEvent(7, 'gallery');
+      let clickedId = -1;
+      let searchedKeyword = '';
+      page.setInitiallyProvidedValue({
+        showSearchPage: false,
+        searchKeyword: '',
+        searchResults: [initialEvent],
+        safeTopInset: 0,
+        safeBottomInset: 2
+      });
+      page.updateStateVars({
+        showSearchPage: true,
+        searchKeyword: 'ga',
+        searchResults: [nextEvent],
+        safeTopInset: 9,
+        safeBottomInset: 11
+      });
+      page.getEventStateLabel = (_item: EventEntity): string => '待执行';
+      page.getPlannedRange = (_item: EventEntity): string => '13:00-14:00';
+      page.onSearch = (keyword: string): void => {
+        searchedKeyword = keyword;
+      };
+      page.onResultClick = (item: EventEntity): void => {
+        clickedId = item.id;
+      };
+      page.effectiveTheme = 'light';
+
+      // Act
+      const meta = getCompanionSearchResultMetaText(page.getEventStateLabel(nextEvent), page.getPlannedRange(nextEvent));
+      page.onSearch(page.searchKeyword);
+      page.onResultClick(page.searchResults[0]);
+      const threw = runSearchPageRender(page);
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.showSearchPage).assertTrue();
+      expect(page.searchResults.length).assertEqual(1);
+      expect(page.searchResults[0].id).assertEqual(7);
+      expect(searchedKeyword).assertEqual('ga');
+      expect(clickedId).assertEqual(7);
+      expect(meta).assertEqual('待执行 | 13:00-14:00');
+    });
+
+    it('boundary: search_meta_text_should_preserve_separator_when_state_and_range_are_blank', 0, () => {
+      // Arrange
+      const state = '';
+      const range = '';
+
+      // Act
+      const text = getCompanionSearchResultMetaText(state, range);
+      const emptyState = shouldShowCompanionSearchEmptyState(0);
+      const hiddenPage = shouldShowCompanionSearchPage(false);
+
+      // Assert
+      expect(text).assertEqual(' | ');
+      expect(emptyState).assertTrue();
+      expect(hiddenPage).assertFalse();
+    });
   });
 }
 
