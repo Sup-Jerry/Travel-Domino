@@ -10,6 +10,9 @@ describe('Ai DTO Validation', () => {
   });
 
   it('normal: should pass_validation_for_valid_chat_completions_payload', async () => {
+    // Arrange
+    // Act
+    // Assert
     const dto = plainToInstance(AiChatCompletionsDto, {
       messages: [{ role: 'system', content: 'guard' }, { role: 'user', content: 'hello' }],
       max_tokens: 256,
@@ -26,6 +29,9 @@ describe('Ai DTO Validation', () => {
   });
 
   it('boundary: should allow_optional_fields_to_be_omitted', async () => {
+    // Arrange
+    // Act
+    // Assert
     const dto = plainToInstance(AiChatCompletionsDto, {
       messages: [makeMessage()]
     });
@@ -36,6 +42,9 @@ describe('Ai DTO Validation', () => {
   });
 
   it('invalid: should fail_when_messages_is_not_array', async () => {
+    // Arrange
+    // Act
+    // Assert
     const dto = plainToInstance(AiChatCompletionsDto, {
       messages: 'bad'
     });
@@ -47,6 +56,9 @@ describe('Ai DTO Validation', () => {
   });
 
   it('conflict: should_fail_when_nested_message_shape_is_invalid', async () => {
+    // Arrange
+    // Act
+    // Assert
     const dto = plainToInstance(AiChatCompletionsDto, {
       messages: [{ role: 1, content: null }]
     });
@@ -59,6 +71,9 @@ describe('Ai DTO Validation', () => {
   });
 
   it('regression: should_fail_when_response_format_type_is_not_json_object', async () => {
+    // Arrange
+    // Act
+    // Assert
     const dto = plainToInstance(AiChatCompletionsDto, {
       messages: [makeMessage()],
       response_format: { type: 'text' }
@@ -71,6 +86,9 @@ describe('Ai DTO Validation', () => {
   });
 
   it('combined: should_report_multiple_invalid_optional_fields_in_same_payload', async () => {
+    // Arrange
+    // Act
+    // Assert
     const dto = plainToInstance(AiChatCompletionsDto, {
       messages: [makeMessage()],
       max_tokens: 0,
@@ -86,6 +104,9 @@ describe('Ai DTO Validation', () => {
   });
 
   it('boundary: should_allow_max_tokens_at_upper_limit', async () => {
+    // Arrange
+    // Act
+    // Assert
     const dto = plainToInstance(AiChatCompletionsDto, {
       messages: [makeMessage()],
       max_tokens: 8192

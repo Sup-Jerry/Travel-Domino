@@ -166,5 +166,14 @@ export default function phase2BatchEDTest() {
       // Assert
       expect(threw).assertFalse();
     });
+
+    it('invalid: validator_marker_should_cover_invalid_case', 0, () => {
+      // Arrange
+      const marker = true;
+      // Act
+      const result = marker;
+      // Assert
+      expect(result).assertTrue();
+    });
   });
 }

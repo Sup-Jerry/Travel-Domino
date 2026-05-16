@@ -55,6 +55,9 @@ describe('unit_test_case_generator_autofill_ai_service', () => {
   });
 
   it('normal: map_ai_upstream_http_error_should_match_deepseek_status_codes', () => {
+    // Arrange
+    // Act
+    // Assert
     expect(mapAiUpstreamHttpError(400)).toBe('AI_DEEPSEEK_BAD_REQUEST');
     expect(mapAiUpstreamHttpError(401)).toBe('AI_DEEPSEEK_AUTH_FAILED');
     expect(mapAiUpstreamHttpError(402)).toBe('AI_DEEPSEEK_INSUFFICIENT_BALANCE');
@@ -65,18 +68,30 @@ describe('unit_test_case_generator_autofill_ai_service', () => {
   });
 
   it('boundary: map_ai_upstream_http_error_should_fallback_for_zero_status', () => {
+    // Arrange
+    // Act
+    // Assert
     expect(mapAiUpstreamHttpError(0)).toBe('AI_UPSTREAM_HTTP_0');
   });
 
   it('invalid: map_ai_upstream_http_error_should_fallback_for_negative_status', () => {
+    // Arrange
+    // Act
+    // Assert
     expect(mapAiUpstreamHttpError(-1)).toBe('AI_UPSTREAM_HTTP_-1');
   });
 
   it('conflict: map_ai_upstream_http_error_should_not_use_deepseek_map_for_unknown_5xx', () => {
+    // Arrange
+    // Act
+    // Assert
     expect(mapAiUpstreamHttpError(599)).toBe('AI_UPSTREAM_HTTP_599');
   });
 
   it('regression: chat_completions_should_reject_empty_messages', async () => {
+    // Arrange
+    // Act
+    // Assert
     const service = buildService();
     const dto = { messages: [] } as AiChatCompletionsDto;
 
@@ -85,6 +100,9 @@ describe('unit_test_case_generator_autofill_ai_service', () => {
   });
 
   it('combined: chat_completions_should_build_payload_with_optional_fields_and_parse_json', async () => {
+    // Arrange
+    // Act
+    // Assert
     const service = buildService();
     const dto: AiChatCompletionsDto = {
       messages: [{ role: 'system', content: 's' }, { role: 'user', content: 'u' }],
@@ -117,6 +135,9 @@ describe('unit_test_case_generator_autofill_ai_service', () => {
   });
 
   it('boundary: chat_completions_should_use_default_max_tokens_and_omit_optional_fields', async () => {
+    // Arrange
+    // Act
+    // Assert
     const service = buildService();
     const dto = makeDto();
     const postJson = jest.spyOn(service as any, 'postJson').mockResolvedValue({
@@ -137,6 +158,9 @@ describe('unit_test_case_generator_autofill_ai_service', () => {
   });
 
   it('invalid: chat_completions_should_map_upstream_http_error_to_bad_gateway', async () => {
+    // Arrange
+    // Act
+    // Assert
     const service = buildService();
     jest.spyOn(service as any, 'postJson').mockResolvedValue({ statusCode: 429, body: '{"error":true}' });
 
@@ -145,6 +169,9 @@ describe('unit_test_case_generator_autofill_ai_service', () => {
   });
 
   it('conflict: chat_completions_should_fallback_unknown_http_status_code', async () => {
+    // Arrange
+    // Act
+    // Assert
     const service = buildService();
     jest.spyOn(service as any, 'postJson').mockResolvedValue({ statusCode: 418, body: 'teapot' });
 
@@ -152,6 +179,9 @@ describe('unit_test_case_generator_autofill_ai_service', () => {
   });
 
   it('regression: chat_completions_should_throw_invalid_json_when_upstream_body_is_not_json', async () => {
+    // Arrange
+    // Act
+    // Assert
     const service = buildService();
     jest.spyOn(service as any, 'postJson').mockResolvedValue({ statusCode: 200, body: 'not-json' });
 
@@ -159,6 +189,9 @@ describe('unit_test_case_generator_autofill_ai_service', () => {
   });
 
   it('normal: post_json_should_send_https_request_and_collect_chunks', async () => {
+    // Arrange
+    // Act
+    // Assert
     const service = buildService();
     const request = new MockRequest();
     let optionsSnapshot: RequestOptionsSnapshot | null = null;
@@ -195,6 +228,9 @@ describe('unit_test_case_generator_autofill_ai_service', () => {
   });
 
   it('boundary: post_json_should_use_explicit_port_when_upstream_url_contains_port', async () => {
+    // Arrange
+    // Act
+    // Assert
     const service = buildService();
     let optionsSnapshot: RequestOptionsSnapshot | null = null;
     jest.spyOn(https, 'request').mockImplementation(((options: RequestOptionsSnapshot, callback: (res: EventEmitter & { statusCode?: number }) => void) => {
@@ -215,6 +251,9 @@ describe('unit_test_case_generator_autofill_ai_service', () => {
   });
 
   it('boundary: post_json_should_default_status_code_to_500_when_upstream_response_has_no_status', async () => {
+    // Arrange
+    // Act
+    // Assert
     const service = buildService();
     jest.spyOn(https, 'request').mockImplementation((((_options: RequestOptionsSnapshot, callback: (res: EventEmitter & { statusCode?: number }) => void) => {
       const response = new EventEmitter() as EventEmitter & { statusCode?: number };
@@ -229,18 +268,27 @@ describe('unit_test_case_generator_autofill_ai_service', () => {
   });
 
   it('invalid: post_json_should_reject_invalid_url', async () => {
+    // Arrange
+    // Act
+    // Assert
     const service = buildService();
 
     await expect((service as any).postJson('not-a-url', '{}', config.aiUpstreamKey)).rejects.toThrow('AI_UPSTREAM_URL_INVALID');
   });
 
   it('invalid: post_json_should_reject_non_https_url', async () => {
+    // Arrange
+    // Act
+    // Assert
     const service = buildService();
 
     await expect((service as any).postJson('http://example.com/a', '{}', config.aiUpstreamKey)).rejects.toThrow('AI_UPSTREAM_URL_NOT_HTTPS');
   });
 
   it('conflict: post_json_should_reject_request_errors', async () => {
+    // Arrange
+    // Act
+    // Assert
     const service = buildService();
     jest.spyOn(https, 'request').mockImplementation((((_options: RequestOptionsSnapshot, _callback: (res: EventEmitter & { statusCode?: number }) => void) => {
       const request = new MockRequest();
@@ -252,6 +300,9 @@ describe('unit_test_case_generator_autofill_ai_service', () => {
   });
 
   it('combined: post_json_should_reject_timeout_once_and_destroy_request', async () => {
+    // Arrange
+    // Act
+    // Assert
     const service = buildService();
     const request = new MockRequest();
     const response = new EventEmitter() as EventEmitter & { statusCode?: number };

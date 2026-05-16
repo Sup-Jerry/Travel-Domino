@@ -1,4 +1,4 @@
-﻿import { BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
 import { AuthService } from '../src/modules/auth/auth.service';
 import { GuestCreateDto, SocialLoginDto, UpdateAvatarDto } from '../src/modules/auth/dto/auth.dto';
@@ -146,6 +146,9 @@ describe('auth_service_core_branch_cover', () => {
   });
 
   it('boundary: social_login_should_use_empty_credential_object_when_dto_credential_missing', async () => {
+    // Arrange
+    // Act
+    // Assert
     const pg = new PgServiceMock();
     const service = createService(pg);
     const dto = {
@@ -157,6 +160,9 @@ describe('auth_service_core_branch_cover', () => {
   });
 
   it('boundary: social_login_should_support_id_token_as_provider_uid_source', async () => {
+    // Arrange
+    // Act
+    // Assert
     const pg = new PgServiceMock();
     const service = createService(pg);
     const dto = createSocialDto('HUAWEI', '', '', '');
@@ -424,6 +430,9 @@ describe('auth_service_core_branch_cover', () => {
   });
 
   it('regression: social_login_should_wrap_unknown_query_failure_with_internal_phase_code', async () => {
+    // Arrange
+    // Act
+    // Assert
     const pg = new PgServiceMock();
     const service = createService(pg);
     const dto = createSocialDto('HUAWEI', '', 'open_x', '');
@@ -437,6 +446,9 @@ describe('auth_service_core_branch_cover', () => {
   });
 
   it('regression: social_login_should_map_non_error_failures_to_unknown_reason', async () => {
+    // Arrange
+    // Act
+    // Assert
     const pg = new PgServiceMock();
     const service = createService(pg);
     const dto = createSocialDto('HUAWEI', '', 'open_primitive', '');
@@ -448,6 +460,9 @@ describe('auth_service_core_branch_cover', () => {
   });
 
   it('boundary: issue_session_should_use_default_pg_executor_when_query_executor_missing', async () => {
+    // Arrange
+    // Act
+    // Assert
     const pg = new PgServiceMock();
     const service = createService(pg);
     const internals = service as unknown as {
@@ -472,6 +487,9 @@ describe('auth_service_core_branch_cover', () => {
   });
 
   it('boundary: load_profile_should_fallback_default_login_method_to_guest_when_row_empty', async () => {
+    // Arrange
+    // Act
+    // Assert
     const pg = new PgServiceMock();
     const service = createService(pg);
     const internals = service as unknown as {
@@ -496,6 +514,9 @@ describe('auth_service_core_branch_cover', () => {
   });
 
   it('boundary: social_login_should_fallback_empty_identity_fields_when_existing_row_has_blanks', async () => {
+    // Arrange
+    // Act
+    // Assert
     const pg = new PgServiceMock();
     const service = createService(pg);
     const dto = createSocialDto('HUAWEI', '', 'open_blank', '');
@@ -525,6 +546,9 @@ describe('auth_service_core_branch_cover', () => {
   });
 
   it('boundary: social_login_should_fallback_open_id_to_empty_string_when_existing_identity_updates', async () => {
+    // Arrange
+    // Act
+    // Assert
     const pg = new PgServiceMock();
     const service = createService(pg);
     const dto = createSocialDto('HUAWEI', 'code_only', '', 'union_keep');
@@ -543,6 +567,9 @@ describe('auth_service_core_branch_cover', () => {
   });
 
   it('invalid: update_username_should_reject_illegal_characters', async () => {
+    // Arrange
+    // Act
+    // Assert
     const pg = new PgServiceMock();
     const service = createService(pg);
     const token = makeAccessToken('u_name_2', 's_name_2');
@@ -554,6 +581,9 @@ describe('auth_service_core_branch_cover', () => {
   });
 
   it('boundary: username_and_avatar_internal_normalizers_should_fallback_when_raw_value_or_mime_missing', () => {
+    // Arrange
+    // Act
+    // Assert
     const service = createService(new PgServiceMock());
     const internals = service as unknown as {
       normalizeAndValidateUsername(rawValue: string | undefined): string;
@@ -572,6 +602,9 @@ describe('auth_service_core_branch_cover', () => {
   });
 
   it('combined: update_avatar_should_accept_webp_and_reject_oversized_payload', async () => {
+    // Arrange
+    // Act
+    // Assert
     const validPg = new PgServiceMock();
     const validService = createService(validPg);
     const validToken = makeAccessToken('u_avatar_webp', 's_avatar_webp');
@@ -600,6 +633,9 @@ describe('auth_service_core_branch_cover', () => {
   });
 
   it('boundary: issue_session_and_load_profile_should_use_default_executor_fallbacks', async () => {
+    // Arrange
+    // Act
+    // Assert
     const pg = new PgServiceMock();
     const service = createService(pg);
     const internals = service as unknown as {

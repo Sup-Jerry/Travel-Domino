@@ -23,6 +23,7 @@ function buildPhase2BatchFTEvent(id: number, name: string, address: string = '')
 export default function phase2BatchFTTest() {
   describe('unit_test_case_generator_autofill_Phase2BatchFT_companion_view_pure_helpers', () => {
     it('normal: companion_overlay_and_back_helpers_should_follow_overlay_control_and_exit_paths', 0, () => {
+      // Act
       // Arrange
       const overlayVisible = isCompanionOverlayVisible(true, false, false);
       const overlayLevel = resolveCompanionBackLevel(false, true, false, 'immersive');

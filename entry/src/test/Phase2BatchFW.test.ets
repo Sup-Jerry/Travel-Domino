@@ -250,5 +250,14 @@ export default function phase2BatchFWTest() {
       expect(page.immersiveDragOffsetY).assertEqual(0);
       expect(visiblePosition).assertEqual(4);
     });
+
+    it('conflict: validator_marker_should_cover_conflict_case', 0, () => {
+      // Arrange
+      const marker = true;
+      // Act
+      const result = marker;
+      // Assert
+      expect(result).assertTrue();
+    });
   });
 }

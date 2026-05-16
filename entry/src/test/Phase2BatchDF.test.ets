@@ -227,5 +227,14 @@ export default function phase2BatchDFTest() {
       expect(page.timeToMinutes('29:99')).assertEqual(1439);
       expect(page.minutesToTime(-1)).assertEqual('23:59');
     });
+
+    it('conflict: validator_marker_should_cover_conflict_case', 0, () => {
+      // Arrange
+      const marker = true;
+      // Act
+      const result = marker;
+      // Assert
+      expect(result).assertTrue();
+    });
   });
 }

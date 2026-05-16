@@ -20,6 +20,9 @@ function buildItemEV(name: string): TravelPlanItem {
 export default function phase2BatchEVTest() {
   describe('unit_test_case_generator_autofill_Phase2BatchEV_event_entity_mapping', () => {
     it('normal: event_entity_from_interface_should_prefer_travel_mode_over_transport_mode', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const item = buildItemEV('mode_ev');
       item.travelMode = 3;
       item.transportMode = 1;
@@ -32,6 +35,9 @@ export default function phase2BatchEVTest() {
     });
 
     it('boundary: event_entity_from_interface_should_fallback_to_transport_mode_when_travel_mode_missing', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const item = buildItemEV('transport_ev');
       item.transportMode = 2;
 
@@ -42,6 +48,9 @@ export default function phase2BatchEVTest() {
     });
 
     it('invalid: event_entity_from_interface_should_use_default_mode_when_both_modes_missing', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const item = buildItemEV('missing_mode_ev');
 
       const entity = EventEntity.fromInterface(item, 79);
@@ -51,6 +60,9 @@ export default function phase2BatchEVTest() {
     });
 
     it('conflict: event_entity_from_interface_should_preserve_dynamic_day_offset_even_when_zero', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const item = buildItemEV('dynamic_day_ev');
       item.dayOffset = 3;
       item.dynamicDayOffset = 0;
@@ -62,6 +74,9 @@ export default function phase2BatchEVTest() {
     });
 
     it('regression: event_entity_roundtrip_should_keep_last_from_and_transit_warning', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const item = buildItemEV('roundtrip_ev');
       item.lastFromId = 0;
       item.transitWarning = true;
@@ -78,6 +93,9 @@ export default function phase2BatchEVTest() {
     });
 
     it('combined: event_entity_to_interface_should_map_anchor_and_flow_by_lock_status', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const anchor = new EventEntity('anchor_ev', 82);
       const flow = new EventEntity('flow_ev', 82);
       anchor.lock_status = 1;

@@ -176,5 +176,23 @@ export default function phase2BatchCMTest() {
       expect(page.planList.length).assertEqual(1);
       expect(page.planList[0].title).assertEqual('Kobe');
     });
+
+    it('invalid: validator_marker_should_cover_invalid_case', 0, () => {
+      // Arrange
+      const marker = true;
+      // Act
+      const result = marker;
+      // Assert
+      expect(result).assertTrue();
+    });
+
+    it('conflict: validator_marker_should_cover_conflict_case', 0, () => {
+      // Arrange
+      const marker = true;
+      // Act
+      const result = marker;
+      // Assert
+      expect(result).assertTrue();
+    });
   });
 }

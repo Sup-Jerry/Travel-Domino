@@ -70,6 +70,9 @@ class MapsInitializerHooksET {
 export default function phase2BatchETTest() {
   describe('unit_test_case_generator_autofill_Phase2BatchET_add_item_runtime', () => {
     it('normal: add_item_native_runtime_should_report_ready_when_sdk_version_exists', 0, async (done: Function) => {
+      // Arrange
+      // Act
+      // Assert
       const hooks = new MapsInitializerHooksET();
       const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateET;
       hooks.setGetVersion((): string => '9.8.7');
@@ -82,6 +85,9 @@ export default function phase2BatchETTest() {
     });
 
     it('boundary: add_item_native_runtime_should_report_not_ready_when_sdk_version_blank', 0, async (done: Function) => {
+      // Arrange
+      // Act
+      // Assert
       const hooks = new MapsInitializerHooksET();
       const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateET;
       hooks.setGetVersion((): string => '   ');
@@ -94,6 +100,9 @@ export default function phase2BatchETTest() {
     });
 
     it('invalid: add_item_native_runtime_should_report_not_ready_when_sdk_probe_throws', 0, async (done: Function) => {
+      // Arrange
+      // Act
+      // Assert
       const hooks = new MapsInitializerHooksET();
       const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateET;
       hooks.setGetVersion((): string => {
@@ -108,6 +117,9 @@ export default function phase2BatchETTest() {
     });
 
     it('conflict: add_item_toast_and_map_picker_guard_should_stay_independent', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateET;
       let threw = false;
 
@@ -125,6 +137,9 @@ export default function phase2BatchETTest() {
     });
 
     it('combined: add_item_initial_render_should_support_new_backlog_loading_state', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateET;
       let threw = false;
 
@@ -170,6 +185,9 @@ export default function phase2BatchETTest() {
     });
 
     it('regression: add_item_initial_render_should_support_edit_schedule_branch_with_anchor', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateET;
       let threw = false;
 

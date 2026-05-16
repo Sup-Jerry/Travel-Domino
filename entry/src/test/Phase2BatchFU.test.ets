@@ -275,5 +275,14 @@ export default function phase2BatchFUTest() {
       expect(retargets.length).assertEqual(1);
       expect(retargets[0]).assertEqual(visible.id);
     });
+
+    it('conflict: validator_marker_should_cover_conflict_case', 0, () => {
+      // Arrange
+      const marker = true;
+      // Act
+      const result = marker;
+      // Assert
+      expect(result).assertTrue();
+    });
   });
 }

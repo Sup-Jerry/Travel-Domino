@@ -133,6 +133,9 @@ describe('Auth DTO Validation', () => {
   });
 
   it('boundary: should allow_social_login_with_access_token_only_credential', async () => {
+    // Arrange
+    // Act
+    // Assert
     const social = Object.assign(new SocialLoginDto(), {
       providerType: 'HUAWEI',
       credential: Object.assign(new SocialCredentialDto(), {

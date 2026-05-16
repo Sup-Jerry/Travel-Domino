@@ -114,6 +114,9 @@ describe('unit_test_case_generator_autofill_pg_service', () => {
   });
 
   it('boundary: pg_service_query_should_default_params_to_empty_array_when_omitted', async () => {
+    // Arrange
+    // Act
+    // Assert
     const service = new PgService(new AppConfigService());
     const query = jest.fn<Promise<MockQueryResult>, [string, unknown[]]>().mockResolvedValue({ rowCount: 0, rows: [] });
     (service as unknown as { pool: { query: typeof query } }).pool = { query };
@@ -124,6 +127,9 @@ describe('unit_test_case_generator_autofill_pg_service', () => {
   });
 
   it('boundary: pg_service_constructor_should_use_numeric_pool_size_from_env', async () => {
+    // Arrange
+    // Act
+    // Assert
     process.env.PG_POOL_SIZE = '7';
     const config = new AppConfigService();
     const service = new PgService(config) as unknown as {
@@ -135,6 +141,9 @@ describe('unit_test_case_generator_autofill_pg_service', () => {
   });
 
   it('boundary: pg_service_constructor_should_fallback_when_pool_size_is_zero_string', async () => {
+    // Arrange
+    // Act
+    // Assert
     process.env.PG_POOL_SIZE = '0';
     const config = new AppConfigService();
     const service = new PgService(config) as unknown as {

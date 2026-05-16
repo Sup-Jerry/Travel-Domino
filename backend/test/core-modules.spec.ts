@@ -118,6 +118,9 @@ describe('Core Modules Metadata', () => {
   });
 
   it('boundary: app_config_module_should_export_both_config_and_pg_services_without_imports', () => {
+    // Arrange
+    // Act
+    // Assert
     const providers = getProviders(AppConfigModule);
     const exports = getExports(AppConfigModule);
     const imports = getImports(AppConfigModule);

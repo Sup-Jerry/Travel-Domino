@@ -67,6 +67,9 @@ class AddDialogControllerMockEU {
 export default function phase2BatchEUTest() {
   describe('unit_test_case_generator_autofill_Phase2BatchEU_add_item_extra', () => {
     it('normal: add_item_about_to_appear_should_use_suggested_time_and_new_item_pretravel', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateEU;
 
       page.globalDefaultDuration = 50;
@@ -95,6 +98,9 @@ export default function phase2BatchEUTest() {
     });
 
     it('boundary: add_item_time_helpers_should_keep_duration_when_end_not_after_start', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateEU;
 
       page.duration = 70;
@@ -108,6 +114,9 @@ export default function phase2BatchEUTest() {
     });
 
     it('invalid: add_item_apply_time_string_should_ignore_invalid_extracted_parts', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateEU;
       const target = new Date(2026, 3, 10, 9, 5, 0, 0);
 
@@ -121,6 +130,9 @@ export default function phase2BatchEUTest() {
     });
 
     it('conflict: add_item_coordinate_storage_and_mode_helpers_should_keep_rules_independent', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const mode = resolveAddItemMode('spot', false);
       const duration = resolveAddItemDuration(0, 35);
       const key = resolveAddItemScopedStorageKey('pickedLocationStr', -2);
@@ -135,6 +147,9 @@ export default function phase2BatchEUTest() {
     });
 
     it('regression: add_item_palette_and_private_accessors_should_follow_dark_theme_and_scope', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateEU;
 
       page.effectiveTheme = 'dark';
@@ -153,6 +168,9 @@ export default function phase2BatchEUTest() {
     });
 
     it('combined: add_item_initial_render_should_support_edit_backlog_branch_with_max_name_length', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateEU;
       let threw = false;
 
@@ -196,6 +214,9 @@ export default function phase2BatchEUTest() {
     });
 
     it('combined: add_item_initial_render_should_support_schedule_branch_with_geocoding_idle_state', 0, () => {
+      // Arrange
+      // Act
+      // Assert
       const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateEU;
       let threw = false;
 

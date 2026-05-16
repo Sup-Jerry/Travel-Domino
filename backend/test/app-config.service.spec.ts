@@ -137,6 +137,9 @@ describe('unit_test_case_generator_autofill_app_config_service', () => {
   });
 
   it('boundary: app_config_should_ignore_invalid_local_env_lines_and_keep_first_value', () => {
+    // Arrange
+    // Act
+    // Assert
     const existsSpy = jest.spyOn(fs, 'existsSync')
       .mockImplementation((filePath: fs.PathLike) => String(filePath).endsWith('.env'));
     const readSpy = jest.spyOn(fs, 'readFileSync')
@@ -154,6 +157,9 @@ describe('unit_test_case_generator_autofill_app_config_service', () => {
   });
 
   it('boundary: app_config_should_use_explicit_fallback_when_read_env_called_without_second_arg', () => {
+    // Arrange
+    // Act
+    // Assert
     const service = new AppConfigService() as unknown as {
       readEnv(key: string): string;
     };
@@ -164,6 +170,9 @@ describe('unit_test_case_generator_autofill_app_config_service', () => {
   });
 
   it('boundary: app_config_should_fallback_model_when_config_value_is_blank_after_trim', () => {
+    // Arrange
+    // Act
+    // Assert
     (AppConfigService as any).localEnv = new Map<string, string>([['AI_UPSTREAM_MODEL', '   ']]);
     const service = new AppConfigService();
 
@@ -171,6 +180,9 @@ describe('unit_test_case_generator_autofill_app_config_service', () => {
   });
 
   it('boundary: app_config_should_trim_non_empty_ai_upstream_model_value', () => {
+    // Arrange
+    // Act
+    // Assert
     (AppConfigService as any).localEnv = new Map<string, string>([['AI_UPSTREAM_MODEL', '  deepseek-reasoner  ']]);
     const service = new AppConfigService();
 
@@ -178,6 +190,9 @@ describe('unit_test_case_generator_autofill_app_config_service', () => {
   });
 
   it('boundary: app_config_should_prefer_non_empty_local_env_over_process_env', () => {
+    // Arrange
+    // Act
+    // Assert
     (AppConfigService as any).localEnv = new Map<string, string>([
       ['JWT_SECRET', 'local_secret'],
       ['AI_UPSTREAM_KEY', 'local_ai_key']

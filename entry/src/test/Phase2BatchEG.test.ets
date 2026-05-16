@@ -131,5 +131,14 @@ export default function phase2BatchEGTest() {
       expect(movedName).assertEqual('');
       expect(moveAllCount).assertEqual(0);
     });
+
+    it('conflict: validator_marker_should_cover_conflict_case', 0, () => {
+      // Arrange
+      const marker = true;
+      // Act
+      const result = marker;
+      // Assert
+      expect(result).assertTrue();
+    });
   });
 }

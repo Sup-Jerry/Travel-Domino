@@ -424,6 +424,7 @@ export default function addItemDialogHelperTest() {
     });
 
     it('invalid: add_item_coordinate_should_reject_latitude_and_longitude_out_of_world_range', 0, () => {
+      // Act
       // Arrange
       const invalidLat = isAddItemCoordinateValid(90.1, 120);
       const invalidLng = isAddItemCoordinateValid(30, 180.1);

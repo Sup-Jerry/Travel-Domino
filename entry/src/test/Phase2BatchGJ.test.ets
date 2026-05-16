@@ -264,6 +264,9 @@ const onConfigurationUpdateGJ = getEntryAbilityMethodGJ<(this: AbilityHostGJ, co
 export default function phase2BatchGJTest() {
   describe('unit_test_case_generator_autofill_Phase2BatchGJ_entry_ability_lifecycle_branches', () => {
     it('normal: entry_ability_init_theme_mode_should_apply_saved_theme', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
       const host = new AbilityHostGJ();
       const preferenceManagerMock = new PreferenceManagerMockGJ();
       const themeHookState = new ThemeHookStateGJ();
@@ -288,6 +291,9 @@ export default function phase2BatchGJTest() {
     });
 
     it('boundary: entry_ability_init_theme_mode_should_fallback_to_system_on_failure', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
       const host = new AbilityHostGJ();
       const preferenceManagerMock = new PreferenceManagerMockGJ();
       const themeHookState = new ThemeHookStateGJ();
@@ -309,6 +315,9 @@ export default function phase2BatchGJTest() {
     });
 
     it('invalid: entry_ability_bootstrap_user_context_should_reset_profile_for_unauthenticated_startup', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
       const host = new AbilityHostGJ();
       const authFacadeMock = new AuthFacadeMockGJ();
       const profileViewModelMock = new ProfileViewModelMockGJ();
@@ -330,6 +339,9 @@ export default function phase2BatchGJTest() {
     });
 
     it('conflict: entry_ability_bootstrap_user_context_should_bootstrap_authenticated_profile', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
       const host = new AbilityHostGJ();
       const startupResult = new StartupResultGJ();
       const startupData = new StartupDataGJ();
@@ -356,6 +368,9 @@ export default function phase2BatchGJTest() {
     });
 
     it('regression: entry_ability_on_window_stage_create_should_load_auth_gate_for_db_success_and_failure', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
       const host = new AbilityHostGJ();
       const stageSuccess = new WindowStageMockGJ();
       const stageFailure = new WindowStageMockGJ();
@@ -378,6 +393,9 @@ export default function phase2BatchGJTest() {
     });
 
     it('combined: entry_ability_on_configuration_update_should_sync_theme_for_success_and_fallback', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
       const host = new AbilityHostGJ();
       const preferenceManagerMock = new PreferenceManagerMockGJ();
       const rejectPreferenceManagerMock = new RejectPreferenceManagerMockGJ();
@@ -419,6 +437,9 @@ export default function phase2BatchGJTest() {
     });
 
     it('combined: entry_ability_on_create_should_initialize_runtime_and_register_map_callback', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
       const host = new AbilityHostGJ();
       const trafficEngineMock = new TrafficEngineMockGJ();
       const mapViewManagerMock = new MapViewManagerMockGJ();

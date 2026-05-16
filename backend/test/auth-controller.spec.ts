@@ -38,6 +38,9 @@ describe('AuthController', () => {
   });
 
   it('boundary: guestCreate should fallback device_id_length_to_zero_when_missing', async () => {
+    // Arrange
+    // Act
+    // Assert
     const { controller, authService } = buildController();
     const dto = {
       deviceInfo: {
@@ -66,6 +69,9 @@ describe('AuthController', () => {
   });
 
   it('boundary: me should preserve non_empty_authorization_header', async () => {
+    // Arrange
+    // Act
+    // Assert
     const { controller, authService } = buildController();
     authService.me.mockResolvedValue({ ok: 'with-header' });
 
@@ -94,6 +100,9 @@ describe('AuthController', () => {
   });
 
   it('boundary: socialLogin should log truthy auth_code_open_id_and_union_id_branches', async () => {
+    // Arrange
+    // Act
+    // Assert
     const { controller, authService } = buildController();
     const dto: SocialLoginDto = {
       providerType: 'HUAWEI',
@@ -125,6 +134,9 @@ describe('AuthController', () => {
   });
 
   it('boundary: updateUsername should fallback to empty authorization when header missing', async () => {
+    // Arrange
+    // Act
+    // Assert
     const { controller, authService } = buildController();
     const dto: UpdateUsernameDto = { username: 'fallback_name' };
     authService.updateUsername.mockResolvedValue({ ok: 'username-fallback' });
@@ -152,6 +164,9 @@ describe('AuthController', () => {
   });
 
   it('boundary: updateAvatar should fallback to empty authorization when header missing', async () => {
+    // Arrange
+    // Act
+    // Assert
     const { controller, authService } = buildController();
     const dto: UpdateAvatarDto = {
       imageDataUrl: 'data:image/png;base64,BBBB',
@@ -166,6 +181,9 @@ describe('AuthController', () => {
   });
 
   it('conflict: socialLogin should rethrow non-error rejection with empty provider fallback', async () => {
+    // Arrange
+    // Act
+    // Assert
     const { controller, authService } = buildController();
     const dto = {
       providerType: '',
@@ -178,6 +196,9 @@ describe('AuthController', () => {
   });
 
   it('boundary: updateUsernameCompat should fallback to empty authorization when header missing', async () => {
+    // Arrange
+    // Act
+    // Assert
     const { controller, authService } = buildController();
     const dto: UpdateUsernameDto = { username: 'compat_name' };
     authService.updateUsername.mockResolvedValue({ ok: 'compat' });
