@@ -130,5 +130,24 @@ export default function conflictSelectionDialogHelperTest() {
       expect(useEnabled).assertTrue();
       expect(useDisabled).assertFalse();
     });
+
+    it('combined: conflict_selection_dialog_initial_render_should_support_zero_and_negative_gap_matrix', 0, () => {
+      // Arrange
+      const page = new ConflictSelectionDialog(undefined, {} as LocalStorage) as Object as ConflictSelectionDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      try {
+        page.gapMinutes = 0;
+        page.initialRender();
+        page.gapMinutes = -15;
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
   });
 }

@@ -252,5 +252,24 @@ export default function appSideBarHelperTest() {
       expect(threw).assertFalse();
       expect(page.current).assertEqual('trash');
     });
+
+    it('combined: app_sidebar_initial_render_should_support_plans_light_theme_branch', 0, () => {
+      // Arrange
+      const page = createAppSideBarForTest();
+      let threw = false;
+      page.current = 'plans';
+      page.effectiveTheme = 'light';
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.current).assertEqual('plans');
+    });
   });
 }

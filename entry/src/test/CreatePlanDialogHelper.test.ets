@@ -128,5 +128,42 @@ export default function createPlanDialogHelperTest() {
       // Assert
       expect(dateText).assertEqual('2028/2/29');
     });
+
+    it('normal: create_plan_dialog_set_controller_should_replace_controller_reference', 0, () => {
+      // Arrange
+      const page = new CreatePlanDialog(undefined, {} as LocalStorage) as Object as CreatePlanDialogPrivateTest;
+      const first = new DialogControllerMockCreatePlan();
+      const second = new DialogControllerMockCreatePlan();
+      page.controller = first;
+
+      // Act
+      page.setController(second);
+
+      // Assert
+      expect(page.controller === second).assertTrue();
+    });
+
+    it('combined: create_plan_dialog_initial_render_should_support_light_theme_with_empty_title_matrix', 0, () => {
+      // Arrange
+      const page = new CreatePlanDialog(undefined, {} as LocalStorage) as Object as CreatePlanDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.title = '';
+      page.selectedDate = new Date(2027, 8, 9);
+      page.effectiveTheme = 'light';
+      try {
+        page.initialRender();
+        page.title = 'beijing trip';
+        page.selectedDate = new Date(2027, 10, 11);
+        page.effectiveTheme = 'dark';
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
   });
 }
