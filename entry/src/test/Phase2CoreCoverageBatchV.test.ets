@@ -57,6 +57,7 @@ class HostMockForV implements ITimelineExecutionHost {
   conflictList: EventEntity[] = [];
   planStartDate: number = Date.now();
   isArchived: boolean = false;
+  shouldThrowTransition: boolean = false;
   actualTimeMutationInFlight: boolean = false;
   latestReflowHint: ReflowHint | null = null;
   planId: number = 1;
@@ -75,6 +76,9 @@ class HostMockForV implements ITimelineExecutionHost {
     transition: 'START' | 'END' | 'SKIP' | 'REOPEN',
     timestamp: number
   ): Promise<boolean> {
+    if (this.shouldThrowTransition) {
+      throw new Error('transition_failed_v');
+    }
     this.transitionCallCount++;
     if (transition === 'START') {
       target.actual_start_time = timestamp;
@@ -426,6 +430,110 @@ export default function phase2CoreCoverageBatchVTest() {
         expect(bundle.host.reminderFacade.callCount).assertEqual(1);
         expect(bundle.host.latestReflowHint !== null).assertTrue();
         expect(bundle.host.scheduleChangedCount).assertEqual(1);
+      } finally {
+        hooks.restore();
+      }
+    });
+
+    it('boundary: timeline_execution_skip_and_reopen_should_short_circuit_for_archived_or_missing_targets', 0, async () => {
+      // Arrange
+      const archivedBundle = createBundleForV();
+      archivedBundle.host.isArchived = true;
+      const archivedTarget = createEventForV(36, 'archived_skip_v');
+      archivedBundle.host.events = [archivedTarget];
+      const missingBundle = createBundleForV();
+
+      // Act
+      await archivedBundle.service.skipEvent(archivedTarget);
+      const archivedReopenOk = await archivedBundle.service.reopenSkippedEvent(archivedTarget.id);
+      const missingReopenOk = await missingBundle.service.reopenSkippedEvent(999);
+
+      // Assert
+      expect(archivedBundle.host.transitionCallCount).assertEqual(0);
+      expect(archivedBundle.host.recalculateCallCount).assertEqual(0);
+      expect(archivedReopenOk).assertFalse();
+      expect(missingReopenOk).assertFalse();
+    });
+
+    it('invalid: timeline_execution_reopen_and_update_should_rollback_when_transition_or_target_is_invalid', 0, async () => {
+      // Arrange
+      const reopenBundle = createBundleForV();
+      const skippedTarget = createEventForV(37, 'throw_reopen_v');
+      skippedTarget.completion_status = EventEntity.STATE_SKIPPED;
+      reopenBundle.host.events = [skippedTarget];
+      reopenBundle.host.shouldThrowTransition = true;
+
+      const updateBundle = createBundleForV();
+      const nonPendingTarget = createEventForV(38, 'non_pending_start_v');
+      nonPendingTarget.completion_status = EventEntity.STATE_COMPLETED;
+      updateBundle.host.events = [nonPendingTarget];
+      const hooks = new StaticHooksForV();
+      hooks.setFindGlobalActiveEvent(async (_excludeEventId: number): Promise<Object | null> => null);
+
+      try {
+        // Act
+        const reopenOk = await reopenBundle.service.reopenSkippedEvent(skippedTarget.id);
+        const missingUpdateOk = await updateBundle.service.updateActualTime(999, 'actual_end_time', Date.now());
+        const nonPendingStartOk = await updateBundle.service.updateActualTime(
+          nonPendingTarget.id,
+          'actual_start_time',
+          Date.now()
+        );
+
+        // Assert
+        expect(reopenOk).assertFalse();
+        expect(missingUpdateOk).assertFalse();
+        expect(nonPendingStartOk).assertFalse();
+        expect(updateBundle.host.transitionCallCount).assertEqual(0);
+      } finally {
+        hooks.restore();
+      }
+    });
+
+    it('regression: td-20260516-timeline-execution-forecast-should-show-placeholder-before-any-start', 0, () => {
+      // Arrange
+      const bundle = createBundleForV();
+      bundle.host.planStartDate = new Date('2026-05-16T00:00:00.000Z').getTime();
+      const first = createEventForV(39, 'first_planned_v');
+      first.computed_time = '2026-05-16 09:00';
+      first.duration = 30;
+      const second = createEventForV(40, 'anchored_v');
+      second.computed_time = '2026-05-16 09:20';
+      second.fixed_start_time = '10:00';
+      second.duration = 45;
+      second.pre_travel_min = 10;
+      bundle.host.events = [first, second];
+
+      // Act
+      bundle.service.calculateRealtimeSchedule();
+
+      // Assert
+      expect(first.forecast_start_time).assertEqual('xxxx');
+      expect(first.forecast_end_time).assertEqual('xxxx');
+      expect(second.forecast_start_time).assertEqual('xxxx');
+      expect(second.forecast_end_time).assertEqual('xxxx');
+      expect(second.dynamic_start_time > first.dynamic_end_time).assertTrue();
+      expect(second.dynamic_start_time >= first.dynamic_end_time + 10 * 60 * 1000).assertTrue();
+    });
+
+    it('combined: timeline_execution_skip_should_ignore_completed_items_and_conflict_lookup_should_return_null', 0, async () => {
+      // Arrange
+      const bundle = createBundleForV();
+      const completedTarget = createEventForV(41, 'completed_skip_v');
+      completedTarget.completion_status = EventEntity.STATE_COMPLETED;
+      bundle.host.events = [completedTarget];
+      const hooks = new StaticHooksForV();
+      hooks.setFindGlobalActiveEvent(async (_excludeEventId: number): Promise<Object | null> => null);
+
+      try {
+        // Act
+        await bundle.service.skipEvent(completedTarget);
+        const conflict = await bundle.service.getStartConflictInfo(completedTarget.id);
+
+        // Assert
+        expect(bundle.host.transitionCallCount).assertEqual(0);
+        expect(bundle.host.recalculateCallCount).assertEqual(0);
+        expect(conflict === null).assertTrue();
       } finally {
         hooks.restore();
       }
