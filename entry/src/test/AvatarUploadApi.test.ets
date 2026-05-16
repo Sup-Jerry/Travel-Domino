@@ -2,9 +2,13 @@ import { describe, expect, it } from '@ohos/hypium';
 import { AvatarUploadInput } from '../main/ets/domain/auth/AvatarModels';
 import { AuthApiResponse, UpdateAvatarResult } from '../main/ets/domain/auth/AuthModels';
 import { AvatarUploadApi } from '../main/ets/infrastructure/avatar/AvatarUploadApi';
+import { AuthGateway } from '../main/ets/infrastructure/auth/AuthGateway';
+import { AuthSessionStore } from '../main/ets/infrastructure/auth/AuthSessionStore';
 
 interface AvatarUploadApiPrivate {
   errorMessage: (error: Object) => string;
+  resolveFilePath: (rawFileUri: string) => string;
+  readFileAsDataUrl: (fileUriText: string, mimeType: string) => string;
 }
 
 export default function avatarUploadApiTest() {
@@ -236,6 +240,120 @@ export default function avatarUploadApiTest() {
       const message = privateApi.errorMessage(new Object());
       // Assert
       expect(message).assertEqual('unknown_error');
+    });
+
+    it('boundary: upload_api_resolve_file_path_should_trim_plain_path_without_scheme', 0, () => {
+      // Arrange
+      const privateApi = AvatarUploadApi as Object as AvatarUploadApiPrivate;
+      const rawPath = '  /data/storage/el2/base/files/avatar.jpg  ';
+
+      // Act
+      const resolved = privateApi.resolveFilePath(rawPath);
+
+      // Assert
+      expect(resolved).assertEqual('/data/storage/el2/base/files/avatar.jpg');
+    });
+
+    it('invalid: upload_api_resolve_file_path_should_throw_for_blank_uri', 0, () => {
+      // Arrange
+      const privateApi = AvatarUploadApi as Object as AvatarUploadApiPrivate;
+      let message = '';
+
+      // Act
+      try {
+        privateApi.resolveFilePath('   ');
+      } catch (error) {
+        message = privateApi.errorMessage(error as Object);
+      }
+
+      // Assert
+      expect(message).assertEqual('avatar_uri_empty');
+    });
+
+    it('regression: upload_api_error_message_should_return_error_message_for_error_instance', 0, () => {
+      // Arrange
+      const privateApi = AvatarUploadApi as Object as AvatarUploadApiPrivate;
+      const error = new Error('avatar_decode_failed');
+
+      // Act
+      const message = privateApi.errorMessage(error);
+
+      // Assert
+      expect(message).assertEqual('avatar_decode_failed');
+    });
+
+    it('combined: upload_api_read_file_as_data_url_should_wrap_blank_uri_as_error', 0, () => {
+      // Arrange
+      const privateApi = AvatarUploadApi as Object as AvatarUploadApiPrivate;
+      let message = '';
+
+      // Act
+      try {
+        privateApi.readFileAsDataUrl('', '');
+      } catch (error) {
+        message = privateApi.errorMessage(error as Object);
+      }
+
+      // Assert
+      expect(message).assertEqual('avatar_uri_empty');
+    });
+
+    it('combined: upload_api_should_use_default_session_encoder_and_gateway_callbacks', 0, async (done: () => void) => {
+      // Arrange
+      const authSessionStoreObj = AuthSessionStore as Object;
+      const authGatewayObj = AuthGateway as Object;
+      const avatarUploadApiObj = AvatarUploadApi as Object;
+      const originalGetAccessToken = Reflect.get(authSessionStoreObj, 'getAccessToken') as Object;
+      const originalUpdateAvatar = Reflect.get(authGatewayObj, 'updateAvatar') as Object;
+      const originalReadFileAsDataUrl = Reflect.get(avatarUploadApiObj, 'readFileAsDataUrl') as Object;
+      let gatewayToken = '';
+      let gatewayMimeType = '';
+      let gatewayDataUrl = '';
+
+      Reflect.set(authSessionStoreObj, 'getAccessToken', (): string => 'default_token');
+      Reflect.set(avatarUploadApiObj, 'readFileAsDataUrl', (_fileUriText: string, mimeType: string): string => {
+        return `data:${mimeType};base64,EE==`;
+      });
+      Reflect.set(
+        authGatewayObj,
+        'updateAvatar',
+        async (accessToken: string, imageDataUrl: string, mimeType: string): Promise<AuthApiResponse<UpdateAvatarResult>> => {
+          gatewayToken = accessToken;
+          gatewayDataUrl = imageDataUrl;
+          gatewayMimeType = mimeType;
+          const data = new UpdateAvatarResult();
+          data.avatarUrl = 'https://example.com/default-callback.jpg';
+          const response = new AuthApiResponse<UpdateAvatarResult>(data);
+          response.code = 0;
+          return response;
+        }
+      );
+
+      try {
+        const uploader = new AvatarUploadApi({
+          now: (): number => 4001
+        });
+        const input = new AvatarUploadInput();
+        input.userId = 'u_default_callback';
+        input.fileUri = 'file://default-callback.jpg';
+        input.mimeType = 'image/png';
+
+        // Act
+        const result = await uploader.uploadAvatar(input);
+
+        // Assert
+        expect(String(result.status)).assertEqual('SYNCED');
+        expect(String(result.remoteUrl || '')).assertEqual('https://example.com/default-callback.jpg');
+        expect(gatewayToken).assertEqual('default_token');
+        expect(gatewayMimeType).assertEqual('image/png');
+        expect(gatewayDataUrl).assertEqual('data:image/png;base64,EE==');
+      } finally {
+        Reflect.set(authSessionStoreObj, 'getAccessToken', originalGetAccessToken);
+        Reflect.set(authGatewayObj, 'updateAvatar', originalUpdateAvatar);
+        Reflect.set(avatarUploadApiObj, 'readFileAsDataUrl', originalReadFileAsDataUrl);
+      }
+
+      done();
     });
   });
 }
