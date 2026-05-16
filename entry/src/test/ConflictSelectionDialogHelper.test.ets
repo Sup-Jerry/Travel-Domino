@@ -149,5 +149,28 @@ export default function conflictSelectionDialogHelperTest() {
       // Assert
       expect(threw).assertFalse();
     });
+
+    it('combined: conflict_selection_dialog_initial_render_should_support_large_gap_and_controller_replacement_matrix', 0, () => {
+      // Arrange
+      const page = new ConflictSelectionDialog(undefined, {} as LocalStorage) as Object as ConflictSelectionDialogPrivateTest;
+      const controller = new DialogControllerMockConflictSelection();
+      let threw = false;
+
+      // Act
+      page.setController(controller);
+      page.gapMinutes = 180;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+      const prompt = getConflictSelectionGapPrompt(page.gapMinutes);
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.controller === controller).assertTrue();
+      expect(prompt.indexOf('180') >= 0).assertTrue();
+      expect(shouldUseConflictAdvanceAdjust(true)).assertTrue();
+    });
   });
 }

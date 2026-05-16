@@ -19,9 +19,13 @@ interface GapDialogHostHelper {
   currentGap: EventEntity | null;
   gapList: EventEntity[];
   candidates: EventEntity[];
+  aboutToAppear(): void;
   refreshGaps(): void;
   selectGap(item: EventEntity): void;
   getPreview(item: EventEntity): GapPreviewHelper;
+  getTierColor(min: number): string;
+  getTierLabel(min: number): string;
+  hasPositiveAllocation(distributionMap: Map<number, number>): boolean;
   getAllocatableCandidates(): EventEntity[];
   isCandidateAllocatable(item: EventEntity): boolean;
 }
@@ -85,6 +89,10 @@ class GapDialogHostImplHelper implements GapDialogHostHelper {
     this.vm = vm;
   }
 
+  aboutToAppear(): void {
+    invokeGapDialogMethodHelper(gapAboutToAppearHelper, this);
+  }
+
   refreshGaps(): void {
     invokeGapDialogMethodHelper(gapRefreshGapsHelper, this);
   }
@@ -95,6 +103,18 @@ class GapDialogHostImplHelper implements GapDialogHostHelper {
 
   getPreview(item: EventEntity): GapPreviewHelper {
     return invokeGapDialogMethodHelper(gapGetPreviewHelper, this, item);
+  }
+
+  getTierColor(min: number): string {
+    return invokeGapDialogMethodHelper(gapGetTierColorHelper, this, min);
+  }
+
+  getTierLabel(min: number): string {
+    return invokeGapDialogMethodHelper(gapGetTierLabelHelper, this, min);
+  }
+
+  hasPositiveAllocation(distributionMap: Map<number, number>): boolean {
+    return invokeGapDialogMethodHelper(gapHasPositiveAllocationHelper, this, distributionMap);
   }
 
   getAllocatableCandidates(): EventEntity[] {
@@ -142,8 +162,12 @@ function invokeGapDialogMethodHelper<TArgs extends GapDialogArgHelper[], TResult
 }
 
 const gapRefreshGapsHelper = getGapDialogMethodHelper<[], void>('refreshGaps');
+const gapAboutToAppearHelper = getGapDialogMethodHelper<[], void>('aboutToAppear');
 const gapSelectGapHelper = getGapDialogMethodHelper<[EventEntity], void>('selectGap');
 const gapGetPreviewHelper = getGapDialogMethodHelper<[EventEntity], GapPreviewHelper>('getPreview');
+const gapGetTierColorHelper = getGapDialogMethodHelper<[number], string>('getTierColor');
+const gapGetTierLabelHelper = getGapDialogMethodHelper<[number], string>('getTierLabel');
+const gapHasPositiveAllocationHelper = getGapDialogMethodHelper<[Map<number, number>], boolean>('hasPositiveAllocation');
 const gapGetAllocatableCandidatesHelper = getGapDialogMethodHelper<[], EventEntity[]>('getAllocatableCandidates');
 const gapIsCandidateAllocatableHelper = getGapDialogMethodHelper<[EventEntity], boolean>('isCandidateAllocatable');
 
@@ -278,6 +302,80 @@ export default function gapResolutionDialogHelperTest() {
       // Assert
       expect(emptyResult).assertFalse();
       expect(nonPositiveResult).assertFalse();
+    });
+
+    it('boundary: gap_resolution_about_to_appear_should_delegate_refresh_for_single_gap', 0, () => {
+      // Arrange
+      const vm = new GapVmMockHelper();
+      const dialog = createDialogHelper(vm);
+      const gap = buildGapEventHelper(401, 'single-gap', 55, '2026-05-16 13:00');
+      const candidate = buildGapEventHelper(402, 'tea-stop', 0, '2026-05-16 13:30', 25);
+      vm.distributionCoordinator.sortedGaps = [gap];
+      vm.distributionCoordinator.candidatesByGapId.set(gap.id, [candidate]);
+
+      // Act
+      dialog.aboutToAppear();
+
+      // Assert
+      expect(dialog.gapList.length).assertEqual(1);
+      expect(dialog.currentGap?.id ?? -1).assertEqual(gap.id);
+      expect(dialog.candidates.length).assertEqual(1);
+    });
+
+    it('combined: gap_resolution_private_helpers_should_follow_trigger_and_positive_distribution_map', 0, () => {
+      // Arrange
+      const vm = new GapVmMockHelper();
+      vm.trigger = 45;
+      const dialog = createDialogHelper(vm);
+      const positiveMap = new Map<number, number>();
+      positiveMap.set(1, 0);
+      positiveMap.set(2, 12);
+      const emptyMap = new Map<number, number>();
+
+      // Act
+      const goldColor = dialog.getTierColor(150);
+      const greenColor = dialog.getTierColor(45);
+      const goldLabel = dialog.getTierLabel(150);
+      const greenLabel = dialog.getTierLabel(45);
+      const positive = dialog.hasPositiveAllocation(positiveMap);
+      const empty = dialog.hasPositiveAllocation(emptyMap);
+
+      // Assert
+      expect(goldColor).assertEqual('#FFB800');
+      expect(greenColor).assertEqual('#4CAF50');
+      expect(goldLabel).assertEqual('\u9EC4\u91D1\u91CD\u6392');
+      expect(greenLabel).assertEqual('\u6548\u7387\u8865\u5168');
+      expect(positive).assertTrue();
+      expect(empty).assertFalse();
+    });
+
+    it('combined: gap_resolution_preview_should_support_manual_preview_map_and_strategy_switch', 0, () => {
+      // Arrange
+      const vm = new GapVmMockHelper();
+      const dialog = createDialogHelper(vm);
+      const gap = buildGapEventHelper(501, 'museum-gap', 95, '2026-05-16 15:00');
+      const candidate = buildGapEventHelper(502, 'gallery', 0, '2026-05-16 15:10', 40);
+      const overflowCandidate = buildGapEventHelper(503, 'park', 0, '2026-05-16 16:00', 20);
+      vm.distributionCoordinator.candidatesByGapId.set(gap.id, [candidate]);
+      vm.distributionCoordinator.safetyCaps.set(candidate.id, 20);
+      vm.distributionCoordinator.safetyCaps.set(overflowCandidate.id, 0);
+      vm.distributionCoordinator.previewMap.set(candidate.id, 20);
+      vm.distributionCoordinator.previewMap.set(overflowCandidate.id, 0);
+      dialog.strategy = 'SMART';
+      dialog.selectGap(gap);
+      dialog.candidates.push(overflowCandidate);
+      dialog.selectedIds = new Set<number>([candidate.id]);
+
+      // Act
+      const preview = dialog.getPreview(candidate);
+      const allocatableCandidates = dialog.getAllocatableCandidates();
+
+      // Assert
+      expect(preview.timeRange).assertEqual('15:10-15:50 \u2192 16:10');
+      expect(preview.addStr).assertEqual('(+20m)');
+      expect(allocatableCandidates.length).assertEqual(1);
+      expect(dialog.strategy).assertEqual('SMART');
+      expect(dialog.selectedIds.has(candidate.id)).assertTrue();
     });
   });
 }

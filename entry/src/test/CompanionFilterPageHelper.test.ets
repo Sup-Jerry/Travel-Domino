@@ -273,5 +273,61 @@ export default function companionFilterPageHelperTest() {
       expect(getCompanionFilterBorderWidth('PENDING', 'ACTIVE')).assertEqual(0);
       expect(getCompanionFilterBorderWidth('ACTIVE', 'ACTIVE')).assertEqual(1);
     });
+
+    it('boundary: filter_page_initial_render_should_support_pending_selected_light_theme_branch', 0, () => {
+      // Arrange
+      const page = new CompanionFilterPage(undefined, {} as LocalStorage) as Object as CompanionFilterPagePrivateTest;
+      page.effectiveTheme = 'light';
+      page.getFilterOptions = (): CompanionFilterState[] => ['PENDING', 'ACTIVE', 'ALL'];
+      page.getFilterLabel = (state: CompanionFilterState): string => `pending_${state}`;
+      page.setInitiallyProvidedValue({
+        showFilterPage: true,
+        companionFilterState: 'PENDING',
+        safeTopInset: 5,
+        safeBottomInset: 7
+      });
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(getCompanionFilterBorderType('PENDING')).assertEqual('pending');
+      expect(getCompanionFilterBorderWidth('PENDING', 'PENDING')).assertEqual(1);
+      expect(page.getThemePalette().primary).assertEqual(ThemeCenter.getPalette('light').primary);
+    });
+
+    it('combined: filter_page_initial_render_should_support_default_border_branch_for_all_selection', 0, () => {
+      // Arrange
+      const page = new CompanionFilterPage(undefined, {} as LocalStorage) as Object as CompanionFilterPagePrivateTest;
+      page.effectiveTheme = 'dark';
+      page.getFilterOptions = (): CompanionFilterState[] => ['ALL', 'PENDING', 'SKIPPED'];
+      page.getFilterLabel = (state: CompanionFilterState): string => `all_${state}`;
+      page.setInitiallyProvidedValue({
+        showFilterPage: true,
+        companionFilterState: 'ALL',
+        safeTopInset: 1,
+        safeBottomInset: 2
+      });
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(getCompanionFilterBorderType('ALL')).assertEqual('default');
+      expect(getCompanionFilterBorderWidth('ALL', 'ALL')).assertEqual(1);
+      expect(getCompanionFilterBorderWidth('SKIPPED', 'ALL')).assertEqual(0);
+    });
   });
 }
