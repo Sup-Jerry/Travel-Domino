@@ -364,6 +364,80 @@ export default function indexTimelineViewHelperTest() {
       // Assert
       expect(threw).assertFalse();
     });
+
+    it('regression: timeline_view_initial_render_should_support_visible_group_without_gap_hint_in_companion_mode', 0, () => {
+      // Arrange
+      const page = new IndexTimelineView(undefined, {} as LocalStorage) as Object as IndexTimelineViewPrivateTest;
+      const event = buildTimelineEvent(31);
+      page.setInitiallyProvidedValue({
+        groupedEvents: [{
+          dayOffset: 3,
+          actualDateMs: 30,
+          dateHeader: 'Day 3',
+          events: [event]
+        }],
+        allEvents: [event],
+        isArchived: false,
+        isCompanionMode: true,
+        showWeather: false,
+        isPageRefreshing: true,
+        gapsCount: 0,
+        onIsDayCollapsed: (_dayOffset: number) => false
+      });
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(resolveIndexTimelineBottomSpacerHeight(true)).assertEqual(24);
+      expect(shouldShowIndexTimelineGapHint(false, 0)).assertFalse();
+      expect(shouldEnableIndexTimelineItem(page.isArchived)).assertTrue();
+    });
+
+    it('combined: timeline_view_should_cover_hidden_group_and_header_matrix_with_negative_places', 0, () => {
+      // Arrange
+      const page = new IndexTimelineView(undefined, {} as LocalStorage) as Object as IndexTimelineViewPrivateTest;
+      const event = buildTimelineEvent(41);
+      page.setInitiallyProvidedValue({
+        groupedEvents: [{
+          dayOffset: 4,
+          actualDateMs: 40,
+          dateHeader: 'Day 4',
+          events: [event]
+        }],
+        allEvents: [event],
+        isArchived: false,
+        isCompanionMode: false,
+        showWeather: true,
+        isPageRefreshing: false,
+        gapsCount: 3,
+        onIsDayCollapsed: (_dayOffset: number) => true
+      });
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+      const header = buildIndexTimelineHeaderText('Day 4', -5);
+      const hiddenItems = shouldShowIndexTimelineGroupItems(true);
+      const archivedDisabled = shouldEnableIndexTimelineItem(true);
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(header.indexOf('Day 4') >= 0).assertTrue();
+      expect(hiddenItems).assertFalse();
+      expect(archivedDisabled).assertFalse();
+      expect(shouldShowIndexTimelineGapHint(false, 3)).assertTrue();
+    });
   });
 }
 

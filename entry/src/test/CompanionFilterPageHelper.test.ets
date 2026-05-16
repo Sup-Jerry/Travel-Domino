@@ -202,5 +202,76 @@ export default function companionFilterPageHelperTest() {
       // Assert
       expect(threw).assertFalse();
     });
+
+    it('regression: filter_page_initial_render_should_support_completed_and_skipped_border_branches', 0, () => {
+      // Arrange
+      const completedPage = new CompanionFilterPage(undefined, {} as LocalStorage) as Object as CompanionFilterPagePrivateTest;
+      completedPage.getFilterOptions = (): CompanionFilterState[] => ['COMPLETED', 'SKIPPED'];
+      completedPage.getFilterLabel = (state: CompanionFilterState): string => `label_${state}`;
+      completedPage.effectiveTheme = 'dark';
+      completedPage.setInitiallyProvidedValue({
+        showFilterPage: true,
+        companionFilterState: 'COMPLETED',
+        safeTopInset: 4,
+        safeBottomInset: 6
+      });
+      const skippedPage = new CompanionFilterPage(undefined, {} as LocalStorage) as Object as CompanionFilterPagePrivateTest;
+      skippedPage.getFilterOptions = (): CompanionFilterState[] => ['SKIPPED', 'ALL'];
+      skippedPage.getFilterLabel = (state: CompanionFilterState): string => `label_${state}`;
+      skippedPage.setInitiallyProvidedValue({
+        showFilterPage: true,
+        companionFilterState: 'SKIPPED',
+        safeTopInset: 2,
+        safeBottomInset: 3
+      });
+      let completedThrew = false;
+      let skippedThrew = false;
+
+      // Act
+      try {
+        completedPage.initialRender();
+      } catch (_error) {
+        completedThrew = true;
+      }
+      try {
+        skippedPage.initialRender();
+      } catch (_error) {
+        skippedThrew = true;
+      }
+
+      // Assert
+      expect(completedThrew).assertFalse();
+      expect(skippedThrew).assertFalse();
+      expect(getCompanionFilterBorderType('COMPLETED')).assertEqual('completed');
+      expect(getCompanionFilterBorderType('SKIPPED')).assertEqual('skipped');
+      expect(!!completedPage.getThemePalette().primary).assertTrue();
+    });
+
+    it('combined: filter_page_should_cover_unselected_visible_matrix_for_active_state', 0, () => {
+      // Arrange
+      const page = new CompanionFilterPage(undefined, {} as LocalStorage) as Object as CompanionFilterPagePrivateTest;
+      page.getFilterOptions = (): CompanionFilterState[] => ['ALL', 'ACTIVE', 'PENDING', 'COMPLETED'];
+      page.getFilterLabel = (state: CompanionFilterState): string => `matrix_${state}`;
+      page.setInitiallyProvidedValue({
+        showFilterPage: true,
+        companionFilterState: 'ACTIVE',
+        safeTopInset: 10,
+        safeBottomInset: 12
+      });
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(isCompanionFilterSelected('ACTIVE', 'ACTIVE')).assertTrue();
+      expect(getCompanionFilterBorderWidth('PENDING', 'ACTIVE')).assertEqual(0);
+      expect(getCompanionFilterBorderWidth('ACTIVE', 'ACTIVE')).assertEqual(1);
+    });
   });
 }

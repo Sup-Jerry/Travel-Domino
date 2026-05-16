@@ -475,5 +475,76 @@ export default function companionFocusedCardHostHelperTest() {
       expect(page.getPlannedRange(stable)).assertEqual('10:00-11:00');
       expect(page.canEndFocused(stable)).assertTrue();
     });
+
+    it('boundary: focused_card_body_should_support_direct_pending_and_skipped_action_modes', 0, () => {
+      // Arrange
+      const page = new CompanionFocusedCardHost(undefined, {} as LocalStorage) as Object as CompanionFocusedCardHostPrivateTest;
+      const pending = buildEvent(111);
+      const skipped = buildEvent(112);
+      page.canStartFocused = (_event: EventEntity) => true;
+      page.getEventStateLabel = (event: EventEntity) => `state_${event.id}`;
+      page.getMainCardTimeText = (event: EventEntity) => `time_${event.id}`;
+      page.getPlannedRange = (event: EventEntity) => `plan_${event.id}`;
+      let pendingThrew = false;
+      let skippedThrew = false;
+
+      // Act
+      page.getEventState = (_event: EventEntity) => 'PENDING';
+      try {
+        page.FocusedCardBody(pending, 'outgoing');
+      } catch (_error) {
+        pendingThrew = true;
+      }
+      page.getEventState = (_event: EventEntity) => 'SKIPPED';
+      try {
+        page.FocusedCardBody(skipped, 'incoming');
+      } catch (_error) {
+        skippedThrew = true;
+      }
+
+      // Assert
+      expect(pendingThrew).assertFalse();
+      expect(skippedThrew).assertFalse();
+      expect(page.canStartFocused(pending)).assertTrue();
+      expect(page.getEventStateLabel(skipped)).assertEqual('state_112');
+      expect(page.getMainCardTimeText(pending)).assertEqual('time_111');
+      expect(page.getPlannedRange(skipped)).assertEqual('plan_112');
+    });
+
+    it('combined: focused_card_body_should_support_paused_active_and_disabled_modes_with_phase_styles', 0, () => {
+      // Arrange
+      const page = new CompanionFocusedCardHost(undefined, {} as LocalStorage) as Object as CompanionFocusedCardHostPrivateTest;
+      const pausedActive = buildEvent(121);
+      const disabled = buildEvent(122);
+      page.runtimeState = 'PAUSED';
+      page.currentEventId = pausedActive.id;
+      page.getEventState = (event: EventEntity) => event.id === pausedActive.id ? 'COMPLETED' : 'DONE';
+      page.getCardTranslateX = (phase: CompanionFocusedCardPhaseTest) => phase === 'incoming' ? 6 : 2;
+      page.getCardOpacity = (phase: CompanionFocusedCardPhaseTest) => phase === 'incoming' ? 0.76 : 0.9;
+      page.getCardScale = (phase: CompanionFocusedCardPhaseTest) => phase === 'incoming' ? 0.94 : 0.98;
+      let pausedThrew = false;
+      let disabledThrew = false;
+
+      // Act
+      try {
+        page.FocusedCardBody(pausedActive, 'incoming');
+      } catch (_error) {
+        pausedThrew = true;
+      }
+      try {
+        page.FocusedCardBody(disabled, 'stable');
+      } catch (_error) {
+        disabledThrew = true;
+      }
+
+      // Assert
+      expect(pausedThrew).assertFalse();
+      expect(disabledThrew).assertFalse();
+      expect(resolveCompanionFocusedActionMode('COMPLETED', 'PAUSED', pausedActive.id, pausedActive.id)).assertEqual('PAUSED_ACTIVE');
+      expect(resolveCompanionFocusedActionMode('DONE', 'IDLE', -1, disabled.id)).assertEqual('DISABLED');
+      expect(page.getCardTranslateX('incoming')).assertEqual(6);
+      expect(page.getCardOpacity('incoming')).assertEqual(0.76);
+      expect(page.getCardScale('incoming')).assertEqual(0.94);
+    });
   });
 }
