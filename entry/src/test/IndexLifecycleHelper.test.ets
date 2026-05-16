@@ -441,5 +441,83 @@ export default function indexLifecycleHelperTest() {
       // Assert
       expect(timerValue).assertEqual(123);
     });
+
+    it('boundary: handle_about_to_appear_should_fallback_to_default_title_when_missing', 0, async (done: Function) => {
+      // Arrange
+      const vm = new LifecycleVmMock();
+      const routeParams = new RouteParamsMock();
+      routeParams.planId = 17;
+      let planTitle = '';
+
+      // Act
+      IndexLifecycleHelper.handleAboutToAppear({
+        uiContext: new UiContextMock(routeParams) as Object as UIContext,
+        vm: vm as Object as TimelineViewModel,
+        onSetCurrentPlanId: (_planId: number) => {},
+        onSetManualWeatherRefresh: (_value: boolean) => {},
+        onRefreshUnsavedFlag: () => {},
+        onSetPlanTitle: (title: string) => {
+          planTitle = title;
+        },
+        onBindReminderSubscriptions: () => {},
+        onSetStrategyMode: (_mode: number) => {},
+        onLoadStrategyExplanation: () => {},
+        onSetCompanionMode: (_value: boolean) => {},
+        onTryStartEvent: async (_eventId: number) => true,
+        onStartArrivalReminderEngine: () => {},
+        onStartStrategyAdaptationCheck: () => {},
+        onInitBacklogExpandedState: async (_planId: number, _isNewPlan: boolean) => {},
+        onLoadDataError: (_reason: string) => {}
+      });
+      await new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => {
+        setTimeout(() => resolve(), 30);
+      });
+
+      // Assert
+      expect(planTitle.length > 0).assertTrue();
+      done();
+    });
+
+    it('combined: handle_about_to_appear_should_skip_planning_refresh_when_auto_refresh_disabled', 0, async (done: Function) => {
+      // Arrange
+      const vm = new LifecycleVmMock();
+      vm.autoRefreshPlanning = false;
+      const routeParams = new RouteParamsMock();
+      routeParams.planId = 18;
+      let startArrivalCount = 0;
+      let startAdaptCount = 0;
+
+      // Act
+      IndexLifecycleHelper.handleAboutToAppear({
+        uiContext: new UiContextMock(routeParams) as Object as UIContext,
+        vm: vm as Object as TimelineViewModel,
+        onSetCurrentPlanId: (_planId: number) => {},
+        onSetManualWeatherRefresh: (_value: boolean) => {},
+        onRefreshUnsavedFlag: () => {},
+        onSetPlanTitle: (_title: string) => {},
+        onBindReminderSubscriptions: () => {},
+        onSetStrategyMode: (_mode: number) => {},
+        onLoadStrategyExplanation: () => {},
+        onSetCompanionMode: (_value: boolean) => {},
+        onTryStartEvent: async (_eventId: number) => true,
+        onStartArrivalReminderEngine: () => {
+          startArrivalCount += 1;
+        },
+        onStartStrategyAdaptationCheck: () => {
+          startAdaptCount += 1;
+        },
+        onInitBacklogExpandedState: async (_planId: number, _isNewPlan: boolean) => {},
+        onLoadDataError: (_reason: string) => {}
+      });
+      await new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => {
+        setTimeout(() => resolve(), 30);
+      });
+
+      // Assert
+      expect(vm.refreshPlanningCount).assertEqual(0);
+      expect(startArrivalCount).assertEqual(1);
+      expect(startAdaptCount).assertEqual(1);
+      done();
+    });
   });
 }
