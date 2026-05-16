@@ -512,6 +512,62 @@ export default function indexPageLayoutHelperTest() {
       expect(text.indexOf('天气建议') >= 0).assertTrue();
       expect(text.indexOf('策略联动') < 0).assertTrue();
     });
+    it('regression: page_weather_suggestion_should_include_strategy_text_when_provided', 0, () => {
+      // Arrange
+      const collabLabel = '鍗忎綔';
+      const planningHint = '甯︿紴';
+      const collabSummary = '';
+      const strategyHint = '鍏堝幓鍗楁箹';
+
+      // Act
+      const text = buildIndexPageWeatherSuggestionText(collabLabel, planningHint, collabSummary, strategyHint);
+
+      // Assert
+      expect(text.indexOf('鍗忎綔') >= 0).assertTrue();
+      expect(text.indexOf('甯︿紴') >= 0).assertTrue();
+      expect(text.indexOf('鍏堝幓鍗楁箹') >= 0).assertTrue();
+    });
+
+    it('combined: page_layout_defaults_should_keep_noop_callbacks_and_default_theme', 0, () => {
+      // Arrange
+      const page = new IndexPageLayout(undefined, {} as LocalStorage) as Object as IndexPageLayoutPrivateTest;
+      const event = buildLayoutEvent(41);
+
+      // Act
+      page.onBack();
+      page.onOpenSettings();
+      page.onEnterCompanion();
+      page.onRefreshWeather();
+      page.onToggleHint();
+      page.onToggleScore();
+      page.onHintPopupVisibleChange(true);
+      page.onScorePopupVisibleChange(false);
+      page.onToggleBacklogExpand();
+      page.onMoveToSchedule(event as Object);
+      page.onMoveAllToSchedule();
+      page.onToggleDay(3);
+      page.onScheduleRefresh();
+      page.onOpenEditDialog(event);
+      page.onOpenTimeEditDialog(event);
+      page.onGapFound(event);
+      page.onResolveConflictAction(event, 'advance', 20);
+      page.onConfirmMoveToBacklog(event);
+      page.onConfirmDeleteEvent(event);
+      page.onOpenGapOptimize();
+      page.onFilter();
+      page.onAi();
+      page.onAdd();
+      page.onUndo();
+      page.onSave();
+      const showHint = shouldShowIndexPageWeatherHint(true, true, 'hint');
+
+      // Assert
+      expect(showHint).assertTrue();
+      expect(page.planTitle).assertEqual('');
+      expect(page.strategyMode).assertEqual(0);
+      expect(page.themePalette.primary).assertEqual('#2F7DFF');
+      expect(page.companionOverlayZIndex).assertEqual(10);
+    });
   });
 }
 

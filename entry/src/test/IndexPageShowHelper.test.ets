@@ -177,5 +177,43 @@ export default function indexPageShowHelperTest() {
       expect((probe.lastDialogData as InitDialogData).name).assertEqual('picked_address');
       expect((probe.lastDialogData as InitDialogData).dayOffset).assertEqual(4);
     });
+
+    it('boundary: handle_page_show_should_clear_orphan_picked_without_restore', 0, () => {
+      // Arrange
+      const picked = JSON.stringify({
+        lat: 39.9,
+        lng: 116.4,
+        address: 'picked_only'
+      });
+      const probe = new PageShowProbe('', picked);
+
+      // Act
+      probe.run(new PageShowVmMock(false, false));
+
+      // Assert
+      expect(probe.clearCount).assertEqual(1);
+      expect(probe.openCount).assertEqual(0);
+      expect(probe.toastCount).assertEqual(0);
+    });
+
+    it('combined: handle_page_show_should_use_coordinate_fallback_when_picked_address_blank', 0, () => {
+      // Arrange
+      const picked = JSON.stringify({
+        lat: 31.2304,
+        lng: 121.4737,
+        address: '   '
+      });
+      const probe = new PageShowProbe(buildTempStateRaw('old_name', 5), picked);
+
+      // Act
+      probe.run(new PageShowVmMock(false, false));
+
+      // Assert
+      expect(probe.clearCount).assertEqual(1);
+      expect(probe.openCount).assertEqual(1);
+      expect((probe.lastDialogData as InitDialogData).name.indexOf('31.23040') >= 0).assertTrue();
+      expect((probe.lastDialogData as InitDialogData).name.indexOf('121.47370') >= 0).assertTrue();
+      expect((probe.lastDialogData as InitDialogData).dayOffset).assertEqual(5);
+    });
   });
 }

@@ -523,5 +523,83 @@ export default function companionFocusActionHelperTest() {
       expect(mock.toasts.length).assertEqual(0);
       done();
     });
+
+    it('combined: skip_should_fallback_to_earlier_startable_when_no_later_event_can_start', 0, async (done: Function) => {
+      // Arrange
+      const earlierStartable = buildEvent(21, 'PENDING');
+      const focused = buildEvent(22, 'PENDING');
+      const laterBlocked = buildEvent(23, 'ACTIVE');
+      const mock = createSkipMock(focused, [earlierStartable, focused, laterBlocked]);
+
+      // Act
+      await handleCompanionFocusedSkip({
+        focusedEvent: mock.focusedEvent,
+        skipEvent: async (_event: EventEntity): Promise<void> => {
+          mock.skipCalls += 1;
+        },
+        refreshContext: (): void => {
+          mock.refreshCalls += 1;
+        },
+        getScheduledEvents: () => mock.schedule,
+        getScheduleIndexById: (_id: number): number => 1,
+        applyFocusById: (id: number): void => {
+          mock.applyFocusIds.push(id);
+        },
+        showToast: (message: string): void => {
+          mock.toasts.push(message);
+        }
+      });
+      await new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => {
+        setTimeout(() => resolve(), 150);
+      });
+
+      // Assert
+      expect(mock.skipCalls).assertEqual(1);
+      expect(mock.refreshCalls).assertEqual(1);
+      expect(mock.applyFocusIds.length).assertEqual(1);
+      expect(mock.applyFocusIds[0]).assertEqual(21);
+      done();
+    });
+
+    it('regression: reopen_should_pass_positive_timestamp_to_update_actual_start', 0, async (done: Function) => {
+      // Arrange
+      const focused = buildEvent(24, 'SKIPPED');
+      const mock = createReopenMock(focused, [focused]);
+      let capturedNowTs = -1;
+
+      // Act
+      await handleCompanionFocusedReopen({
+        focusedEvent: mock.focusedEvent,
+        getScheduledEvents: () => mock.schedule,
+        reopenSkippedEvent: async (_eventId: number): Promise<boolean> => {
+          mock.reopenCalls += 1;
+          return mock.reopenResult;
+        },
+        updateActualStart: async (_eventId: number, nowTs: number): Promise<boolean> => {
+          capturedNowTs = nowTs;
+          mock.updateCalls += 1;
+          return mock.updateStartResult;
+        },
+        showGlobalActiveConflictDialog: async (_excludeEventId: number): Promise<boolean> => mock.conflictDialogResult,
+        refreshContext: (): void => {
+          mock.refreshCalls += 1;
+        },
+        applyFocusById: (id: number): void => {
+          mock.applyFocusIds.push(id);
+        },
+        enterImmersiveMode: (): void => {
+          mock.immersiveCalls += 1;
+        },
+        showToast: (message: string): void => {
+          mock.toasts.push(message);
+        }
+      });
+
+      // Assert
+      expect(mock.reopenCalls).assertEqual(1);
+      expect(mock.updateCalls).assertEqual(1);
+      expect(capturedNowTs > 0).assertTrue();
+      done();
+    });
   });
 }
