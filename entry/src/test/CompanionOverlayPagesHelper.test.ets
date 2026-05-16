@@ -261,5 +261,88 @@ export default function companionOverlayPagesHelperTest() {
       // Assert
       expect(threw).assertFalse();
     });
+
+    it('combined: overlay_pages_initial_render_should_support_search_only_branch', 0, () => {
+      // Arrange
+      const page = new CompanionOverlayPages(undefined, {} as LocalStorage) as Object as CompanionOverlayPagesPrivateTest;
+      const params: CompanionOverlayPagesParamsTest = {
+        showHistoryPage: false,
+        historyTimelineItems: [],
+        historyTimelineFilter: 'all',
+        historyViewMode: 'timeline',
+        historySummary: null,
+        vm: null,
+        selectedHistoryTimelineItem: null,
+        showSearchPage: true,
+        searchKeyword: 'station',
+        searchResults: [createOverlayEvent(7), createOverlayEvent(8)],
+        showFilterPage: false,
+        companionFilterState: 'ALL',
+        safeTopInset: 6,
+        safeBottomInset: 8
+      };
+      page.setInitiallyProvidedValue(params);
+      page.updateStateVars(params);
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.showSearchPage).assertTrue();
+      expect(page.searchResults.length).assertEqual(2);
+    });
+
+    it('normal: overlay_pages_should_execute_overridden_callbacks_without_mutating_flags', 0, () => {
+      // Arrange
+      const page = new CompanionOverlayPages(undefined, {} as LocalStorage) as Object as CompanionOverlayPagesPrivateTest;
+      let historyCloseCount = 0;
+      let searchCount = 0;
+      let filterCount = 0;
+      const params: CompanionOverlayPagesParamsTest = {
+        showHistoryPage: true,
+        historyTimelineItems: [new OverlayPlaceholderTest() as Object],
+        historyTimelineFilter: 'pending',
+        historyViewMode: 'timeline',
+        historySummary: null,
+        vm: null,
+        selectedHistoryTimelineItem: null,
+        showSearchPage: false,
+        searchKeyword: '',
+        searchResults: [],
+        showFilterPage: true,
+        companionFilterState: 'PENDING',
+        safeTopInset: 2,
+        safeBottomInset: 4
+      };
+      page.setInitiallyProvidedValue(params);
+      page.updateStateVars(params);
+      page.onHistoryClose = (): void => {
+        historyCloseCount += 1;
+      };
+      page.onSearch = (_keyword: string): void => {
+        searchCount += 1;
+      };
+      page.onFilterSelect = (_state: string): void => {
+        filterCount += 1;
+      };
+
+      // Act
+      page.onHistoryClose();
+      page.onSearch('museum');
+      page.onFilterSelect('ACTIVE');
+
+      // Assert
+      expect(historyCloseCount).assertEqual(1);
+      expect(searchCount).assertEqual(1);
+      expect(filterCount).assertEqual(1);
+      expect(page.showHistoryPage).assertTrue();
+      expect(page.showFilterPage).assertTrue();
+    });
   });
 }

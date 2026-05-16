@@ -99,6 +99,22 @@ function buildTempStateRaw(name: string, dayOffset: number): string {
   });
 }
 
+class CustomTempStateRaw {
+  name: string = '';
+  note: string = '';
+  duration: number = 0;
+  isAnchor: boolean = false;
+  fixedTime: string = '';
+  dayOffset: number = 0;
+  isSchedule: boolean = false;
+  lat: Object = 0;
+  lng: Object = 0;
+}
+
+function buildCustomTempStateRaw(raw: Object): string {
+  return JSON.stringify(raw);
+}
+
 export default function indexPageShowHelperTest() {
   describe('unit_test_case_generator_autofill_IndexPageShowHelper', () => {
     it('normal: handle_page_show_should_restore_temp_draft_when_picked_absent', 0, () => {
@@ -214,6 +230,49 @@ export default function indexPageShowHelperTest() {
       expect((probe.lastDialogData as InitDialogData).name.indexOf('31.23040') >= 0).assertTrue();
       expect((probe.lastDialogData as InitDialogData).name.indexOf('121.47370') >= 0).assertTrue();
       expect((probe.lastDialogData as InitDialogData).dayOffset).assertEqual(5);
+    });
+
+    it('boundary: handle_page_show_should_keep_restore_when_only_min_reload_fails', 0, async (done: Function) => {
+      // Arrange
+      const probe = new PageShowProbe(buildTempStateRaw('min_reload_only', 6), '');
+
+      // Act
+      probe.run(new PageShowVmMock(true, false));
+      await new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => {
+        setTimeout(() => resolve(), 30);
+      });
+
+      // Assert
+      expect(probe.sanitizeCount).assertEqual(1);
+      expect(probe.openCount).assertEqual(1);
+      expect((probe.lastDialogData as InitDialogData).name).assertEqual('min_reload_only');
+      done();
+    });
+
+    it('invalid: handle_page_show_should_normalize_invalid_duration_and_coordinates_from_temp_draft', 0, () => {
+      // Arrange
+      const raw = new CustomTempStateRaw();
+      raw.name = 'normalized_name';
+      raw.note = 'n';
+      raw.duration = 0;
+      raw.isAnchor = false;
+      raw.fixedTime = '08:00';
+      raw.dayOffset = 2.9;
+      raw.isSchedule = true;
+      raw.lat = 'bad';
+      raw.lng = 'invalid';
+      const probe = new PageShowProbe(buildCustomTempStateRaw(raw), '');
+
+      // Act
+      probe.run(new PageShowVmMock(false, false));
+
+      // Assert
+      expect(probe.clearCount).assertEqual(1);
+      expect(probe.openCount).assertEqual(1);
+      expect((probe.lastDialogData as InitDialogData).duration).assertEqual(1);
+      expect((probe.lastDialogData as InitDialogData).dayOffset).assertEqual(2);
+      expect((probe.lastDialogData as InitDialogData).lat ?? -1).assertEqual(0);
+      expect((probe.lastDialogData as InitDialogData).lng ?? -1).assertEqual(0);
     });
   });
 }
