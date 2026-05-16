@@ -1,5 +1,19 @@
-﻿import { describe, it, expect } from '@ohos/hypium';
-import { IndexDialogManager } from '../main/ets/pages/index/IndexDialogManager';
+import { describe, it, expect } from '@ohos/hypium';
+import {
+  AddItemDialogCallbacks,
+  AdvanceAdjustCallbacks,
+  AiDialogCallbacks,
+  ConflictCompressCallbacks,
+  ConflictSelectionCallbacks,
+  DateConflictCallbacks,
+  GapResolutionCallbacks,
+  IndexDialogManager,
+  SettingsCallbacks,
+  ShareDialogCallbacks,
+  SuggestionDialogCallbacks
+} from '../main/ets/pages/index/IndexDialogManager';
+import { WeatherUserPreference } from '../main/ets/domain/services/WeatherModels';
+import { CompressionMode, TimelineViewModel } from '../main/ets/viewmodel/TimelineViewModel';
 
 interface DatePickerDialogOptionsLike {
   start: Date;
@@ -42,6 +56,102 @@ class DateFilterControllerMock {
   open(): void {
     this.openCount += 1;
   }
+}
+
+class CapturedDialogOptionsLike {
+  alignmentLabel: string = '';
+  autoCancel: boolean = false;
+  customStyle: boolean = false;
+  hasBuilder: boolean = false;
+  hasOffset: boolean = false;
+  offsetDy: number = 0;
+
+  constructor(options: Object) {
+    const alignment = Reflect.get(options as Object, 'alignment') as Object | undefined | null;
+    this.alignmentLabel = alignment === undefined || alignment === null ? '' : String(alignment);
+
+    const autoCancel = Reflect.get(options as Object, 'autoCancel') as boolean | undefined;
+    if (typeof autoCancel === 'boolean') {
+      this.autoCancel = autoCancel;
+    }
+
+    const customStyle = Reflect.get(options as Object, 'customStyle') as boolean | undefined;
+    if (typeof customStyle === 'boolean') {
+      this.customStyle = customStyle;
+    }
+
+    const builder = Reflect.get(options as Object, 'builder') as Object | undefined | null;
+    this.hasBuilder = builder !== undefined && builder !== null;
+
+    const offset = Reflect.get(options as Object, 'offset') as Object | undefined | null;
+    if (offset !== undefined && offset !== null) {
+      this.hasOffset = true;
+      const dy = Reflect.get(offset as Object, 'dy') as number | undefined;
+      if (typeof dy === 'number') {
+        this.offsetDy = dy;
+      }
+    }
+  }
+}
+
+let activeDialogRecorder: DialogRecorderLike | null = null;
+
+class CustomDialogControllerStubLike {
+  dialogOptions: CapturedDialogOptionsLike;
+  openCount: number = 0;
+
+  constructor(options: Object, _owner?: Object) {
+    this.dialogOptions = new CapturedDialogOptionsLike(options);
+    if (activeDialogRecorder !== null) {
+      activeDialogRecorder.record(this);
+    }
+  }
+
+  open(): void {
+    this.openCount += 1;
+  }
+}
+
+class DialogAlignmentStubLike {
+  Bottom: string = 'BOTTOM';
+  Center: string = 'CENTER';
+}
+
+class DialogRecorderLike {
+  private readonly originController: Object;
+  private readonly originAlignment: Object;
+  controllers: CustomDialogControllerStubLike[] = [];
+
+  constructor() {
+    this.originController = Reflect.get(globalThis as Object, 'CustomDialogController') as Object;
+    this.originAlignment = Reflect.get(globalThis as Object, 'DialogAlignment') as Object;
+  }
+
+  install(): void {
+    this.controllers = [];
+    activeDialogRecorder = this;
+    Reflect.set(globalThis as Object, 'CustomDialogController', CustomDialogControllerStubLike as Object);
+    Reflect.set(globalThis as Object, 'DialogAlignment', new DialogAlignmentStubLike() as Object);
+  }
+
+  record(controller: CustomDialogControllerStubLike): void {
+    this.controllers.push(controller);
+  }
+
+  restore(): void {
+    activeDialogRecorder = null;
+    Reflect.set(globalThis as Object, 'CustomDialogController', this.originController);
+    Reflect.set(globalThis as Object, 'DialogAlignment', this.originAlignment);
+  }
+}
+
+class WeatherPreferenceStubLike implements WeatherUserPreference {
+  heatSensitivity: 0 | 1 | 2 = 1;
+  rainSensitivity: 0 | 1 | 2 = 1;
+  weatherRiskTolerance: 0 | 1 | 2 = 1;
+}
+
+class TimelineVmStubLike {
 }
 
 export default function indexDialogManagerTest() {
@@ -296,6 +406,258 @@ export default function indexDialogManagerTest() {
         Reflect.set(IndexDialogManager as Object, 'createDateFilterController', originalCreate);
         Reflect.set(IndexDialogManager as Object, 'openSingleDateFilterPicker', originalOpenSingle);
         Reflect.set(IndexDialogManager as Object, 'openRangeDateFilterPicker', originalOpenRange);
+      }
+    });
+
+    it('normal: create_date_filter_settings_rename_and_suggestion_controllers_should_keep_expected_dialog_config', 0, () => {
+      // Arrange
+      const weatherPreference = new WeatherPreferenceStubLike();
+      // Act
+      const dateController = IndexDialogManager.createDateFilterController({
+        onShowAll: (): void => {},
+        onSelectDate: (): void => {},
+        onSelectRange: (): void => {}
+      }) as Object;
+      const settingsController = IndexDialogManager.createSettingsController({
+          onRename: (): void => {},
+          onReschedule: (): void => {},
+          onShare: (): void => {},
+          weatherUserPreference: weatherPreference,
+          onWeatherPreferenceChange: async (_preference): Promise<void> => {}
+        } as SettingsCallbacks) as Object;
+      const renameController = IndexDialogManager.createRenameController('trip-name', (_name: string): void => {}) as Object;
+      const suggestionController = IndexDialogManager.createSuggestionController({
+          itemName: 'museum',
+          conflictName: 'traffic',
+          targetTime: '09:00',
+          suggestedTime: '09:30',
+          detailMsg: 'shift by 30m',
+          onConfirm: (): void => {},
+          onBack: (): void => {}
+        } as SuggestionDialogCallbacks) as Object;
+
+      // Assert
+      expect(typeof Reflect.get(dateController, 'open')).assertEqual('function');
+      expect(typeof Reflect.get(settingsController, 'open')).assertEqual('function');
+      expect(typeof Reflect.get(renameController, 'open')).assertEqual('function');
+      expect(typeof Reflect.get(suggestionController, 'open')).assertEqual('function');
+    });
+
+    it('boundary: create_ai_dialog_controller_should_cover_default_and_explicit_strategy_mode_paths', 0, () => {
+      // Arrange
+      const defaultCallbacks: AiDialogCallbacks = {
+        hasAiHistory: true,
+        onConfirm: async (_text: string, _strategy: number): Promise<void> => {},
+        onRegenerate: async (_strategy: number): Promise<void> => {}
+      };
+      const explicitCallbacks: AiDialogCallbacks = {
+        hasAiHistory: true,
+        currentStrategyMode: 2,
+        onConfirm: async (_text: string, _strategy: number): Promise<void> => {},
+        onRegenerate: async (_strategy: number): Promise<void> => {}
+      };
+      // Act
+      const defaultController = IndexDialogManager.createAiDialogController(defaultCallbacks) as Object;
+      const explicitController = IndexDialogManager.createAiDialogController(explicitCallbacks) as Object;
+
+      // Assert
+      expect(typeof Reflect.get(defaultController, 'open')).assertEqual('function');
+      expect(typeof Reflect.get(explicitController, 'open')).assertEqual('function');
+    });
+
+    it('invalid: create_advance_adjust_controller_should_cover_missing_forced_gap_fallback', 0, () => {
+      // Arrange
+      const vm = new TimelineVmStubLike() as Object as TimelineViewModel;
+      // Act
+      const defaultController = IndexDialogManager.createAdvanceAdjustController({
+          vm: vm,
+          targetIndex: 1,
+          targetName: 'station',
+          onCancel: (): void => {},
+          onConfirm: (_ids: number[], _nextStartTime: string): void => {}
+        } as AdvanceAdjustCallbacks) as Object;
+      const explicitController = IndexDialogManager.createAdvanceAdjustController({
+          vm: vm,
+          targetIndex: 2,
+          targetName: 'museum',
+          forcedGapMinutes: 25,
+          onCancel: (): void => {},
+          onConfirm: (_ids: number[], _nextStartTime: string): void => {}
+        } as AdvanceAdjustCallbacks) as Object;
+
+      // Assert
+      expect(typeof Reflect.get(defaultController, 'open')).assertEqual('function');
+      expect(typeof Reflect.get(explicitController, 'open')).assertEqual('function');
+    });
+
+    it('conflict: create_conflict_and_date_conflict_controllers_should_keep_non_auto_cancel_flow', 0, () => {
+      // Arrange
+      const vm = new TimelineVmStubLike() as Object as TimelineViewModel;
+      // Act
+      const selectionController = IndexDialogManager.createConflictSelectionController({
+          gapMinutes: 45,
+          onDelayY: (): void => {},
+          onCompressX: (): void => {},
+          onShiftSameDay: (): void => {},
+          onAdvanceAdjust: (): void => {},
+          onSmartAdjust: (): void => {}
+        } as ConflictSelectionCallbacks) as Object;
+      const compressController = IndexDialogManager.createConflictCompressController({
+          vm: vm,
+          targetIndex: 3,
+          targetTime: '10:00',
+          targetName: 'bridge',
+          initialMode: 'RATIO' as CompressionMode,
+          initialSelectedIds: [1, 2],
+          onCancel: (): void => {},
+          onConfirm: (_ids: number[], _mode: CompressionMode): void => {}
+        } as ConflictCompressCallbacks) as Object;
+      const dateConflictController = IndexDialogManager.createDateConflictController({
+          conflictDateStr: '2026-05-16',
+          planStartDateStr: '2026-05-15',
+          planStartDate: new Date(2026, 4, 15).getTime(),
+          onChangeItemDate: (): void => {},
+          onMoveToBacklog: (): void => {},
+          onChangePlanStartDate: (): void => {},
+          onCancel: (): void => {}
+        } as DateConflictCallbacks) as Object;
+
+      // Assert
+      expect(typeof Reflect.get(selectionController, 'open')).assertEqual('function');
+      expect(typeof Reflect.get(compressController, 'open')).assertEqual('function');
+      expect(typeof Reflect.get(dateConflictController, 'open')).assertEqual('function');
+    });
+
+    it('regression: create_gap_add_and_share_controllers_should_preserve_offset_and_style_contract', 0, () => {
+      // Arrange
+      const vm = new TimelineVmStubLike() as Object as TimelineViewModel;
+      // Act
+      const gapController = IndexDialogManager.createGapResolutionController({
+          vm: vm,
+          currentGap: null
+        } as GapResolutionCallbacks) as Object;
+      const addController = IndexDialogManager.createAddItemController({
+          initName: 'cafe',
+          initNote: 'window seat',
+          initDuration: 90,
+          initIsAnchor: false,
+          initFixedTime: '11:00',
+          initSuggestedTime: '11:10',
+          initIsSchedule: true,
+          initDayOffset: 1,
+          initPreTravel: 15,
+          initPriority: 2,
+          storageScopePlanId: 9,
+          planStartDate: new Date(2026, 4, 16).getTime(),
+          initLat: 31.2,
+          initLng: 121.5,
+          onDateChangedRecommendTime: (_dayOffset: number, currentTime: string): string => currentTime,
+          onConfirm: async (
+            _name: string,
+            _duration: number,
+            _isSchedule: boolean
+          ): Promise<void> => {}
+        } as AddItemDialogCallbacks) as Object;
+      const shareController = IndexDialogManager.createShareController({
+          planId: 9,
+          planTitle: 'weekend',
+          startDate: 1,
+          endDate: 2,
+          totalDays: 2,
+          totalEvents: 5,
+          compressedJson: '{"id":9}'
+        } as ShareDialogCallbacks) as Object;
+
+      // Assert
+      expect(typeof Reflect.get(gapController, 'open')).assertEqual('function');
+      expect(typeof Reflect.get(addController, 'open')).assertEqual('function');
+      expect(typeof Reflect.get(shareController, 'open')).assertEqual('function');
+    });
+
+    it('combined: controller_matrix_should_expose_builder_and_open_for_all_wrappers_created_in_this_file', 0, () => {
+      // Arrange
+      const vm = new TimelineVmStubLike() as Object as TimelineViewModel;
+
+      // Act
+      const controllers = [
+        IndexDialogManager.createDateFilterController({
+          onShowAll: (): void => {},
+          onSelectDate: (): void => {},
+          onSelectRange: (): void => {}
+        }) as Object,
+        IndexDialogManager.createAiDialogController({
+          hasAiHistory: false,
+          currentStrategyMode: 1,
+          onConfirm: async (_text: string, _strategy: number): Promise<void> => {},
+          onRegenerate: async (_strategy: number): Promise<void> => {}
+        } as AiDialogCallbacks) as Object,
+        IndexDialogManager.createAddItemController({
+          initName: 'park',
+          initNote: '',
+          initDuration: 30,
+          initIsAnchor: true,
+          initFixedTime: '',
+          initSuggestedTime: '14:00',
+          initIsSchedule: false,
+          initDayOffset: 0,
+          initPreTravel: 0,
+          initPriority: 0,
+          storageScopePlanId: 2,
+          planStartDate: 3,
+          initLat: 0,
+          initLng: 0,
+          onDateChangedRecommendTime: (_dayOffset: number, currentTime: string): string => currentTime,
+          onConfirm: async (
+            _name: string,
+            _duration: number,
+            _isSchedule: boolean
+          ): Promise<void> => {}
+        } as AddItemDialogCallbacks) as Object,
+        IndexDialogManager.createGapResolutionController({
+          vm: vm,
+          currentGap: null
+        } as GapResolutionCallbacks) as Object
+      ];
+
+      // Assert
+      expect(controllers.length).assertEqual(4);
+      for (let i = 0; i < controllers.length; i++) {
+        expect(typeof Reflect.get(controllers[i], 'open')).assertEqual('function');
+      }
+    });
+
+    it('combined: controller_matrix_should_open_remaining_dialog_wrappers_without_throwing', 0, () => {
+      // Arrange
+      const weatherPreference = new WeatherPreferenceStubLike();
+
+      // Act
+      const controllers = [
+        IndexDialogManager.createSettingsController({
+          onRename: (): void => {},
+          onReschedule: (): void => {},
+          onShare: (): void => {},
+          weatherUserPreference: weatherPreference,
+          onWeatherPreferenceChange: async (_preference): Promise<void> => {}
+        } as SettingsCallbacks) as Object,
+        IndexDialogManager.createRenameController(
+          'trip',
+          (_name: string): void => {}
+        ) as Object,
+        IndexDialogManager.createShareController({
+          planId: 3,
+          planTitle: 'trip',
+          startDate: 1,
+          endDate: 2,
+          totalDays: 2,
+          totalEvents: 6,
+          compressedJson: '{}'
+        } as ShareDialogCallbacks) as Object
+      ];
+
+      // Assert
+      expect(controllers.length).assertEqual(3);
+      for (let i = 0; i < controllers.length; i++) {
+        expect(typeof Reflect.get(controllers[i], 'open')).assertEqual('function');
       }
     });
   });

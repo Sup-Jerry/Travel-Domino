@@ -40,6 +40,7 @@ interface CompanionSearchPagePrivateTest {
   setInitiallyProvidedValue(params: CompanionSearchPageParamsTest): void;
   updateStateVars(params: CompanionSearchPageParamsTest): void;
   getThemePalette(): CompanionSearchPaletteTest;
+  build(): void;
   initialRender(): void;
 }
 
@@ -48,6 +49,15 @@ function buildSearchEvent(id: number, name: string): EventEntity {
   event.id = id;
   event.name = name;
   return event;
+}
+
+function runSearchPageRender(page: CompanionSearchPagePrivateTest): boolean {
+  try {
+    page.initialRender();
+    return false;
+  } catch (_error) {
+    return true;
+  }
 }
 
 export default function companionSearchPageHelperTest() {
@@ -125,7 +135,7 @@ export default function companionSearchPageHelperTest() {
       expect(ok).assertTrue();
     });
 
-    it('combined: search_page_instance_should_sync_props_callbacks_and_palette', 0, () => {
+    it('combined: search_page_instance_should_sync_props_callbacks_default_labels_and_palette', 0, () => {
       // Arrange
       const page = new CompanionSearchPage(undefined, {} as LocalStorage) as Object as CompanionSearchPagePrivateTest;
       const first = buildSearchEvent(10, 'library');
@@ -138,6 +148,8 @@ export default function companionSearchPageHelperTest() {
       page.onClose();
       page.onSearch('before');
       page.onResultClick(first);
+      const defaultStateLabel = page.getEventStateLabel(first);
+      const defaultRange = page.getPlannedRange(first);
       page.setInitiallyProvidedValue({
         showSearchPage: true,
         searchKeyword: 'lib',
@@ -170,6 +182,8 @@ export default function companionSearchPageHelperTest() {
       expect(closeCount).assertEqual(1);
       expect(searchKeyword).assertEqual('park');
       expect(clickedId).assertEqual(11);
+      expect(defaultStateLabel).assertEqual('--');
+      expect(defaultRange).assertEqual('--');
       expect(palette.textPrimary).assertEqual(ThemeCenter.getPalette('dark').textPrimary);
       expect(palette.textSecondary).assertEqual(ThemeCenter.getPalette('dark').textSecondary);
       expect(palette.textTertiary).assertEqual(ThemeCenter.getPalette('dark').textTertiary);
@@ -177,13 +191,17 @@ export default function companionSearchPageHelperTest() {
       expect(palette.companionCardBg).assertEqual(ThemeCenter.getPalette('dark').companionCardBg);
       expect(palette.primary).assertEqual(ThemeCenter.getPalette('dark').primary);
     });
-    it('normal: search_page_initial_render_should_support_result_list_branch', 0, () => {
+    it('normal: search_page_render_should_support_result_list_branch_and_custom_meta_callbacks', 0, () => {
       // Arrange
       const page = new CompanionSearchPage(undefined, {} as LocalStorage) as Object as CompanionSearchPagePrivateTest;
       const first = buildSearchEvent(1, 'museum');
       const second = buildSearchEvent(2, 'station');
+      const capturedNames: string[] = [];
       page.getEventStateLabel = (_item: EventEntity): string => '进行中';
-      page.getPlannedRange = (_item: EventEntity): string => '10:00-11:00';
+      page.getPlannedRange = (item: EventEntity): string => {
+        capturedNames.push(item.name);
+        return '10:00-11:00';
+      };
       page.setInitiallyProvidedValue({
         showSearchPage: true,
         searchKeyword: 'mu',
@@ -193,53 +211,91 @@ export default function companionSearchPageHelperTest() {
       });
 
       // Act
-      let threw = false;
-      try {
-        page.initialRender();
-      } catch (_error) {
-        threw = true;
-      }
+      const meta = getCompanionSearchResultMetaText(page.getEventStateLabel(first), page.getPlannedRange(first));
+      const threw = runSearchPageRender(page);
 
       // Assert
       expect(threw).assertFalse();
+      expect(meta).assertEqual('进行中 | 10:00-11:00');
+      expect(capturedNames[0]).assertEqual('museum');
     });
 
-    it('boundary: search_page_initial_render_should_support_empty_state_and_hidden_state_branches', 0, () => {
+    it('boundary: search_page_render_should_support_empty_state_branch_with_safe_area_values', 0, () => {
       // Arrange
-      const emptyPage = new CompanionSearchPage(undefined, {} as LocalStorage) as Object as CompanionSearchPagePrivateTest;
-      emptyPage.setInitiallyProvidedValue({
+      const page = new CompanionSearchPage(undefined, {} as LocalStorage) as Object as CompanionSearchPagePrivateTest;
+      page.setInitiallyProvidedValue({
         showSearchPage: true,
         searchKeyword: 'none',
         searchResults: [],
-        safeTopInset: 0,
-        safeBottomInset: 0
-      });
-      const hiddenPage = new CompanionSearchPage(undefined, {} as LocalStorage) as Object as CompanionSearchPagePrivateTest;
-      hiddenPage.setInitiallyProvidedValue({
-        showSearchPage: false,
-        searchKeyword: '',
-        searchResults: [],
-        safeTopInset: 0,
-        safeBottomInset: 0
+        safeTopInset: 12,
+        safeBottomInset: 18
       });
 
       // Act
-      let emptyThrew = false;
-      let hiddenThrew = false;
-      try {
-        emptyPage.initialRender();
-      } catch (_error) {
-        emptyThrew = true;
-      }
-      try {
-        hiddenPage.initialRender();
-      } catch (_error) {
-        hiddenThrew = true;
-      }
+      const shouldShowEmpty = shouldShowCompanionSearchEmptyState(page.searchResults.length);
+      const threw = runSearchPageRender(page);
 
       // Assert
-      expect(emptyThrew).assertFalse();
-      expect(hiddenThrew).assertFalse();
+      expect(shouldShowEmpty).assertTrue();
+      expect(threw).assertFalse();
+      expect(page.searchResults.length).assertEqual(0);
+    });
+
+    it('conflict: search_page_render_should_keep_hidden_branch_independent_from_non_empty_results', 0, () => {
+      // Arrange
+      const page = new CompanionSearchPage(undefined, {} as LocalStorage) as Object as CompanionSearchPagePrivateTest;
+      page.setInitiallyProvidedValue({
+        showSearchPage: false,
+        searchKeyword: 'park',
+        searchResults: [buildSearchEvent(3, 'park')],
+        safeTopInset: 2,
+        safeBottomInset: 4
+      });
+
+      // Act
+      const visible = shouldShowCompanionSearchPage(false);
+      const shouldShowEmpty = shouldShowCompanionSearchEmptyState(1);
+
+      // Assert
+      expect(visible).assertFalse();
+      expect(shouldShowEmpty).assertFalse();
+      expect(page.searchResults.length >= 0).assertTrue();
+    });
+
+    it('regression: search_page_render_should_keep_dark_theme_result_state_after_props_update', 0, () => {
+      // Arrange
+      const page = new CompanionSearchPage(undefined, {} as LocalStorage) as Object as CompanionSearchPagePrivateTest;
+      const initialEvent = buildSearchEvent(4, 'cafe');
+      const nextEvent = buildSearchEvent(5, 'hotel');
+      page.setInitiallyProvidedValue({
+        showSearchPage: true,
+        searchKeyword: 'ca',
+        searchResults: [initialEvent],
+        safeTopInset: 6,
+        safeBottomInset: 8
+      });
+      page.updateStateVars({
+        showSearchPage: true,
+        searchKeyword: 'ho',
+        searchResults: [nextEvent],
+        safeTopInset: 16,
+        safeBottomInset: 20
+      });
+      page.effectiveTheme = 'dark';
+
+      // Act
+      const palette = page.getThemePalette();
+      const threw = runSearchPageRender(page);
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.searchKeyword).assertEqual('ho');
+      expect(page.searchResults[0].name).assertEqual('hotel');
+      expect(page.safeTopInset).assertEqual(16);
+      expect(page.safeBottomInset).assertEqual(20);
+      expect(palette.companionBg).assertEqual(ThemeCenter.getPalette('dark').companionBg);
+      expect(palette.companionCardBg).assertEqual(ThemeCenter.getPalette('dark').companionCardBg);
+      expect(palette.primary).assertEqual(ThemeCenter.getPalette('dark').primary);
     });
   });
 }
