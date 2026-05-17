@@ -417,5 +417,44 @@ export default function gapResolutionDialogHelperTest() {
       expect(greenLabel).assertEqual('\u6548\u7387\u8865\u5168');
       expect(emptyLabel).assertEqual('');
     });
+
+    it('boundary: gap_resolution_refresh_should_clear_stale_current_gap_when_gap_list_is_empty', 0, () => {
+      // Arrange
+      const vm = new GapVmMockHelper();
+      const dialog = createDialogHelper(vm);
+      dialog.currentGap = buildGapEventHelper(701, 'stale-gap', 35, '2026-05-16 08:00');
+      dialog.candidates = [buildGapEventHelper(702, 'stale-candidate', 0, '2026-05-16 08:30', 20)];
+      dialog.selectedIds = new Set<number>([702]);
+      vm.distributionCoordinator.sortedGaps = [];
+
+      // Act
+      dialog.refreshGaps();
+
+      // Assert
+      expect(dialog.gapList.length).assertEqual(0);
+      expect(dialog.currentGap === null).assertTrue();
+      expect(dialog.candidates.length).assertEqual(1);
+      expect(dialog.selectedIds.size).assertEqual(1);
+    });
+
+    it('combined: gap_resolution_private_helpers_should_keep_blank_tier_and_zero_allocations_consistent', 0, () => {
+      // Arrange
+      const vm = new GapVmMockHelper();
+      vm.trigger = 45;
+      const dialog = createDialogHelper(vm);
+      const zeroMap = new Map<number, number>();
+      zeroMap.set(1, 0);
+      zeroMap.set(2, 0);
+
+      // Act
+      const blankColor = dialog.getTierColor(44);
+      const blankLabel = dialog.getTierLabel(44);
+      const zeroAllocations = dialog.hasPositiveAllocation(zeroMap);
+
+      // Assert
+      expect(blankColor).assertEqual('');
+      expect(blankLabel).assertEqual('');
+      expect(zeroAllocations).assertFalse();
+    });
   });
 }

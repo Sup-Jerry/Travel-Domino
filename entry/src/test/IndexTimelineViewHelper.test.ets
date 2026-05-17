@@ -438,6 +438,64 @@ export default function indexTimelineViewHelperTest() {
       expect(archivedDisabled).assertFalse();
       expect(shouldShowIndexTimelineGapHint(false, 3)).assertTrue();
     });
+
+    it('boundary: timeline_header_text_should_keep_zero_place_count_visible', 0, () => {
+      // Arrange
+      const text = 'Day 5';
+
+      // Act
+      const header = buildIndexTimelineHeaderText(text, 0);
+
+      // Assert
+      expect(header.indexOf('Day 5') >= 0).assertTrue();
+      expect(header.indexOf('0') >= 0).assertTrue();
+    });
+
+    it('combined: timeline_view_initial_render_should_support_mixed_collapsed_groups_and_gap_hint_matrix', 0, () => {
+      // Arrange
+      const page = new IndexTimelineView(undefined, {} as LocalStorage) as Object as IndexTimelineViewPrivateTest;
+      const first = buildTimelineEvent(51);
+      const second = buildTimelineEvent(52);
+      page.setInitiallyProvidedValue({
+        groupedEvents: [{
+          dayOffset: 5,
+          actualDateMs: 50,
+          dateHeader: 'Day 5',
+          events: [first]
+        }, {
+          dayOffset: 6,
+          actualDateMs: 60,
+          dateHeader: 'Day 6',
+          events: [second]
+        }],
+        allEvents: [first, second],
+        isArchived: false,
+        isCompanionMode: true,
+        showWeather: true,
+        isPageRefreshing: false,
+        gapsCount: 2,
+        onIsDayCollapsed: (dayOffset: number) => dayOffset === 5
+      });
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+      const firstHidden = shouldShowIndexTimelineGroupItems(page.onIsDayCollapsed(5));
+      const secondVisible = shouldShowIndexTimelineGroupItems(page.onIsDayCollapsed(6));
+      const gapHint = shouldShowIndexTimelineGapHint(false, 2);
+      const spacerHeight = resolveIndexTimelineBottomSpacerHeight(true);
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(firstHidden).assertFalse();
+      expect(secondVisible).assertTrue();
+      expect(gapHint).assertTrue();
+      expect(spacerHeight).assertEqual(24);
+    });
   });
 }
 

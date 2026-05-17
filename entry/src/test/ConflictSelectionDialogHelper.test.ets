@@ -190,5 +190,76 @@ export default function conflictSelectionDialogHelperTest() {
       expect(shouldUseConflictAdvanceAdjust(true)).assertTrue();
     });
 
+    it('regression: conflict_selection_dialog_should_close_and_dispatch_delay_and_compress_actions', 0, () => {
+      // Arrange
+      const page = new ConflictSelectionDialog(undefined, {} as LocalStorage) as Object as ConflictSelectionDialogPrivateTest;
+      const controller = new DialogControllerMockConflictSelection();
+      let delayCalls = 0;
+      let compressCalls = 0;
+      page.setController(controller);
+      page.onDelayY = () => {
+        delayCalls += 1;
+      };
+      page.onCompressX = () => {
+        compressCalls += 1;
+      };
+      page.OptionCard = (
+        _icon: string,
+        title: string,
+        _desc: string,
+        _bg: string,
+        _color: string,
+        action: () => void
+      ): void => {
+        if (title === '向后顺延' || title === '压缩前序') {
+          action();
+        }
+      };
+
+      // Act
+      page.initialRender();
+
+      // Assert
+      expect(controller.closeCount).assertEqual(2);
+      expect(delayCalls).assertEqual(1);
+      expect(compressCalls).assertEqual(1);
+    });
+
+    it('combined: conflict_selection_dialog_should_fallback_to_shift_same_day_when_advance_callback_is_missing', 0, () => {
+      // Arrange
+      const page = new ConflictSelectionDialog(undefined, {} as LocalStorage) as Object as ConflictSelectionDialogPrivateTest;
+      const controller = new DialogControllerMockConflictSelection();
+      let advanceCalls = 0;
+      let shiftCalls = 0;
+      page.setController(controller);
+      page.onAdvanceAdjust = () => {
+        advanceCalls += 1;
+      };
+      page.onShiftSameDay = () => {
+        shiftCalls += 1;
+      };
+      Reflect.set(page as Object, 'onAdvanceAdjust', undefined);
+      page.OptionCard = (
+        _icon: string,
+        title: string,
+        _desc: string,
+        _bg: string,
+        _color: string,
+        action: () => void
+      ): void => {
+        if (title === '前移调整') {
+          action();
+        }
+      };
+
+      // Act
+      page.initialRender();
+
+      // Assert
+      expect(controller.closeCount).assertEqual(1);
+      expect(advanceCalls).assertEqual(0);
+      expect(shiftCalls).assertEqual(1);
+    });
+
   });
 }
