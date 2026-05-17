@@ -738,5 +738,65 @@ export default function indexDialogManagerTest() {
       expect(acceptedStartMs).assertEqual(-1);
       expect(acceptedEndMs).assertEqual(-1);
     });
+
+    it('combined: open_date_filter_dialog_should_forward_wrapper_callbacks_to_single_and_range_pickers', 0, () => {
+      // Arrange
+      const uiContext = new PickerUiContextMock();
+      const originalCreate = Reflect.get(IndexDialogManager as Object, 'createDateFilterController') as (callbacks: Object) => Object;
+      const originalSingle = Reflect.get(IndexDialogManager as Object, 'openSingleDateFilterPicker') as Object;
+      const originalRange = Reflect.get(IndexDialogManager as Object, 'openRangeDateFilterPicker') as Object;
+      const controllerStub = new DateFilterControllerMock();
+      let capturedBag: Object | null = null;
+      let singlePlanStartDate = -1;
+      let rangePlanStartDate = -1;
+      let selectedDateMs = -1;
+      let selectedStartMs = -1;
+      let selectedEndMs = -1;
+
+      Reflect.set(IndexDialogManager as Object, 'createDateFilterController', (callbacks: Object): Object => {
+        capturedBag = callbacks as DateFilterCallbackBagLike;
+        return controllerStub as Object;
+      });
+      Reflect.set(IndexDialogManager as Object, 'openSingleDateFilterPicker', (_uiContext: UIContext, planStartDate: number, onAccept: (dateMs: number) => void): void => {
+        singlePlanStartDate = planStartDate;
+        onAccept(111);
+      });
+      Reflect.set(IndexDialogManager as Object, 'openRangeDateFilterPicker', (_uiContext: UIContext, planStartDate: number, onAccept: (startMs: number, endMs: number) => void): void => {
+        rangePlanStartDate = planStartDate;
+        onAccept(222, 333);
+      });
+
+      try {
+        // Act
+        const controller = IndexDialogManager.openDateFilterDialog(uiContext as Object as UIContext, 456, {
+          onShowAll: (): void => {},
+          onSelectDate: (dateMs: number): void => {
+            selectedDateMs = dateMs;
+          },
+          onSelectRange: (startMs: number, endMs: number): void => {
+            selectedStartMs = startMs;
+            selectedEndMs = endMs;
+          }
+        });
+        if (capturedBag !== null) {
+          const callbackBag = capturedBag as DateFilterCallbackBagLike;
+          callbackBag.onSelectDate();
+          callbackBag.onSelectRange();
+        }
+
+        // Assert
+        expect(controller === controllerStub as Object).assertTrue();
+        expect(controllerStub.openCount).assertEqual(1);
+        expect(singlePlanStartDate).assertEqual(456);
+        expect(rangePlanStartDate).assertEqual(456);
+        expect(selectedDateMs).assertEqual(111);
+        expect(selectedStartMs).assertEqual(222);
+        expect(selectedEndMs).assertEqual(333);
+      } finally {
+        Reflect.set(IndexDialogManager as Object, 'createDateFilterController', originalCreate);
+        Reflect.set(IndexDialogManager as Object, 'openSingleDateFilterPicker', originalSingle);
+        Reflect.set(IndexDialogManager as Object, 'openRangeDateFilterPicker', originalRange);
+      }
+    });
   });
 }

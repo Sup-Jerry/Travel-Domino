@@ -3279,6 +3279,60 @@ export default function phase2BatchAQTest() {
       expect(first).assertEqual(DomainConstants.COMMUTE_LOADING);
       expect(second).assertEqual(15);
     });
+
+    it('boundary: traffic_get_commute_minutes_should_clear_expired_transient_guard_before_triggering_fetch', 0, () => {
+      // Arrange
+      const engine = resetTrafficEngineAQ();
+      const from = createLocationAQ('GuardFrom', 31.20, 121.40);
+      const to = createLocationAQ('GuardTo', 31.30, 121.50);
+      const key = buildTrafficKeyAQ(engine, from, to, 1);
+      let capturedKey = '';
+      Reflect.set(engine as Object, 'mapService', new FakeMapServiceAQ() as Object);
+      Reflect.set(engine as Object, 'fetchMultiModalTrafficAsync', (
+        _from: LocationInfo,
+        _to: LocationInfo,
+        _mode: number,
+        asyncKey: string,
+        _startTime?: string
+      ): void => {
+        capturedKey = asyncKey;
+      });
+      (Reflect.get(engine as Object, 'transientFailureUntil') as Map<string, number>).set(key, Date.now() - 1);
+
+      // Act
+      const minutes = engine.getCommuteMinutes(from, to, 1, '10:00');
+
+      // Assert
+      expect(minutes).assertEqual(DomainConstants.COMMUTE_LOADING);
+      expect(capturedKey).assertEqual(key);
+      expect((Reflect.get(engine as Object, 'transientFailureUntil') as Map<string, number>).has(key)).assertFalse();
+    });
+
+    it('combined: traffic_get_commute_minutes_should_build_nocoord_cache_key_for_invalid_coordinates', 0, () => {
+      // Arrange
+      const engine = resetTrafficEngineAQ();
+      const from = createLocationAQ('NoCoordFrom', 0, 0);
+      const to = createLocationAQ('NoCoordTo', 0, 0);
+      let capturedKey = '';
+      Reflect.set(engine as Object, 'mapService', new FakeMapServiceAQ() as Object);
+      Reflect.set(engine as Object, 'fetchMultiModalTrafficAsync', (
+        _from: LocationInfo,
+        _to: LocationInfo,
+        _mode: number,
+        asyncKey: string,
+        _startTime?: string
+      ): void => {
+        capturedKey = asyncKey;
+      });
+
+      // Act
+      const minutes = engine.getCommuteMinutes(from, to, 0);
+
+      // Assert
+      expect(minutes).assertEqual(DomainConstants.COMMUTE_LOADING);
+      expect(capturedKey.indexOf('FNOCOORD') >= 0).assertTrue();
+      expect(capturedKey.indexOf('TNOCOORD') >= 0).assertTrue();
+    });
   });
 }
 

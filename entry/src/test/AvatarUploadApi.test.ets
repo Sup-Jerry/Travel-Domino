@@ -511,5 +511,36 @@ export default function avatarUploadApiTest() {
 
       done();
     });
+
+    it('combined: upload_api_should_keep_whitespace_access_token_on_remote_sync_path', 0, async (done: () => void) => {
+      // Arrange
+      let capturedToken = '';
+      const uploader = new AvatarUploadApi({
+        getAccessToken: (): string => '   ',
+        encodeFileToDataUrl: (_fileUriText: string, _mimeType: string): string => 'data:image/jpeg;base64,II==',
+        updateAvatar: async (accessToken: string): Promise<AuthApiResponse<UpdateAvatarResult>> => {
+          capturedToken = accessToken;
+          const data = new UpdateAvatarResult();
+          data.avatarUrl = 'https://example.com/whitespace-token.jpg';
+          const response = new AuthApiResponse<UpdateAvatarResult>(data);
+          response.code = 0;
+          return response;
+        },
+        now: (): number => 5001
+      });
+      const input = new AvatarUploadInput();
+      input.userId = 'u_whitespace_token';
+      input.fileUri = 'file://avatar-whitespace-token.jpg';
+
+      // Act
+      const result = await uploader.uploadAvatar(input);
+
+      // Assert
+      expect(String(result.status)).assertEqual('SYNCED');
+      expect(String(result.requestId)).assertEqual('avatar_req_5001');
+      expect(capturedToken).assertEqual('   ');
+      expect(String(result.remoteUrl || '')).assertEqual('https://example.com/whitespace-token.jpg');
+      done();
+    });
   });
 }
