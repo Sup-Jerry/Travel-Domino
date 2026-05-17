@@ -625,6 +625,32 @@ export default function phase2CoreCoverageBatchVTest() {
       expect(third.forecast_end_time === 'xxxx').assertFalse();
     });
 
+    it('boundary: timeline_execution_realtime_schedule_should_respect_actual_start_on_non_first_event', 0, () => {
+      // Arrange
+      const bundle = createBundleForV();
+      bundle.host.planStartDate = new Date('2026-05-18T00:00:00.000Z').getTime();
+      const first = createEventForV(52, 'first_cursor_v');
+      first.actual_start_time = new Date('2026-05-18T08:00:00.000Z').getTime();
+      first.actual_end_time = new Date('2026-05-18T08:20:00.000Z').getTime();
+      first.completion_status = EventEntity.STATE_COMPLETED;
+      const second = createEventForV(53, 'second_actual_v');
+      second.actual_start_time = new Date('2026-05-18T09:10:00.000Z').getTime();
+      second.duration = 35;
+      const third = createEventForV(54, 'third_follow_v');
+      third.pre_travel_min = 10;
+      third.duration = 20;
+      bundle.host.events = [first, second, third];
+
+      // Act
+      bundle.service.calculateRealtimeSchedule();
+
+      // Assert
+      expect(second.dynamic_start_time).assertEqual(second.actual_start_time);
+      expect(second.dynamic_end_time).assertEqual(second.actual_start_time + 35 * 60 * 1000);
+      expect(third.dynamic_start_time).assertEqual(second.dynamic_end_time + 10 * 60 * 1000);
+      expect(third.dynamic_end_time).assertEqual(third.dynamic_start_time + 20 * 60 * 1000);
+    });
+
     it('combined: timeline_execution_skip_should_ignore_completed_items_and_conflict_lookup_should_return_null', 0, async () => {
       // Arrange
       const bundle = createBundleForV();
@@ -646,6 +672,24 @@ export default function phase2CoreCoverageBatchVTest() {
       } finally {
         hooks.restore();
       }
+    });
+
+    it('boundary: timeline_execution_skip_should_recalculate_when_target_has_no_persisted_id', 0, async () => {
+      // Arrange
+      const bundle = createBundleForV();
+      const transientTarget = createEventForV(55, 'transient_skip_v');
+      transientTarget.id = 0;
+      transientTarget.dynamic_start_time = Date.now() + 30 * 60 * 1000;
+      bundle.host.events = [transientTarget];
+
+      // Act
+      await bundle.service.skipEvent(transientTarget);
+
+      // Assert
+      expect(bundle.host.transitionCallCount).assertEqual(0);
+      expect(bundle.host.recalculateCallCount).assertEqual(1);
+      expect(bundle.host.latestReflowHint !== null).assertTrue();
+      expect(bundle.host.checkinCount).assertEqual(1);
     });
 
     it('invalid: timeline_execution_update_actual_end_should_return_false_when_runtime_transition_rejects', 0, async () => {
