@@ -58,6 +58,7 @@ class HostMockForV implements ITimelineExecutionHost {
   planStartDate: number = Date.now();
   isArchived: boolean = false;
   shouldThrowTransition: boolean = false;
+  transitionShouldSucceed: boolean = true;
   actualTimeMutationInFlight: boolean = false;
   latestReflowHint: ReflowHint | null = null;
   planId: number = 1;
@@ -78,6 +79,9 @@ class HostMockForV implements ITimelineExecutionHost {
   ): Promise<boolean> {
     if (this.shouldThrowTransition) {
       throw new Error('transition_failed_v');
+    }
+    if (!this.transitionShouldSucceed) {
+      return false;
     }
     this.transitionCallCount++;
     if (transition === 'START') {
@@ -239,6 +243,24 @@ export default function phase2CoreCoverageBatchVTest() {
       expect(found?.id ?? 0).assertEqual(1);
     });
 
+    it('boundary: timeline_execution_find_current_active_event_should_match_dynamic_window_when_no_actual_start_exists', 0, () => {
+      // Arrange
+      const bundle = createBundleForV();
+      const dynamicActive = createEventForV(42, 'dynamic_active_v');
+      dynamicActive.dynamic_start_time = Date.now() - 30_000;
+      dynamicActive.dynamic_end_time = Date.now() + 30_000;
+      const laterPending = createEventForV(43, 'later_pending_v');
+      laterPending.dynamic_start_time = Date.now() + 90_000;
+      laterPending.dynamic_end_time = Date.now() + 150_000;
+      bundle.host.events = [dynamicActive, laterPending];
+
+      // Act
+      const found = bundle.service.findCurrentActiveEvent();
+
+      // Assert
+      expect(found?.id ?? 0).assertEqual(42);
+    });
+
     it('boundary: timeline_execution_calculate_realtime_schedule_should_mark_anchor_conflict_when_cursor_exceeds_locked_time', 0, () => {
       // Arrange
       const bundle = createBundleForV();
@@ -352,6 +374,26 @@ export default function phase2CoreCoverageBatchVTest() {
       expect(afterStartEvents === afterEndEvents).assertFalse();
     });
 
+    it('invalid: timeline_execution_record_start_and_checkout_should_stop_when_transition_returns_false', 0, async () => {
+      // Arrange
+      const bundle = createBundleForV();
+      const target = createEventForV(44, 'blocked_transition_v');
+      bundle.host.events = [target];
+      bundle.host.transitionShouldSucceed = false;
+      const beforeEvents = bundle.host.events;
+
+      // Act
+      await bundle.service.recordStartTime(target);
+      await bundle.service.checkOutEvent(target);
+
+      // Assert
+      expect(bundle.host.transitionCallCount).assertEqual(0);
+      expect(bundle.host.recalculateCallCount).assertEqual(0);
+      expect(target.actual_start_time).assertEqual(0);
+      expect(target.actual_end_time).assertEqual(0);
+      expect(bundle.host.events === beforeEvents).assertTrue();
+    });
+
     it('boundary: timeline_execution_update_actual_time_should_persist_zero_start_without_starting_plan', 0, async () => {
       // Arrange
       const bundle = createBundleForV();
@@ -435,6 +477,25 @@ export default function phase2CoreCoverageBatchVTest() {
       }
     });
 
+    it('combined: timeline_execution_update_actual_end_should_evaluate_runtime_when_schedule_not_fully_completed', 0, async () => {
+      // Arrange
+      const bundle = createBundleForV();
+      bundle.host.planId = 12;
+      const active = createEventForV(45, 'active_partial_end_v');
+      active.actual_start_time = Date.now() - 60_000;
+      const pending = createEventForV(46, 'still_pending_v');
+      bundle.host.events = [active, pending];
+
+      // Act
+      const ok = await bundle.service.updateActualTime(active.id, 'actual_end_time', Date.now());
+
+      // Assert
+      expect(ok).assertTrue();
+      expect(bundle.host.planStateMachine.completeCount).assertEqual(0);
+      expect(bundle.host.evaluateStatusCount > 0).assertTrue();
+      expect(bundle.host.currentPlanStatus).assertEqual(PlanStatus.READY);
+    });
+
     it('boundary: timeline_execution_skip_and_reopen_should_short_circuit_for_archived_or_missing_targets', 0, async () => {
       // Arrange
       const archivedBundle = createBundleForV();
@@ -453,6 +514,24 @@ export default function phase2CoreCoverageBatchVTest() {
       expect(archivedBundle.host.recalculateCallCount).assertEqual(0);
       expect(archivedReopenOk).assertFalse();
       expect(missingReopenOk).assertFalse();
+    });
+
+    it('invalid: timeline_execution_reopen_should_return_false_when_runtime_transition_rejects_without_throwing', 0, async () => {
+      // Arrange
+      const bundle = createBundleForV();
+      const skippedTarget = createEventForV(47, 'reopen_rejected_v');
+      skippedTarget.completion_status = EventEntity.STATE_SKIPPED;
+      bundle.host.events = [skippedTarget];
+      bundle.host.transitionShouldSucceed = false;
+
+      // Act
+      const reopenOk = await bundle.service.reopenSkippedEvent(skippedTarget.id);
+
+      // Assert
+      expect(reopenOk).assertFalse();
+      expect(bundle.host.transitionCallCount).assertEqual(0);
+      expect(bundle.host.recalculateCallCount).assertEqual(0);
+      expect(skippedTarget.completion_status).assertEqual(EventEntity.STATE_SKIPPED);
     });
 
     it('invalid: timeline_execution_reopen_and_update_should_rollback_when_transition_or_target_is_invalid', 0, async () => {
@@ -516,6 +595,36 @@ export default function phase2CoreCoverageBatchVTest() {
       expect(second.dynamic_start_time >= first.dynamic_end_time + 10 * 60 * 1000).assertTrue();
     });
 
+    it('combined: timeline_execution_realtime_schedule_should_advance_cursor_and_keep_forecast_for_mixed_states', 0, () => {
+      // Arrange
+      const bundle = createBundleForV();
+      bundle.host.planStartDate = new Date('2026-05-17T00:00:00.000Z').getTime();
+      const first = createEventForV(48, 'started_anchor_v');
+      first.actual_start_time = new Date('2026-05-17T09:00:00.000Z').getTime();
+      first.duration = 30;
+      first.actual_end_time = new Date('2026-05-17T09:30:00.000Z').getTime();
+      first.completion_status = EventEntity.STATE_COMPLETED;
+      const second = createEventForV(49, 'travel_pending_v');
+      second.pre_travel_min = 20;
+      second.duration = 40;
+      const third = createEventForV(50, 'skipped_tail_v');
+      third.pre_travel_min = 15;
+      third.duration = 25;
+      third.completion_status = EventEntity.STATE_SKIPPED;
+      bundle.host.events = [first, second, third];
+
+      // Act
+      bundle.service.calculateRealtimeSchedule();
+
+      // Assert
+      expect(bundle.host.conflictList.length).assertEqual(0);
+      expect(second.dynamic_start_time).assertEqual(first.actual_end_time + 20 * 60 * 1000);
+      expect(second.dynamic_end_time).assertEqual(second.dynamic_start_time + 40 * 60 * 1000);
+      expect(third.dynamic_start_time).assertEqual(second.dynamic_end_time + 15 * 60 * 1000);
+      expect(second.forecast_start_time === 'xxxx').assertFalse();
+      expect(third.forecast_end_time === 'xxxx').assertFalse();
+    });
+
     it('combined: timeline_execution_skip_should_ignore_completed_items_and_conflict_lookup_should_return_null', 0, async () => {
       // Arrange
       const bundle = createBundleForV();
@@ -537,6 +646,25 @@ export default function phase2CoreCoverageBatchVTest() {
       } finally {
         hooks.restore();
       }
+    });
+
+    it('invalid: timeline_execution_update_actual_end_should_return_false_when_runtime_transition_rejects', 0, async () => {
+      // Arrange
+      const bundle = createBundleForV();
+      const target = createEventForV(51, 'end_rejected_v');
+      target.actual_start_time = Date.now() - 30_000;
+      bundle.host.events = [target];
+      bundle.host.transitionShouldSucceed = false;
+
+      // Act
+      const ok = await bundle.service.updateActualTime(target.id, 'actual_end_time', Date.now());
+
+      // Assert
+      expect(ok).assertFalse();
+      expect(bundle.host.transitionCallCount).assertEqual(0);
+      expect(bundle.host.recalculateCallCount).assertEqual(0);
+      expect(bundle.host.actualTimeMutationInFlight).assertFalse();
+      expect(target.actual_end_time).assertEqual(0);
     });
   });
 }
