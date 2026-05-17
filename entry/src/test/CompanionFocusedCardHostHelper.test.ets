@@ -546,5 +546,75 @@ export default function companionFocusedCardHostHelperTest() {
       expect(page.getCardOpacity('incoming')).assertEqual(0.76);
       expect(page.getCardScale('incoming')).assertEqual(0.94);
     });
+
+    it('boundary: focused_helpers_should_hide_pending_range_and_reject_switch_cards_when_flag_is_false', 0, () => {
+      // Arrange
+      const outgoing = buildEvent(131);
+      const incoming = buildEvent(132);
+
+      // Act
+      const pendingVisible = shouldShowFocusedPlannedRange('PENDING');
+      const renderable = shouldRenderFocusedSwitchCards(false, outgoing, incoming);
+
+      // Assert
+      expect(pendingVisible).assertFalse();
+      expect(renderable).assertFalse();
+    });
+
+    it('conflict: focused_action_mode_should_keep_skipped_when_runtime_is_paused_but_event_is_not_current', 0, () => {
+      // Arrange
+      const state = 'SKIPPED';
+
+      // Act
+      const mode = resolveCompanionFocusedActionMode(state, 'PAUSED', 201, 202);
+
+      // Assert
+      expect(mode).assertEqual('SKIPPED');
+    });
+
+    it('combined: focused_card_host_initial_render_should_support_switch_cards_branch_with_dark_palette', 0, () => {
+      // Arrange
+      const page = new CompanionFocusedCardHost(undefined, {} as LocalStorage) as Object as CompanionFocusedCardHostPrivateTest;
+      const outgoing = buildEvent(141);
+      const incoming = buildEvent(142);
+      page.getEventState = (event: EventEntity) => event.id === outgoing.id ? 'PENDING' : 'ACTIVE';
+      page.getEventStateLabel = (event: EventEntity) => `focused_${event.id}`;
+      page.getMainCardTimeText = (event: EventEntity) => `time_${event.id}`;
+      page.getPlannedRange = (event: EventEntity) => `range_${event.id}`;
+      page.getCardTranslateX = (phase: CompanionFocusedCardPhaseTest) => phase === 'outgoing' ? -8 : 8;
+      page.getCardOpacity = (phase: CompanionFocusedCardPhaseTest) => phase === 'outgoing' ? 0.72 : 0.95;
+      page.getCardScale = (phase: CompanionFocusedCardPhaseTest) => phase === 'outgoing' ? 0.92 : 0.98;
+      page.setInitiallyProvidedValue({
+        canRenderSwitchCards: true,
+        outgoingEvent: outgoing,
+        incomingEvent: incoming,
+        stableEvent: null,
+        runtimeState: 'ACTIVE',
+        currentEventId: incoming.id
+      });
+      page.effectiveTheme = 'dark';
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+      const palette = page.getThemePalette();
+      const renderable = shouldRenderFocusedSwitchCards(true, outgoing, incoming);
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(renderable).assertTrue();
+      expect(page.getEventStateLabel(outgoing)).assertEqual('focused_141');
+      expect(page.getMainCardTimeText(incoming)).assertEqual('time_142');
+      expect(page.getPlannedRange(incoming)).assertEqual('range_142');
+      expect(page.getCardTranslateX('outgoing')).assertEqual(-8);
+      expect(page.getCardOpacity('incoming')).assertEqual(0.95);
+      expect(page.getCardScale('outgoing')).assertEqual(0.92);
+      expect(palette.primary).assertEqual(ThemeCenter.getPalette('dark').primary);
+      expect(palette.companionCardBg).assertEqual(ThemeCenter.getPalette('dark').companionCardBg);
+    });
   });
 }
