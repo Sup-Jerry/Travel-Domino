@@ -219,6 +219,41 @@ function resetTrafficEngineEJ(): TrafficEnginePrivateForEJ {
   return TrafficEngine.getInstance() as Object as TrafficEnginePrivateForEJ;
 }
 
+class DriveMapServiceForEJ {
+  duration: number = 26;
+  throwOnDrive: boolean = false;
+  driveCalls: number = 0;
+
+  public async getLocationInfo(_keyword: string): Promise<LocationInfo[]> {
+    return [];
+  }
+
+  public async calculateCommute(_from: string, _to: string): Promise<number> {
+    return 0;
+  }
+
+  public async getDriveDuration(
+    _origin: LocationInfo,
+    _destination: LocationInfo,
+    _strategy: DriveStrategy
+  ): Promise<number> {
+    this.driveCalls += 1;
+    if (this.throwOnDrive) {
+      throw new Error('drive_fetch_failed_ej');
+    }
+    return this.duration;
+  }
+
+  public async getDurationByMode(
+    _origin: LocationInfo,
+    _destination: LocationInfo,
+    _mode: number,
+    _startTime?: string
+  ): Promise<number> {
+    return this.duration;
+  }
+}
+
 interface AiResponseParserPrivateForEJ {
   pickArrayFromObject(parsed: Object): AiParserItem[] | null;
 }
@@ -467,6 +502,57 @@ export default function phase2BatchEJTest() {
       // Assert
       expect(engine.cache.has(key)).assertFalse();
       expect(engine.transientFailureUntil.has(key)).assertTrue();
+    });
+
+    it('boundary: traffic_engine_drive_fetch_should_short_circuit_when_same_key_is_already_loading', 0, async () => {
+      // Arrange
+      const engine = resetTrafficEngineEJ();
+      const mapService = new DriveMapServiceForEJ();
+      const key = 'drive_loading_short_circuit';
+      engine.cache.set(key, -1);
+      Reflect.set(engine as Object, 'mapService', mapService as Object);
+
+      // Act
+      await engine.fetchAmapTrafficAsync(createLocationEJ('from'), createLocationEJ('to'), DriveStrategy.FASTEST, key);
+
+      // Assert
+      expect(mapService.driveCalls).assertEqual(0);
+      expect(engine.cache.get(key)).assertEqual(-1);
+    });
+
+    it('normal: traffic_engine_drive_fetch_should_cache_duration_and_clear_transient_failure_after_success', 0, async () => {
+      // Arrange
+      const engine = resetTrafficEngineEJ();
+      const mapService = new DriveMapServiceForEJ();
+      const key = 'drive_success_cache';
+      mapService.duration = 34;
+      engine.markTransientFailure(key, 'stale_guard');
+      Reflect.set(engine as Object, 'mapService', mapService as Object);
+
+      // Act
+      await engine.fetchAmapTrafficAsync(createLocationEJ('from'), createLocationEJ('to'), DriveStrategy.AVOID_CONGESTION, key);
+
+      // Assert
+      expect(mapService.driveCalls).assertEqual(1);
+      expect(engine.cache.get(key)).assertEqual(34);
+      expect(engine.transientFailureUntil.has(key)).assertFalse();
+    });
+
+    it('regression: traffic_engine_drive_fetch_should_delete_loading_cache_and_restore_transient_failure_after_exception', 0, async () => {
+      // Arrange
+      const engine = resetTrafficEngineEJ();
+      const mapService = new DriveMapServiceForEJ();
+      const key = 'drive_exception_guard';
+      mapService.throwOnDrive = true;
+      Reflect.set(engine as Object, 'mapService', mapService as Object);
+
+      // Act
+      await engine.fetchAmapTrafficAsync(createLocationEJ('from'), createLocationEJ('to'), DriveStrategy.ECONOMICAL, key);
+
+      // Assert
+      expect(mapService.driveCalls).assertEqual(1);
+      expect(engine.cache.has(key)).assertFalse();
+      expect((engine.transientFailureUntil.get(key) ?? 0) > Date.now()).assertTrue();
     });
 
     it('invalid: arrival_coordinator_terminal_status_helper_should_reject_non_terminal_status', 0, () => {
