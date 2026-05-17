@@ -254,6 +254,18 @@ export default function avatarUploadApiTest() {
       expect(resolved).assertEqual('/data/storage/el2/base/files/avatar.jpg');
     });
 
+    it('boundary: upload_api_resolve_file_path_should_decode_encoded_file_uri', 0, () => {
+      // Arrange
+      const privateApi = AvatarUploadApi as Object as AvatarUploadApiPrivate;
+
+      // Act
+      const resolved = privateApi.resolveFilePath('file://C:/avatar%20space.jpg');
+
+      // Assert
+      expect(resolved.indexOf('%20') < 0).assertTrue();
+      expect(resolved.length > 0).assertTrue();
+    });
+
     it('invalid: upload_api_resolve_file_path_should_throw_for_blank_uri', 0, () => {
       // Arrange
       const privateApi = AvatarUploadApi as Object as AvatarUploadApiPrivate;
@@ -347,6 +359,150 @@ export default function avatarUploadApiTest() {
         expect(gatewayToken).assertEqual('default_token');
         expect(gatewayMimeType).assertEqual('image/png');
         expect(gatewayDataUrl).assertEqual('data:image/png;base64,EE==');
+      } finally {
+        Reflect.set(authSessionStoreObj, 'getAccessToken', originalGetAccessToken);
+        Reflect.set(authGatewayObj, 'updateAvatar', originalUpdateAvatar);
+        Reflect.set(avatarUploadApiObj, 'readFileAsDataUrl', originalReadFileAsDataUrl);
+      }
+
+      done();
+    });
+
+    it('boundary: upload_api_should_stop_at_default_session_store_when_token_missing', 0, async (done: () => void) => {
+      // Arrange
+      const authSessionStoreObj = AuthSessionStore as Object;
+      const authGatewayObj = AuthGateway as Object;
+      const avatarUploadApiObj = AvatarUploadApi as Object;
+      const originalGetAccessToken = Reflect.get(authSessionStoreObj, 'getAccessToken') as Object;
+      const originalUpdateAvatar = Reflect.get(authGatewayObj, 'updateAvatar') as Object;
+      const originalReadFileAsDataUrl = Reflect.get(avatarUploadApiObj, 'readFileAsDataUrl') as Object;
+      let encodeCalls = 0;
+      let gatewayCalls = 0;
+
+      Reflect.set(authSessionStoreObj, 'getAccessToken', (): string => '');
+      Reflect.set(avatarUploadApiObj, 'readFileAsDataUrl', (): string => {
+        encodeCalls += 1;
+        return 'data:image/jpeg;base64,FF==';
+      });
+      Reflect.set(authGatewayObj, 'updateAvatar', async (): Promise<AuthApiResponse<UpdateAvatarResult>> => {
+        gatewayCalls += 1;
+        const response = new AuthApiResponse<UpdateAvatarResult>(new UpdateAvatarResult());
+        response.code = 0;
+        return response;
+      });
+
+      try {
+        const uploader = new AvatarUploadApi({
+          now: (): number => 4002
+        });
+        const input = new AvatarUploadInput();
+        input.userId = 'u_default_session_missing';
+        input.fileUri = 'file://default-session-missing.jpg';
+
+        // Act
+        const result = await uploader.uploadAvatar(input);
+
+        // Assert
+        expect(String(result.status)).assertEqual('LOCAL_ONLY');
+        expect(String(result.errorCode || '')).assertEqual('NO_SESSION');
+        expect(encodeCalls).assertEqual(0);
+        expect(gatewayCalls).assertEqual(0);
+      } finally {
+        Reflect.set(authSessionStoreObj, 'getAccessToken', originalGetAccessToken);
+        Reflect.set(authGatewayObj, 'updateAvatar', originalUpdateAvatar);
+        Reflect.set(avatarUploadApiObj, 'readFileAsDataUrl', originalReadFileAsDataUrl);
+      }
+
+      done();
+    });
+
+    it('invalid: upload_api_should_map_default_gateway_non_zero_code_to_local_only', 0, async (done: () => void) => {
+      // Arrange
+      const authSessionStoreObj = AuthSessionStore as Object;
+      const authGatewayObj = AuthGateway as Object;
+      const avatarUploadApiObj = AvatarUploadApi as Object;
+      const originalGetAccessToken = Reflect.get(authSessionStoreObj, 'getAccessToken') as Object;
+      const originalUpdateAvatar = Reflect.get(authGatewayObj, 'updateAvatar') as Object;
+      const originalReadFileAsDataUrl = Reflect.get(avatarUploadApiObj, 'readFileAsDataUrl') as Object;
+      let capturedToken = '';
+      let capturedMimeType = '';
+      let capturedDataUrl = '';
+
+      Reflect.set(authSessionStoreObj, 'getAccessToken', (): string => 'default_invalid_token');
+      Reflect.set(avatarUploadApiObj, 'readFileAsDataUrl', (_fileUriText: string, mimeType: string): string => {
+        return `data:${mimeType};base64,GG==`;
+      });
+      Reflect.set(
+        authGatewayObj,
+        'updateAvatar',
+        async (accessToken: string, imageDataUrl: string, mimeType: string): Promise<AuthApiResponse<UpdateAvatarResult>> => {
+          capturedToken = accessToken;
+          capturedDataUrl = imageDataUrl;
+          capturedMimeType = mimeType;
+          const response = new AuthApiResponse<UpdateAvatarResult>(new UpdateAvatarResult());
+          response.code = 401;
+          response.message = 'token_expired';
+          return response;
+        }
+      );
+
+      try {
+        const uploader = new AvatarUploadApi({
+          now: (): number => 4003
+        });
+        const input = new AvatarUploadInput();
+        input.userId = 'u_default_gateway_invalid';
+        input.fileUri = 'file://default-gateway-invalid.jpg';
+        input.mimeType = 'image/webp';
+
+        // Act
+        const result = await uploader.uploadAvatar(input);
+
+        // Assert
+        expect(String(result.status)).assertEqual('LOCAL_ONLY');
+        expect(String(result.errorCode || '')).assertEqual('401');
+        expect(capturedToken).assertEqual('default_invalid_token');
+        expect(capturedMimeType).assertEqual('image/webp');
+        expect(capturedDataUrl).assertEqual('data:image/webp;base64,GG==');
+      } finally {
+        Reflect.set(authSessionStoreObj, 'getAccessToken', originalGetAccessToken);
+        Reflect.set(authGatewayObj, 'updateAvatar', originalUpdateAvatar);
+        Reflect.set(avatarUploadApiObj, 'readFileAsDataUrl', originalReadFileAsDataUrl);
+      }
+
+      done();
+    });
+
+    it('regression: upload_api_should_map_default_gateway_exception_to_upload_exception', 0, async (done: () => void) => {
+      // Arrange
+      const authSessionStoreObj = AuthSessionStore as Object;
+      const authGatewayObj = AuthGateway as Object;
+      const avatarUploadApiObj = AvatarUploadApi as Object;
+      const originalGetAccessToken = Reflect.get(authSessionStoreObj, 'getAccessToken') as Object;
+      const originalUpdateAvatar = Reflect.get(authGatewayObj, 'updateAvatar') as Object;
+      const originalReadFileAsDataUrl = Reflect.get(avatarUploadApiObj, 'readFileAsDataUrl') as Object;
+
+      Reflect.set(authSessionStoreObj, 'getAccessToken', (): string => 'default_exception_token');
+      Reflect.set(avatarUploadApiObj, 'readFileAsDataUrl', (): string => 'data:image/jpeg;base64,HH==');
+      Reflect.set(authGatewayObj, 'updateAvatar', async (): Promise<AuthApiResponse<UpdateAvatarResult>> => {
+        throw new Error('gateway_unreachable');
+      });
+
+      try {
+        const uploader = new AvatarUploadApi({
+          now: (): number => 4004
+        });
+        const input = new AvatarUploadInput();
+        input.userId = 'u_default_gateway_exception';
+        input.fileUri = 'file://default-gateway-exception.jpg';
+
+        // Act
+        const result = await uploader.uploadAvatar(input);
+
+        // Assert
+        expect(String(result.status)).assertEqual('LOCAL_ONLY');
+        expect(String(result.errorCode || '')).assertEqual('UPLOAD_EXCEPTION');
+        expect(String(result.requestId)).assertEqual('avatar_req_4004');
       } finally {
         Reflect.set(authSessionStoreObj, 'getAccessToken', originalGetAccessToken);
         Reflect.set(authGatewayObj, 'updateAvatar', originalUpdateAvatar);

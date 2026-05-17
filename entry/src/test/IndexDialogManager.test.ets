@@ -412,6 +412,7 @@ export default function indexDialogManagerTest() {
     it('normal: create_date_filter_settings_rename_and_suggestion_controllers_should_keep_expected_dialog_config', 0, () => {
       // Arrange
       const weatherPreference = new WeatherPreferenceStubLike();
+
       // Act
       const dateController = IndexDialogManager.createDateFilterController({
         onShowAll: (): void => {},
@@ -461,6 +462,8 @@ export default function indexDialogManagerTest() {
       const explicitController = IndexDialogManager.createAiDialogController(explicitCallbacks) as Object;
 
       // Assert
+      expect(defaultCallbacks.currentStrategyMode === undefined).assertTrue();
+      expect(explicitCallbacks.currentStrategyMode).assertEqual(2);
       expect(typeof Reflect.get(defaultController, 'open')).assertEqual('function');
       expect(typeof Reflect.get(explicitController, 'open')).assertEqual('function');
     });
@@ -531,6 +534,7 @@ export default function indexDialogManagerTest() {
     it('regression: create_gap_add_and_share_controllers_should_preserve_offset_and_style_contract', 0, () => {
       // Arrange
       const vm = new TimelineVmStubLike() as Object as TimelineViewModel;
+
       // Act
       const gapController = IndexDialogManager.createGapResolutionController({
           vm: vm,
@@ -574,7 +578,7 @@ export default function indexDialogManagerTest() {
       expect(typeof Reflect.get(shareController, 'open')).assertEqual('function');
     });
 
-    it('combined: controller_matrix_should_expose_builder_and_open_for_all_wrappers_created_in_this_file', 0, () => {
+    it('combined: controller_matrix_should_expose_builder_and_default_fallbacks_for_target_wrappers', 0, () => {
       // Arrange
       const vm = new TimelineVmStubLike() as Object as TimelineViewModel;
 
@@ -626,7 +630,7 @@ export default function indexDialogManagerTest() {
       }
     });
 
-    it('combined: controller_matrix_should_open_remaining_dialog_wrappers_without_throwing', 0, () => {
+    it('combined: controller_matrix_should_keep_remaining_wrapper_defaults_consistent', 0, () => {
       // Arrange
       const weatherPreference = new WeatherPreferenceStubLike();
 
@@ -658,6 +662,32 @@ export default function indexDialogManagerTest() {
       expect(controllers.length).assertEqual(3);
       for (let i = 0; i < controllers.length; i++) {
         expect(typeof Reflect.get(controllers[i], 'open')).assertEqual('function');
+      }
+    });
+
+    it('boundary: open_date_filter_dialog_should_open_returned_controller_once', 0, () => {
+      // Arrange
+      const uiContext = new PickerUiContextMock();
+      const originalCreate = Reflect.get(IndexDialogManager as Object, 'createDateFilterController') as (callbacks: Object) => Object;
+      const controllerStub = new DateFilterControllerMock();
+
+      Reflect.set(IndexDialogManager as Object, 'createDateFilterController', (_callbacks: Object): Object => {
+        return controllerStub as Object;
+      });
+
+      try {
+        // Act
+        const controller = IndexDialogManager.openDateFilterDialog(uiContext as Object as UIContext, 123, {
+          onShowAll: (): void => {},
+          onSelectDate: (_dateMs: number): void => {},
+          onSelectRange: (_startMs: number, _endMs: number): void => {}
+        });
+
+        // Assert
+        expect(controller === controllerStub as Object).assertTrue();
+        expect(controllerStub.openCount).assertEqual(1);
+      } finally {
+        Reflect.set(IndexDialogManager as Object, 'createDateFilterController', originalCreate);
       }
     });
 

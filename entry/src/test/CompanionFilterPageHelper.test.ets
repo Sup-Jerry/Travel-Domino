@@ -36,6 +36,7 @@ interface CompanionFilterPagePrivateTest {
   setInitiallyProvidedValue(params: CompanionFilterPageParamsTest): void;
   updateStateVars(params: CompanionFilterPageParamsTest): void;
   getThemePalette(): CompanionFilterPagePaletteTest;
+  build(): void;
   initialRender(): void;
 }
 
@@ -328,6 +329,102 @@ export default function companionFilterPageHelperTest() {
       expect(getCompanionFilterBorderType('ALL')).assertEqual('default');
       expect(getCompanionFilterBorderWidth('ALL', 'ALL')).assertEqual(1);
       expect(getCompanionFilterBorderWidth('SKIPPED', 'ALL')).assertEqual(0);
+    });
+
+    it('boundary: filter_page_initial_render_should_skip_option_rendering_when_page_hidden', 0, () => {
+      // Arrange
+      const page = new CompanionFilterPage(undefined, {} as LocalStorage) as Object as CompanionFilterPagePrivateTest;
+      let optionReadCount = 0;
+      page.getFilterOptions = (): CompanionFilterState[] => {
+        optionReadCount += 1;
+        return ['ALL', 'ACTIVE'];
+      };
+      page.setInitiallyProvidedValue({
+        showFilterPage: false,
+        companionFilterState: 'ACTIVE',
+        safeTopInset: 3,
+        safeBottomInset: 5
+      });
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(optionReadCount).assertEqual(0);
+      expect(shouldShowCompanionFilterPage(page.showFilterPage)).assertFalse();
+    });
+
+    it('regression: filter_page_initial_render_should_support_visible_active_selected_with_completed_and_skipped_unselected', 0, () => {
+      // Arrange
+      const page = new CompanionFilterPage(undefined, {} as LocalStorage) as Object as CompanionFilterPagePrivateTest;
+      page.effectiveTheme = 'dark';
+      page.getFilterOptions = (): CompanionFilterState[] => ['ACTIVE', 'COMPLETED', 'SKIPPED'];
+      page.getFilterLabel = (state: CompanionFilterState): string => `build_${state}`;
+      page.setInitiallyProvidedValue({
+        showFilterPage: true,
+        companionFilterState: 'ACTIVE',
+        safeTopInset: 9,
+        safeBottomInset: 11
+      });
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(isCompanionFilterSelected('ACTIVE', 'ACTIVE')).assertTrue();
+      expect(getCompanionFilterBorderWidth('ACTIVE', 'ACTIVE')).assertEqual(1);
+      expect(getCompanionFilterBorderWidth('COMPLETED', 'ACTIVE')).assertEqual(0);
+      expect(getCompanionFilterBorderWidth('SKIPPED', 'ACTIVE')).assertEqual(0);
+      expect(getCompanionFilterBorderType('ACTIVE')).assertEqual('default');
+      expect(getCompanionFilterBorderType('COMPLETED')).assertEqual('completed');
+      expect(getCompanionFilterBorderType('SKIPPED')).assertEqual('skipped');
+      expect(page.getThemePalette().textPrimary).assertEqual(ThemeCenter.getPalette('dark').textPrimary);
+    });
+
+    it('combined: filter_page_initial_render_should_support_visible_completed_selected_with_all_and_pending_unselected', 0, () => {
+      // Arrange
+      const page = new CompanionFilterPage(undefined, {} as LocalStorage) as Object as CompanionFilterPagePrivateTest;
+      page.effectiveTheme = 'light';
+      page.getFilterOptions = (): CompanionFilterState[] => ['ALL', 'PENDING', 'COMPLETED'];
+      page.getFilterLabel = (state: CompanionFilterState): string => `visible_${state}`;
+      page.setInitiallyProvidedValue({
+        showFilterPage: true,
+        companionFilterState: 'COMPLETED',
+        safeTopInset: 12,
+        safeBottomInset: 16
+      });
+
+      // Act
+      let threw = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(shouldShowCompanionFilterPage(true)).assertTrue();
+      expect(isCompanionFilterSelected('COMPLETED', 'COMPLETED')).assertTrue();
+      expect(isCompanionFilterSelected('ALL', 'COMPLETED')).assertFalse();
+      expect(isCompanionFilterSelected('PENDING', 'COMPLETED')).assertFalse();
+      expect(getCompanionFilterBorderType('ALL')).assertEqual('default');
+      expect(getCompanionFilterBorderType('PENDING')).assertEqual('pending');
+      expect(getCompanionFilterBorderType('COMPLETED')).assertEqual('completed');
+      expect(getCompanionFilterBorderWidth('COMPLETED', 'COMPLETED')).assertEqual(1);
+      expect(getCompanionFilterBorderWidth('ALL', 'COMPLETED')).assertEqual(0);
     });
   });
 }
