@@ -8,6 +8,24 @@ import {
   getCompanionPopupWidth
 } from '../main/ets/pages/components/views/companion/CompanionWeatherPopups';
 
+interface PopupBuilderHostPrivateTest {
+  lines: string[];
+  initialRender(): void;
+}
+
+@Component
+struct PopupBuilderHostTest {
+  @State lines: string[] = [];
+
+  build() {
+    Column() {
+      CompanionWeatherScorePopupBuilder(this.lines);
+      CompanionWeatherHintPopupBuilder(this.lines);
+      CompanionWeatherSuggestionPopupBuilder(this.lines);
+    }
+  }
+}
+
 function buildLines(): string[] {
   const lines: string[] = [];
   lines.push('line0');
@@ -223,6 +241,72 @@ export default function companionWeatherPopupsHelperTest() {
       expect(outside).assertEqual('');
       expect(typeof scoreBuilt === 'boolean').assertTrue();
       expect(typeof hintBuilt === 'boolean').assertTrue();
+    });
+
+    it('normal: popup_builder_host_should_initial_render_with_full_lines', 0, () => {
+      // Arrange
+      const host = new PopupBuilderHostTest(undefined, {} as LocalStorage) as Object as PopupBuilderHostPrivateTest;
+      host.lines = buildLines();
+      let threw = false;
+
+      // Act
+      try {
+        host.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(getCompanionPopupLine(host.lines, 5)).assertEqual('line5');
+      expect(getCompanionPopupHeight('suggestion')).assertEqual(240);
+    });
+
+    it('boundary: popup_builder_host_should_initial_render_with_sparse_lines', 0, () => {
+      // Arrange
+      const host = new PopupBuilderHostTest(undefined, {} as LocalStorage) as Object as PopupBuilderHostPrivateTest;
+      host.lines = ['head'];
+      let threw = false;
+
+      // Act
+      try {
+        host.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(getCompanionPopupLine(host.lines, 0)).assertEqual('head');
+      expect(getCompanionPopupLine(host.lines, 4)).assertEqual('');
+    });
+
+    it('combined: popup_builder_host_should_support_lines_update_between_renders', 0, () => {
+      // Arrange
+      const host = new PopupBuilderHostTest(undefined, {} as LocalStorage) as Object as PopupBuilderHostPrivateTest;
+      host.lines = ['a0', 'a1'];
+      let firstThrew = false;
+      let secondThrew = false;
+
+      // Act
+      try {
+        host.initialRender();
+      } catch (_error) {
+        firstThrew = true;
+      }
+      host.lines = ['b0', '', 'b2', 'b3', 'b4', 'b5'];
+      try {
+        host.initialRender();
+      } catch (_error) {
+        secondThrew = true;
+      }
+
+      // Assert
+      expect(firstThrew).assertFalse();
+      expect(secondThrew).assertFalse();
+      expect(getCompanionPopupLine(host.lines, 1)).assertEqual('');
+      expect(getCompanionPopupWidth('score')).assertEqual(280);
+      expect(getCompanionPopupWidth('suggestion')).assertEqual(290);
     });
   });
 }
