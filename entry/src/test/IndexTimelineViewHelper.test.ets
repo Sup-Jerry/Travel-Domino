@@ -496,6 +496,59 @@ export default function indexTimelineViewHelperTest() {
       expect(gapHint).assertTrue();
       expect(spacerHeight).assertEqual(24);
     });
+
+    it('boundary: timeline_header_text_should_clamp_negative_place_count_to_zero_text', 0, () => {
+      // Arrange
+      const text = 'Day 6';
+
+      // Act
+      const header = buildIndexTimelineHeaderText(text, -9);
+
+      // Assert
+      expect(header.indexOf('Day 6') >= 0).assertTrue();
+      expect(header.indexOf('0') >= 0).assertTrue();
+    });
+
+    it('combined: timeline_view_initial_render_should_support_archived_companion_mode_without_gap_hint', 0, () => {
+      // Arrange
+      const page = new IndexTimelineView(undefined, {} as LocalStorage) as Object as IndexTimelineViewPrivateTest;
+      const first = buildTimelineEvent(61);
+      const second = buildTimelineEvent(62);
+      page.setInitiallyProvidedValue({
+        groupedEvents: [{
+          dayOffset: 7,
+          actualDateMs: 70,
+          dateHeader: 'Day 7',
+          events: [first, second]
+        }],
+        allEvents: [first, second],
+        isArchived: true,
+        isCompanionMode: true,
+        showWeather: false,
+        isPageRefreshing: false,
+        gapsCount: 4,
+        onIsDayCollapsed: (_dayOffset: number) => false
+      });
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+      const itemsVisible = shouldShowIndexTimelineGroupItems(page.onIsDayCollapsed(7));
+      const itemEnabled = shouldEnableIndexTimelineItem(true);
+      const gapHint = shouldShowIndexTimelineGapHint(true, 4);
+      const spacerHeight = resolveIndexTimelineBottomSpacerHeight(true);
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(itemsVisible).assertTrue();
+      expect(itemEnabled).assertFalse();
+      expect(gapHint).assertFalse();
+      expect(spacerHeight).assertEqual(24);
+    });
   });
 }
 

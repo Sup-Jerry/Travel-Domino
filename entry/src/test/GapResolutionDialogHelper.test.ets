@@ -492,5 +492,43 @@ export default function gapResolutionDialogHelperTest() {
       expect(preview.timeRange).assertEqual('09:30-10:00 \u2192 10:00');
       expect(preview.addStr).assertEqual('');
     });
+
+    it('invalid: gap_resolution_preview_should_fallback_to_zero_clock_when_computed_time_has_no_clock_segment', 0, () => {
+      // Arrange
+      const vm = new GapVmMockHelper();
+      const dialog = createDialogHelper(vm);
+      const gap = buildGapEventHelper(805, 'fallback-gap', 40, '2026-05-16 09:00');
+      const candidate = buildGapEventHelper(806, 'clockless-item', 0, 'clockless', 25);
+      vm.distributionCoordinator.candidatesByGapId.set(gap.id, [candidate]);
+      dialog.selectGap(gap);
+
+      // Act
+      const preview = dialog.getPreview(candidate);
+
+      // Assert
+      expect(preview.timeRange).assertEqual('clockless---:-- \u2192 --:--');
+      expect(preview.addStr).assertEqual('');
+    });
+
+    it('combined: gap_resolution_allocatable_candidates_should_keep_all_positive_safety_cap_items', 0, () => {
+      // Arrange
+      const vm = new GapVmMockHelper();
+      const dialog = createDialogHelper(vm);
+      const gap = buildGapEventHelper(807, 'alloc-gap', 70, '2026-05-16 13:00');
+      const candidateA = buildGapEventHelper(808, 'alloc-a', 0, '2026-05-16 13:10', 20);
+      const candidateB = buildGapEventHelper(809, 'alloc-b', 0, '2026-05-16 13:40', 30);
+      vm.distributionCoordinator.candidatesByGapId.set(gap.id, [candidateA, candidateB]);
+      vm.distributionCoordinator.safetyCaps.set(candidateA.id, 5);
+      vm.distributionCoordinator.safetyCaps.set(candidateB.id, 8);
+      dialog.selectGap(gap);
+
+      // Act
+      const allocatableCandidates = dialog.getAllocatableCandidates();
+
+      // Assert
+      expect(allocatableCandidates.length).assertEqual(2);
+      expect(dialog.isCandidateAllocatable(candidateA)).assertTrue();
+      expect(dialog.isCandidateAllocatable(candidateB)).assertTrue();
+    });
   });
 }

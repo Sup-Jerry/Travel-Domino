@@ -471,5 +471,49 @@ export default function companionFilterPageHelperTest() {
       expect(allWidth).assertEqual(0);
       expect(pendingWidth).assertEqual(1);
     });
+
+    it('boundary: filter_page_initial_render_should_support_visible_all_selected_with_zero_safe_insets', 0, () => {
+      // Arrange
+      const page = new CompanionFilterPage(undefined, {} as LocalStorage) as Object as CompanionFilterPagePrivateTest;
+      page.getFilterOptions = (): CompanionFilterState[] => ['ALL', 'ACTIVE'];
+      page.getFilterLabel = (state: CompanionFilterState): string => `all_mode_${state}`;
+      page.setInitiallyProvidedValue({
+        showFilterPage: true,
+        companionFilterState: 'ALL',
+        safeTopInset: 0,
+        safeBottomInset: 0
+      });
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(isCompanionFilterSelected('ALL', 'ALL')).assertTrue();
+      expect(getCompanionFilterBorderWidth('ALL', 'ALL')).assertEqual(1);
+      expect(getCompanionFilterBorderType('ALL')).assertEqual('default');
+    });
+
+    it('combined: filter_page_should_keep_completed_and_skipped_unselected_matrix_consistent_under_pending_state', 0, () => {
+      // Arrange
+      const current: CompanionFilterState = 'PENDING';
+
+      // Act
+      const completedSelected = isCompanionFilterSelected('COMPLETED', current);
+      const skippedSelected = isCompanionFilterSelected('SKIPPED', current);
+      const completedWidth = getCompanionFilterBorderWidth('COMPLETED', current);
+      const skippedWidth = getCompanionFilterBorderWidth('SKIPPED', current);
+
+      // Assert
+      expect(completedSelected).assertFalse();
+      expect(skippedSelected).assertFalse();
+      expect(completedWidth).assertEqual(0);
+      expect(skippedWidth).assertEqual(0);
+    });
   });
 }
