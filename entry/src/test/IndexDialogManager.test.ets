@@ -824,5 +824,28 @@ export default function indexDialogManagerTest() {
       expect(actualStartMs).assertEqual(startDate.getTime());
       expect(actualEndMs).assertEqual(expectedEnd.getTime());
     });
+
+    it('boundary: open_plan_date_picker_should_keep_explicit_plan_start_as_selected_before_accept', 0, () => {
+      // Arrange
+      const uiContext = new PickerUiContextMock();
+      const planStartDate = new Date(2026, 9, 3, 0, 0, 0, 0).getTime();
+      let actualDateMs = -1;
+
+      // Act
+      IndexDialogManager.openPlanDatePicker(
+        uiContext as Object as UIContext,
+        planStartDate,
+        (dateMs: number): void => {
+          actualDateMs = dateMs;
+        }
+      );
+
+      // Assert
+      expect(uiContext.showCount).assertEqual(1);
+      expect(uiContext.dialogs[0].start.getTime()).assertEqual(946684800000);
+      expect(uiContext.dialogs[0].selected.getTime()).assertEqual(planStartDate);
+      expect(uiContext.dialogs[0].end.getTime()).assertEqual(4102416000000);
+      expect(actualDateMs).assertEqual(-1);
+    });
   });
 }

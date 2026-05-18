@@ -664,6 +664,75 @@ export default function indexTimelineViewHelperTest() {
       expect(shouldEnableIndexTimelineItem(true)).assertFalse();
       expect(shouldShowIndexTimelineGapHint(true, 1)).assertFalse();
     });
+
+    it('combined: timeline_view_callbacks_should_keep_manual_operation_channels_stable_after_prop_sync', 0, () => {
+      // Arrange
+      const page = new IndexTimelineView(undefined, {} as LocalStorage) as Object as IndexTimelineViewPrivateTest;
+      const first = buildTimelineEvent(81);
+      let callCount = 0;
+      let lastMode = -1;
+      let lastMinutes = -1;
+      page.setInitiallyProvidedValue({
+        groupedEvents: [{
+          dayOffset: 9,
+          actualDateMs: 90,
+          dateHeader: 'Day 9',
+          events: [first]
+        }],
+        allEvents: [first],
+        isArchived: false,
+        isCompanionMode: true,
+        showWeather: true,
+        isPageRefreshing: true,
+        gapsCount: 3,
+        onIsDayCollapsed: (_dayOffset: number) => false,
+        onRefresh: () => { callCount += 1; },
+        onMoveUp: (_item: EventEntity) => { callCount += 1; },
+        onMoveDown: (_item: EventEntity) => { callCount += 1; },
+        onMainContentClick: (_item: EventEntity) => { callCount += 1; },
+        onTimeClick: (_item: EventEntity) => { callCount += 1; },
+        onTravelModeChange: (_item: EventEntity, mode: number) => {
+          callCount += 1;
+          lastMode = mode;
+        },
+        onManualTravelInput: (_item: EventEntity, minutes: number) => {
+          callCount += 1;
+          lastMinutes = minutes;
+        },
+        onCommuteChange: (_item: EventEntity, minutes: number) => {
+          callCount += 1;
+          lastMinutes = minutes;
+        },
+        onConflictAction: (_item: EventEntity, _strategy: string, gapMinutes: number) => {
+          callCount += 1;
+          lastMinutes = gapMinutes;
+        },
+        onMoveToBacklog: (_item: EventEntity) => { callCount += 1; },
+        onDeleteEvent: (_item: EventEntity) => { callCount += 1; },
+        onOpenGapOptimize: () => { callCount += 1; }
+      });
+
+      // Act
+      page.onRefresh();
+      page.onMoveUp(first);
+      page.onMoveDown(first);
+      page.onMainContentClick(first);
+      page.onTimeClick(first);
+      page.onTravelModeChange(first, 4);
+      page.onManualTravelInput(first, 12);
+      page.onCommuteChange(first, 18);
+      page.onConflictAction(first, 'compress', 24);
+      page.onMoveToBacklog(first);
+      page.onDeleteEvent(first);
+      page.onOpenGapOptimize();
+
+      // Assert
+      expect(callCount).assertEqual(12);
+      expect(lastMode).assertEqual(4);
+      expect(lastMinutes).assertEqual(24);
+      expect(shouldShowIndexTimelineGapHint(false, 3)).assertTrue();
+      expect(resolveIndexTimelineBottomSpacerHeight(true)).assertEqual(24);
+    });
   });
 }
 

@@ -274,5 +274,40 @@ export default function indexPageShowHelperTest() {
       expect((probe.lastDialogData as InitDialogData).lat ?? -1).assertEqual(0);
       expect((probe.lastDialogData as InitDialogData).lng ?? -1).assertEqual(0);
     });
+
+    it('boundary: handle_page_show_should_keep_restore_when_only_route_reload_fails', 0, async (done: Function) => {
+      // Arrange
+      const probe = new PageShowProbe(buildTempStateRaw('route_reload_only', 7), '');
+
+      // Act
+      probe.run(new PageShowVmMock(false, true));
+      await new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => {
+        setTimeout(() => resolve(), 30);
+      });
+
+      // Assert
+      expect(probe.sanitizeCount).assertEqual(1);
+      expect(probe.openCount).assertEqual(1);
+      expect((probe.lastDialogData as InitDialogData).name).assertEqual('route_reload_only');
+      done();
+    });
+
+    it('regression: handle_page_show_should_prioritize_temp_invalid_reason_over_valid_picked_payload', 0, () => {
+      // Arrange
+      const picked = JSON.stringify({
+        lat: 39.9,
+        lng: 116.4,
+        address: 'valid_picked'
+      });
+      const probe = new PageShowProbe('broken_json', picked);
+
+      // Act
+      probe.run(new PageShowVmMock(false, false));
+
+      // Assert
+      expect(probe.clearCount).assertEqual(1);
+      expect(probe.openCount).assertEqual(0);
+      expect(probe.toastCount).assertEqual(1);
+    });
   });
 }
