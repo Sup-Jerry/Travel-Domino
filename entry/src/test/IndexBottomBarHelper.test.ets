@@ -13,6 +13,10 @@ interface IndexBottomBarParamsTest {
 interface IndexBottomBarPrivateTest {
   aiEnabled: boolean;
   addEnabled: boolean;
+  onFilter: () => void;
+  onAi: () => void;
+  onAdd: () => void;
+  initialRender(): void;
   updateStateVars(params: IndexBottomBarParamsTest): void;
 }
 
@@ -133,6 +137,49 @@ export default function indexBottomBarHelperTest() {
       // Assert
       expect(page.aiEnabled).assertFalse();
       expect(page.addEnabled).assertFalse();
+    });
+
+    it('boundary: index_bottom_bar_initial_render_should_support_disabled_ai_and_add_flags', 0, () => {
+      // Arrange
+      const page = new IndexBottomBar(undefined, {} as LocalStorage) as Object as IndexBottomBarPrivateTest;
+      let threw = false;
+      page.aiEnabled = false;
+      page.addEnabled = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(shouldEnableIndexBottomBarAi(page.aiEnabled)).assertFalse();
+      expect(shouldEnableIndexBottomBarAdd(page.addEnabled)).assertFalse();
+    });
+
+    it('combined: index_bottom_bar_initial_render_should_keep_default_callbacks_and_enabled_flags_stable', 0, () => {
+      // Arrange
+      const page = new IndexBottomBar(undefined, {} as LocalStorage) as Object as IndexBottomBarPrivateTest;
+      let threw = false;
+      page.aiEnabled = true;
+      page.addEnabled = true;
+
+      // Act
+      page.onFilter();
+      page.onAi();
+      page.onAdd();
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(shouldEnableIndexBottomBarAi(page.aiEnabled)).assertTrue();
+      expect(shouldEnableIndexBottomBarAdd(page.addEnabled)).assertTrue();
     });
   });
 }

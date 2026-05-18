@@ -515,5 +515,48 @@ export default function companionFilterPageHelperTest() {
       expect(completedWidth).assertEqual(0);
       expect(skippedWidth).assertEqual(0);
     });
+
+    it('boundary: filter_page_should_keep_active_unselected_when_current_is_all', 0, () => {
+      // Arrange
+      const current: CompanionFilterState = 'ALL';
+
+      // Act
+      const activeSelected = isCompanionFilterSelected('ACTIVE', current);
+      const activeWidth = getCompanionFilterBorderWidth('ACTIVE', current);
+
+      // Assert
+      expect(activeSelected).assertFalse();
+      expect(activeWidth).assertEqual(0);
+    });
+
+    it('combined: filter_page_initial_render_should_support_visible_skipped_selected_with_pending_and_all_unselected', 0, () => {
+      // Arrange
+      const page = new CompanionFilterPage(undefined, {} as LocalStorage) as Object as CompanionFilterPagePrivateTest;
+      page.effectiveTheme = 'dark';
+      page.getFilterOptions = (): CompanionFilterState[] => ['PENDING', 'ALL', 'SKIPPED'];
+      page.getFilterLabel = (state: CompanionFilterState): string => `skipped_${state}`;
+      page.setInitiallyProvidedValue({
+        showFilterPage: true,
+        companionFilterState: 'SKIPPED',
+        safeTopInset: 5,
+        safeBottomInset: 7
+      });
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(isCompanionFilterSelected('SKIPPED', 'SKIPPED')).assertTrue();
+      expect(isCompanionFilterSelected('PENDING', 'SKIPPED')).assertFalse();
+      expect(getCompanionFilterBorderType('SKIPPED')).assertEqual('skipped');
+      expect(getCompanionFilterBorderWidth('SKIPPED', 'SKIPPED')).assertEqual(1);
+      expect(page.getThemePalette().textSecondary).assertEqual(ThemeCenter.getPalette('dark').textSecondary);
+    });
   });
 }
