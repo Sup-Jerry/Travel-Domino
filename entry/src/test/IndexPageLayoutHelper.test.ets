@@ -568,6 +568,42 @@ export default function indexPageLayoutHelperTest() {
       expect(page.themePalette.primary).assertEqual('#2F7DFF');
       expect(page.companionOverlayZIndex).assertEqual(10);
     });
+
+    it('regression: page_weather_hint_should_keep_whitespace_hint_visible_when_manual_refresh_is_true', 0, () => {
+      // Arrange
+      const weatherFeatureEnabled = true;
+      const hasManualPlanningWeatherRefresh = true;
+      const weatherPlanningHint = '   ';
+
+      // Act
+      const show = shouldShowIndexPageWeatherHint(
+        weatherFeatureEnabled,
+        hasManualPlanningWeatherRefresh,
+        weatherPlanningHint
+      );
+
+      // Assert
+      expect(show).assertTrue();
+    });
+
+    it('combined: page_layout_should_keep_default_day_collapsed_callback_false_and_gaps_identity_consistent', 0, () => {
+      // Arrange
+      const page = new IndexPageLayout(undefined, {} as LocalStorage) as Object as IndexPageLayoutPrivateTest;
+
+      // Act
+      const collapsed = page.onIsDayCollapsed(99);
+      const zeroGaps = resolveIndexPageGapsCount(0);
+      const hintLines = buildIndexPageHintLines('only_hint');
+      const scoreLines = buildIndexPageScoreLines('');
+
+      // Assert
+      expect(collapsed).assertFalse();
+      expect(zeroGaps).assertEqual(0);
+      expect(hintLines.length).assertEqual(1);
+      expect(hintLines[0]).assertEqual('only_hint');
+      expect(scoreLines.length).assertEqual(1);
+      expect(scoreLines[0]).assertEqual('');
+    });
   });
 }
 

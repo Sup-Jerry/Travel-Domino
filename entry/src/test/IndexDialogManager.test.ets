@@ -798,5 +798,31 @@ export default function indexDialogManagerTest() {
         Reflect.set(IndexDialogManager as Object, 'openRangeDateFilterPicker', originalRange);
       }
     });
+
+    it('combined: open_range_end_date_picker_should_emit_same_day_end_when_start_and_end_pick_same_date', 0, () => {
+      // Arrange
+      const uiContext = new PickerUiContextMock();
+      const startDate = new Date(2026, 7, 9, 0, 0, 0, 0);
+      let actualStartMs = -1;
+      let actualEndMs = -1;
+
+      // Act
+      IndexDialogManager.openRangeEndDatePicker(
+        uiContext as Object as UIContext,
+        startDate,
+        (startMs: number, endMs: number): void => {
+          actualStartMs = startMs;
+          actualEndMs = endMs;
+        }
+      );
+      uiContext.dialogs[0].onAccept(new DatePickerResultMock(2026, 7, 9) as Object as DatePickerResult);
+
+      // Assert
+      const expectedEnd = new Date();
+      expectedEnd.setFullYear(2026, 7, 9);
+      expectedEnd.setHours(23, 59, 59, 999);
+      expect(actualStartMs).assertEqual(startDate.getTime());
+      expect(actualEndMs).assertEqual(expectedEnd.getTime());
+    });
   });
 }

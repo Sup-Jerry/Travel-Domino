@@ -549,6 +549,51 @@ export default function indexTimelineViewHelperTest() {
       expect(gapHint).assertFalse();
       expect(spacerHeight).assertEqual(24);
     });
+
+    it('boundary: timeline_gap_hint_should_hide_for_zero_and_negative_gap_count', 0, () => {
+      // Arrange
+      const zeroGaps = 0;
+      const negativeGaps = -2;
+
+      // Act
+      const zeroVisible = shouldShowIndexTimelineGapHint(false, zeroGaps);
+      const negativeVisible = shouldShowIndexTimelineGapHint(false, negativeGaps);
+
+      // Assert
+      expect(zeroVisible).assertFalse();
+      expect(negativeVisible).assertFalse();
+    });
+
+    it('combined: timeline_view_initial_render_should_support_empty_groups_without_gap_hint_in_normal_mode', 0, () => {
+      // Arrange
+      const page = new IndexTimelineView(undefined, {} as LocalStorage) as Object as IndexTimelineViewPrivateTest;
+      page.setInitiallyProvidedValue({
+        groupedEvents: [],
+        allEvents: [],
+        isArchived: false,
+        isCompanionMode: false,
+        showWeather: false,
+        isPageRefreshing: false,
+        gapsCount: 0,
+        onIsDayCollapsed: (_dayOffset: number) => false
+      });
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+      const spacerHeight = resolveIndexTimelineBottomSpacerHeight(false);
+      const itemEnabled = shouldEnableIndexTimelineItem(false);
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(spacerHeight).assertEqual(100);
+      expect(itemEnabled).assertTrue();
+      expect(shouldShowIndexTimelineGapHint(false, 0)).assertFalse();
+    });
   });
 }
 
