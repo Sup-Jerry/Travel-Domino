@@ -261,5 +261,40 @@ export default function conflictSelectionDialogHelperTest() {
       expect(shiftCalls).assertEqual(1);
     });
 
+    it('combined: conflict_selection_dialog_should_close_and_dispatch_advance_action_when_callback_exists', 0, () => {
+      // Arrange
+      const page = new ConflictSelectionDialog(undefined, {} as LocalStorage) as Object as ConflictSelectionDialogPrivateTest;
+      const controller = new DialogControllerMockConflictSelection();
+      let advanceCalls = 0;
+      let shiftCalls = 0;
+      page.setController(controller);
+      page.onAdvanceAdjust = () => {
+        advanceCalls += 1;
+      };
+      page.onShiftSameDay = () => {
+        shiftCalls += 1;
+      };
+      page.OptionCard = (
+        _icon: string,
+        title: string,
+        _desc: string,
+        _bg: string,
+        _color: string,
+        action: () => void
+      ): void => {
+        if (title === '前移调整') {
+          action();
+        }
+      };
+
+      // Act
+      page.initialRender();
+
+      // Assert
+      expect(controller.closeCount).assertEqual(1);
+      expect(advanceCalls).assertEqual(1);
+      expect(shiftCalls).assertEqual(0);
+    });
+
   });
 }

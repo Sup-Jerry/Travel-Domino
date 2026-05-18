@@ -426,5 +426,50 @@ export default function companionFilterPageHelperTest() {
       expect(getCompanionFilterBorderWidth('COMPLETED', 'COMPLETED')).assertEqual(1);
       expect(getCompanionFilterBorderWidth('ALL', 'COMPLETED')).assertEqual(0);
     });
+
+    it('regression: filter_page_initial_render_should_support_visible_pending_selected_with_default_light_palette', 0, () => {
+      // Arrange
+      const page = new CompanionFilterPage(undefined, {} as LocalStorage) as Object as CompanionFilterPagePrivateTest;
+      page.getFilterOptions = (): CompanionFilterState[] => ['ALL', 'PENDING', 'SKIPPED'];
+      page.setInitiallyProvidedValue({
+        showFilterPage: true,
+        companionFilterState: 'PENDING',
+        safeTopInset: 0,
+        safeBottomInset: 0
+      });
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(isCompanionFilterSelected('PENDING', 'PENDING')).assertTrue();
+      expect(isCompanionFilterSelected('SKIPPED', 'PENDING')).assertFalse();
+      expect(getCompanionFilterBorderType('PENDING')).assertEqual('pending');
+      expect(getCompanionFilterBorderType('SKIPPED')).assertEqual('skipped');
+      expect(page.getThemePalette().textPrimary).assertEqual(ThemeCenter.getPalette('light').textPrimary);
+    });
+
+    it('combined: filter_page_should_keep_default_label_and_width_matrix_consistent_for_all_and_pending', 0, () => {
+      // Arrange
+      const page = new CompanionFilterPage(undefined, {} as LocalStorage) as Object as CompanionFilterPagePrivateTest;
+
+      // Act
+      const allLabel = page.getFilterLabel('ALL');
+      const pendingLabel = page.getFilterLabel('PENDING');
+      const allWidth = getCompanionFilterBorderWidth('ALL', 'PENDING');
+      const pendingWidth = getCompanionFilterBorderWidth('PENDING', 'PENDING');
+
+      // Assert
+      expect(allLabel).assertEqual('--');
+      expect(pendingLabel).assertEqual('--');
+      expect(allWidth).assertEqual(0);
+      expect(pendingWidth).assertEqual(1);
+    });
   });
 }

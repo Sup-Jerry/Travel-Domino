@@ -456,5 +456,41 @@ export default function gapResolutionDialogHelperTest() {
       expect(blankLabel).assertEqual('');
       expect(zeroAllocations).assertFalse();
     });
+
+    it('boundary: gap_resolution_about_to_appear_should_clear_current_gap_when_multiple_gaps_exist', 0, () => {
+      // Arrange
+      const vm = new GapVmMockHelper();
+      const dialog = createDialogHelper(vm);
+      const firstGap = buildGapEventHelper(801, 'first-gap', 35, '2026-05-16 08:00');
+      const secondGap = buildGapEventHelper(802, 'second-gap', 65, '2026-05-16 10:00');
+      dialog.currentGap = firstGap;
+      vm.distributionCoordinator.sortedGaps = [firstGap, secondGap];
+
+      // Act
+      dialog.aboutToAppear();
+
+      // Assert
+      expect(dialog.gapList.length).assertEqual(2);
+      expect(dialog.currentGap === null).assertTrue();
+    });
+
+    it('combined: gap_resolution_preview_should_keep_empty_add_str_when_selected_item_has_zero_allocation', 0, () => {
+      // Arrange
+      const vm = new GapVmMockHelper();
+      const dialog = createDialogHelper(vm);
+      const gap = buildGapEventHelper(803, 'preview-gap', 55, '2026-05-16 09:00');
+      const candidate = buildGapEventHelper(804, 'zero-add-item', 0, '2026-05-16 09:30', 30);
+      vm.distributionCoordinator.candidatesByGapId.set(gap.id, [candidate]);
+      vm.distributionCoordinator.safetyCaps.set(candidate.id, 0);
+      dialog.selectGap(gap);
+      dialog.selectedIds = new Set<number>([candidate.id]);
+
+      // Act
+      const preview = dialog.getPreview(candidate);
+
+      // Assert
+      expect(preview.timeRange).assertEqual('09:30-10:00 \u2192 10:00');
+      expect(preview.addStr).assertEqual('');
+    });
   });
 }
