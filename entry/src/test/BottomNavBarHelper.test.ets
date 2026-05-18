@@ -67,6 +67,12 @@ class GlobalBottomNavUIContextImplTest implements GlobalBottomNavUIContextTest {
   }
 }
 
+class GlobalBottomNavRouterThrowingImplTest implements GlobalBottomNavRouterTest {
+  async replaceUrl(_options: BottomNavRouteOptionsTest): Promise<void> {
+    throw new Error('route_failed');
+  }
+}
+
 class BottomNavTouchEventTest {
   type: TouchType = TouchType.Down;
 
@@ -574,6 +580,57 @@ export default function bottomNavBarHelperTest() {
       // Assert
       expect(pressed).assertEqual('archive');
       expect(released).assertEqual('');
+    });
+
+    it('invalid: global_bottom_nav_safe_replace_url_should_swallow_router_failure', 0, async (done: () => void) => {
+      // Arrange
+      const page = new GlobalBottomNavBar(undefined, {} as LocalStorage) as Object as GlobalBottomNavBarPrivateTest;
+      const fakeRouter = new GlobalBottomNavRouterThrowingImplTest();
+      const fakeUiContext = new GlobalBottomNavUIContextImplTest(fakeRouter);
+      page.getUIContext = (): GlobalBottomNavUIContextTest => fakeUiContext;
+      let threw = false;
+
+      // Act
+      try {
+        await page.safeReplaceUrl(page.createRouteOptions('pages/ArchivePage'), 'pages/ArchivePage');
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      done();
+    });
+
+    it('boundary: global_bottom_nav_handle_tab_tap_should_clear_lock_for_same_tab', 0, () => {
+      // Arrange
+      const page = new GlobalBottomNavBar(undefined, {} as LocalStorage) as Object as GlobalBottomNavBarPrivateTest;
+      page.currentTab = 'home';
+      page.transitionTab = 'archive';
+      page.navLocked = true;
+
+      // Act
+      page.handleTabTap('home');
+
+      // Assert
+      expect(page.transitionTab).assertEqual('');
+      expect(page.navLocked).assertFalse();
+    });
+
+    it('combined: plan_bottom_action_bar_should_keep_disabled_actions_and_dark_palette_consistent', 0, () => {
+      // Arrange
+      const page = new PlanBottomActionBar(undefined, {} as LocalStorage) as Object as PlanBottomActionBarPrivateTest;
+      page.effectiveTheme = 'dark';
+      page.aiEnabled = false;
+      page.addEnabled = false;
+
+      // Act
+      const palette = page.getPalette();
+
+      // Assert
+      expect(page.aiEnabled).assertFalse();
+      expect(page.addEnabled).assertFalse();
+      expect(palette.textTertiary).assertEqual(ThemeCenter.getPalette('dark').textTertiary);
     });
   });
 }

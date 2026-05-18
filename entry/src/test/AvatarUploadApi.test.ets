@@ -542,5 +542,91 @@ export default function avatarUploadApiTest() {
       expect(String(result.remoteUrl || '')).assertEqual('https://example.com/whitespace-token.jpg');
       done();
     });
+
+    it('boundary: upload_api_should_forward_explicit_png_mime_type_to_encoder_and_gateway', 0, async (done: () => void) => {
+      // Arrange
+      let encodedMimeType = '';
+      let gatewayMimeType = '';
+      const uploader = new AvatarUploadApi({
+        getAccessToken: (): string => 'token_png',
+        encodeFileToDataUrl: (_fileUriText: string, mimeType: string): string => {
+          encodedMimeType = mimeType;
+          return 'data:image/png;base64,JJ==';
+        },
+        updateAvatar: async (_accessToken: string, _imageDataUrl: string, mimeType: string): Promise<AuthApiResponse<UpdateAvatarResult>> => {
+          gatewayMimeType = mimeType;
+          const data = new UpdateAvatarResult();
+          data.avatarUrl = 'https://example.com/avatar.png';
+          const response = new AuthApiResponse<UpdateAvatarResult>(data);
+          response.code = 0;
+          return response;
+        },
+        now: (): number => 5002
+      });
+      const input = new AvatarUploadInput();
+      input.userId = 'u_png';
+      input.fileUri = 'file://avatar-png.jpg';
+      input.mimeType = 'image/png';
+
+      // Act
+      const result = await uploader.uploadAvatar(input);
+
+      // Assert
+      expect(String(result.status)).assertEqual('SYNCED');
+      expect(encodedMimeType).assertEqual('image/png');
+      expect(gatewayMimeType).assertEqual('image/png');
+      done();
+    });
+
+    it('invalid: upload_api_should_map_encode_error_with_blank_message_to_upload_exception', 0, async (done: () => void) => {
+      // Arrange
+      const uploader = new AvatarUploadApi({
+        getAccessToken: (): string => 'token_blank_error',
+        encodeFileToDataUrl: (): string => {
+          throw new Error('');
+        },
+        now: (): number => 5003
+      });
+      const input = new AvatarUploadInput();
+      input.userId = 'u_blank_error';
+      input.fileUri = 'file://avatar-blank-error.jpg';
+
+      // Act
+      const result = await uploader.uploadAvatar(input);
+
+      // Assert
+      expect(String(result.status)).assertEqual('LOCAL_ONLY');
+      expect(String(result.errorCode || '')).assertEqual('UPLOAD_EXCEPTION');
+      expect(String(result.requestId)).assertEqual('avatar_req_5003');
+      done();
+    });
+
+    it('combined: upload_api_should_allow_synced_result_with_empty_remote_url_when_gateway_returns_zero', 0, async (done: () => void) => {
+      // Arrange
+      const uploader = new AvatarUploadApi({
+        getAccessToken: (): string => 'token_empty_url',
+        encodeFileToDataUrl: (_fileUriText: string, _mimeType: string): string => 'data:image/jpeg;base64,KK==',
+        updateAvatar: async (): Promise<AuthApiResponse<UpdateAvatarResult>> => {
+          const data = new UpdateAvatarResult();
+          data.avatarUrl = '';
+          const response = new AuthApiResponse<UpdateAvatarResult>(data);
+          response.code = 0;
+          return response;
+        },
+        now: (): number => 5004
+      });
+      const input = new AvatarUploadInput();
+      input.userId = 'u_empty_url';
+      input.fileUri = 'file://avatar-empty-url.jpg';
+
+      // Act
+      const result = await uploader.uploadAvatar(input);
+
+      // Assert
+      expect(String(result.status)).assertEqual('SYNCED');
+      expect(String(result.remoteUrl || '')).assertEqual('');
+      expect(String(result.requestId)).assertEqual('avatar_req_5004');
+      done();
+    });
   });
 }
