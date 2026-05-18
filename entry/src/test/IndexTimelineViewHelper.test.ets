@@ -75,6 +75,9 @@ interface IndexTimelineViewPrivateTest {
   onOpenGapOptimize: () => void;
   setInitiallyProvidedValue(params: IndexTimelineViewParamsTest): void;
   updateStateVars(params: IndexTimelineViewParamsTest): void;
+  buildDateHeader(text: string, dayOffset: number, placeCount: number): void;
+  swipeStartAction(item: EventEntity): void;
+  swipeEndAction(item: EventEntity): void;
   initialRender(): void;
 }
 
@@ -593,6 +596,73 @@ export default function indexTimelineViewHelperTest() {
       expect(spacerHeight).assertEqual(100);
       expect(itemEnabled).assertTrue();
       expect(shouldShowIndexTimelineGapHint(false, 0)).assertFalse();
+    });
+
+    it('combined: timeline_view_builder_methods_should_support_header_and_swipe_paths_without_throwing', 0, () => {
+      // Arrange
+      const page = new IndexTimelineView(undefined, {} as LocalStorage) as Object as IndexTimelineViewPrivateTest;
+      const first = buildTimelineEvent(71);
+      let headerThrew = false;
+      let startThrew = false;
+      let endThrew = false;
+
+      // Act
+      try {
+        page.buildDateHeader('Day 8', 8, 1);
+      } catch (_error) {
+        headerThrew = true;
+      }
+      try {
+        page.swipeStartAction(first);
+      } catch (_error) {
+        startThrew = true;
+      }
+      try {
+        page.swipeEndAction(first);
+      } catch (_error) {
+        endThrew = true;
+      }
+
+      // Assert
+      expect(headerThrew).assertFalse();
+      expect(startThrew).assertFalse();
+      expect(endThrew).assertFalse();
+      expect(buildIndexTimelineHeaderText('Day 8', 1).indexOf('Day 8') >= 0).assertTrue();
+    });
+
+    it('boundary: timeline_view_initial_render_should_support_expanded_archived_group_without_swipe_actions', 0, () => {
+      // Arrange
+      const page = new IndexTimelineView(undefined, {} as LocalStorage) as Object as IndexTimelineViewPrivateTest;
+      const event = buildTimelineEvent(72);
+      page.setInitiallyProvidedValue({
+        groupedEvents: [{
+          dayOffset: 8,
+          actualDateMs: 80,
+          dateHeader: 'Day 8',
+          events: [event]
+        }],
+        allEvents: [event],
+        isArchived: true,
+        isCompanionMode: false,
+        showWeather: true,
+        isPageRefreshing: false,
+        gapsCount: 1,
+        onIsDayCollapsed: (_dayOffset: number) => false
+      });
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(shouldShowIndexTimelineGroupItems(false)).assertTrue();
+      expect(shouldEnableIndexTimelineItem(true)).assertFalse();
+      expect(shouldShowIndexTimelineGapHint(true, 1)).assertFalse();
     });
   });
 }

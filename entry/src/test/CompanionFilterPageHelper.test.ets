@@ -601,5 +601,56 @@ export default function companionFilterPageHelperTest() {
       expect(getCompanionFilterBorderWidth('COMPLETED', 'ACTIVE')).assertEqual(0);
       expect(getCompanionFilterBorderType('SKIPPED')).assertEqual('skipped');
     });
+
+    it('combined: filter_page_callbacks_should_keep_visible_completed_state_and_explicit_selection_consistent', 0, () => {
+      // Arrange
+      const page = new CompanionFilterPage(undefined, {} as LocalStorage) as Object as CompanionFilterPagePrivateTest;
+      let selectedState: CompanionFilterState = 'ALL';
+      let closeCount = 0;
+      page.effectiveTheme = 'dark';
+      page.onClose = (): void => {
+        closeCount += 1;
+      };
+      page.onFilterSelect = (item: CompanionFilterState): void => {
+        selectedState = item;
+      };
+      page.setInitiallyProvidedValue({
+        showFilterPage: true,
+        companionFilterState: 'COMPLETED',
+        safeTopInset: 6,
+        safeBottomInset: 9
+      });
+
+      // Act
+      page.onClose();
+      page.onFilterSelect('ACTIVE');
+
+      // Assert
+      expect(closeCount).assertEqual(1);
+      expect(selectedState).assertEqual('ACTIVE');
+      expect(getCompanionFilterBorderWidth('COMPLETED', 'COMPLETED')).assertEqual(1);
+      expect(getCompanionFilterBorderType('COMPLETED')).assertEqual('completed');
+      expect(page.getThemePalette().companionBg).assertEqual(ThemeCenter.getPalette('dark').companionBg);
+    });
+
+    it('boundary: filter_page_hidden_state_should_keep_options_lazy_and_selection_semantics_stable', 0, () => {
+      // Arrange
+      const page = new CompanionFilterPage(undefined, {} as LocalStorage) as Object as CompanionFilterPagePrivateTest;
+      page.setInitiallyProvidedValue({
+        showFilterPage: false,
+        companionFilterState: 'SKIPPED',
+        safeTopInset: 1,
+        safeBottomInset: 2
+      });
+
+      // Act
+      const options = page.getFilterOptions();
+
+      // Assert
+      expect(shouldShowCompanionFilterPage(page.showFilterPage)).assertFalse();
+      expect(options.length).assertEqual(5);
+      expect(getCompanionFilterBorderWidth('SKIPPED', 'SKIPPED')).assertEqual(1);
+      expect(getCompanionFilterBorderWidth('ACTIVE', 'SKIPPED')).assertEqual(0);
+    });
   });
 }

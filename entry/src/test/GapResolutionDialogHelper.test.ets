@@ -28,6 +28,7 @@ interface GapDialogHostHelper {
   hasPositiveAllocation(distributionMap: Map<number, number>): boolean;
   getAllocatableCandidates(): EventEntity[];
   isCandidateAllocatable(item: EventEntity): boolean;
+  safeShowToast(message: string, duration?: number): void;
 }
 
 type GapDialogArgHelper = Object | string | number | boolean | undefined;
@@ -125,6 +126,10 @@ class GapDialogHostImplHelper implements GapDialogHostHelper {
     return invokeGapDialogMethodHelper(gapIsCandidateAllocatableHelper, this, item);
   }
 
+  safeShowToast(message: string, duration?: number): void {
+    return invokeGapDialogMethodHelper(gapSafeShowToastHelper, this, message, duration);
+  }
+
 }
 
 function buildGapEventHelper(
@@ -170,6 +175,7 @@ const gapGetTierLabelHelper = getGapDialogMethodHelper<[number], string>('getTie
 const gapHasPositiveAllocationHelper = getGapDialogMethodHelper<[Map<number, number>], boolean>('hasPositiveAllocation');
 const gapGetAllocatableCandidatesHelper = getGapDialogMethodHelper<[], EventEntity[]>('getAllocatableCandidates');
 const gapIsCandidateAllocatableHelper = getGapDialogMethodHelper<[EventEntity], boolean>('isCandidateAllocatable');
+const gapSafeShowToastHelper = getGapDialogMethodHelper<[string, (number | undefined)], void>('safeShowToast');
 
 function createDialogHelper(vm: GapVmMockHelper): GapDialogHostHelper {
   return new GapDialogHostImplHelper(vm);
@@ -563,6 +569,30 @@ export default function gapResolutionDialogHelperTest() {
       // Assert
       expect(allocatableCandidates.length).assertEqual(0);
       expect(dialog.isCandidateAllocatable(candidate)).assertFalse();
+    });
+
+    it('combined: gap_resolution_safe_toast_should_accept_plain_and_timed_messages_without_throwing', 0, () => {
+      // Arrange
+      const vm = new GapVmMockHelper();
+      const dialog = createDialogHelper(vm);
+      let plainThrew = false;
+      let timedThrew = false;
+
+      // Act
+      try {
+        dialog.safeShowToast('gap_toast_plain');
+      } catch (_error) {
+        plainThrew = true;
+      }
+      try {
+        dialog.safeShowToast('gap_toast_timed', 1800);
+      } catch (_error) {
+        timedThrew = true;
+      }
+
+      // Assert
+      expect(plainThrew).assertFalse();
+      expect(timedThrew).assertFalse();
     });
   });
 }
