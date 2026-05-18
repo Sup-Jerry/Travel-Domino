@@ -847,5 +847,74 @@ export default function indexDialogManagerTest() {
       expect(uiContext.dialogs[0].end.getTime()).assertEqual(4102416000000);
       expect(actualDateMs).assertEqual(-1);
     });
+
+    it('combined: open_date_filter_dialog_should_preserve_show_all_callback_without_triggering_pickers', 0, () => {
+      // Arrange
+      const uiContext = new PickerUiContextMock();
+      const originalCreate = Reflect.get(IndexDialogManager as Object, 'createDateFilterController') as (callbacks: Object) => Object;
+      const originalSingle = Reflect.get(IndexDialogManager as Object, 'openSingleDateFilterPicker') as Object;
+      const originalRange = Reflect.get(IndexDialogManager as Object, 'openRangeDateFilterPicker') as Object;
+      const controllerStub = new DateFilterControllerMock();
+      let capturedBag: Object | null = null;
+      let showAllCount = 0;
+      let singleCalls = 0;
+      let rangeCalls = 0;
+
+      Reflect.set(IndexDialogManager as Object, 'createDateFilterController', (callbacks: Object): Object => {
+        capturedBag = callbacks;
+        return controllerStub as Object;
+      });
+      Reflect.set(IndexDialogManager as Object, 'openSingleDateFilterPicker', (): void => {
+        singleCalls += 1;
+      });
+      Reflect.set(IndexDialogManager as Object, 'openRangeDateFilterPicker', (): void => {
+        rangeCalls += 1;
+      });
+
+      try {
+        // Act
+        IndexDialogManager.openDateFilterDialog(uiContext as Object as UIContext, 789, {
+          onShowAll: (): void => {
+            showAllCount += 1;
+          },
+          onSelectDate: (_dateMs: number): void => {},
+          onSelectRange: (_startMs: number, _endMs: number): void => {}
+        });
+        if (capturedBag !== null) {
+          const callbackBag = capturedBag as DateFilterCallbackBagLike;
+          callbackBag.onShowAll();
+        }
+
+        // Assert
+        expect(controllerStub.openCount).assertEqual(1);
+        expect(showAllCount).assertEqual(1);
+        expect(singleCalls).assertEqual(0);
+        expect(rangeCalls).assertEqual(0);
+      } finally {
+        Reflect.set(IndexDialogManager as Object, 'createDateFilterController', originalCreate);
+        Reflect.set(IndexDialogManager as Object, 'openSingleDateFilterPicker', originalSingle);
+        Reflect.set(IndexDialogManager as Object, 'openRangeDateFilterPicker', originalRange);
+      }
+    });
+
+    it('boundary: open_plan_date_picker_should_fallback_selected_date_when_plan_start_is_zero', 0, () => {
+      // Arrange
+      const uiContext = new PickerUiContextMock();
+      const beforeMs = Date.now();
+
+      // Act
+      IndexDialogManager.openPlanDatePicker(
+        uiContext as Object as UIContext,
+        0,
+        (_dateMs: number): void => {}
+      );
+      const afterMs = Date.now();
+
+      // Assert
+      expect(uiContext.showCount).assertEqual(1);
+      expect(uiContext.dialogs[0].start.getTime()).assertEqual(946684800000);
+      expect(uiContext.dialogs[0].selected.getTime() >= beforeMs - 1000).assertTrue();
+      expect(uiContext.dialogs[0].selected.getTime() <= afterMs + 1000).assertTrue();
+    });
   });
 }

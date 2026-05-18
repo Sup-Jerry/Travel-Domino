@@ -199,6 +199,13 @@ interface TrafficEnginePrivateForEJ {
   cache: Map<string, number>;
   transientFailureUntil: Map<string, number>;
   markTransientFailure(key: string, reason: string): void;
+  fetchMultiModalTrafficAsync(
+    from: LocationInfo,
+    to: LocationInfo,
+    mode: number,
+    key: string,
+    startTime?: string
+  ): Promise<void>;
   fetchAmapTrafficAsync(from: LocationInfo, to: LocationInfo, strategy: DriveStrategy, key: string): Promise<void>;
 }
 
@@ -223,6 +230,7 @@ class DriveMapServiceForEJ {
   duration: number = 26;
   throwOnDrive: boolean = false;
   driveCalls: number = 0;
+  modeCalls: number = 0;
 
   public async getLocationInfo(_keyword: string): Promise<LocationInfo[]> {
     return [];
@@ -250,6 +258,7 @@ class DriveMapServiceForEJ {
     _mode: number,
     _startTime?: string
   ): Promise<number> {
+    this.modeCalls += 1;
     return this.duration;
   }
 }
@@ -553,6 +562,53 @@ export default function phase2BatchEJTest() {
       expect(mapService.driveCalls).assertEqual(1);
       expect(engine.cache.has(key)).assertFalse();
       expect((engine.transientFailureUntil.get(key) ?? 0) > Date.now()).assertTrue();
+    });
+
+    it('boundary: traffic_engine_multi_modal_fetch_should_mark_transient_when_service_missing', 0, async () => {
+      // Arrange
+      const engine = resetTrafficEngineEJ();
+      const key = 'multi_modal_missing_service';
+
+      // Act
+      await engine.fetchMultiModalTrafficAsync(createLocationEJ('from'), createLocationEJ('to'), 0, key, '09:00');
+
+      // Assert
+      expect(engine.cache.has(key)).assertFalse();
+      expect(engine.transientFailureUntil.has(key)).assertTrue();
+    });
+
+    it('conflict: traffic_engine_multi_modal_fetch_should_short_circuit_when_same_key_is_already_loading', 0, async () => {
+      // Arrange
+      const engine = resetTrafficEngineEJ();
+      const mapService = new DriveMapServiceForEJ();
+      const key = 'multi_modal_loading_short_circuit';
+      engine.cache.set(key, -1);
+      Reflect.set(engine as Object, 'mapService', mapService as Object);
+
+      // Act
+      await engine.fetchMultiModalTrafficAsync(createLocationEJ('from'), createLocationEJ('to'), 2, key, '10:30');
+
+      // Assert
+      expect(mapService.modeCalls).assertEqual(0);
+      expect(engine.cache.get(key)).assertEqual(-1);
+    });
+
+    it('combined: traffic_engine_multi_modal_fetch_should_drop_non_positive_duration_and_clear_stale_guard', 0, async () => {
+      // Arrange
+      const engine = resetTrafficEngineEJ();
+      const mapService = new DriveMapServiceForEJ();
+      const key = 'multi_modal_non_positive_duration';
+      mapService.duration = 0;
+      engine.markTransientFailure(key, 'stale_guard');
+      Reflect.set(engine as Object, 'mapService', mapService as Object);
+
+      // Act
+      await engine.fetchMultiModalTrafficAsync(createLocationEJ('from'), createLocationEJ('to'), 3, key, '11:15');
+
+      // Assert
+      expect(mapService.modeCalls).assertEqual(1);
+      expect(engine.cache.has(key)).assertFalse();
+      expect(engine.transientFailureUntil.has(key)).assertFalse();
     });
 
     it('invalid: arrival_coordinator_terminal_status_helper_should_reject_non_terminal_status', 0, () => {

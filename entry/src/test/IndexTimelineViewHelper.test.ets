@@ -733,6 +733,45 @@ export default function indexTimelineViewHelperTest() {
       expect(shouldShowIndexTimelineGapHint(false, 3)).assertTrue();
       expect(resolveIndexTimelineBottomSpacerHeight(true)).assertEqual(24);
     });
+
+    it('combined: timeline_view_initial_render_should_support_collapsed_group_with_gap_hint_in_normal_mode', 0, () => {
+      // Arrange
+      const page = new IndexTimelineView(undefined, {} as LocalStorage) as Object as IndexTimelineViewPrivateTest;
+      const event = buildTimelineEvent(91);
+      page.setInitiallyProvidedValue({
+        groupedEvents: [{
+          dayOffset: 10,
+          actualDateMs: 100,
+          dateHeader: 'Day 10',
+          events: [event]
+        }],
+        allEvents: [event],
+        isArchived: false,
+        isCompanionMode: false,
+        showWeather: true,
+        isPageRefreshing: false,
+        gapsCount: 2,
+        onIsDayCollapsed: (dayOffset: number) => dayOffset === 10
+      });
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+      const itemsVisible = shouldShowIndexTimelineGroupItems(page.onIsDayCollapsed(10));
+      const gapHintVisible = shouldShowIndexTimelineGapHint(false, 2);
+      const header = buildIndexTimelineHeaderText('Day 10', 0);
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(itemsVisible).assertFalse();
+      expect(gapHintVisible).assertTrue();
+      expect(resolveIndexTimelineBottomSpacerHeight(false)).assertEqual(100);
+      expect(header.indexOf('Day 10') >= 0).assertTrue();
+    });
   });
 }
 
