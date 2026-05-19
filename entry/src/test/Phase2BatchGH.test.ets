@@ -24,6 +24,30 @@ import {
   shouldMyPageEmitLightHint,
   shouldMyPageUseImmediateGuestProfile
 } from '../main/ets/pages/MyPage';
+import { EventEntity } from '../main/ets/model/entity/EventEntity';
+import { CompressionEngine } from '../main/ets/domain/timeline/CompressionEngine';
+import { CompanionModeController } from '../main/ets/domain/timeline/CompanionModeController';
+import { StrategyService as LegacyStrategyService } from '../main/ets/domain/services/StrategyService';
+import { TravelStrategyMode } from '../main/ets/domain/strategy/TravelStrategyMode';
+
+function buildPhase2BatchGHEvent(
+  id: number,
+  name: string,
+  duration: number,
+  status: number,
+  lockStatus: number = 0
+): EventEntity {
+  const event = new EventEntity();
+  event.id = id;
+  event.name = name;
+  event.duration = duration;
+  event.status = status;
+  event.lock_status = lockStatus;
+  event.completion_status = EventEntity.STATE_PENDING;
+  event.actual_start_time = 0;
+  event.actual_end_time = 0;
+  return event;
+}
 
 export default function phase2BatchGHTest() {
   describe('unit_test_case_generator_autofill_Phase2BatchGH_dialogs_and_my_page_branches', () => {
@@ -87,6 +111,129 @@ export default function phase2BatchGHTest() {
       expect(canCreatePlanWithTitle('')).assertFalse();
       expect(formatCreatePlanDateText(new Date(2024, 1, 29))).assertEqual('2024/2/29');
       expect(formatCreatePlanDateText(new Date(2026, 0, 1))).assertEqual('2026/1/1');
+    });
+
+    it('combined: compression_engine_should_cover_invalid_inputs_and_mixed_candidate_disable_reasons', 0, () => {
+      // Arrange
+      const beforeChain = buildPhase2BatchGHEvent(1, 'before-chain', 20, 1);
+      const rigidStop = buildPhase2BatchGHEvent(2, 'rigid-stop', 60, 1, 1);
+      const flexibleStop = buildPhase2BatchGHEvent(3, 'flexible-stop', 80, 1);
+      const targetStop = buildPhase2BatchGHEvent(4, 'target-stop', 50, 1);
+      const events = [beforeChain, rigidStop, flexibleStop, targetStop];
+
+      // Act
+      const invalidTarget = CompressionEngine.buildContext(events, 0, '10:00', 1, 30, 1570, 1);
+      const invalidTime = CompressionEngine.buildContext(events, 3, '25:00', 1, 30, 1570, 1);
+      const context = CompressionEngine.buildContext(events, 3, '02:00', 1, 30, 1570, 1);
+
+      // Assert
+      expect(invalidTarget === null).assertTrue();
+      expect(invalidTime === null).assertTrue();
+      expect(context === null).assertFalse();
+      expect(context?.neededGapMinutes ?? -1).assertEqual(10);
+      expect(context?.candidates.length ?? -1).assertEqual(3);
+      expect(context?.candidates[0].selectable ?? true).assertFalse();
+      expect((context?.candidates[0].disabledReason.length ?? 0) > 0).assertTrue();
+      expect(context?.candidates[1].selectable ?? true).assertFalse();
+      expect((context?.candidates[1].disabledReason.length ?? 0) > 0).assertTrue();
+      expect(context?.candidates[2].selectable ?? false).assertTrue();
+      expect(context?.candidates[2].maxReducible ?? -1).assertEqual(50);
+    });
+
+    it('combined: companion_mode_controller_should_cover_active_pending_lookup_and_action_matrices', 0, () => {
+      // Arrange
+      const backlog = buildPhase2BatchGHEvent(11, 'backlog', 30, 0);
+      const pending = buildPhase2BatchGHEvent(12, 'pending', 40, 1);
+      const active = buildPhase2BatchGHEvent(13, 'active', 50, 1);
+      active.actual_start_time = 100;
+      const completed = buildPhase2BatchGHEvent(14, 'completed', 60, 1);
+      completed.completion_status = EventEntity.STATE_COMPLETED;
+      const events = [backlog, pending, active, completed];
+
+      // Act
+      const foundActive = CompanionModeController.findActiveEvent(events);
+      const foundPending = CompanionModeController.findPendingEvent(events);
+      const activeActions = CompanionModeController.getActionsForState('ACTIVE');
+      const readyActions = CompanionModeController.getActionsForState('READY');
+      const idleActions = CompanionModeController.getActionsForState('GAP');
+
+      // Assert
+      expect(foundActive?.id ?? -1).assertEqual(active.id);
+      expect(foundPending?.id ?? -1).assertEqual(pending.id);
+      expect(activeActions.canEnd).assertTrue();
+      expect(activeActions.canStart).assertFalse();
+      expect(readyActions.canStart).assertTrue();
+      expect(readyActions.canNavigate).assertTrue();
+      expect(idleActions.canStart).assertFalse();
+      expect(idleActions.canViewDetail).assertFalse();
+    });
+
+    it('combined: legacy_strategy_service_should_cover_profile_name_description_explanation_and_validation_edges', 0, () => {
+      // Arrange
+      const service = new LegacyStrategyService();
+
+      // Act
+      const leisureProfile = service.getProfile(TravelStrategyMode.LEISURE);
+      const soldierName = service.getModeName(1);
+      const leisureDescription = service.getModeDescription(2);
+      const defaultDescription = service.getModeDescription(99);
+      const soldierExplanation = service.getModeExplanation(1);
+      const defaultExplanation = service.getModeExplanation(99);
+      const validDefault = service.validateMode(0);
+      const invalidUpper = service.validateMode(3);
+
+      // Assert
+      expect(leisureProfile.dailyPoiTarget.min).assertEqual(3);
+      expect(leisureProfile.avoidBacktracking).assertTrue();
+      expect(soldierName.length > 0).assertTrue();
+      expect(leisureDescription.length > 0).assertTrue();
+      expect(defaultDescription.length > 0).assertTrue();
+      expect(soldierExplanation.length > defaultExplanation.length / 2).assertTrue();
+      expect(validDefault).assertTrue();
+      expect(invalidUpper).assertFalse();
+    });
+
+    it('boundary: compression_engine_should_skip_unscheduled_items_and_disable_zero_reducible_candidates', 0, () => {
+      // Arrange
+      const skippedBacklog = buildPhase2BatchGHEvent(21, 'backlog-skip', 25, 0);
+      const fixedDuration = buildPhase2BatchGHEvent(22, 'fixed-duration', 20, 1);
+      const targetStop = buildPhase2BatchGHEvent(23, 'target-stop', 40, 1);
+      const events = [skippedBacklog, fixedDuration, targetStop];
+
+      // Act
+      const context = CompressionEngine.buildContext(events, 2, '03:10', 0, 30, 191, 0);
+
+      // Assert
+      expect(context === null).assertFalse();
+      expect(context?.neededGapMinutes ?? -1).assertEqual(1);
+      expect(context?.candidates.length ?? -1).assertEqual(1);
+      expect(context?.candidates[0].id ?? -1).assertEqual(fixedDuration.id);
+      expect(context?.candidates[0].minAllowed ?? -1).assertEqual(20);
+      expect(context?.candidates[0].maxReducible ?? -1).assertEqual(0);
+      expect(context?.candidates[0].selectable ?? true).assertFalse();
+      expect((context?.candidates[0].disabledReason.length ?? 0) > 0).assertTrue();
+    });
+
+    it('boundary: legacy_strategy_service_should_cover_leisure_and_default_mode_branches_explicitly', 0, () => {
+      // Arrange
+      const service = new LegacyStrategyService();
+
+      // Act
+      const leisureName = service.getModeName(2);
+      const defaultName = service.getModeName(-1);
+      const soldierDescription = service.getModeDescription(1);
+      const leisureExplanation = service.getModeExplanation(2);
+      const maxValid = service.validateMode(2);
+      const invalidLower = service.validateMode(-1);
+
+      // Assert
+      expect(leisureName.length > 0).assertTrue();
+      expect(defaultName.length > 0).assertTrue();
+      expect(leisureName !== defaultName).assertTrue();
+      expect(soldierDescription.length > 0).assertTrue();
+      expect(leisureExplanation.length > 0).assertTrue();
+      expect(maxValid).assertTrue();
+      expect(invalidLower).assertFalse();
     });
 
     it('normal: validator_marker_should_cover_normal_case', 0, () => {

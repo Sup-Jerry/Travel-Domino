@@ -99,6 +99,65 @@ export default function phase1ZeroHitBatchATest() {
       expect(check.gapMinutes).assertEqual(35);
     });
 
+    it('invalid: conflict_detector_should_skip_unavailable_conflict_candidates_before_returning_direct_gap_conflict', 0, () => {
+      // Arrange
+      const lockedConflict = createLockedEvent(11, 'lake');
+      const statusBlocked = createLockedEvent(12, 'status-blocked');
+      statusBlocked.status = 0;
+      const lockBlocked = createLockedEvent(13, 'lock-blocked');
+      lockBlocked.lock_status = 0;
+      const events: EventEntity[] = new Array<EventEntity>(4);
+      events[1] = statusBlocked;
+      events[2] = lockBlocked;
+      events[3] = lockedConflict;
+      const results: TravelPlanItem[] = [
+        createPlanItem(true, 'ignore missing event', 9),
+        createPlanItem(true, 'ignore first', 18),
+        createPlanItem(true, 'ignore second', 22),
+        createPlanItem(true, 'direct gap branch', 15)
+      ];
+      // Act
+      const check = ConflictDetector.checkConflicts(events, results);
+      // Assert
+      expect(check.hasConflict).assertTrue();
+      expect(check.conflictItemId).assertEqual(11);
+      expect(check.conflictItemName).assertEqual('lake');
+      expect(check.gapMinutes).assertEqual(15);
+      expect(check.conflictMsg).assertEqual('direct gap branch');
+    });
+
+    it('boundary: conflict_detector_should_skip_non_conflict_results_until_next_conflict', 0, () => {
+      // Arrange
+      const events: EventEntity[] = [
+        createLockedEvent(21, 'first'),
+        createLockedEvent(22, 'second')
+      ];
+      const results: TravelPlanItem[] = [
+        createPlanItem(false, 'not a conflict', 30),
+        createPlanItem(true, 'real conflict', 12)
+      ];
+      // Act
+      const check = ConflictDetector.checkConflicts(events, results);
+      // Assert
+      expect(check.hasConflict).assertTrue();
+      expect(check.conflictItemId).assertEqual(22);
+      expect(check.gapMinutes).assertEqual(12);
+      expect(check.conflictMsg).assertEqual('real conflict');
+    });
+
+    it('boundary: conflict_detector_should_keep_conflict_and_fallback_gap_to_zero_when_message_has_no_minutes', 0, () => {
+      // Arrange
+      const events: EventEntity[] = [createLockedEvent(31, 'bridge')];
+      const results: TravelPlanItem[] = [createPlanItem(true, '', 0)];
+      // Act
+      const check = ConflictDetector.checkConflicts(events, results);
+      // Assert
+      expect(check.hasConflict).assertTrue();
+      expect(check.conflictItemId).assertEqual(31);
+      expect(check.gapMinutes).assertEqual(0);
+      expect(check.conflictMsg).assertEqual('');
+    });
+
     it('regression: td-20260412-phase1-user-behavior-tracker-threshold-should-stay-five', 0, () => {
       // Arrange
       const tracker = new UserBehaviorTracker();

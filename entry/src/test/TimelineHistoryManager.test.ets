@@ -30,6 +30,19 @@ export default function timelineHistoryManagerTest() {
       expect(address).assertEqual('杭州市西湖区龙井路');
     });
 
+    it('boundary: get_place_address_should_fallback_to_dash_when_all_addresses_are_empty', 0, () => {
+      // Arrange
+      const a = createScheduleEvent(3, '外滩', 0, 100);
+      const b = createScheduleEvent(4, '外滩', 1, 100);
+      a.address = ' ';
+      b.address = '';
+      const manager = new TimelineHistoryManager({ events: [a, b], planId: 11, planName: '上海行' });
+      // Act
+      const address = manager.getPlaceAddress('外滩');
+      // Assert
+      expect(address).assertEqual('-');
+    });
+
     it('boundary: get_current_plan_history_timeline_items_should_use_default_threshold_when_invalid', 0, () => {
       // Arrange
       const event = createScheduleEvent(10, '博物馆', 0, 100);
@@ -65,6 +78,23 @@ export default function timelineHistoryManagerTest() {
       // Assert
       expect(latest !== null).assertTrue();
       expect(latest?.id || 0).assertEqual(31);
+    });
+
+    it('boundary: get_latest_event_for_place_should_use_actual_start_time_and_filter_unscheduled_items', 0, () => {
+      // Arrange
+      const unscheduled = createScheduleEvent(32, '城墙', 0, 100);
+      unscheduled.status = 0;
+      unscheduled.actual_end_time = 99_000;
+      const byStartTime = createScheduleEvent(33, '城墙', 0, 200);
+      byStartTime.actual_start_time = 8_000;
+      const byEndTime = createScheduleEvent(34, '城墙', 0, 300);
+      byEndTime.actual_end_time = 7_000;
+      const manager = new TimelineHistoryManager({ events: [unscheduled, byEndTime, byStartTime], planId: 12, planName: '西安行' });
+      // Act
+      const latest = manager.getLatestEventForPlace('城墙');
+      // Assert
+      expect(latest !== null).assertTrue();
+      expect(latest?.id || 0).assertEqual(33);
     });
 
     it('regression: td-20260411-c4-history-items-should-sort-by-display-time', 0, () => {
@@ -115,6 +145,47 @@ export default function timelineHistoryManagerTest() {
       expect(items.some((item) => item.actionType === 'LEAVE')).assertTrue();
       expect(items.some((item) => item.actionType === 'SKIP')).assertTrue();
       expect(items.some((item) => item.actionType === 'ACTIVE')).assertTrue();
+    });
+
+    it('combined: history_items_should_filter_unscheduled_and_keep_normal_arrive_leave_not_abnormal', 0, () => {
+      // Arrange
+      const hidden = createScheduleEvent(60, '隐藏点', 0, 50);
+      hidden.status = 0;
+      hidden.actual_start_time = 2_000;
+      hidden.actual_end_time = 3_000;
+
+      const normal = createScheduleEvent(61, '正常点', 0, 100);
+      normal.dynamic_start_time = 20 * 60 * 1000;
+      normal.actual_start_time = 23 * 60 * 1000;
+      normal.actual_end_time = 53 * 60 * 1000;
+      normal.address = '  ';
+      normal.note = '  ';
+
+      const manager = new TimelineHistoryManager({ events: [hidden, normal], planId: 13, planName: '普通行程' });
+      // Act
+      const items = manager.getCurrentPlanHistoryTimelineItems(10);
+      // Assert
+      expect(items.length).assertEqual(2);
+      expect(items[0].eventId).assertEqual(61);
+      expect(items[0].actionType).assertEqual('ARRIVE');
+      expect(items[1].actionType).assertEqual('LEAVE');
+      expect(items[0].isAbnormal).assertFalse();
+      expect(items[0].address).assertEqual('');
+      expect(items[0].note).assertEqual('');
+    });
+
+    it('boundary: history_items_should_use_unknown_group_key_when_skip_has_no_available_timestamp', 0, () => {
+      // Arrange
+      const skipped = createScheduleEvent(62, '未知跳过点', 0, 100);
+      skipped.completion_status = EventEntity.STATE_SKIPPED;
+      const manager = new TimelineHistoryManager({ events: [skipped], planId: 14, planName: '未知时间行程' });
+      // Act
+      const items = manager.getCurrentPlanHistoryTimelineItems();
+      // Assert
+      expect(items.length).assertEqual(1);
+      expect(items[0].actionType).assertEqual('SKIP');
+      expect(items[0].groupDateKey).assertEqual('未定');
+      expect(items[0].displayTs).assertEqual(0);
     });
   });
 }

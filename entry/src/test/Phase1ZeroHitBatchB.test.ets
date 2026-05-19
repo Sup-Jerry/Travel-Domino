@@ -57,6 +57,34 @@ function assertAnyThrow(action: () => void): void {
   expect(thrown).assertTrue();
 }
 
+class Base64DecodeThrowsStub {
+  public decodeSync(_base64: string): Uint8Array {
+    throw new Error('decode_sync_failed');
+  }
+}
+
+class Base64DecodeEmptyStub {
+  public decodeSync(_base64: string): Uint8Array {
+    return new Uint8Array();
+  }
+}
+
+class Base64HelperHooksB {
+  private readonly originBase64Helper: Object;
+
+  constructor() {
+    this.originBase64Helper = Reflect.get(Reflect.get(globalThis, 'util') as Object, 'Base64Helper') as Object;
+  }
+
+  public use(stubCtor: Object): void {
+    Reflect.set(Reflect.get(globalThis, 'util') as Object, 'Base64Helper', stubCtor);
+  }
+
+  public restore(): void {
+    Reflect.set(Reflect.get(globalThis, 'util') as Object, 'Base64Helper', this.originBase64Helper);
+  }
+}
+
 export default function phase1ZeroHitBatchBTest() {
   describe('phase1ZeroHitBatchBTest', () => {
     it('normal: deep_link_should_round_trip_payload', 0, () => {
@@ -137,6 +165,60 @@ export default function phase1ZeroHitBatchBTest() {
       // Act
       // Assert
       assertAnyThrow(() => DeepLinkService.parseShareLink(invalidUrl));
+    });
+
+    it('invalid: deep_link_parse_should_reject_link_without_query_part', 0, () => {
+      // Arrange
+      const invalidUrl = 'travelapp://import';
+
+      // Act
+      // Assert
+      assertThrow(() => DeepLinkService.parseShareLink(invalidUrl), 'missing_data_parameter');
+    });
+
+    it('invalid: deep_link_parse_should_reject_trailing_question_mark_without_segments', 0, () => {
+      // Arrange
+      const invalidUrl = 'travelapp://import?';
+
+      // Act
+      // Assert
+      assertThrow(() => DeepLinkService.parseShareLink(invalidUrl), 'missing_data_parameter');
+    });
+
+    it('boundary: deep_link_parse_should_fallback_to_manual_base64_decoder_when_decode_sync_throws', 0, () => {
+      // Arrange
+      const hooks = new Base64HelperHooksB();
+      const url = 'travelapp://import?data=eyJ2IjoxLCJwIjp7%0AInQiOiJwYXJzZSJ9fQ==';
+
+      // Act
+      let restored = '';
+      hooks.use(Base64DecodeThrowsStub as Object);
+      try {
+        restored = DeepLinkService.parseShareLink(url);
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(restored).assertEqual('{"v":1,"p":{"t":"parse"}}');
+    });
+
+    it('boundary: deep_link_parse_should_retry_with_manual_decoder_when_decode_sync_returns_empty_bytes', 0, () => {
+      // Arrange
+      const hooks = new Base64HelperHooksB();
+      const url = 'travelapp://import?data=eyJ2IjoxLCJwIjp7InQiOiJxdWVyeSJ9fQ==';
+
+      // Act
+      let restored = '';
+      hooks.use(Base64DecodeEmptyStub as Object);
+      try {
+        restored = DeepLinkService.parseShareLink(url);
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(restored).assertEqual('{"v":1,"p":{"t":"query"}}');
     });
 
     it('conflict: serializer_should_fallback_to_transport_mode_when_travel_mode_missing', 0, () => {
