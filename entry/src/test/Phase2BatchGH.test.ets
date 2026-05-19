@@ -193,6 +193,49 @@ export default function phase2BatchGHTest() {
       expect(invalidUpper).assertFalse();
     });
 
+    it('boundary: compression_engine_should_skip_unscheduled_items_and_disable_zero_reducible_candidates', 0, () => {
+      // Arrange
+      const skippedBacklog = buildPhase2BatchGHEvent(21, 'backlog-skip', 25, 0);
+      const fixedDuration = buildPhase2BatchGHEvent(22, 'fixed-duration', 20, 1);
+      const targetStop = buildPhase2BatchGHEvent(23, 'target-stop', 40, 1);
+      const events = [skippedBacklog, fixedDuration, targetStop];
+
+      // Act
+      const context = CompressionEngine.buildContext(events, 2, '03:10', 0, 30, 191, 0);
+
+      // Assert
+      expect(context === null).assertFalse();
+      expect(context?.neededGapMinutes ?? -1).assertEqual(1);
+      expect(context?.candidates.length ?? -1).assertEqual(1);
+      expect(context?.candidates[0].id ?? -1).assertEqual(fixedDuration.id);
+      expect(context?.candidates[0].minAllowed ?? -1).assertEqual(20);
+      expect(context?.candidates[0].maxReducible ?? -1).assertEqual(0);
+      expect(context?.candidates[0].selectable ?? true).assertFalse();
+      expect((context?.candidates[0].disabledReason.length ?? 0) > 0).assertTrue();
+    });
+
+    it('boundary: legacy_strategy_service_should_cover_leisure_and_default_mode_branches_explicitly', 0, () => {
+      // Arrange
+      const service = new LegacyStrategyService();
+
+      // Act
+      const leisureName = service.getModeName(2);
+      const defaultName = service.getModeName(-1);
+      const soldierDescription = service.getModeDescription(1);
+      const leisureExplanation = service.getModeExplanation(2);
+      const maxValid = service.validateMode(2);
+      const invalidLower = service.validateMode(-1);
+
+      // Assert
+      expect(leisureName.length > 0).assertTrue();
+      expect(defaultName.length > 0).assertTrue();
+      expect(leisureName !== defaultName).assertTrue();
+      expect(soldierDescription.length > 0).assertTrue();
+      expect(leisureExplanation.length > 0).assertTrue();
+      expect(maxValid).assertTrue();
+      expect(invalidLower).assertFalse();
+    });
+
     it('normal: validator_marker_should_cover_normal_case', 0, () => {
       // Arrange
       const marker = true;
