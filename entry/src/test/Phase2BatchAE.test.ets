@@ -427,6 +427,87 @@ export default function phase2BatchAETest() {
       expect(result.startFromEventId).assertEqual(88);
     });
 
+    it('invalid: request_soft_replan_should_reject_non_runnable_status', 0, () => {
+      // Arrange
+      // Act
+      // Assert
+      const coordinator = new ReplanCoordinator();
+      const ctx = createDefaultExecutionContext('rp_soft_invalid', Date.now());
+      ctx.status = PlanStatus.DRAFT;
+      const result = coordinator.requestSoftReplan({
+        planId: 'rp_soft_invalid',
+        reason: 'rain',
+        currentNodeId: '101',
+        preserveCompletedNodes: true,
+        preserveStartedWindow: true,
+        useWeatherConstraint: true
+      }, ctx);
+      expect(result.success).assertEqual(false);
+      expect(result.changed).assertEqual(false);
+      expect(result.errorCode).assertEqual('REPLAN_INVALID');
+      expect(result.reasonCode).assertEqual('status_blocked');
+    });
+
+    it('boundary: request_soft_replan_should_return_zero_start_event_id_when_anchor_is_missing_or_non_positive', 0, () => {
+      // Arrange
+      // Act
+      // Assert
+      const coordinator = new ReplanCoordinator();
+      const emptyCtx = createDefaultExecutionContext('rp_soft_empty_anchor', Date.now());
+      emptyCtx.status = PlanStatus.PAUSED;
+      const emptyAnchor = coordinator.requestSoftReplan({
+        planId: 'rp_soft_empty_anchor',
+        reason: 'rain',
+        preserveCompletedNodes: false,
+        preserveStartedWindow: false,
+        useWeatherConstraint: false
+      }, emptyCtx);
+
+      const negativeCtx = createDefaultExecutionContext('rp_soft_negative_anchor', Date.now());
+      negativeCtx.status = PlanStatus.READY;
+      const negativeAnchor = coordinator.requestSoftReplan({
+        planId: 'rp_soft_negative_anchor',
+        reason: 'traffic',
+        currentNodeId: '-3',
+        preserveCompletedNodes: true,
+        preserveStartedWindow: false,
+        useWeatherConstraint: true
+      }, negativeCtx);
+      const emptySummary = (emptyAnchor.changeSummary ?? [])[0];
+      const negativeSummary = (negativeAnchor.changeSummary ?? [])[0];
+
+      expect(emptyAnchor.success).assertEqual(true);
+      expect(emptyAnchor.startFromEventId).assertEqual(0);
+      expect(emptySummary ? emptySummary.nodeId : '').assertEqual('');
+      expect(negativeAnchor.success).assertEqual(true);
+      expect(negativeAnchor.startFromEventId).assertEqual(0);
+      expect(negativeSummary ? negativeSummary.nodeId : '').assertEqual('-3');
+    });
+
+    it('boundary: request_soft_replan_should_floor_decimal_anchor_and_keep_summary_metadata', 0, () => {
+      // Arrange
+      // Act
+      // Assert
+      const coordinator = new ReplanCoordinator();
+      const ctx = createDefaultExecutionContext('rp_soft_decimal', Date.now());
+      ctx.status = PlanStatus.PAUSED;
+      ctx.completedNodeIds = ['a', 'b'];
+      const result = coordinator.requestSoftReplan({
+        planId: 'rp_soft_decimal',
+        reason: 'weather',
+        currentNodeId: '7.9',
+        preserveCompletedNodes: false,
+        preserveStartedWindow: true,
+        useWeatherConstraint: false
+      }, ctx);
+      const summary = (result.changeSummary ?? [])[0];
+      const summaryAfter = summary && summary.after ? summary.after : '';
+      expect(result.success).assertEqual(true);
+      expect(result.startFromEventId).assertEqual(7);
+      expect(result.preserveCompletedNodes).assertEqual(false);
+      expect(summaryAfter.includes('completed=2')).assertEqual(true);
+    });
+
     it('invalid: request_full_replan_should_reject_terminal_status', 0, () => {
       // Arrange
       // Act
@@ -441,6 +522,35 @@ export default function phase2BatchAETest() {
       expect(result.success).assertEqual(false);
       expect(result.errorCode).assertEqual('REPLAN_INVALID');
       expect(result.reasonCode).assertEqual('status_blocked');
+    });
+
+    it('normal: request_full_replan_should_succeed_for_draft_and_confirmed_status', 0, () => {
+      // Arrange
+      // Act
+      // Assert
+      const coordinator = new ReplanCoordinator();
+      const draftResult = coordinator.requestFullReplan({
+        planId: 'rp_full_draft',
+        reason: 'force',
+        triggeredBy: 'draft_test',
+        useWeatherConstraint: false
+      }, PlanStatus.DRAFT);
+      const confirmedResult = coordinator.requestFullReplan({
+        planId: 'rp_full_confirmed',
+        reason: 'storm',
+        triggeredBy: 'confirmed_test',
+        useWeatherConstraint: true
+      }, PlanStatus.CONFIRMED);
+      const draftSummary = (draftResult.changeSummary ?? [])[0];
+      const confirmedSummary = (confirmedResult.changeSummary ?? [])[0];
+      const draftAfter = draftSummary && draftSummary.after ? draftSummary.after : '';
+      const confirmedAfter = confirmedSummary && confirmedSummary.after ? confirmedSummary.after : '';
+      expect(draftResult.success).assertEqual(true);
+      expect(draftResult.reasonCode).assertEqual('full_replan');
+      expect(draftAfter.includes('triggered_by=draft_test')).assertEqual(true);
+      expect(confirmedResult.success).assertEqual(true);
+      expect(confirmedResult.reasonCode).assertEqual('full_replan');
+      expect(confirmedAfter.includes('weather=true')).assertEqual(true);
     });
 
     it('normal: on_state_entered_should_be_no_op_without_throw', 0, () => {
