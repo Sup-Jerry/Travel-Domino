@@ -24,6 +24,12 @@ class HttpResponseLikeJ {
   result: string = '';
 }
 
+class HeaderCaptureJ {
+  authorization: string = '';
+  contentType: string = '';
+  method: number = -1;
+}
+
 class AuthHttpHooksJ {
   private readonly originRequest: Object;
 
@@ -182,6 +188,66 @@ export default function phase1ZeroHitBatchJTest() {
       expect((envelope as ApiEnvelopeLike).message).assertEqual('ok');
       expect((envelope as ApiEnvelopeLike).requestId).assertEqual('r-success');
       expect((envelope as ApiEnvelopeLike).data).assertEqual('payload');
+    });
+
+    it('boundary: auth_api_client_post_should_include_authorization_header_when_token_not_blank', 0, async () => {
+      // Arrange
+      const client = new AuthApiClient();
+      const hooks = new AuthHttpHooksJ();
+      const capture = new HeaderCaptureJ();
+      hooks.setRequest(async (_ownerTag: string, _requestName: string, _url: string, options: Object): Promise<Object> => {
+        const headers = Reflect.get(options, 'header') as Record<string, string>;
+        capture.authorization = headers['Authorization'] ?? '';
+        capture.contentType = headers['Content-Type'] ?? '';
+        capture.method = Number(Reflect.get(options, 'method'));
+        const response = new HttpResponseLikeJ();
+        response.result = '{"code":0,"message":"ok","requestId":"r-token","data":"token-payload"}';
+        return Promise.resolve(response);
+      });
+
+      // Act
+      let envelope: ApiEnvelopeLike | null = null;
+      try {
+        envelope = await client.post<string>('/auth/token-post', new KeyValuePayload(), ' bearer_token ');
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(envelope !== null).assertTrue();
+      expect(capture.authorization).assertEqual('Bearer  bearer_token ');
+      expect(capture.contentType).assertEqual('application/json');
+    });
+
+    it('boundary: auth_api_client_parse_body_should_accept_empty_data_payload', 0, () => {
+      // Arrange
+      const client = new AuthApiClient();
+      const parseBody = getParseBody(client);
+      const raw = '{"code":200,"message":"empty","requestId":"r-empty","data":""}';
+
+      // Act
+      const parsed = parseBody(raw, 'GET /empty');
+
+      // Assert
+      expect(parsed.code).assertEqual(200);
+      expect(parsed.message).assertEqual('empty');
+      expect(parsed.requestId).assertEqual('r-empty');
+      expect(parsed.data).assertEqual('');
+    });
+
+    it('invalid: auth_api_client_with_timeout_should_stringify_non_error_rejection', 0, async () => {
+      // Arrange
+      const client = new AuthApiClient();
+      const withTimeout = getWithTimeout(client);
+
+      // Act
+      const message = await captureErrorMessage(async (): Promise<Object> => {
+        await withTimeout(Promise.reject('plain_failure'), 50, 'PLAIN');
+        return new DummyObject();
+      });
+
+      // Assert
+      expect(message).assertEqual('plain_failure');
     });
   });
 }
