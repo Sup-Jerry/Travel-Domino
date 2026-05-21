@@ -13,10 +13,11 @@ import {
 import { HistoryManager } from '../main/ets/domain/timeline/HistoryManager';
 import { NotificationBridge } from '../main/ets/domain/statemachine/NotificationBridge';
 import { PlanStatus, TransitionTriggerSource } from '../main/ets/domain/statemachine/PlanStatus';
-import { WeatherReminderStore } from '../main/ets/common/utils/weather/WeatherReminderStore';
+import { WeatherReminderPayload, WeatherReminderStore } from '../main/ets/common/utils/weather/WeatherReminderStore';
 import { AppStorageKeys } from '../main/ets/common/constants/AppStorageKeys';
 import { DateUtil } from '../main/ets/common/utils/DateUtil';
 import { TimelineDatePolicy } from '../main/ets/domain/policy/TimelineDatePolicy';
+import { WeatherSuggestion } from '../main/ets/domain/services/WeatherModels';
 
 interface GapPreviewGM {
   timeRange: string;
@@ -148,6 +149,24 @@ function resetReminderStorageGM(planIdNum: number): void {
   AppStorage.setOrCreate(`WeatherInProgressShown_${planIdNum}`, 0);
 }
 
+function createWeatherSuggestionGM(triggerType: 'RAIN' | 'HEAT' | 'COLD' = 'RAIN'): WeatherSuggestion {
+  return {
+    suggestionId: `suggestion_${triggerType}`,
+    level: 'NOTICE',
+    triggerType: triggerType,
+    actionType: 'SHORTEN_STAY',
+    title: `title_${triggerType}`,
+    message: `message_${triggerType}`,
+    relatedNodeIds: ['node_1'],
+    createdAt: 1710000000000,
+    reason: `reason_${triggerType}`,
+    expectedBenefit: `benefit_${triggerType}`,
+    canRollback: true,
+    cooldownKey: `cooldown_${triggerType}`,
+    expiresAt: 1710003600000
+  };
+}
+
 export default function phase2BatchGMTest() {
   describe('unit_test_case_generator_autofill_Phase2BatchGM_gap_map_picker_lines', () => {
     it('combined: gap_dialog_should_cover_zero_single_multi_refresh_and_preview_edges', 0, () => {
@@ -265,6 +284,109 @@ export default function phase2BatchGMTest() {
       expect(header.length > 0).assertTrue();
       expect(header.includes('2026') || header.includes('2')).assertTrue();
       expect(offset).assertEqual(0);
+    });
+
+    it('combined: weather_reminder_store_should_fallback_from_invalid_scoped_payload_to_global_payload', 0, () => {
+      // Arrange
+      const planIdNum = 611;
+      resetReminderStorageGM(planIdNum);
+      const globalPayload: WeatherReminderPayload = {
+        seq: 8,
+        planId: 0,
+        level: 'INFO',
+        title: 'global_title',
+        message: 'global_message',
+        relatedNodeIds: [],
+        createdAt: 8001
+      };
+      AppStorage.setOrCreate(`${AppStorageKeys.WEATHER_REMINDER_PAYLOAD}_${planIdNum}`, '{bad_json');
+      AppStorage.setOrCreate(AppStorageKeys.WEATHER_REMINDER_PAYLOAD, JSON.stringify(globalPayload));
+
+      // Act
+      const payload = WeatherReminderStore.readPayload(planIdNum);
+
+      // Assert
+      expect(payload === null).assertFalse();
+      if (!payload) {
+        return;
+      }
+      expect(payload.seq).assertEqual(8);
+      expect(payload.title).assertEqual('global_title');
+      expect(payload.planId).assertEqual(0);
+    });
+
+    it('boundary: weather_reminder_store_should_return_null_for_blank_payloads_and_preserve_scoped_when_clear_plan_id_invalid', 0, () => {
+      // Arrange
+      const planIdNum = 612;
+      resetReminderStorageGM(planIdNum);
+      AppStorage.setOrCreate(`${AppStorageKeys.WEATHER_REMINDER_PAYLOAD}_${planIdNum}`, '   ');
+      AppStorage.setOrCreate(AppStorageKeys.WEATHER_REMINDER_PAYLOAD, ' ');
+
+      // Act
+      const beforeClear = WeatherReminderStore.readPayload(planIdNum);
+      const scopedPayload: WeatherReminderPayload = {
+        seq: 9,
+        planId: planIdNum,
+        level: 'NOTICE',
+        title: 'scoped_title',
+        message: 'scoped_message',
+        relatedNodeIds: ['node_scoped'],
+        createdAt: 9001
+      };
+      AppStorage.setOrCreate(`${AppStorageKeys.WEATHER_REMINDER_PAYLOAD}_${planIdNum}`, JSON.stringify(scopedPayload));
+      WeatherReminderStore.clearPayload(0);
+      const afterClearScoped = AppStorage.get<string>(`${AppStorageKeys.WEATHER_REMINDER_PAYLOAD}_${planIdNum}`) ?? '';
+      const afterClearGlobal = AppStorage.get<string>(AppStorageKeys.WEATHER_REMINDER_PAYLOAD) ?? 'fallback';
+
+      // Assert
+      expect(beforeClear === null).assertTrue();
+      expect(afterClearScoped.length > 0).assertTrue();
+      expect(afterClearGlobal).assertEqual('');
+    });
+
+    it('combined: weather_reminder_store_from_suggestion_should_cover_rain_heat_and_explicit_override_branches', 0, () => {
+      // Arrange
+      AppStorage.setOrCreate(AppStorageKeys.WEATHER_REMINDER_SEQ, 0);
+
+      const rainSuggestion = createWeatherSuggestionGM('RAIN');
+      rainSuggestion.actionPayload = {
+        suggestedStayMinutes: 35
+      };
+      const heatSuggestion = createWeatherSuggestionGM('HEAT');
+      const coldSuggestion = createWeatherSuggestionGM('COLD');
+      coldSuggestion.suggestedDurationMin = 55;
+      coldSuggestion.actionPayload = {
+        suggestedStayMinutes: 15
+      };
+      const neutralSuggestion = createWeatherSuggestionGM('COLD');
+
+      // Act
+      const rainPayload = WeatherReminderStore.fromSuggestion(701, rainSuggestion);
+      const heatPayload = WeatherReminderStore.fromSuggestion(702, heatSuggestion);
+      const coldPayload = WeatherReminderStore.fromSuggestion(
+        703,
+        coldSuggestion,
+        'custom_hint',
+        { density: 1, pace: 0 }
+      );
+      const neutralPayload = WeatherReminderStore.fromSuggestion(704, neutralSuggestion);
+
+      // Assert
+      expect((rainPayload.strategyHint?.length ?? 0) > 0).assertTrue();
+      expect(rainPayload.strategyAdjustment?.density ?? 0).assertEqual(-1);
+      expect(rainPayload.suggestedDurationMin).assertEqual(35);
+
+      expect((heatPayload.strategyHint?.length ?? 0) > 0).assertTrue();
+      expect(heatPayload.strategyAdjustment?.pace ?? 0).assertEqual(-1);
+      expect(heatPayload.strategyAdjustment?.energy ?? 0).assertEqual(-1);
+
+      expect(coldPayload.strategyHint).assertEqual('custom_hint');
+      expect(coldPayload.strategyAdjustment?.density ?? 0).assertEqual(1);
+      expect(coldPayload.strategyAdjustment?.pace ?? -99).assertEqual(0);
+      expect(coldPayload.suggestedDurationMin).assertEqual(55);
+      expect(neutralPayload.strategyHint === undefined).assertTrue();
+      expect(neutralPayload.strategyAdjustment === undefined).assertTrue();
+      expect(coldPayload.seq > heatPayload.seq && heatPayload.seq > rainPayload.seq).assertTrue();
     });
 
     it('normal: validator_marker_should_cover_normal_case', 0, () => {

@@ -733,6 +733,27 @@ export default function phase2BatchAPTest() {
       done();
     });
 
+    it('boundary: has_guest_chosen_persisted_should_keep_memory_false_when_preference_returns_false', 0, async (done: () => void) => {
+      // Arrange
+      // Act
+      // Assert
+      resetAuthStorageAP();
+      const hooks = new PreferenceManagerHooksAP();
+      const pref = new PreferenceManagerStubAP();
+      pref.guestChosenValue = false;
+      hooks.setInstance(pref);
+      try {
+        const chosen = await AuthSessionStore.hasGuestChosenPersisted(fakeContextAP());
+
+        expect(chosen).assertFalse();
+        expect(AuthSessionStore.hasGuestChosen()).assertFalse();
+        expect(pref.initCount).assertEqual(1);
+      } finally {
+        hooks.restore();
+      }
+      done();
+    });
+
     it('invalid: mark_guest_chosen_persisted_should_keep_memory_flag_when_init_fails', 0, async (done: () => void) => {
       // Arrange
       // Act
@@ -830,6 +851,27 @@ export default function phase2BatchAPTest() {
 
         expect(blocked).assertTrue();
         expect(AuthSessionStore.isSilentLoginBlockedAfterLogout()).assertTrue();
+      } finally {
+        hooks.restore();
+      }
+      done();
+    });
+
+    it('boundary: is_silent_block_persisted_should_keep_memory_false_when_preference_returns_false', 0, async (done: () => void) => {
+      // Arrange
+      // Act
+      // Assert
+      resetAuthStorageAP();
+      const hooks = new PreferenceManagerHooksAP();
+      const pref = new PreferenceManagerStubAP();
+      pref.blockedValue = false;
+      hooks.setInstance(pref);
+      try {
+        const blocked = await AuthSessionStore.isSilentLoginBlockedAfterLogoutPersisted(fakeContextAP());
+
+        expect(blocked).assertFalse();
+        expect(AuthSessionStore.isSilentLoginBlockedAfterLogout()).assertFalse();
+        expect(pref.initCount).assertEqual(1);
       } finally {
         hooks.restore();
       }
