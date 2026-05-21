@@ -462,6 +462,37 @@ export default function phase2BatchCCTest() {
       bundleHooks.restore();
     });
 
+    it('boundary: entry_ability_update_schedule_notification_should_publish_without_route_parameters', 0, async () => {
+      // Arrange
+      resetNotificationStateCC();
+      const bundleHooks = new BundleManagerHooksCC();
+      const wantHooks = new WantAgentHooksCC();
+      const notificationHooks = new NotificationHooksCC();
+      let publishCount = 0;
+      let hasWantAgent = false;
+      bundleHooks.setBundleName('travel.route.none');
+      wantHooks.setResolver(async (): Promise<WantAgentResultCC> => {
+        const result = new WantAgentResultStubCC();
+        result.token = 'publish_none_cc';
+        return result;
+      });
+      notificationHooks.setPublish(async (request: NotificationRequestCC): Promise<void> => {
+        publishCount += 1;
+        hasWantAgent = request.wantAgent !== undefined;
+      });
+
+      // Act
+      await EntryAbility.updateScheduleNotification('none_title_cc', 'none_content_cc');
+
+      // Assert
+      expect(publishCount).assertEqual(1);
+      expect(hasWantAgent).assertTrue();
+
+      notificationHooks.restore();
+      wantHooks.restore();
+      bundleHooks.restore();
+    });
+
     it('normal: entry_ability_handle_notification_launch_want_should_write_payload_and_seq', 0, () => {
       // Arrange
       resetRouteStorageCC();
