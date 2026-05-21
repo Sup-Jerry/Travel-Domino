@@ -47,6 +47,32 @@ export default function weatherPolicyResolverTest() {
       expect(policy.targets.length).assertEqual(0);
     });
 
+    it('boundary: confirmed_should_refresh_all_plan_nodes_every_120_minutes', 0, () => {
+      // Arrange
+      const resolver = new WeatherPolicyResolver();
+      // Act
+      const policy = resolver.resolveWeatherFetchPolicy(PlanStatus.CONFIRMED);
+      // Assert
+      expect(policy.targets.length).assertEqual(1);
+      expect(policy.targets[0]).assertEqual(WeatherTargetType.ALL_PLAN_NODES);
+      expect(policy.refreshIntervalMinutes).assertEqual(120);
+      expect(policy.forceRefreshOnEnter).assertEqual(true);
+      expect(policy.allowCache).assertEqual(true);
+    });
+
+    it('boundary: paused_should_use_current_and_upcoming_without_force_refresh', 0, () => {
+      // Arrange
+      const resolver = new WeatherPolicyResolver();
+      // Act
+      const policy = resolver.resolveWeatherFetchPolicy(PlanStatus.PAUSED);
+      // Assert
+      expect(policy.targets.includes(WeatherTargetType.CURRENT_LOCATION)).assertEqual(true);
+      expect(policy.targets.includes(WeatherTargetType.UPCOMING_NODES)).assertEqual(true);
+      expect(policy.targets.includes(WeatherTargetType.FIRST_NODE)).assertEqual(false);
+      expect(policy.refreshIntervalMinutes).assertEqual(30);
+      expect(policy.forceRefreshOnEnter).assertEqual(false);
+    });
+
     it('normal: build_weather_targets_should_follow_status', 0, () => {
       // Arrange
       // Act
@@ -162,6 +188,54 @@ export default function weatherPolicyResolverTest() {
       const upcomingCount = targets.filter((item) => item.type === WeatherTargetType.UPCOMING_NODES).length;
       expect(currentCount).assertEqual(1);
       expect(upcomingCount >= 1).assertEqual(true);
+    });
+
+    it('invalid: completed_plan_should_not_build_any_weather_targets', 0, () => {
+      // Arrange
+      const resolver = new WeatherPolicyResolver();
+      const now = Date.now();
+      const events: EventEntity[] = [buildEvent(1, 31.2, 121.5, now + 1000)];
+      // Act
+      const targets = resolver.buildWeatherTargets('p-completed', PlanStatus.COMPLETED, events, {
+        planId: 'p-completed',
+        status: PlanStatus.COMPLETED,
+        plannedStartTime: now,
+        plannedEndTime: now + 60000,
+        completedNodeIds: ['1'],
+        skippedNodeIds: [],
+        isAutoStarted: false,
+        isPaused: false,
+        updatedAt: now,
+        lastKnownLatitude: 31.1,
+        lastKnownLongitude: 121.4
+      });
+      // Assert
+      expect(targets.length).assertEqual(0);
+    });
+
+    it('regression: td-20260521-weather_targets_should_fallback_forecast_time_and_dedup_same_nodes', 0, () => {
+      // Arrange
+      const resolver = new WeatherPolicyResolver();
+      const firstPending = buildEvent(7, 31.2, 121.5, 0);
+      const duplicatePending = buildEvent(7, 31.2, 121.5, 0);
+      const draftEvents: EventEntity[] = [firstPending, duplicatePending];
+      const readyEvents: EventEntity[] = [buildEvent(8, 31.3, 121.6, 0)];
+
+      // Act
+      const draftTargets = resolver.buildWeatherTargets('p-draft-dedup', PlanStatus.DRAFT, draftEvents);
+      const readyTargets = resolver.buildWeatherTargets('p-ready-fallback', PlanStatus.READY, readyEvents);
+
+      // Assert
+      expect(draftTargets.length).assertEqual(1);
+      expect(draftTargets[0].type).assertEqual(WeatherTargetType.ALL_PLAN_NODES);
+      expect(draftTargets[0].forecastTime === undefined).assertEqual(true);
+
+      const firstTarget = readyTargets.find((item) => item.type === WeatherTargetType.FIRST_NODE);
+      const upcomingTarget = readyTargets.find((item) => item.type === WeatherTargetType.UPCOMING_NODES);
+      expect(firstTarget !== undefined).assertEqual(true);
+      expect(upcomingTarget !== undefined).assertEqual(true);
+      expect(firstTarget?.forecastTime === undefined).assertEqual(true);
+      expect(upcomingTarget?.forecastTime === undefined).assertEqual(true);
     });
   });
 }
