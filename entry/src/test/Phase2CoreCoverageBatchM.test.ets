@@ -282,6 +282,33 @@ export default function phase2CoreCoverageBatchMTest() {
       hooks.restore();
     });
 
+    it('boundary: auth_facade_get_profile_should_keep_remote_guest_flag_when_me_success', 0, async () => {
+      // Arrange
+      const bundle = createBundleForM();
+      const hooks = new HooksForM();
+      bundle.session.session = createSessionForM('token_profile_guest_flag_m');
+      hooks.setMe(async (_token: string): Promise<AuthApiResponse<AuthMeResult>> => {
+        const data = new AuthMeResult();
+        data.accountId = 'acc_remote_guest_flag_m';
+        data.userId = 'user_remote_guest_flag_m';
+        data.nickname = 'GuestFlagM';
+        data.avatarUrl = 'http://avatar.guest.flag.m';
+        data.isGuest = true;
+        const response = new AuthApiResponse<AuthMeResult>(data);
+        response.code = 0;
+        response.message = 'ok';
+        return response;
+      });
+      // Act
+      const profile = await bundle.facade.getCurrentUserProfile('default_guest_flag_m');
+      // Assert
+      expect(profile.accountId).assertEqual('acc_remote_guest_flag_m');
+      expect(profile.userId).assertEqual('acc_remote_guest_flag_m');
+      expect(profile.nickname).assertEqual('GuestFlagM');
+      expect(profile.isGuest).assertTrue();
+      hooks.restore();
+    });
+
     it('boundary: auth_facade_update_username_should_return_profile_when_gateway_success', 0, async () => {
       // Arrange
       const bundle = createBundleForM();
