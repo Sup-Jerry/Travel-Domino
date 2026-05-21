@@ -50,11 +50,13 @@ class LoadContentErrorGJ {
 
 class WindowStageMockGJ {
   routes: string[] = [];
+  callbackErrorCode: number = 0;
 
   loadContent(url: string, callback?: (err: LoadContentErrorGJ) => void): void {
     this.routes.push(url);
     if (callback) {
       const error = new LoadContentErrorGJ();
+      error.code = this.callbackErrorCode;
       callback(error);
     }
   }
@@ -409,6 +411,7 @@ export default function phase2BatchGJTest() {
 
       Reflect.set(RdbHelper as Object, 'getInstance', (): RdbHelperMockGJ => rdbHelperMock);
 
+      stageSuccess.callbackErrorCode = 1001;
       rdbHelperMock.shouldReject = false;
       host.runOnWindowStageCreate(stageSuccess);
       await flushAsyncGJ();
