@@ -34,7 +34,6 @@ class TimerCaptureJ {
   clearCount: number = 0;
   lastDelay: number = -1;
 }
-
 class AuthHttpHooksJ {
   private readonly originRequest: Object;
 
