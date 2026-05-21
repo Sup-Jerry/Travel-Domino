@@ -107,6 +107,46 @@ export default function phase2BatchCETest() {
       hooks.restoreAll();
     });
 
+    it('boundary: session_manager_should_save_in_memory_when_restore_session_persisted_succeeds', 0, async () => {
+      // Arrange
+      const hooks = new HooksCE();
+      const context = {} as common.Context;
+      const payload = new AuthSessionPayload();
+      payload.accountId = 'restore_ce';
+      payload.userId = 'restore_user_ce';
+      payload.isGuest = true;
+      payload.loginMethod = 'guest';
+      payload.accessToken = 'restore_access_ce';
+      payload.refreshToken = 'restore_refresh_ce';
+      payload.expireAt = Date.now() + 60_000;
+      payload.sessionId = 'restore_session_ce';
+      let saveCalled = false;
+      const savePayload = new AuthSessionPayload();
+      hooks.keep(Object(AuthSessionStore), 'loadSessionPersisted');
+      hooks.keep(Object(AuthSessionStore), 'save');
+      hooks.set(Object(AuthSessionStore), 'loadSessionPersisted', (async (_context: common.Context): Promise<AuthSessionPayload | null> => {
+        return _context === context ? payload : null;
+      }) as Object);
+      hooks.set(Object(AuthSessionStore), 'save', ((nextPayload: AuthSessionPayload): void => {
+        saveCalled = true;
+        savePayload.accountId = nextPayload.accountId;
+        savePayload.sessionId = nextPayload.sessionId;
+      }) as Object);
+      const manager = SessionManager.getInstance();
+
+      // Act
+      const restored = await manager.restoreSessionPersisted(context);
+
+      // Assert
+      expect(restored !== null).assertTrue();
+      expect(restored?.isGuest).assertTrue();
+      expect(String(restored?.accountId || '')).assertEqual('restore_ce');
+      expect(saveCalled).assertTrue();
+      expect(String(savePayload.accountId || '')).assertEqual('restore_ce');
+      expect(String(savePayload.sessionId || '')).assertEqual('restore_session_ce');
+      hooks.restoreAll();
+    });
+
     it('boundary: session_manager_should_delegate_silent_login_block_sync_methods', 0, () => {
       // Arrange
       const hooks = new HooksCE();
