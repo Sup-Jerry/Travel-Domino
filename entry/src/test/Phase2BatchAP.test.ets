@@ -262,6 +262,28 @@ class AppStartupCoordinatorHooksAP {
   }
 }
 
+class TimerHooksAP {
+  private readonly globalObj: Object;
+  private readonly originSetTimeout: Object;
+  private readonly originClearTimeout: Object;
+
+  constructor() {
+    this.globalObj = globalThis as Object;
+    this.originSetTimeout = Reflect.get(this.globalObj, 'setTimeout') as Object;
+    this.originClearTimeout = Reflect.get(this.globalObj, 'clearTimeout') as Object;
+  }
+
+  public setHooks(setTimeoutImpl: Object, clearTimeoutImpl: Object): void {
+    Reflect.set(this.globalObj, 'setTimeout', setTimeoutImpl);
+    Reflect.set(this.globalObj, 'clearTimeout', clearTimeoutImpl);
+  }
+
+  public restore(): void {
+    Reflect.set(this.globalObj, 'setTimeout', this.originSetTimeout);
+    Reflect.set(this.globalObj, 'clearTimeout', this.originClearTimeout);
+  }
+}
+
 class HuaweiAccountProviderHooksAP {
   private readonly provider: HuaweiAccountProvider;
   private readonly originExecuteLoginRequest: Object;
@@ -1247,6 +1269,41 @@ export default function phase2BatchAPTest() {
         expect(result.status).assertEqual(LoginStatus.AUTHENTICATED);
       } finally {
         Reflect.set(facadeObj, 'silentLogin', originSilentLogin);
+        hooks.restore();
+      }
+      done();
+    });
+
+    it('boundary: silent_login_with_timeout_should_skip_clear_when_timer_id_is_zero', 0, async (done: () => void) => {
+      // Arrange
+      // Act
+      // Assert
+      const hooks = new AppStartupCoordinatorHooksAP();
+      const timerHooks = new TimerHooksAP();
+      const coordinator = AppStartupCoordinator.getInstance();
+      const internal = coordinator as Object as AppStartupCoordinatorInternalAP;
+      const facadeObj = internal.authFacade;
+      const originSilentLogin = Reflect.get(facadeObj, 'silentLogin') as Object;
+      let clearTimeoutCount = 0;
+      timerHooks.setHooks(
+        ((_callback: Object, _delay: number): number => {
+          return 0;
+        }) as Object,
+        ((_timerId: number): void => {
+          clearTimeoutCount += 1;
+        }) as Object
+      );
+      try {
+        Reflect.set(facadeObj, 'silentLogin', async (): Promise<AuthResult<UserSession>> => {
+          return buildAuthResultAP(true, 0, 'ok', LoginStatus.AUTHENTICATED);
+        });
+        const result = await internal.silentLoginWithTimeout();
+
+        expect(result.success).assertTrue();
+        expect(clearTimeoutCount).assertEqual(0);
+      } finally {
+        Reflect.set(facadeObj, 'silentLogin', originSilentLogin);
+        timerHooks.restore();
         hooks.restore();
       }
       done();
