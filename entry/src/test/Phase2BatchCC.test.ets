@@ -293,6 +293,53 @@ export default function phase2BatchCCTest() {
       bundleHooks.restore();
     });
 
+    it('boundary: entry_ability_build_launch_want_agent_should_normalize_non_positive_event_id', 0, async () => {
+      // Arrange
+      const bundleHooks = new BundleManagerHooksCC();
+      const wantHooks = new WantAgentHooksCC();
+      const capture: WantAgentCaptureCC = {
+        bundleName: '',
+        abilityName: '',
+        hasParameters: false,
+        targetPlanId: -1,
+        targetEventId: 0,
+        forceCompanionMode: false,
+        requestCode: 0
+      };
+      bundleHooks.setBundleName('travel.normalize');
+      wantHooks.setResolver(async (op: Record<string, Object>): Promise<WantAgentResultCC> => {
+        const wants = op['wants'] as Want[];
+        const firstWant = wants[0] as Want;
+        const parameters = firstWant.parameters as Record<string, Object>;
+        capture.bundleName = firstWant.bundleName ?? '';
+        capture.abilityName = firstWant.abilityName ?? '';
+        capture.hasParameters = parameters !== undefined;
+        capture.targetPlanId = Number(parameters['targetPlanId']);
+        capture.targetEventId = Number(parameters['targetEventId']);
+        capture.forceCompanionMode = parameters['forceCompanionMode'] === true;
+        capture.requestCode = Number(op['requestCode']);
+        const result = new WantAgentResultStubCC();
+        result.token = 'want_agent_normalize_cc';
+        return result;
+      });
+
+      // Act
+      const result = await invokeEntryAbilityMethodCC(buildLaunchWantAgentCC, EntryAbility as Object, 9, 0, false);
+
+      // Assert
+      expect(result !== null).assertTrue();
+      expect(capture.bundleName).assertEqual('travel.normalize');
+      expect(capture.abilityName).assertEqual('EntryAbility');
+      expect(capture.hasParameters).assertTrue();
+      expect(capture.targetPlanId).assertEqual(9);
+      expect(capture.targetEventId).assertEqual(-1);
+      expect(capture.forceCompanionMode).assertFalse();
+      expect(capture.requestCode).assertEqual(1001);
+
+      wantHooks.restore();
+      bundleHooks.restore();
+    });
+
     it('invalid: entry_ability_build_launch_want_agent_should_return_null_when_bundle_lookup_fails', 0, async () => {
       // Arrange
       const bundleHooks = new BundleManagerHooksCC();
