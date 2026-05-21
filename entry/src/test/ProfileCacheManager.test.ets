@@ -1,4 +1,5 @@
 import { describe, expect, it } from '@ohos/hypium';
+import { common } from '@kit.AbilityKit';
 import { UserProfileEntity } from '../main/ets/domain/entity/UserProfileEntity';
 import { ProfileCacheManager } from '../main/ets/infrastructure/cache/ProfileCacheManager';
 import { PreferenceManager } from '../main/ets/common/utils/PreferenceManager';
@@ -14,6 +15,33 @@ function createProfile(accountId: string, username: string): UserProfileEntity {
   profile.createdAt = 1;
   profile.updatedAt = 1;
   return profile;
+}
+
+class PreferenceManagerMockForProfileCache {
+  rawProfile: string = '';
+
+  async init(_context: common.Context): Promise<void> {
+  }
+
+  async getProfileCacheJson(_accountId: string): Promise<string> {
+    return this.rawProfile;
+  }
+}
+
+async function readProfileFromRaw(accountId: string, rawProfile: string): Promise<UserProfileEntity | null> {
+  const cache = ProfileCacheManager.getInstance();
+  const pref = new PreferenceManagerMockForProfileCache();
+  const prefOrigin = Reflect.get(PreferenceManager as Object, 'getInstance') as Object;
+  pref.rawProfile = rawProfile;
+  cache.clearAllMemory();
+  cache.bindContext({} as common.Context);
+  Reflect.set(PreferenceManager as Object, 'getInstance', (): PreferenceManagerMockForProfileCache => pref);
+  try {
+    return await cache.readProfile(accountId);
+  } finally {
+    Reflect.set(PreferenceManager as Object, 'getInstance', prefOrigin);
+    cache.clearAllMemory();
+  }
 }
 
 export default function profileCacheManagerTest() {
@@ -137,6 +165,77 @@ export default function profileCacheManagerTest() {
       expect(profileA === null).assertTrue();
       expect(String(profileB?.username || '')).assertEqual('Beta');
       cache.clearAllMemory();
+      done();
+    });
+
+    it('boundary: profile_cache_read_profile_should_return_null_for_empty_raw', 0, async (done: () => void) => {
+      // Arrange
+      const raw = '';
+
+      // Act
+      const parsed = await readProfileFromRaw('empty_raw_acc', raw);
+
+      // Assert
+      expect(parsed === null).assertTrue();
+      done();
+    });
+
+    it('invalid: profile_cache_read_profile_should_return_null_for_blank_account_id', 0, async (done: () => void) => {
+      // Arrange
+      const raw = JSON.stringify({
+        accountId: '   ',
+        username: 'Nobody',
+        avatarPath: 'avatar.png',
+        avatarVersion: 2,
+        isInitialized: true,
+        createdAt: 10,
+        updatedAt: 11
+      });
+
+      // Act
+      const parsed = await readProfileFromRaw('blank_account_acc', raw);
+
+      // Assert
+      expect(parsed === null).assertTrue();
+      done();
+    });
+
+    it('regression: profile_cache_read_profile_should_fallback_invalid_numbers_to_defaults', 0, async (done: () => void) => {
+      // Arrange
+      const raw = JSON.stringify({
+        accountId: ' profile_num ',
+        username: ' Number User ',
+        avatarPath: ' avatar.png ',
+        avatarVersion: 'bad',
+        isInitialized: false,
+        createdAt: 'oops',
+        updatedAt: null
+      });
+
+      // Act
+      const parsed = await readProfileFromRaw('profile_num', raw);
+
+      // Assert
+      expect(parsed !== null).assertTrue();
+      expect(String(parsed?.accountId || '')).assertEqual('profile_num');
+      expect(String(parsed?.profileId || '')).assertEqual('profile_num');
+      expect(String(parsed?.username || '')).assertEqual('Number User');
+      expect(String(parsed?.avatarPath || '')).assertEqual('avatar.png');
+      expect(Number(parsed?.avatarVersion || 0)).assertEqual(1);
+      expect(Number(parsed?.createdAt ?? -1)).assertEqual(0);
+      expect(Number(parsed?.updatedAt ?? -1)).assertEqual(0);
+      done();
+    });
+
+    it('invalid: profile_cache_read_profile_should_return_null_for_invalid_json', 0, async (done: () => void) => {
+      // Arrange
+      const raw = '{invalid_json';
+
+      // Act
+      const parsed = await readProfileFromRaw('invalid_json_acc', raw);
+
+      // Assert
+      expect(parsed === null).assertTrue();
       done();
     });
   });

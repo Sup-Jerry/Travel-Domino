@@ -290,6 +290,29 @@ export default function phase2CoreCoverageBatchNTest() {
       expect(message).assertEqual('auth_error');
     });
 
+    it('boundary: auth_facade_normalize_expire_at_should_expand_seconds_timestamp', 0, () => {
+      // Arrange
+      const bundle = createBundleForN();
+      const normalize = Reflect.get(bundle.facade as Object, 'normalizeExpireAt') as (rawExpireAt: number | string) => number;
+      // Act
+      const expireAt = normalize(1_717_171_717);
+      // Assert
+      expect(expireAt).assertEqual(1_717_171_717_000);
+    });
+
+    it('boundary: auth_facade_normalize_expire_at_should_fallback_to_future_when_value_invalid', 0, () => {
+      // Arrange
+      const bundle = createBundleForN();
+      const normalize = Reflect.get(bundle.facade as Object, 'normalizeExpireAt') as (rawExpireAt: number | string) => number;
+      const before = Date.now();
+      // Act
+      const expireAt = normalize('invalid_expire_at_n');
+      const after = Date.now();
+      // Assert
+      expect(expireAt >= before + 2 * 60 * 60 * 1000).assertTrue();
+      expect(expireAt <= after + 2 * 60 * 60 * 1000 + 1000).assertTrue();
+    });
+
     it('conflict: auth_facade_explicit_login_should_fail_with_social_login_failed_when_gateway_returns_nonzero', 0, async () => {
       // Arrange
       const bundle = createBundleForN();

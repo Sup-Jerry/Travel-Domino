@@ -2,6 +2,8 @@ import { describe, expect, it } from '@ohos/hypium';
 import { http } from '@kit.NetworkKit';
 import { HttpRequestHelper } from '../main/ets/infrastructure/adapters/HttpRequestHelper';
 
+type ToErrorFn = (value: Object, fallbackMessage: string) => Error;
+
 function buildOptions(connectTimeout: number, readTimeout: number): http.HttpRequestOptions {
   return {
     method: http.RequestMethod.GET,
@@ -26,6 +28,10 @@ async function callAndCapture(
     message = (error as Error).message;
   }
   return message;
+}
+
+function getToError(): ToErrorFn {
+  return Reflect.get(HttpRequestHelper as Object, 'toError') as ToErrorFn;
 }
 
 export default function phase1ZeroHitBatchITest() {
@@ -95,6 +101,27 @@ export default function phase1ZeroHitBatchITest() {
       // Assert
       expect(results[0].length > 0).assertTrue();
       expect(results[1].length > 0).assertTrue();
+    });
+
+    it('boundary: http_request_helper_to_error_should_return_original_error_instance', 0, () => {
+      // Arrange
+      const toError = getToError();
+      const original = new Error('origin_fail');
+      // Act
+      const result = toError(original, 'fallback');
+      // Assert
+      expect(result).assertEqual(original);
+      expect(result.message).assertEqual('origin_fail');
+    });
+
+    it('invalid: http_request_helper_to_error_should_fallback_when_thrown_value_has_no_detail', 0, () => {
+      // Arrange
+      const toError = getToError();
+      const noDetailValue = (): void => {};
+      // Act
+      const result = toError(noDetailValue as Object, 'fallback_only');
+      // Assert
+      expect(result.message).assertEqual('fallback_only');
     });
   });
 }

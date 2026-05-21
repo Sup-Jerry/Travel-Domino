@@ -110,5 +110,19 @@ export default function timelineDatePolicyTest() {
       expect(timestamp).assertEqual(expected);
       expect(dayDate.getDate()).assertEqual(3);
     });
+
+    it('boundary: day_offset_to_day_start_ms_should_fallback_to_current_day_when_plan_start_non_positive', 0, () => {
+      // Arrange
+      const before = TimelineDatePolicy.toDayStartMs(Date.now());
+
+      // Act
+      const actual = TimelineDatePolicy.dayOffsetToDayStartMs(0, 2);
+
+      // Assert
+      const after = TimelineDatePolicy.toDayStartMs(Date.now());
+      const expectedFromBefore = before + 2 * 24 * 60 * 60 * 1000;
+      const expectedFromAfter = after + 2 * 24 * 60 * 60 * 1000;
+      expect(actual === expectedFromBefore || actual === expectedFromAfter).assertTrue();
+    });
   });
 }

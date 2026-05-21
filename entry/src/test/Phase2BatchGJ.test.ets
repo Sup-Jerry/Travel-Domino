@@ -50,11 +50,13 @@ class LoadContentErrorGJ {
 
 class WindowStageMockGJ {
   routes: string[] = [];
+  callbackErrorCode: number = 0;
 
   loadContent(url: string, callback?: (err: LoadContentErrorGJ) => void): void {
     this.routes.push(url);
     if (callback) {
       const error = new LoadContentErrorGJ();
+      error.code = this.callbackErrorCode;
       callback(error);
     }
   }
@@ -367,6 +369,36 @@ export default function phase2BatchGJTest() {
       Reflect.set(ProfileViewModel as Object, 'getInstance', profileOrigin);
     });
 
+    it('boundary: entry_ability_bootstrap_user_context_should_skip_profile_bootstrap_for_blank_account_id', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
+      const host = new AbilityHostGJ();
+      const startupResult = new StartupResultGJ();
+      const startupData = new StartupDataGJ();
+      const authFacadeMock = new AuthFacadeMockGJ();
+      const profileViewModelMock = new ProfileViewModelMockGJ();
+      const authOrigin = Reflect.get(AuthFacade as Object, 'getInstance') as Object;
+      const profileOrigin = Reflect.get(ProfileViewModel as Object, 'getInstance') as Object;
+
+      startupResult.success = true;
+      startupData.accountId = '   ';
+      startupResult.data = startupData;
+      host.startupCoordinator.result = startupResult;
+      Reflect.set(AuthFacade as Object, 'getInstance', (): AuthFacadeMockGJ => authFacadeMock);
+      Reflect.set(ProfileViewModel as Object, 'getInstance', (): ProfileViewModelMockGJ => profileViewModelMock);
+
+      await host.runBootstrapUserContext();
+
+      expect(authFacadeMock.bindCount).assertEqual(1);
+      expect(profileViewModelMock.bindCount).assertEqual(1);
+      expect(profileViewModelMock.resetCount).assertEqual(0);
+      expect(profileViewModelMock.bootstrapCount).assertEqual(0);
+
+      Reflect.set(AuthFacade as Object, 'getInstance', authOrigin);
+      Reflect.set(ProfileViewModel as Object, 'getInstance', profileOrigin);
+    });
+
     it('regression: entry_ability_on_window_stage_create_should_load_auth_gate_for_db_success_and_failure', 0, async () => {
       // Arrange
       // Act
@@ -379,6 +411,7 @@ export default function phase2BatchGJTest() {
 
       Reflect.set(RdbHelper as Object, 'getInstance', (): RdbHelperMockGJ => rdbHelperMock);
 
+      stageSuccess.callbackErrorCode = 1001;
       rdbHelperMock.shouldReject = false;
       host.runOnWindowStageCreate(stageSuccess);
       await flushAsyncGJ();

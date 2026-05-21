@@ -115,5 +115,39 @@ export default function executionContextStoreTest() {
       expect(transitions.length).assertEqual(1);
       expect(transitions[0].timestamp).assertEqual(9_999);
     });
+
+    it('boundary: clear_context_should_remove_only_target_plan_context', 0, () => {
+      // Arrange
+      resetStoreKeys();
+      const store = ExecutionContextStore.getInstance();
+      const keep = createDefaultExecutionContext('p_keep', 1_000);
+      keep.status = PlanStatus.CONFIRMED;
+      const remove = createDefaultExecutionContext('p_remove', 2_000);
+      remove.status = PlanStatus.IN_PROGRESS;
+      store.writeContext(keep);
+      store.writeContext(remove);
+
+      // Act
+      store.clearContext('p_remove');
+      const kept = store.readContext('p_keep');
+      const removed = store.readContext('p_remove');
+
+      // Assert
+      expect(kept !== null).assertTrue();
+      expect(kept?.status || PlanStatus.DRAFT).assertEqual(PlanStatus.CONFIRMED);
+      expect(removed === null).assertTrue();
+    });
+
+    it('invalid: read_latest_transition_should_return_null_when_no_transition_exists', 0, () => {
+      // Arrange
+      resetStoreKeys();
+      const store = ExecutionContextStore.getInstance();
+
+      // Act
+      const latest = store.readLatestTransition('p_empty_latest');
+
+      // Assert
+      expect(latest === null).assertTrue();
+    });
   });
 }
