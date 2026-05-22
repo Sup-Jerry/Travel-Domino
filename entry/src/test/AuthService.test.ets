@@ -37,6 +37,60 @@ export default function authServiceTest() {
       expect(String(login.data.user.accountId || '').length > 0).assertTrue();
     });
 
+    it('invalid: social_login_should_reject_empty_social_credential', 0, () => {
+      // Arrange
+      const service = AuthService.getInstance();
+      const credential = new SocialCredential();
+
+      // Act
+      const login = service.loginWithSocial('HUAWEI', credential, new DeviceInfo('d_empty_social', 'dev_empty_social', 'HARMONY'));
+
+      // Assert
+      expect(login.code).assertEqual(AuthErrorCode.THIRD_PARTY_AUTH_FAILED);
+      expect(login.message).assertEqual('social_credential_invalid');
+    });
+
+    it('regression: social_login_should_reuse_existing_provider_user_without_creating_new_user', 0, () => {
+      // Arrange
+      const service = AuthService.getInstance();
+      const uid = `uid_reuse_${Date.now()}`;
+      const loginA = service.loginWithSocial('HUAWEI', makeSocialCredential(uid), new DeviceInfo('d_reuse_a', 'dev_reuse_a', 'HARMONY'));
+      expect(loginA.code).assertEqual(0);
+
+      // Act
+      const loginB = service.loginWithSocial('HUAWEI', makeSocialCredential(uid), new DeviceInfo('d_reuse_b', 'dev_reuse_b', 'HARMONY'));
+
+      // Assert
+      expect(loginB.code).assertEqual(0);
+      expect(loginB.data.user.userId).assertEqual(loginA.data.user.userId);
+      expect(loginB.data.isNewUser).assertFalse();
+    });
+
+    it('combined: social_login_should_backfill_missing_account_id_for_existing_provider_user', 0, () => {
+      // Arrange
+      const service = AuthService.getInstance();
+      const uid = `uid_backfill_${Date.now()}`;
+      const loginA = service.loginWithSocial('HUAWEI', makeSocialCredential(uid), new DeviceInfo('d_backfill_a', 'dev_backfill_a', 'HARMONY'));
+      expect(loginA.code).assertEqual(0);
+      const users = Reflect.get(service as Object, 'users') as Object[];
+      const target = users.find((user: Object) => {
+        const record = user as Record<string, Object>;
+        return String(record['userId'] || '') === loginA.data.user.userId;
+      }) as Record<string, Object> | undefined;
+      expect(!!target).assertTrue();
+      if (target) {
+        target['accountId'] = '';
+      }
+
+      // Act
+      const loginB = service.loginWithSocial('HUAWEI', makeSocialCredential(uid), new DeviceInfo('d_backfill_b', 'dev_backfill_b', 'HARMONY'));
+
+      // Assert
+      expect(loginB.code).assertEqual(0);
+      expect(loginB.data.user.accountId).assertEqual(uid);
+      expect(loginB.data.session.accountId).assertEqual(uid);
+    });
+
     it('normal: update_username_should_succeed_for_social_user', 0, () => {
       // Arrange
       // Act
@@ -72,6 +126,62 @@ export default function authServiceTest() {
 
       const updated = service.updateUsername(login.data.session.accessToken, makeUsernamePayload('@@@'));
       expect(updated.code).assertEqual(AuthErrorCode.USERNAME_INVALID);
+    });
+
+    it('boundary: update_username_should_reject_blank_username_after_trim', 0, () => {
+      // Arrange
+      const service = AuthService.getInstance();
+      const login = service.loginWithSocial('HUAWEI', makeSocialCredential(`uid_${Date.now()}_blank_name`), new DeviceInfo('d_blank_name', 'dev_blank_name', 'HARMONY'));
+      expect(login.code).assertEqual(0);
+
+      // Act
+      const updated = service.updateUsername(login.data.session.accessToken, makeUsernamePayload('   '));
+
+      // Assert
+      expect(updated.code).assertEqual(AuthErrorCode.USERNAME_INVALID);
+      expect(updated.message).assertEqual('username_invalid');
+    });
+
+    it('invalid: update_username_should_reject_expired_session', 0, () => {
+      // Arrange
+      const service = AuthService.getInstance();
+      const login = service.loginWithSocial('HUAWEI', makeSocialCredential(`uid_${Date.now()}_expired_name`), new DeviceInfo('d_expired_name', 'dev_expired_name', 'HARMONY'));
+      expect(login.code).assertEqual(0);
+      const sessions = Reflect.get(service as Object, 'sessions') as Object[];
+      const target = sessions.find((session: Object) => {
+        const record = session as Record<string, Object>;
+        return String(record['accessToken'] || '') === login.data.session.accessToken;
+      }) as Record<string, Object> | undefined;
+      expect(!!target).assertTrue();
+      if (target) {
+        target['expireAt'] = Date.now() - 1;
+      }
+
+      // Act
+      const updated = service.updateUsername(login.data.session.accessToken, makeUsernamePayload('still_invalid'));
+
+      // Assert
+      expect(updated.code).assertEqual(AuthErrorCode.SESSION_EXPIRED);
+      expect(updated.message).assertEqual('session_expired');
+    });
+
+    it('invalid: update_username_should_fail_when_session_user_is_missing', 0, () => {
+      // Arrange
+      const service = AuthService.getInstance();
+      const login = service.loginWithSocial('HUAWEI', makeSocialCredential(`uid_${Date.now()}_missing_name`), new DeviceInfo('d_missing_name', 'dev_missing_name', 'HARMONY'));
+      expect(login.code).assertEqual(0);
+      const users = Reflect.get(service as Object, 'users') as Object[];
+      Reflect.set(service as Object, 'users', users.filter((user: Object) => {
+        const record = user as Record<string, Object>;
+        return String(record['userId'] || '') !== login.data.user.userId;
+      }));
+
+      // Act
+      const updated = service.updateUsername(login.data.session.accessToken, makeUsernamePayload('name_after_remove'));
+
+      // Assert
+      expect(updated.code).assertEqual(AuthErrorCode.ACCOUNT_NOT_FOUND);
+      expect(updated.message).assertEqual('user_not_found');
     });
 
     it('normal: update_username_should_allow_duplicates', 0, () => {
@@ -117,6 +227,76 @@ export default function authServiceTest() {
 
       const updated = service.updateAvatar(login.data.session.accessToken, makeAvatarPayload('invalid_data'));
       expect(updated.code).assertEqual(AuthErrorCode.AVATAR_INVALID);
+    });
+
+    it('invalid: update_avatar_should_reject_expired_session', 0, () => {
+      // Arrange
+      const service = AuthService.getInstance();
+      const login = service.loginWithSocial('HUAWEI', makeSocialCredential(`uid_${Date.now()}_expired_avatar`), new DeviceInfo('d_expired_avatar', 'dev_expired_avatar', 'HARMONY'));
+      expect(login.code).assertEqual(0);
+      const sessions = Reflect.get(service as Object, 'sessions') as Object[];
+      const target = sessions.find((session: Object) => {
+        const record = session as Record<string, Object>;
+        return String(record['accessToken'] || '') === login.data.session.accessToken;
+      }) as Record<string, Object> | undefined;
+      expect(!!target).assertTrue();
+      if (target) {
+        target['expireAt'] = Date.now() - 1;
+      }
+
+      // Act
+      const updated = service.updateAvatar(login.data.session.accessToken, makeAvatarPayload('data:image/jpeg;base64,/9j/4AAQSkZJRg=='));
+
+      // Assert
+      expect(updated.code).assertEqual(AuthErrorCode.SESSION_EXPIRED);
+      expect(updated.message).assertEqual('session_expired');
+    });
+
+    it('invalid: update_avatar_should_fail_when_session_user_is_missing', 0, () => {
+      // Arrange
+      const service = AuthService.getInstance();
+      const login = service.loginWithSocial('HUAWEI', makeSocialCredential(`uid_${Date.now()}_missing_avatar`), new DeviceInfo('d_missing_avatar', 'dev_missing_avatar', 'HARMONY'));
+      expect(login.code).assertEqual(0);
+      const users = Reflect.get(service as Object, 'users') as Object[];
+      Reflect.set(service as Object, 'users', users.filter((user: Object) => {
+        const record = user as Record<string, Object>;
+        return String(record['userId'] || '') !== login.data.user.userId;
+      }));
+
+      // Act
+      const updated = service.updateAvatar(login.data.session.accessToken, makeAvatarPayload('data:image/jpeg;base64,/9j/4AAQSkZJRg=='));
+
+      // Assert
+      expect(updated.code).assertEqual(AuthErrorCode.ACCOUNT_NOT_FOUND);
+      expect(updated.message).assertEqual('user_not_found');
+    });
+
+    it('invalid: update_avatar_should_reject_guest_user', 0, () => {
+      // Arrange
+      const service = AuthService.getInstance();
+      const guest = service.createGuest(new DeviceInfo(`gd_avatar_${Date.now()}`, 'guest_avatar', 'HARMONY'));
+      expect(guest.code).assertEqual(0);
+
+      // Act
+      const updated = service.updateAvatar(guest.data.session.accessToken, makeAvatarPayload('data:image/jpeg;base64,/9j/4AAQSkZJRg=='));
+
+      // Assert
+      expect(updated.code).assertEqual(AuthErrorCode.GUEST_AVATAR_UNSUPPORTED);
+      expect(updated.message).assertEqual('guest_avatar_unsupported');
+    });
+
+    it('boundary: update_avatar_should_reject_unsupported_mime_type', 0, () => {
+      // Arrange
+      const service = AuthService.getInstance();
+      const login = service.loginWithSocial('HUAWEI', makeSocialCredential(`uid_${Date.now()}_mime_avatar`), new DeviceInfo('d_mime_avatar', 'dev_mime_avatar', 'HARMONY'));
+      expect(login.code).assertEqual(0);
+
+      // Act
+      const updated = service.updateAvatar(login.data.session.accessToken, makeAvatarPayload('data:image/gif;base64,abcd', 'image/gif'));
+
+      // Assert
+      expect(updated.code).assertEqual(AuthErrorCode.AVATAR_INVALID);
+      expect(updated.message).assertEqual('avatar_invalid');
     });
 
     it('normal: get_me_should_return_guest_profile_for_active_guest_session', 0, () => {

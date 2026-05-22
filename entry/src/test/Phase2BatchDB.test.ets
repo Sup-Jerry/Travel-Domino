@@ -180,40 +180,153 @@ export default function phase2BatchDBTest() {
       expect(host.refreshCalls).assertEqual(1);
     });
 
-    it('boundary: validator_marker_should_cover_boundary_case', 0, () => {
+    it('boundary: recalculate_should_clear_unscheduled_fields_when_solver_result_missing', 0, () => {
       // Arrange
-      const marker = true;
+      const host = new RecalculationHostDB();
+      const target = buildScheduleEventDB(4, 400);
+      target.status = 0;
+      target.is_conflict = true;
+      target.computed_time = '11:30';
+      target.has_gap = true;
+      target.gap_minutes = 14;
+      target.natural_start_time = '11:10';
+      target.transit_warning = true;
+      target.day_offset = 1;
+      target.dynamic_day_offset = 3;
+      host.events = [target];
+      let callbackFlags: ApplyResultFlags = { changed: false, dayOffsetChanged: false };
+      const calcPatch = new StaticPatchDB(TimelineCalculationService, 'recalculate', (
+        events: EventEntity[],
+        _globalStartTime: string,
+        _planStartDate: number,
+        _orchestrator: ScheduleOrchestrator,
+        _options: Object,
+        applyResult: (entity: EventEntity, calculated: SolverCalculatedItem | undefined) => ApplyResultFlags
+      ): CalcResultDB => {
+        callbackFlags = applyResult(events[0], undefined);
+        return { hasFieldChanged: callbackFlags.changed, hasDayOffsetChanged: callbackFlags.dayOffsetChanged };
+      });
+      const manager = new TimelineRecalculationManager(host);
       // Act
-      const result = marker;
+      manager.recalculate();
+      calcPatch.restore();
       // Assert
-      expect(result).assertTrue();
+      expect(callbackFlags.changed).assertTrue();
+      expect(callbackFlags.dayOffsetChanged).assertTrue();
+      expect(target.is_conflict).assertFalse();
+      expect(target.computed_time).assertEqual('');
+      expect(target.has_gap).assertFalse();
+      expect(target.gap_minutes).assertEqual(0);
+      expect(target.natural_start_time).assertEqual('');
+      expect(target.transit_warning).assertFalse();
+      expect(target.dynamic_day_offset).assertEqual(1);
     });
 
-    it('invalid: validator_marker_should_cover_invalid_case', 0, () => {
+    it('invalid: recalculate_should_keep_fixed_start_when_item_locked', 0, () => {
       // Arrange
-      const marker = true;
+      const host = new RecalculationHostDB();
+      const target = buildScheduleEventDB(5, 500);
+      target.fixed_start_time = '09:15';
+      target.lock_status = 1;
+      host.events = [target];
+      const calcPatch = new StaticPatchDB(TimelineCalculationService, 'recalculate', (
+        events: EventEntity[],
+        _globalStartTime: string,
+        _planStartDate: number,
+        _orchestrator: ScheduleOrchestrator,
+        _options: Object,
+        applyResult: (entity: EventEntity, calculated: SolverCalculatedItem | undefined) => ApplyResultFlags
+      ): CalcResultDB => {
+        const calculated: SolverCalculatedItem = {
+          computedStartTime: '2026-04-22 13:40',
+          dynamicDayOffset: 2,
+          dynamicStartTime: 3000,
+          dynamicEndTime: 6000
+        };
+        const flags = applyResult(events[0], calculated);
+        return { hasFieldChanged: flags.changed, hasDayOffsetChanged: flags.dayOffsetChanged };
+      });
+      const manager = new TimelineRecalculationManager(host);
       // Act
-      const result = marker;
+      manager.recalculate();
+      calcPatch.restore();
       // Assert
-      expect(result).assertTrue();
+      expect(target.computed_time).assertEqual('2026-04-22 13:40');
+      expect(target.fixed_start_time).assertEqual('09:15');
+      expect(target.dynamic_day_offset).assertEqual(2);
     });
 
-    it('conflict: validator_marker_should_cover_conflict_case', 0, () => {
+    it('conflict: recalculate_traffic_only_should_skip_persist_for_manual_and_first_items', 0, () => {
       // Arrange
-      const marker = true;
+      const host = new RecalculationHostDB();
+      const first = buildScheduleEventDB(1, 100);
+      const manual = buildScheduleEventDB(6, 600);
+      manual.is_travel_manual = 1;
+      const invalid = buildScheduleEventDB(0, 700);
+      host.events = [first, manual, invalid];
+      let persistedCalls = 0;
+      const repoPatch = new StaticPatchDB(EventRepositoryImpl, 'updateFields', async (): Promise<void> => {
+        persistedCalls += 1;
+      });
+      const calcPatch = new StaticPatchDB(TimelineCalculationService, 'recalculateTrafficOnly', (
+        events: EventEntity[],
+        _globalStartTime: string,
+        _planStartDate: number,
+        _orchestrator: ScheduleOrchestrator,
+        _options: Object,
+        persistPreTravel: (entity: EventEntity, minutes: number) => void
+      ): CalcResultDB => {
+        persistPreTravel(events[0], 12);
+        persistPreTravel(events[1], 12);
+        persistPreTravel(events[2], -1);
+        return { hasFieldChanged: true, hasDayOffsetChanged: false };
+      });
+      const manager = new TimelineRecalculationManager(host);
       // Act
-      const result = marker;
+      manager.recalculateTrafficOnly();
+      calcPatch.restore();
+      repoPatch.restore();
       // Assert
-      expect(result).assertTrue();
+      expect(persistedCalls).assertEqual(0);
+      expect(host.refreshCalls).assertEqual(1);
     });
 
-    it('combined: validator_marker_should_cover_combined_case', 0, () => {
+    it('combined: recalculate_from_index_should_only_reset_schedulable_zero_pretravel_items', 0, () => {
       // Arrange
-      const marker = true;
+      const host = new RecalculationHostDB();
+      const first = buildScheduleEventDB(1, 100);
+      first.pre_travel_min = 0;
+      const autoRoute = buildScheduleEventDB(8, 800);
+      autoRoute.pre_travel_min = 0;
+      const manual = buildScheduleEventDB(9, 900);
+      manual.pre_travel_min = 0;
+      manual.is_travel_manual = 1;
+      const backlog = buildScheduleEventDB(10, 1000);
+      backlog.status = 0;
+      backlog.pre_travel_min = 0;
+      host.events = [first, autoRoute, manual, backlog];
+      let capturedAuto = 0;
+      let capturedFirst = 0;
+      let capturedManual = 0;
+      let capturedBacklog = 0;
+      const calcPatch = new StaticPatchDB(TimelineCalculationService, 'recalculateFromIndex', (
+        events: EventEntity[]
+      ): CalcResultDB => {
+        capturedFirst = events[0].pre_travel_min;
+        capturedAuto = events[1].pre_travel_min;
+        capturedManual = events[2].pre_travel_min;
+        capturedBacklog = events[3].pre_travel_min;
+        return { hasFieldChanged: false, hasDayOffsetChanged: false };
+      });
+      const manager = new TimelineRecalculationManager(host);
       // Act
-      const result = marker;
+      manager.recalculateFromIndex(0);
+      calcPatch.restore();
       // Assert
-      expect(result).assertTrue();
+      expect(capturedFirst).assertEqual(0);
+      expect(capturedAuto).assertEqual(-1);
+      expect(capturedManual).assertEqual(0);
+      expect(capturedBacklog).assertEqual(0);
     });
   });
 }
