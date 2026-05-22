@@ -320,6 +320,72 @@ export default function phase2BatchEJTest() {
       expect(items[0].type).assertEqual(2);
     });
 
+    it('boundary: ai_parser_should_extract_items_from_nested_message_content_string', 0, () => {
+      // Arrange
+      const raw = '{"message":{"content":"[{\\"name\\":\\"tower\\",\\"duration\\":35,\\"ai_reasoning\\":\\"nested\\",\\"type\\":0}]"}}';
+      // Act
+      const items = AiResponseParser.parseItemsFromContent(raw, identityEJ);
+      // Assert
+      expect(items.length).assertEqual(1);
+      expect(items[0].name).assertEqual('tower');
+    });
+
+    it('boundary: ai_parser_should_extract_items_from_nested_result_text_object', 0, () => {
+      // Arrange
+      const raw = '{"result":{"text":"[{\\"name\\":\\"gallery\\",\\"duration\\":55,\\"ai_reasoning\\":\\"deep\\",\\"type\\":0}]"}}';
+      // Act
+      const items = AiResponseParser.parseItemsFromContent(raw, identityEJ);
+      // Assert
+      expect(items.length).assertEqual(1);
+      expect(items[0].duration).assertEqual(55);
+    });
+
+    it('boundary: ai_parser_line_text_should_use_candidate_name_before_dash_when_name_missing', 0, () => {
+      // Arrange
+      const raw = '- River Walk - duration: 40min reason: relaxed';
+      // Act
+      const items = AiResponseParser.parseItemsFromContent(raw, identityEJ);
+      // Assert
+      expect(items.length).assertEqual(1);
+      expect(items[0].name).assertEqual('River Walk');
+      expect(items[0].type).assertEqual(0);
+    });
+
+    it('combined: ai_parser_line_text_should_skip_invalid_lines_and_keep_valid_item', 0, () => {
+      // Arrange
+      const raw = '- duration: 0min reason: skip\n- Sunset Pier duration: 25min reason: photo stop';
+      // Act
+      const items = AiResponseParser.parseItemsFromContent(raw, identityEJ);
+      // Assert
+      expect(items.length).assertEqual(1);
+      expect(items[0].name).assertEqual('Sunset Pier');
+      expect(items[0].duration).assertEqual(25);
+    });
+
+    it('regression: ai_parser_model_response_should_join_segment_content_field_and_ignore_blank_segments', 0, () => {
+      // Arrange
+      const res =
+        '{"choices":[{"message":{"content":["   ",{"content":"[{\\"name\\":\\"joined\\",\\"duration\\":65,\\"ai_reasoning\\":\\"segment\\",\\"type\\":1}]"}]}}]}';
+      // Act
+      const items = AiResponseParser.parseModelResponseForTest(res, identityEJ);
+      // Assert
+      expect(items.length).assertEqual(1);
+      expect(items[0].name).assertEqual('joined');
+      expect(items[0].type).assertEqual(1);
+    });
+
+    it('regression: ai_parser_model_response_should_read_message_content_text_object', 0, () => {
+      // Arrange
+      const res =
+        '{"choices":[{"message":{"content":{"text":"[{\\"name\\":\\"objectText\\",\\"duration\\":30,\\"ai_reasoning\\":\\"obj\\",\\"type\\":2}]"}}}]}';
+      // Act
+      const items = AiResponseParser.parseModelResponseForTest(res, identityEJ);
+      // Assert
+      expect(items.length).assertEqual(1);
+      expect(items[0].name).assertEqual('objectText');
+      expect(items[0].type).assertEqual(2);
+    });
+
     it('conflict: weather_scheduler_callback_should_skip_when_feature_disabled', 0, () => {
       // Arrange
       const bundle = createWeatherBundleEJ();
