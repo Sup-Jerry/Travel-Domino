@@ -142,6 +142,23 @@ export default function phase2CoreCoverageBatchYTest() {
       expect(info === null).assertTrue();
     });
 
+    it('boundary: amap_weather_get_weather_by_geo_point_should_return_null_when_city_weather_missing', 0, async () => {
+      // Arrange
+      const service = new TestableAmapWeatherServiceForY();
+      const hooks = new StaticHooksForY();
+      hooks.setGetCityCodeByCoordinate(async (_lat: number, _lng: number): Promise<string | null> => {
+        return 'CITY_EMPTY';
+      });
+
+      // Act
+      const info = await service.getWeatherByGeoPoint(31.25, 121.45, 1700000000002, 'CURRENT_LOCATION', true);
+      hooks.restore();
+
+      // Assert
+      expect(info === null).assertTrue();
+      expect(service.getWeatherCallCount).assertEqual(1);
+    });
+
     it('conflict: amap_weather_batch_should_limit_city_groups_when_current_location_exists', 0, async () => {
       // Arrange
       const service = new TestableAmapWeatherServiceForY();
@@ -165,6 +182,28 @@ export default function phase2CoreCoverageBatchYTest() {
       expect(service.getWeatherCallCount).assertEqual(5);
     });
 
+    it('boundary: amap_weather_batch_should_keep_all_city_groups_when_no_current_location_exists', 0, async () => {
+      // Arrange
+      const service = new TestableAmapWeatherServiceForY();
+      const hooks = new StaticHooksForY();
+      hooks.setGetCityCodeByCoordinate(async (lat: number, _lng: number): Promise<string | null> => {
+        return `CITY_${Math.floor(lat)}`;
+      });
+      const points: WeatherGeoPointRequest[] = [];
+      for (let i = 1; i <= 6; i++) {
+        service.weatherByCity.set(`CITY_${i}`, createWeatherForY(`CITY_${i}`, 18 + i, 'SUNNY'));
+        points.push(createPointForY(i + 0.01, 120.5, 'PLAN_LOCATION', false, 1700000002000 + i));
+      }
+
+      // Act
+      const map = await service.batchGetWeather(points);
+      hooks.restore();
+
+      // Assert
+      expect(map.size).assertEqual(6);
+      expect(service.getWeatherCallCount).assertEqual(6);
+    });
+
     it('regression: td-20260415-amap-weather-force-refresh-should-bypass-cache', 0, async () => {
       // Arrange
       const service = new TestableAmapWeatherServiceForY();
@@ -184,6 +223,32 @@ export default function phase2CoreCoverageBatchYTest() {
       expect(second !== null).assertTrue();
       expect(geocodeCount).assertEqual(2);
       expect(service.getWeatherCallCount).assertEqual(2);
+    });
+
+    it('combined: amap_weather_batch_should_skip_invalid_and_city_miss_points_but_keep_valid_weather', 0, async () => {
+      // Arrange
+      const service = new TestableAmapWeatherServiceForY();
+      const hooks = new StaticHooksForY();
+      hooks.setGetCityCodeByCoordinate(async (lat: number, _lng: number): Promise<string | null> => {
+        if (lat < 0) {
+          return null;
+        }
+        return lat > 40 ? 'CITY_OK' : 'CITY_MISS_WEATHER';
+      });
+      service.weatherByCity.set('CITY_OK', createWeatherForY('CITY_OK', 29, 'RAIN'));
+      const invalid = createPointForY(Number.NaN, 120.1, 'PLAN_LOCATION', false, 1700000003001);
+      const cityMiss = createPointForY(-1.2, 120.2, 'PLAN_LOCATION', false, 1700000003002);
+      const weatherMiss = createPointForY(30.3, 120.3, 'PLAN_LOCATION', false, 1700000003003);
+      const valid = createPointForY(41.4, 120.4, 'PLAN_LOCATION', false, 1700000003004);
+
+      // Act
+      const map = await service.batchGetWeather([invalid, cityMiss, weatherMiss, valid]);
+      hooks.restore();
+
+      // Assert
+      expect(map.size).assertEqual(1);
+      expect(service.getWeatherCallCount).assertEqual(2);
+      expect(map.values().next().value.condition).assertEqual('RAIN');
     });
 
     it('combined: amap_weather_snapshot_roundtrip_and_get_weather_without_runtime_context_should_keep_safe_defaults', 0, async () => {
