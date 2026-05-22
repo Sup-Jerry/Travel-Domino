@@ -1,5 +1,57 @@
 import { describe, it, expect } from '@ohos/hypium';
 import { PreferenceManager } from '../main/ets/common/utils/PreferenceManager';
+import { AvatarProfile } from '../main/ets/domain/auth/AvatarModels';
+import { DEFAULT_USER_PROFILE, UserStrategyProfile } from '../main/ets/domain/strategy/UserStrategyProfile';
+
+class PreferenceStoreMockForPreferenceTest {
+  private readonly values: Map<string, Object> = new Map<string, Object>();
+
+  async put(key: string, value: Object): Promise<void> {
+    this.values.set(key, value);
+  }
+
+  async get(key: string, defaultValue: Object): Promise<Object> {
+    const value = this.values.get(key);
+    return value === undefined ? defaultValue : value;
+  }
+
+  async flush(): Promise<void> {
+    return;
+  }
+
+  setRaw(key: string, value: Object): void {
+    this.values.set(key, value);
+  }
+}
+
+function attachPreferenceStoreForPreferenceTest(): PreferenceStoreMockForPreferenceTest {
+  const store = new PreferenceStoreMockForPreferenceTest();
+  const manager = PreferenceManager.getInstance();
+  Reflect.set(manager as Object, 'pref', store as Object);
+  return store;
+}
+
+function createStrategyProfileForPreferenceTest(): UserStrategyProfile {
+  return {
+    avgDensity: DEFAULT_USER_PROFILE.avgDensity,
+    avgPace: DEFAULT_USER_PROFILE.avgPace,
+    avgPreference: DEFAULT_USER_PROFILE.avgPreference,
+    avgEnergy: DEFAULT_USER_PROFILE.avgEnergy,
+    modeFrequency: DEFAULT_USER_PROFILE.modeFrequency,
+    sampleCount: DEFAULT_USER_PROFILE.sampleCount,
+    updatedAt: DEFAULT_USER_PROFILE.updatedAt,
+    manualOverrideEnabled: DEFAULT_USER_PROFILE.manualOverrideEnabled === true,
+    consistencyMatchCount: Number(DEFAULT_USER_PROFILE.consistencyMatchCount) > 0
+      ? Math.floor(Number(DEFAULT_USER_PROFILE.consistencyMatchCount))
+      : 0,
+    consistencyMismatchCount: Number(DEFAULT_USER_PROFILE.consistencyMismatchCount) > 0
+      ? Math.floor(Number(DEFAULT_USER_PROFILE.consistencyMismatchCount))
+      : 0,
+    lastConsistencyCheckAt: Number(DEFAULT_USER_PROFILE.lastConsistencyCheckAt) > 0
+      ? Number(DEFAULT_USER_PROFILE.lastConsistencyCheckAt)
+      : 0
+  };
+}
 
 export default function preferenceManagerTest() {
   describe('preferenceManagerTest', () => {
@@ -122,6 +174,170 @@ export default function preferenceManagerTest() {
       expect(weatherLevel).assertEqual(2);
       expect(duration).assertEqual(15);
       expect(idleGap).assertEqual(1);
+    });
+
+    it('boundary: preference_manager_set_theme_mode_should_preserve_valid_mode', 0, async () => {
+      // Arrange
+      const store = attachPreferenceStoreForPreferenceTest();
+      const manager = PreferenceManager.getInstance();
+
+      // Act
+      await manager.setThemeMode('light');
+      const saved = await manager.getValue(PreferenceManager.KEY_THEME_MODE, '');
+
+      // Assert
+      expect(String(saved)).assertEqual('light');
+      expect(String(await store.get(PreferenceManager.KEY_THEME_MODE, ''))).assertEqual('light');
+    });
+
+    it('boundary: preference_manager_get_avatar_profile_should_return_fallback_for_empty_raw', 0, async () => {
+      // Arrange
+      attachPreferenceStoreForPreferenceTest();
+      const manager = PreferenceManager.getInstance();
+
+      // Act
+      const profile = await manager.getAvatarProfile('   ');
+
+      // Assert
+      expect(profile.userId).assertEqual('guest_local');
+      expect(profile.localUri).assertEqual('');
+      expect(profile.compressedUri).assertEqual('');
+      expect(profile.cloudUrl).assertEqual('');
+      expect(profile.uploadState).assertEqual('EMPTY');
+      expect(profile.updatedAt).assertEqual(0);
+    });
+
+    it('invalid: preference_manager_get_avatar_profile_should_sanitize_partial_snapshot_fields', 0, async () => {
+      // Arrange
+      const store = attachPreferenceStoreForPreferenceTest();
+      const manager = PreferenceManager.getInstance();
+      store.setRaw(
+        PreferenceManager.buildAvatarProfileKey('origin_avatar'),
+        JSON.stringify({
+          userId: '',
+          localUri: 123,
+          compressedUri: null,
+          cloudUrl: false,
+          uploadState: 'BROKEN',
+          updatedAt: 'oops'
+        }) as Object
+      );
+
+      // Act
+      const profile = await manager.getAvatarProfile(' origin_avatar ');
+
+      // Assert
+      expect(profile.userId).assertEqual('origin_avatar');
+      expect(profile.localUri).assertEqual('');
+      expect(profile.compressedUri).assertEqual('');
+      expect(profile.cloudUrl).assertEqual('');
+      expect(profile.uploadState).assertEqual('EMPTY');
+      expect(profile.updatedAt).assertEqual(0);
+    });
+
+    it('boundary: preference_manager_set_avatar_profile_should_keep_trimmed_user_and_positive_updated_at', 0, async () => {
+      // Arrange
+      const store = attachPreferenceStoreForPreferenceTest();
+      const manager = PreferenceManager.getInstance();
+      const avatar = new AvatarProfile();
+      avatar.userId = ' avatar_user ';
+      avatar.localUri = 'file://avatar';
+      avatar.compressedUri = 'file://avatar_small';
+      avatar.cloudUrl = 'https://cdn/avatar';
+      avatar.uploadState = 'SYNCED';
+      avatar.updatedAt = 12345;
+
+      // Act
+      await manager.setAvatarProfile(avatar);
+      const raw = await store.get(PreferenceManager.buildAvatarProfileKey('avatar_user'), '') as string;
+      const saved = JSON.parse(String(raw)) as Record<string, Object>;
+
+      // Assert
+      expect(String(saved['userId'] || '')).assertEqual('avatar_user');
+      expect(Number(saved['updatedAt'] || 0)).assertEqual(12345);
+      expect(String(saved['uploadState'] || '')).assertEqual('SYNCED');
+    });
+
+    it('boundary: preference_manager_get_strategy_profile_should_fallback_to_default_when_raw_empty', 0, async () => {
+      // Arrange
+      attachPreferenceStoreForPreferenceTest();
+      const manager = PreferenceManager.getInstance();
+
+      // Act
+      const profile = await manager.getUserStrategyProfile();
+
+      // Assert
+      expect(profile.avgDensity).assertEqual(DEFAULT_USER_PROFILE.avgDensity);
+      expect(profile.avgPace).assertEqual(DEFAULT_USER_PROFILE.avgPace);
+      expect(profile.avgPreference).assertEqual(DEFAULT_USER_PROFILE.avgPreference);
+      expect(profile.avgEnergy).assertEqual(DEFAULT_USER_PROFILE.avgEnergy);
+      expect(profile.modeFrequency).assertEqual(DEFAULT_USER_PROFILE.modeFrequency);
+      expect(profile.sampleCount).assertEqual(DEFAULT_USER_PROFILE.sampleCount);
+      expect(profile.manualOverrideEnabled).assertEqual(DEFAULT_USER_PROFILE.manualOverrideEnabled === true);
+    });
+
+    it('invalid: preference_manager_get_strategy_profile_should_sanitize_invalid_snapshot_fields', 0, async () => {
+      // Arrange
+      const store = attachPreferenceStoreForPreferenceTest();
+      const manager = PreferenceManager.getInstance();
+      store.setRaw(
+        PreferenceManager.KEY_USER_STRATEGY_PROFILE,
+        JSON.stringify({
+          avgDensity: 'bad',
+          avgPace: 'bad',
+          avgPreference: null,
+          avgEnergy: 'bad',
+          modeFrequency: 1,
+          sampleCount: 'bad',
+          updatedAt: 'bad',
+          manualOverrideEnabled: 'true',
+          consistencyMatchCount: 'bad',
+          consistencyMismatchCount: 'bad',
+          lastConsistencyCheckAt: 'bad'
+        }) as Object
+      );
+
+      // Act
+      const profile = await manager.getUserStrategyProfile();
+
+      // Assert
+      expect(profile.avgDensity).assertEqual(DEFAULT_USER_PROFILE.avgDensity);
+      expect(profile.avgPace).assertEqual(DEFAULT_USER_PROFILE.avgPace);
+      expect(profile.avgPreference).assertEqual(DEFAULT_USER_PROFILE.avgPreference);
+      expect(profile.avgEnergy).assertEqual(DEFAULT_USER_PROFILE.avgEnergy);
+      expect(profile.modeFrequency).assertEqual(DEFAULT_USER_PROFILE.modeFrequency);
+      expect(profile.sampleCount).assertEqual(DEFAULT_USER_PROFILE.sampleCount);
+      expect(profile.updatedAt).assertEqual(DEFAULT_USER_PROFILE.updatedAt);
+      expect(profile.manualOverrideEnabled).assertFalse();
+      expect(profile.consistencyMatchCount).assertEqual(Number(DEFAULT_USER_PROFILE.consistencyMatchCount) > 0
+        ? Math.floor(Number(DEFAULT_USER_PROFILE.consistencyMatchCount))
+        : 0);
+      expect(profile.consistencyMismatchCount).assertEqual(Number(DEFAULT_USER_PROFILE.consistencyMismatchCount) > 0
+        ? Math.floor(Number(DEFAULT_USER_PROFILE.consistencyMismatchCount))
+        : 0);
+      expect(profile.lastConsistencyCheckAt).assertEqual(Number(DEFAULT_USER_PROFILE.lastConsistencyCheckAt) > 0
+        ? Number(DEFAULT_USER_PROFILE.lastConsistencyCheckAt)
+        : 0);
+    });
+
+    it('invalid: preference_manager_set_strategy_profile_should_zero_invalid_counters', 0, async () => {
+      // Arrange
+      const store = attachPreferenceStoreForPreferenceTest();
+      const manager = PreferenceManager.getInstance();
+      const profile = createStrategyProfileForPreferenceTest();
+      profile.consistencyMatchCount = Number.NaN;
+      profile.consistencyMismatchCount = Number.NaN;
+      profile.lastConsistencyCheckAt = Number.NaN;
+
+      // Act
+      await manager.setUserStrategyProfile(profile);
+      const raw = await store.get(PreferenceManager.KEY_USER_STRATEGY_PROFILE, '') as string;
+      const saved = JSON.parse(String(raw)) as Record<string, Object>;
+
+      // Assert
+      expect(Number(saved['consistencyMatchCount'])).assertEqual(0);
+      expect(Number(saved['consistencyMismatchCount'])).assertEqual(0);
+      expect(Number(saved['lastConsistencyCheckAt'])).assertEqual(0);
     });
   });
 }
