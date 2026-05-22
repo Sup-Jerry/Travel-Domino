@@ -3,6 +3,36 @@ import { EventEntity } from '../main/ets/model/entity/EventEntity';
 import { ArrivalReminderStore } from '../main/ets/common/utils/arrival/ArrivalReminderStore';
 import { ArrivalReminderCoordinator } from '../main/ets/infrastructure/services/ArrivalReminderCoordinator';
 import { ArrivalReminderPayload } from '../main/ets/infrastructure/services/ArrivalReminderEngine';
+import { PlanStatus } from '../main/ets/domain/statemachine/PlanStatus';
+
+interface PlanTransitionEventForF {
+  planId: string;
+  toStatus: PlanStatus;
+}
+
+interface PlanStatusSnapshotForF {
+  status: PlanStatus;
+}
+
+class FakePlanStateMachineForF {
+  public status: PlanStatus = PlanStatus.READY;
+  private listener: ((event: PlanTransitionEventForF) => void) | null = null;
+
+  public subscribePlanTransition(_planId: string, handler: (event: PlanTransitionEventForF) => void): () => void {
+    this.listener = handler;
+    return (): void => {
+      this.listener = null;
+    };
+  }
+
+  public getPlanStatus(_planId: string): PlanStatusSnapshotForF {
+    return { status: this.status };
+  }
+
+  public emit(planId: number, toStatus: PlanStatus): void {
+    this.listener?.({ planId: `${planId}`, toStatus: toStatus });
+  }
+}
 
 function buildPayload(planId: number, eventId: number, seq: number, placeName: string): ArrivalReminderPayload {
   return {
@@ -148,6 +178,120 @@ export default function phase1ZeroHitBatchFTest() {
       reached = true;
       // Assert
       expect(reached).assertTrue();
+    });
+
+    it('invalid: coordinator_consume_on_plan_should_ignore_when_payload_absent', 0, () => {
+      // Arrange
+      const coordinator = ArrivalReminderCoordinator.getInstance();
+      ArrivalReminderStore.clearPayload(94);
+      let showCount = 0;
+
+      // Act
+      coordinator.consumeOnPlan({
+        isDialogOpen: false,
+        currentPlanId: 94,
+        events: [buildStartableEvent(940)],
+        onShow: (_nextPayload): void => {
+          showCount += 1;
+        }
+      });
+
+      // Assert
+      expect(showCount).assertEqual(0);
+    });
+
+    it('invalid: coordinator_consume_on_plan_should_dismiss_when_target_event_missing', 0, () => {
+      // Arrange
+      const coordinator = ArrivalReminderCoordinator.getInstance();
+      const payload = buildPayload(95, 950, 7, 'missing-target');
+      ArrivalReminderStore.writePayload(payload);
+      let showCount = 0;
+
+      // Act
+      coordinator.consumeOnPlan({
+        isDialogOpen: false,
+        currentPlanId: 95,
+        events: [buildStartableEvent(951)],
+        onShow: (_nextPayload): void => {
+          showCount += 1;
+        }
+      });
+      const after = ArrivalReminderStore.readPayload(95);
+
+      // Assert
+      expect(showCount).assertEqual(0);
+      expect(after === null).assertTrue();
+    });
+
+    it('boundary: coordinator_subscribe_plan_should_skip_home_show_when_resolve_title_missing', 0, () => {
+      // Arrange
+      const coordinator = ArrivalReminderCoordinator.getInstance();
+      const machine = new FakePlanStateMachineForF();
+      Reflect.set(coordinator as Object, 'planStateMachine', machine);
+      const payload = buildPayload(96, 960, 8, 'title-missing');
+      ArrivalReminderStore.writePayload(payload);
+      let showCount = 0;
+
+      // Act
+      const unsubscribe = coordinator.subscribePlan('*', {
+        isDialogOpen: (): boolean => false,
+        onShowHome: (_nextPayload: ArrivalReminderPayload, _planTitle: string): void => {
+          showCount += 1;
+        },
+        pollIntervalMs: 1000
+      });
+      unsubscribe();
+
+      // Assert
+      expect(showCount).assertEqual(0);
+      expect(ArrivalReminderStore.readPayload(96) !== null).assertTrue();
+    });
+
+    it('boundary: coordinator_subscribe_plan_should_skip_plan_show_when_event_resolver_missing', 0, () => {
+      // Arrange
+      const coordinator = ArrivalReminderCoordinator.getInstance();
+      const machine = new FakePlanStateMachineForF();
+      Reflect.set(coordinator as Object, 'planStateMachine', machine);
+      const payload = buildPayload(97, 970, 9, 'resolver-missing');
+      ArrivalReminderStore.writePayload(payload);
+      let showCount = 0;
+
+      // Act
+      const unsubscribe = coordinator.subscribePlan(97, {
+        isDialogOpen: (): boolean => false,
+        onShowPlan: (_nextPayload: ArrivalReminderPayload): void => {
+          showCount += 1;
+        },
+        pollIntervalMs: 1000
+      });
+      unsubscribe();
+
+      // Assert
+      expect(showCount).assertEqual(0);
+      expect(ArrivalReminderStore.readPayload(97) !== null).assertTrue();
+    });
+
+    it('regression: coordinator_subscribe_plan_should_ignore_non_terminal_transition', 0, () => {
+      // Arrange
+      const coordinator = ArrivalReminderCoordinator.getInstance();
+      const machine = new FakePlanStateMachineForF();
+      Reflect.set(coordinator as Object, 'planStateMachine', machine);
+      const payload = buildPayload(98, 980, 10, 'non-terminal');
+      ArrivalReminderStore.writePayload(payload);
+
+      // Act
+      const unsubscribe = coordinator.subscribePlan(98, {
+        isDialogOpen: (): boolean => true,
+        resolveEvents: (): EventEntity[] => [buildStartableEvent(980)],
+        onShowPlan: (_nextPayload: ArrivalReminderPayload): void => {},
+        pollIntervalMs: 1000
+      });
+      machine.emit(98, PlanStatus.READY);
+      const after = ArrivalReminderStore.readPayload(98);
+      unsubscribe();
+
+      // Assert
+      expect(after === null).assertFalse();
     });
   });
 }
