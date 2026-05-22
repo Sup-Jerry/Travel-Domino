@@ -237,5 +237,38 @@ export default function weatherPolicyResolverTest() {
       expect(firstTarget?.forecastTime === undefined).assertEqual(true);
       expect(upcomingTarget?.forecastTime === undefined).assertEqual(true);
     });
+
+    it('boundary: ready_targets_should_skip_first_and_upcoming_when_all_events_completed', 0, () => {
+      // Arrange
+      const resolver = new WeatherPolicyResolver();
+      const now = Date.now();
+      const completedEvents: EventEntity[] = [
+        buildEvent(21, 31.2, 121.5, now + 1000, false),
+        buildEvent(22, 31.3, 121.6, now + 2000, false)
+      ];
+
+      // Act
+      const targets = resolver.buildWeatherTargets('p-ready-completed', PlanStatus.READY, completedEvents, {
+        planId: 'p-ready-completed',
+        status: PlanStatus.READY,
+        plannedStartTime: now,
+        plannedEndTime: now + 60000,
+        completedNodeIds: ['21', '22'],
+        skippedNodeIds: [],
+        isAutoStarted: false,
+        isPaused: false,
+        updatedAt: now,
+        lastKnownLatitude: 31.1,
+        lastKnownLongitude: 121.4
+      });
+
+      // Assert
+      expect(targets.length).assertEqual(1);
+      expect(targets[0].type).assertEqual(WeatherTargetType.CURRENT_LOCATION);
+      const hasFirst = targets.some((item) => item.type === WeatherTargetType.FIRST_NODE);
+      const hasUpcoming = targets.some((item) => item.type === WeatherTargetType.UPCOMING_NODES);
+      expect(hasFirst).assertEqual(false);
+      expect(hasUpcoming).assertEqual(false);
+    });
   });
 }
