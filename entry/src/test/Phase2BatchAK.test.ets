@@ -513,6 +513,28 @@ export default function phase2BatchAKTest() {
       expect(sessionState).assertEqual('EXPIRED');
     });
 
+    it('conflict: auth_state_machine_should_prioritize_pending_before_guest_and_authenticated', 0, () => {
+      // Arrange
+      const expireAt = Date.now() + 60_000;
+      // Act
+      const userState = AuthStateMachine.resolveUserRuntimeState(true, true, false, true);
+      const sessionState = AuthStateMachine.resolveSessionRuntimeState(expireAt, false);
+      // Assert
+      expect(userState).assertEqual('AUTH_PENDING');
+      expect(sessionState).assertEqual('ACTIVE');
+    });
+
+    it('regression: auth_state_machine_should_output_guest_when_authenticated_guest_not_blocked_or_pending', 0, () => {
+      // Arrange
+      const expireAt = Date.now() + 60_000;
+      // Act
+      const userState = AuthStateMachine.resolveUserRuntimeState(true, true, false, false);
+      const sessionState = AuthStateMachine.resolveSessionRuntimeState(expireAt, false);
+      // Assert
+      expect(userState).assertEqual('GUEST');
+      expect(sessionState).assertEqual('ACTIVE');
+    });
+
     it('normal: auth_error_code_should_keep_core_values', 0, () => {
       // Arrange
       // Act
