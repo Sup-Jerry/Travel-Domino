@@ -57,6 +57,25 @@ export default function phase2BatchHCTest() {
       expect(strategyText).assertContain('避雨优先');
     });
 
+    it('combined: index_helpers_should_build_weather_text_with_label_summary_and_strategy', 0, () => {
+      // Arrange
+      // Act
+      // Assert
+      const context: WeatherSuggestionContext = {
+        collabLabel: 'A1',
+        planningHint: 'museum_visit_hc',
+        collabSummary: 'avoid_peak_hc',
+        strategyHint: 'indoor_first_hc'
+      };
+
+      const text = IndexHelpers.buildWeatherSuggestionText(context);
+
+      expect(text).assertContain('A1');
+      expect(text).assertContain('museum_visit_hc');
+      expect(text).assertContain('avoid_peak_hc');
+      expect(text).assertContain('indoor_first_hc');
+    });
+
     it('combined: index_helpers_should_use_dynamic_end_time_and_keep_zero_padding', 0, () => {
       // Arrange
       // Act
@@ -78,6 +97,29 @@ export default function phase2BatchHCTest() {
       const suggested = IndexHelpers.resolveBacklogSuggestedTime([event]);
 
       expect(suggested).assertEqual('07:30');
+    });
+
+    it('boundary: index_helpers_should_fallback_to_dynamic_end_time_when_computed_time_cannot_resolve_clock', 0, () => {
+      // Arrange
+      // Act
+      // Assert
+      const endTime = new Date(2026, 3, 25, 8, 9).getTime();
+      const event = buildScheduleEventHC(953, 10, ' ', 45, endTime);
+
+      const suggested = IndexHelpers.resolveBacklogSuggestedTime([event]);
+
+      expect(suggested).assertEqual('08:09');
+    });
+
+    it('invalid: index_helpers_should_fallback_to_default_when_schedule_item_has_no_usable_time', 0, () => {
+      // Arrange
+      // Act
+      // Assert
+      const event = buildScheduleEventHC(954, 10, '', 0, 0);
+
+      const suggested = IndexHelpers.resolveBacklogSuggestedTime([event]);
+
+      expect(suggested).assertEqual('09:00');
     });
 
     it('normal: validator_marker_should_cover_normal_case', 0, () => {
