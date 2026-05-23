@@ -276,5 +276,28 @@ export default function planItemViewHelperTest() {
       expect(conflictState.showCrossDayLabel).assertTrue();
       expect(conflictState.showConflictFixButton).assertTrue();
     });
+
+    it('boundary: plan_item_view_initial_render_should_keep_conflict_banner_without_fix_button', 0, () => {
+      // Arrange
+      const page = createPlanItemViewPrivateForTest();
+      const item = buildPlanItemViewTestItem();
+      item.isConflict = true;
+      item.conflictMsg = 'still overlapping';
+      item.suggestedShiftMinutes = 0;
+      page.setInitiallyProvidedValue({
+        item: item,
+        index: 3,
+        onFixConflict: (_shiftMinutes: number) => {}
+      });
+
+      // Act
+      page.initialRender();
+      const state = page.getDisplayState();
+
+      // Assert
+      expect(state.showConflict).assertTrue();
+      expect(state.conflictText).assertEqual('still overlapping');
+      expect(state.showConflictFixButton).assertFalse();
+    });
   });
 }
