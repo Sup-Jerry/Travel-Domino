@@ -198,7 +198,9 @@ function identityEJ(item: AiParserItem): AiParserItem {
 interface TrafficEnginePrivateForEJ {
   cache: Map<string, number>;
   transientFailureUntil: Map<string, number>;
+  trafficSignalTimer: number;
   markTransientFailure(key: string, reason: string): void;
+  emitTrafficDataUpdated(): void;
   fetchMultiModalTrafficAsync(
     from: LocationInfo,
     to: LocationInfo,
@@ -568,6 +570,17 @@ export default function phase2BatchEJTest() {
       expect((engine.transientFailureUntil.get(key) ?? 0) > Date.now()).assertTrue();
     });
 
+    it('boundary: traffic_engine_emit_should_replace_existing_signal_timer', 0, () => {
+      // Arrange
+      const engine = resetTrafficEngineEJ();
+      engine.trafficSignalTimer = 5;
+      // Act
+      engine.emitTrafficDataUpdated();
+      // Assert
+      expect(engine.trafficSignalTimer === 5).assertFalse();
+      expect(engine.trafficSignalTimer > 0).assertTrue();
+    });
+
     it('boundary: traffic_engine_drive_fetch_should_mark_transient_when_service_missing', 0, async () => {
       // Arrange
       const engine = resetTrafficEngineEJ();
@@ -674,6 +687,30 @@ export default function phase2BatchEJTest() {
       // Assert
       expect(mapService.modeCalls).assertEqual(1);
       expect(engine.cache.has(key)).assertFalse();
+      expect(engine.transientFailureUntil.has(key)).assertFalse();
+    });
+
+    it('boundary: traffic_engine_multi_modal_fetch_should_cache_fallback_sixty_for_invalid_coordinates', 0, async () => {
+      // Arrange
+      const engine = resetTrafficEngineEJ();
+      const mapService = new DriveMapServiceForEJ();
+      const key = 'multi_modal_fallback_sixty_invalid_coord';
+      const from = createLocationEJ('invalid_from');
+      const to = createLocationEJ('invalid_to');
+      from.latitude = 0;
+      from.longitude = 0;
+      to.latitude = 0;
+      to.longitude = 0;
+      mapService.duration = 60;
+      engine.markTransientFailure(key, 'stale_guard');
+      Reflect.set(engine as Object, 'mapService', mapService as Object);
+
+      // Act
+      await engine.fetchMultiModalTrafficAsync(from, to, 1, key, '13:00');
+
+      // Assert
+      expect(mapService.modeCalls).assertEqual(1);
+      expect(engine.cache.get(key)).assertEqual(60);
       expect(engine.transientFailureUntil.has(key)).assertFalse();
     });
 
