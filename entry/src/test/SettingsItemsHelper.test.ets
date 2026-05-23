@@ -218,6 +218,36 @@ export default function settingsItemsHelperTest() {
       expect(toggleValue).assertTrue();
     });
 
+    it('boundary: settings_switch_item_initial_render_should_support_loading_branch', 0, () => {
+      // Arrange
+      const page = createSettingSwitchItemForTest();
+      let toggled = false;
+      let threw = false;
+
+      // Act
+      page.setInitiallyProvidedValue({
+        title: '同步中',
+        desc: '等待设置写入完成',
+        loading: false,
+        onToggle: (_value: boolean) => {
+          toggled = true;
+        }
+      });
+      page.updateStateVars({
+        loading: true
+      });
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.loading).assertTrue();
+      expect(toggled).assertFalse();
+    });
+
     it('normal: settings_select_item_initial_render_should_support_value_branch', 0, () => {
       // Arrange
       const page = new SettingSelectItem(undefined, {} as LocalStorage) as Object as SettingSelectItemPrivateTest;
