@@ -314,6 +314,20 @@ export default function phase2BatchALTest() {
       expect(String(decision?.reason || '')).assertEqual('EXCESSIVE_TRAFFIC');
     });
 
+    it('boundary: analyze_and_decide_should_return_null_when_traffic_is_not_excessive', 0, () => {
+      // Arrange
+      // Act
+      // Assert
+      const context: BehaviorContext = {
+        recentDeletions: [createDeletion(10, 15), createDeletion(20, 35), createDeletion(30, 40)],
+        recentSkips: 0,
+        avgTrafficMinutes: 0,
+        currentStrategy: createStrategy(),
+        planId: 1
+      };
+      expect(StrategyAdaptationEngine.analyzeAndDecide(context) === null).assertTrue();
+    });
+
     it('normal: apply_adjustment_should_apply_and_clamp_values', 0, () => {
       // Arrange
       // Act
@@ -369,6 +383,18 @@ export default function phase2BatchALTest() {
       const decision = StrategyAdaptationEngine.adaptToWeather(createWeatherCollabContext('RAIN_PERSIST'), 70, createStrategy());
       expect(String(decision?.reason || '')).assertEqual('WEATHER_RISK');
       expect(decision?.adjustments.preference === undefined).assertTrue();
+    });
+
+    it('normal: adapt_to_weather_rain_persist_should_keep_culture_preference_when_already_indoor_friendly', 0, () => {
+      // Arrange
+      // Act
+      // Assert
+      const current = createStrategy();
+      current.preference = PreferenceType.CULTURE;
+      const decision = StrategyAdaptationEngine.adaptToWeather(createWeatherCollabContext('RAIN_PERSIST'), 65, current);
+      expect(String(decision?.reason || '')).assertEqual('WEATHER_RISK');
+      expect(Number(decision?.adjustments.density)).assertEqual(-1);
+      expect(Number(decision?.adjustments.preference)).assertEqual(PreferenceType.CULTURE);
     });
 
     it('invalid: adapt_to_weather_should_return_null_for_unknown_trend_and_safe_score', 0, () => {
