@@ -160,6 +160,29 @@ export default function phase2BatchDPTest() {
       expect(received.unionId).assertEqual('union-dp');
     });
 
+    it('boundary: huawei_button_callback_should_keep_success_path_when_agreement_already_accepted', 0, () => {
+      // Arrange
+      const controller = new HuaweiControllerMockDP();
+      const button = createButtonDP(controller);
+      let received = new HuaweiCredential();
+      let errorMessage = '';
+      button.agreementAccepted = true;
+      button.onCredential = (credential: HuaweiCredential): void => {
+        received = credential;
+      };
+      button.onError = (message: string): void => {
+        errorMessage = message;
+      };
+
+      // Act
+      button.aboutToAppear();
+      controller.trigger(createErrorDP(0, ''), createDataDP('auth-agreement-dp'));
+
+      // Assert
+      expect(errorMessage).assertEqual('');
+      expect(received.authorizationCode).assertEqual('auth-agreement-dp');
+    });
+
     it('combined: huawei_button_helpers_and_render_should_remain_available', 0, () => {
       // Arrange
       const controller = new HuaweiControllerMockDP();
