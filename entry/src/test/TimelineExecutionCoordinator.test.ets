@@ -148,5 +148,16 @@ export default function timelineExecutionCoordinatorTest() {
       expect(earlierHint.minutesDelta).assertEqual(-20);
       expect(earlierHint.message.includes('提前 20 分钟')).assertTrue();
     });
+
+    it('boundary: build_reflow_hint_should_fallback_to_reflow_when_positive_timestamps_have_zero_delta', 0, () => {
+      // Arrange
+      const coordinator = new TimelineExecutionCoordinator({ events: [] });
+      // Act
+      const reflowHint = coordinator.buildReflowHint('end', 45 * 60 * 1000, 45 * 60 * 1000, 'A', 'B');
+      // Assert
+      expect(reflowHint.type).assertEqual('reflow');
+      expect(reflowHint.minutesDelta).assertEqual(0);
+      expect(reflowHint.message.length > 0).assertTrue();
+    });
   });
 }
