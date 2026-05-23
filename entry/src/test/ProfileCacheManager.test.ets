@@ -238,5 +238,27 @@ export default function profileCacheManagerTest() {
       expect(parsed === null).assertTrue();
       done();
     });
+
+    it('boundary: profile_cache_read_profile_should_fallback_invalid_updated_at_to_zero', 0, async (done: () => void) => {
+      // Arrange
+      const raw = JSON.stringify({
+        accountId: 'profile_updated_at',
+        username: 'Updated At User',
+        avatarPath: 'avatar.png',
+        avatarVersion: 3,
+        isInitialized: true,
+        createdAt: 99,
+        updatedAt: 'not_a_number'
+      });
+
+      // Act
+      const parsed = await readProfileFromRaw('profile_updated_at', raw);
+
+      // Assert
+      expect(parsed !== null).assertTrue();
+      expect(Number(parsed?.createdAt ?? -1)).assertEqual(99);
+      expect(Number(parsed?.updatedAt ?? -1)).assertEqual(0);
+      done();
+    });
   });
 }
