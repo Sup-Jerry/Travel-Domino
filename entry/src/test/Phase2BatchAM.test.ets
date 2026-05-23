@@ -29,6 +29,18 @@ interface PlanStatusSnapshot {
   status: PlanStatus;
 }
 
+interface ImportPlanMetaAM {
+  title: string;
+  startDate: number;
+  status: number;
+  enableAutoAmapRoute: number;
+}
+
+interface ImportPayloadAM {
+  plan: ImportPlanMetaAM;
+  events: TravelPlanItem[];
+}
+
 class ArrivalEngineStub {
   private readonly onAcknowledge: (id: number, action: ArrivalReminderAction) => void;
 
@@ -444,6 +456,44 @@ export default function phase2BatchAMTest() {
         PlanImportExportService.setDepsForTest(null);
       }
       expect(message).assertEqual('invalid_field:plan.startDate:out_of_range:0');
+      done();
+    });
+
+    it('boundary: import_plan_from_json_should_fallback_to_now_when_deserialized_start_date_is_non_positive', 0, async (done: () => void) => {
+      // Arrange
+      const store = new MockStore();
+      let persistedStartDate = 0;
+      const originalDeserialize = Reflect.get(PlanSerializer as Object, 'deserializePlan') as Object;
+      const deserialized: ImportPayloadAM = {
+        plan: {
+          title: 'I6',
+          startDate: 0,
+          status: 1,
+          enableAutoAmapRoute: 1
+        },
+        events: [eventItem('A', 0)]
+      };
+      PlanImportExportService.setDepsForTest({
+        getStore: (): MockStore => store,
+        createPlan: async (_title: string, startDate: number): Promise<number> => {
+          persistedStartDate = startDate;
+          return 8106;
+        },
+        updateAutoAmapRoute: async (_id: number, _enabled: boolean): Promise<void> => {},
+        updatePlanStatus: async (_id: number, _status: number): Promise<void> => {},
+        insertEvent: async (_planId: number, _item: TravelPlanItem): Promise<number> => 1,
+        hardDeletePlan: async (_id: number): Promise<void> => {}
+      });
+      Reflect.set(PlanSerializer as Object, 'deserializePlan', (_raw: string): ImportPayloadAM => deserialized);
+
+      // Act
+      await PlanImportExportService.importPlanFromJson('{}');
+
+      // Assert
+      expect(persistedStartDate > 0).assertTrue();
+      expect(store.stats.commitCount).assertEqual(1);
+      Reflect.set(PlanSerializer as Object, 'deserializePlan', originalDeserialize);
+      PlanImportExportService.setDepsForTest(null);
       done();
     });
 
