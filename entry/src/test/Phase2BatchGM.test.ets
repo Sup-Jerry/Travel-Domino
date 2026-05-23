@@ -244,8 +244,9 @@ export default function phase2BatchGMTest() {
       const skipped = createHistoryEventGM(2, 1, EventEntity.STATE_SKIPPED);
       const active = createHistoryEventGM(3, 1, EventEntity.STATE_PENDING);
       active.actual_start_time = 1000;
+      const scheduledPending = createHistoryEventGM(5, 1, EventEntity.STATE_PENDING);
       const backlog = createHistoryEventGM(4, 0, EventEntity.STATE_COMPLETED);
-      const summary = HistoryManager.generateSummary([completed, skipped, active, backlog], '   ', 88);
+      const summary = HistoryManager.generateSummary([completed, skipped, active, scheduledPending, backlog], '   ', 88);
 
       const planIdNum = 508;
       const bridge = new NotificationBridge();
@@ -284,6 +285,23 @@ export default function phase2BatchGMTest() {
       expect(header.length > 0).assertTrue();
       expect(header.includes('2026') || header.includes('2')).assertTrue();
       expect(offset).assertEqual(0);
+    });
+
+    it('boundary: history_manager_should_preserve_non_blank_name_and_skip_scheduled_pending_from_active_count', 0, () => {
+      // Arrange
+      const pending = createHistoryEventGM(6, 1, EventEntity.STATE_PENDING);
+      pending.actual_start_time = 0;
+      pending.actual_end_time = 0;
+      const completed = createHistoryEventGM(7, 1, EventEntity.STATE_COMPLETED);
+
+      // Act
+      const summary = HistoryManager.generateSummary([pending, completed], 'Trip Alpha', 321);
+
+      // Assert
+      expect(summary.planName).assertEqual('Trip Alpha');
+      expect(summary.completedCount).assertEqual(1);
+      expect(summary.skippedCount).assertEqual(0);
+      expect(summary.activeCount).assertEqual(0);
     });
 
     it('combined: weather_reminder_store_should_fallback_from_invalid_scoped_payload_to_global_payload', 0, () => {
