@@ -1,5 +1,7 @@
 import 'reflect-metadata';
 import { AppConfigModule } from '../src/config/app-config.module';
+import { AppConfigService } from '../src/config/app-config.service';
+import { PgService } from '../src/config/pg.service';
 import { AuditModule } from '../src/modules/audit/audit.module';
 import { AuditService } from '../src/modules/audit/audit.service';
 import { RiskModule } from '../src/modules/risk/risk.module';
@@ -113,5 +115,20 @@ describe('Core Modules Metadata', () => {
 
     // Assert
     expect(contractOk).toBe(true);
+  });
+
+  it('boundary: app_config_module_should_export_both_config_and_pg_services_without_imports', () => {
+    // Arrange
+    // Act
+    // Assert
+    const providers = getProviders(AppConfigModule);
+    const exports = getExports(AppConfigModule);
+    const imports = getImports(AppConfigModule);
+
+    expect(providers.includes(AppConfigService)).toBe(true);
+    expect(providers.includes(PgService)).toBe(true);
+    expect(exports.includes(AppConfigService)).toBe(true);
+    expect(exports.includes(PgService)).toBe(true);
+    expect(imports.length).toBe(0);
   });
 });

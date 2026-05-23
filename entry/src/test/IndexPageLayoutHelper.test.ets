@@ -469,6 +469,141 @@ export default function indexPageLayoutHelperTest() {
       // Assert
       expect(threw).assertFalse();
     });
+
+    it('boundary: page_hint_and_score_lines_should_keep_single_empty_and_single_line_outputs', 0, () => {
+      // Arrange
+      const emptyText = '';
+      const singleLine = 'only_one';
+
+      // Act
+      const hintLines = buildIndexPageHintLines(emptyText);
+      const scoreLines = buildIndexPageScoreLines(singleLine);
+
+      // Assert
+      expect(hintLines.length).assertEqual(1);
+      expect(hintLines[0]).assertEqual('');
+      expect(scoreLines.length).assertEqual(1);
+      expect(scoreLines[0]).assertEqual('only_one');
+    });
+
+    it('invalid: page_gaps_count_should_keep_negative_value_without_clamping', 0, () => {
+      // Arrange
+      const gapsCount = -3;
+
+      // Act
+      const actual = resolveIndexPageGapsCount(gapsCount);
+
+      // Assert
+      expect(actual).assertEqual(-3);
+    });
+
+    it('combined: page_weather_suggestion_should_include_planning_hint_without_optional_segments', 0, () => {
+      // Arrange
+      const collabLabel = '';
+      const planningHint = '建议带伞';
+      const collabSummary = '';
+      const strategyHint = '';
+
+      // Act
+      const text = buildIndexPageWeatherSuggestionText(collabLabel, planningHint, collabSummary, strategyHint);
+
+      // Assert
+      expect(text.indexOf('建议带伞') >= 0).assertTrue();
+      expect(text.indexOf('天气建议') >= 0).assertTrue();
+      expect(text.indexOf('策略联动') < 0).assertTrue();
+    });
+    it('regression: page_weather_suggestion_should_include_strategy_text_when_provided', 0, () => {
+      // Arrange
+      const collabLabel = '鍗忎綔';
+      const planningHint = '甯︿紴';
+      const collabSummary = '';
+      const strategyHint = '鍏堝幓鍗楁箹';
+
+      // Act
+      const text = buildIndexPageWeatherSuggestionText(collabLabel, planningHint, collabSummary, strategyHint);
+
+      // Assert
+      expect(text.indexOf('鍗忎綔') >= 0).assertTrue();
+      expect(text.indexOf('甯︿紴') >= 0).assertTrue();
+      expect(text.indexOf('鍏堝幓鍗楁箹') >= 0).assertTrue();
+    });
+
+    it('combined: page_layout_defaults_should_keep_noop_callbacks_and_default_theme', 0, () => {
+      // Arrange
+      const page = new IndexPageLayout(undefined, {} as LocalStorage) as Object as IndexPageLayoutPrivateTest;
+      const event = buildLayoutEvent(41);
+
+      // Act
+      page.onBack();
+      page.onOpenSettings();
+      page.onEnterCompanion();
+      page.onRefreshWeather();
+      page.onToggleHint();
+      page.onToggleScore();
+      page.onHintPopupVisibleChange(true);
+      page.onScorePopupVisibleChange(false);
+      page.onToggleBacklogExpand();
+      page.onMoveToSchedule(event as Object);
+      page.onMoveAllToSchedule();
+      page.onToggleDay(3);
+      page.onScheduleRefresh();
+      page.onOpenEditDialog(event);
+      page.onOpenTimeEditDialog(event);
+      page.onGapFound(event);
+      page.onResolveConflictAction(event, 'advance', 20);
+      page.onConfirmMoveToBacklog(event);
+      page.onConfirmDeleteEvent(event);
+      page.onOpenGapOptimize();
+      page.onFilter();
+      page.onAi();
+      page.onAdd();
+      page.onUndo();
+      page.onSave();
+      const showHint = shouldShowIndexPageWeatherHint(true, true, 'hint');
+
+      // Assert
+      expect(showHint).assertTrue();
+      expect(page.planTitle).assertEqual('');
+      expect(page.strategyMode).assertEqual(0);
+      expect(page.themePalette.primary).assertEqual('#2F7DFF');
+      expect(page.companionOverlayZIndex).assertEqual(10);
+    });
+
+    it('regression: page_weather_hint_should_keep_whitespace_hint_visible_when_manual_refresh_is_true', 0, () => {
+      // Arrange
+      const weatherFeatureEnabled = true;
+      const hasManualPlanningWeatherRefresh = true;
+      const weatherPlanningHint = '   ';
+
+      // Act
+      const show = shouldShowIndexPageWeatherHint(
+        weatherFeatureEnabled,
+        hasManualPlanningWeatherRefresh,
+        weatherPlanningHint
+      );
+
+      // Assert
+      expect(show).assertTrue();
+    });
+
+    it('combined: page_layout_should_keep_default_day_collapsed_callback_false_and_gaps_identity_consistent', 0, () => {
+      // Arrange
+      const page = new IndexPageLayout(undefined, {} as LocalStorage) as Object as IndexPageLayoutPrivateTest;
+
+      // Act
+      const collapsed = page.onIsDayCollapsed(99);
+      const zeroGaps = resolveIndexPageGapsCount(0);
+      const hintLines = buildIndexPageHintLines('only_hint');
+      const scoreLines = buildIndexPageScoreLines('');
+
+      // Assert
+      expect(collapsed).assertFalse();
+      expect(zeroGaps).assertEqual(0);
+      expect(hintLines.length).assertEqual(1);
+      expect(hintLines[0]).assertEqual('only_hint');
+      expect(scoreLines.length).assertEqual(1);
+      expect(scoreLines[0]).assertEqual('');
+    });
   });
 }
 

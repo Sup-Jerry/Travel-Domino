@@ -1,10 +1,34 @@
 import { describe, it, expect } from '@ohos/hypium';
 import {
+  IndexWeatherHintBar,
   resolveIndexWeatherHintLine,
   resolveIndexWeatherScoreLine,
   shouldShowIndexWeatherHintBar,
   shouldShowIndexWeatherRouteScore
 } from '../main/ets/pages/index/IndexWeatherHintBar';
+
+interface IndexWeatherHintBarParamsTest {
+  visible?: boolean;
+  suggestionText?: string;
+  routeScore?: number;
+  hintPopupVisible?: boolean;
+  scorePopupVisible?: boolean;
+  hintLines?: string[];
+  scoreLines?: string[];
+}
+
+interface IndexWeatherHintBarPrivateTest {
+  visible: boolean;
+  suggestionText: string;
+  routeScore: number;
+  hintPopupVisible: boolean;
+  scorePopupVisible: boolean;
+  hintLines: string[];
+  scoreLines: string[];
+  setInitiallyProvidedValue(params: IndexWeatherHintBarParamsTest): void;
+  updateStateVars(params: IndexWeatherHintBarParamsTest): void;
+  initialRender(): void;
+}
 
 export default function indexWeatherHintBarHelperTest() {
   describe('unit_test_case_generator_autofill_IndexWeatherHintBarHelper', () => {
@@ -85,6 +109,75 @@ export default function indexWeatherHintBarHelperTest() {
       expect(score).assertEqual('');
       expect(showBar).assertTrue();
       expect(showScore).assertTrue();
+    });
+
+    it('combined: weather_hint_bar_initial_render_should_cover_visible_score_and_popup_builders', 0, () => {
+      // Arrange
+      const page = new IndexWeatherHintBar(undefined, {} as LocalStorage) as Object as IndexWeatherHintBarPrivateTest;
+      let threw = false;
+
+      // Act
+      page.visible = true;
+      page.suggestionText = 'rain warning';
+      page.routeScore = 88;
+      page.hintPopupVisible = true;
+      page.scorePopupVisible = true;
+      page.hintLines = ['h0', 'h1', 'h2', 'h3'];
+      page.scoreLines = ['s0', 's1', 's2', 's3', 's4', 's5'];
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: weather_hint_bar_initial_render_should_cover_hidden_branch_without_score', 0, () => {
+      // Arrange
+      const page = new IndexWeatherHintBar(undefined, {} as LocalStorage) as Object as IndexWeatherHintBarPrivateTest;
+      let threw = false;
+
+      // Act
+      page.visible = false;
+      page.suggestionText = '';
+      page.routeScore = -1;
+      page.hintPopupVisible = false;
+      page.scorePopupVisible = false;
+      page.hintLines = [];
+      page.scoreLines = [];
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('combined: weather_hint_bar_update_state_vars_should_replace_visibility_and_lines', 0, () => {
+      // Arrange
+      const page = new IndexWeatherHintBar(undefined, {} as LocalStorage) as Object as IndexWeatherHintBarPrivateTest;
+      page.visible = false;
+      page.routeScore = -1;
+      page.hintLines = [];
+      page.scoreLines = [];
+
+      // Act
+      page.updateStateVars({
+        visible: true,
+        routeScore: 66,
+        hintLines: ['rain', 'wind'],
+        scoreLines: ['score']
+      });
+
+      // Assert
+      expect(page.visible).assertTrue();
+      expect(page.routeScore).assertEqual(66);
+      expect(page.hintLines.length).assertEqual(2);
+      expect(page.scoreLines[0]).assertEqual('score');
     });
   });
 }

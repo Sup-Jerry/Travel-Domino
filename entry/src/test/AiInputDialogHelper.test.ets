@@ -15,6 +15,11 @@ import {
   PreferenceType
 } from '../main/ets/domain/strategy/TravelStrategyDimensions';
 
+class DialogControllerMockAiInput {
+  close(): void {
+  }
+}
+
 interface AiInputDialogPaletteTest {
   textPrimary: Object;
   primary: Object;
@@ -31,6 +36,7 @@ interface AiInputDialogParamsTest {
 }
 
 interface AiInputDialogPrivateTest {
+  controller?: DialogControllerMockAiInput;
   hasAiHistory: boolean;
   currentStrategyMode: number;
   initialPrompt: string;
@@ -54,6 +60,8 @@ interface AiInputDialogPrivateTest {
   aboutToAppear(): void;
   loadRecommendation(): Promise<void>;
   getLoadingText(): string;
+  initialRender(): void;
+  setController(controller: DialogControllerMockAiInput): void;
 }
 
 function buildAiStrategy(
@@ -72,6 +80,20 @@ function buildAiStrategy(
 
 export default function aiInputDialogHelperTest() {
   describe('unit_test_case_generator_autofill_AiInputDialogHelper', () => {
+    it('combined: ai_input_dialog_set_controller_should_replace_controller_reference', 0, () => {
+      // Arrange
+      const page = new AiInputDialog(undefined, {} as LocalStorage) as Object as AiInputDialogPrivateTest;
+      const first = new DialogControllerMockAiInput();
+      const second = new DialogControllerMockAiInput();
+      page.controller = first;
+
+      // Act
+      page.setController(second);
+
+      // Assert
+      expect(page.controller === second).assertTrue();
+    });
+
     it('normal: ai_input_strategy_mode_should_keep_valid_builtin_mode', 0, () => {
       // Arrange
       const mode = 2;
@@ -187,6 +209,55 @@ export default function aiInputDialogHelperTest() {
       expect(palette.textPrimary).assertEqual(ThemeCenter.getPalette('dark').textPrimary);
       expect(palette.primary).assertEqual(ThemeCenter.getPalette('dark').primary);
       expect(palette.cardBgSoft).assertEqual(ThemeCenter.getPalette('dark').cardBgSoft);
+    });
+
+    it('normal: ai_input_dialog_initial_render_should_support_recommendation_and_custom_strategy_branch', 0, () => {
+      // Arrange
+      const page = new AiInputDialog(undefined, {} as LocalStorage) as Object as AiInputDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.inputText = '西安两日游';
+      page.selectedStrategy = -1;
+      page.useCustomStrategy = true;
+      page.strategyTouched = true;
+      page.customStrategy = buildAiStrategy(DensityLevel.HIGH, PaceLevel.COMPACT, PreferenceType.CULTURE, EnergyLevel.HIGH);
+      page.recommendHint = '推荐偏文化路线';
+      page.recommendedStrategy = buildAiStrategy(DensityLevel.MEDIUM, PaceLevel.BALANCED, PreferenceType.FOOD, EnergyLevel.MEDIUM);
+      page.isLoading = false;
+      page.effectiveTheme = 'dark';
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: ai_input_dialog_initial_render_should_support_loading_and_builtin_strategy_branch', 0, () => {
+      // Arrange
+      const page = new AiInputDialog(undefined, {} as LocalStorage) as Object as AiInputDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.inputText = '';
+      page.selectedStrategy = 1;
+      page.useCustomStrategy = false;
+      page.strategyTouched = false;
+      page.recommendHint = '';
+      page.recommendedStrategy = null;
+      page.isLoading = true;
+      page.effectiveTheme = 'light';
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
   });
 }

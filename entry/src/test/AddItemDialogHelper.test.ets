@@ -3,6 +3,7 @@ import { ThemeCenter } from '../main/ets/common/utils/ThemeCenter';
 import { AppConfig } from '../main/ets/common/utils/AppConfig';
 import {
   AddItemDialog,
+  MapPickerRouteParams,
   isAddItemMapPickerEnabled,
   isAddItemCoordinateValid,
   resolveAddItemScopedStorageKey,
@@ -73,6 +74,7 @@ interface AddItemDialogPrivateTest {
     preTravel?: number, isHardLock?: boolean, note?: string, isMustVisit?: boolean, lat?: number,
     lng?: number) => Promise<void>;
   onDateChangedRecommendTime: (dayOffset: number, currentTime: string) => string;
+  setController(controller: Object): void;
   setInitiallyProvidedValue(params: AddItemDialogParamsTest): void;
   updateStateVars(params: AddItemDialogParamsTest): void;
   getPalette(): AddItemDialogPaletteTest;
@@ -183,6 +185,25 @@ export default function addItemDialogHelperTest() {
       // Assert
       expect(enabled).assertTrue();
       expect(disabled).assertFalse();
+    });
+
+    it('normal: map_picker_route_params_constructor_should_assign_all_fields', 0, () => {
+      // Arrange
+      const lat = 34.3416;
+      const lng = 108.9398;
+      const planId = 18;
+      const centerSource = 'existing';
+      const queryName = 'Clock Tower';
+
+      // Act
+      const params = new MapPickerRouteParams(lat, lng, planId, centerSource, queryName);
+
+      // Assert
+      expect(params.lat).assertEqual(lat);
+      expect(params.lng).assertEqual(lng);
+      expect(params.planId).assertEqual(planId);
+      expect(params.centerSource).assertEqual(centerSource);
+      expect(params.queryName).assertEqual(queryName);
     });
   });
 
@@ -366,6 +387,50 @@ export default function addItemDialogHelperTest() {
       expect(currentSchedule).assertTrue();
       expect(currentGeocoding).assertTrue();
       expect(threw).assertFalse();
+    });
+
+    it('regression: td-20260426-add_item_dialog_set_controller_should_replace_reference', 0, () => {
+      // Arrange
+      const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateTest;
+      const first = new AddItemDialogControllerMockTest() as Object;
+      const second = new AddItemDialogControllerMockTest() as Object;
+      page.controller = first;
+
+      // Act
+      page.setController(second);
+
+      // Assert
+      expect(page.controller).assertEqual(second);
+    });
+
+    it('boundary: add_item_mode_should_treat_whitespace_name_as_new_schedule_item', 0, () => {
+      // Arrange
+      const initName = '   ';
+      const initIsSchedule = false;
+      // Act
+      const mode = resolveAddItemMode(initName, initIsSchedule);
+      // Assert
+      expect(mode).assertEqual(1);
+    });
+
+    it('normal: add_item_duration_should_prefer_positive_initial_duration_over_default', 0, () => {
+      // Arrange
+      const initDuration = 25;
+      const defaultDuration = 90;
+      // Act
+      const duration = resolveAddItemDuration(initDuration, defaultDuration);
+      // Assert
+      expect(duration).assertEqual(25);
+    });
+
+    it('invalid: add_item_coordinate_should_reject_latitude_and_longitude_out_of_world_range', 0, () => {
+      // Act
+      // Arrange
+      const invalidLat = isAddItemCoordinateValid(90.1, 120);
+      const invalidLng = isAddItemCoordinateValid(30, 180.1);
+      // Assert
+      expect(invalidLat).assertFalse();
+      expect(invalidLng).assertFalse();
     });
   });
 }

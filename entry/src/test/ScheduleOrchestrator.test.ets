@@ -55,45 +55,105 @@ export default function scheduleOrchestratorTest() {
     });
   });
   describe('unit_test_case_generator_autofill_ScheduleOrchestrator', () => {
-    it('boundary: td-20260411-auto-ScheduleOrchestrator', 0, () => {
+    it('boundary: calculate_should_keep_empty_result_for_empty_input', 0, () => {
       // Arrange
-      const actual = true;
+      const orchestrator = new ScheduleOrchestrator();
+      const events: TravelPlanItem[] = [];
+
       // Act
-      const passed = actual;
+      const byOrchestrator = orchestrator.calculate(events, '09:00', 1735660800000, {
+        autoRouteEnabled: false
+      });
+      const bySolver = TimeConstraintSolver.calculateTimeline(events, '09:00', 1735660800000, {
+        autoRouteEnabled: false
+      });
+
       // Assert
-      expect(passed).assertTrue();
+      expect(JSON.stringify(byOrchestrator)).assertEqual(JSON.stringify(bySolver));
+      expect(byOrchestrator.length).assertEqual(0);
     });
-    it('invalid: td-20260411-auto-ScheduleOrchestrator', 0, () => {
+
+    it('invalid: calculate_should_match_solver_even_with_invalid_global_start_time', 0, () => {
       // Arrange
-      const actual = true;
+      const orchestrator = new ScheduleOrchestrator();
+      const input = [
+        buildItem(11, 'InvalidStartA', 0, 100),
+        buildItem(12, 'InvalidStartB', 0, 200)
+      ];
+
       // Act
-      const passed = actual;
+      const byOrchestrator = orchestrator.calculate(input, 'bad_time', 1735660800000, {
+        autoRouteEnabled: false
+      });
+      const bySolver = TimeConstraintSolver.calculateTimeline(input, 'bad_time', 1735660800000, {
+        autoRouteEnabled: false
+      });
+
       // Assert
-      expect(passed).assertTrue();
+      expect(JSON.stringify(byOrchestrator)).assertEqual(JSON.stringify(bySolver));
     });
-    it('conflict: td-20260411-auto-ScheduleOrchestrator', 0, () => {
+
+    it('conflict: calculate_should_preserve_solver_behavior_for_cross_day_and_same_order_items', 0, () => {
       // Arrange
-      const actual = true;
+      const orchestrator = new ScheduleOrchestrator();
+      const input = [
+        buildItem(21, 'DayOne', 0, 100),
+        buildItem(22, 'DayTwo', 1, 100)
+      ];
+
       // Act
-      const passed = actual;
+      const byOrchestrator = orchestrator.calculate(input, '23:30', 1735660800000, {
+        autoRouteEnabled: false
+      });
+      const bySolver = TimeConstraintSolver.calculateTimeline(input, '23:30', 1735660800000, {
+        autoRouteEnabled: false
+      });
+
       // Assert
-      expect(passed).assertTrue();
+      expect(JSON.stringify(byOrchestrator)).assertEqual(JSON.stringify(bySolver));
+      expect(byOrchestrator.length).assertEqual(2);
     });
-    it('regression: td-20260411-auto-ScheduleOrchestrator', 0, () => {
+
+    it('regression: calculate_should_not_mutate_delegation_consistency_when_route_option_enabled', 0, () => {
       // Arrange
-      const actual = true;
+      const orchestrator = new ScheduleOrchestrator();
+      const input = [
+        buildItem(31, 'RouteOnA', 0, 100),
+        buildItem(32, 'RouteOnB', 0, 200)
+      ];
+
       // Act
-      const passed = actual;
+      const byOrchestrator = orchestrator.calculate(input, '08:30', 1735660800000, {
+        autoRouteEnabled: true
+      });
+      const bySolver = TimeConstraintSolver.calculateTimeline(input, '08:30', 1735660800000, {
+        autoRouteEnabled: true
+      });
+
       // Assert
-      expect(passed).assertTrue();
+      expect(JSON.stringify(byOrchestrator)).assertEqual(JSON.stringify(bySolver));
     });
-    it('combined: td-20260411-auto-ScheduleOrchestrator', 0, () => {
+
+    it('combined: calculate_should_coordinate_multi_day_items_and_route_toggle_without_behavior_drift', 0, () => {
       // Arrange
-      const actual = true;
+      const orchestrator = new ScheduleOrchestrator();
+      const input = [
+        buildItem(41, 'ComboA', 0, 100),
+        buildItem(42, 'ComboB', 0, 200),
+        buildItem(43, 'ComboC', 1, 100)
+      ];
+
       // Act
-      const passed = actual;
+      const byOrchestrator = orchestrator.calculate(input, '07:45', 1735660800000, {
+        autoRouteEnabled: true
+      });
+      const bySolver = TimeConstraintSolver.calculateTimeline(input, '07:45', 1735660800000, {
+        autoRouteEnabled: true
+      });
+
       // Assert
-      expect(passed).assertTrue();
+      expect(JSON.stringify(byOrchestrator)).assertEqual(JSON.stringify(bySolver));
+      expect(byOrchestrator.length).assertEqual(3);
     });
   });
 }

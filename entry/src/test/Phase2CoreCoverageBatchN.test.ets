@@ -290,6 +290,29 @@ export default function phase2CoreCoverageBatchNTest() {
       expect(message).assertEqual('auth_error');
     });
 
+    it('boundary: auth_facade_normalize_expire_at_should_expand_seconds_timestamp', 0, () => {
+      // Arrange
+      const bundle = createBundleForN();
+      const normalize = Reflect.get(bundle.facade as Object, 'normalizeExpireAt') as (rawExpireAt: number | string) => number;
+      // Act
+      const expireAt = normalize(1_717_171_717);
+      // Assert
+      expect(expireAt).assertEqual(1_717_171_717_000);
+    });
+
+    it('boundary: auth_facade_normalize_expire_at_should_fallback_to_future_when_value_invalid', 0, () => {
+      // Arrange
+      const bundle = createBundleForN();
+      const normalize = Reflect.get(bundle.facade as Object, 'normalizeExpireAt') as (rawExpireAt: number | string) => number;
+      const before = Date.now();
+      // Act
+      const expireAt = normalize('invalid_expire_at_n');
+      const after = Date.now();
+      // Assert
+      expect(expireAt >= before + 2 * 60 * 60 * 1000).assertTrue();
+      expect(expireAt <= after + 2 * 60 * 60 * 1000 + 1000).assertTrue();
+    });
+
     it('conflict: auth_facade_explicit_login_should_fail_with_social_login_failed_when_gateway_returns_nonzero', 0, async () => {
       // Arrange
       const bundle = createBundleForN();
@@ -326,11 +349,13 @@ export default function phase2CoreCoverageBatchNTest() {
       hooks.restore();
     });
 
-    it('combined: auth_facade_guest_fallback_should_cover_session_empty_offline_success_and_exception_force_local_success', 0, async () => {
+    it('combined: auth_facade_explicit_guest_login_should_skip_remote_guest_gateway', 0, async () => {
       // Arrange
       const bundle = createBundleForN();
       const hooks = new HooksForN();
+      let createGuestCalls = 0;
       hooks.setCreateGuest(async (_device: DeviceInfo): Promise<AuthApiResponse<AuthLoginResult>> => {
+        createGuestCalls += 1;
         const payload = createLoginPayloadForN(true);
         Reflect.set(payload as Object, 'session', null);
         return createLoginResponseForN(0, payload, 'ok');
@@ -345,15 +370,16 @@ export default function phase2CoreCoverageBatchNTest() {
       // Assert
       expect(fallbackOnSessionEmpty.success).assertTrue();
       expect(fallbackOnSessionEmpty.data !== null).assertTrue();
-      expect(fallbackOnSessionEmpty.data!.loginMethod).assertEqual('GUEST_OFFLINE');
+      expect(fallbackOnSessionEmpty.data!.loginMethod).assertEqual('GUEST_LOCAL_FIRST');
       expect(failureOnException.success).assertTrue();
       expect(failureOnException.data !== null).assertTrue();
       expect(failureOnException.data!.isGuest).assertTrue();
-      expect(failureOnException.data!.loginMethod).assertEqual('GUEST_HARD_FALLBACK');
+      expect(failureOnException.data!.loginMethod).assertEqual('GUEST_LOCAL_FIRST');
+      expect(createGuestCalls).assertEqual(0);
       hooks.restore();
     });
 
-    it('conflict: auth_facade_guest_fallback_should_force_local_success_when_session_empty_and_offline_fallback_disabled', 0, async () => {
+    it('conflict: auth_facade_explicit_guest_login_should_ignore_offline_fallback_override', 0, async () => {
       // Arrange
       const bundle = createBundleForN();
       const hooks = new HooksForN();
@@ -369,7 +395,7 @@ export default function phase2CoreCoverageBatchNTest() {
       expect(result.success).assertTrue();
       expect(result.data !== null).assertTrue();
       expect(result.data!.isGuest).assertTrue();
-      expect(result.data!.loginMethod).assertEqual('GUEST_HARD_FALLBACK');
+      expect(result.data!.loginMethod).assertEqual('GUEST_LOCAL_FIRST');
       expect(result.status).assertEqual(LoginStatus.AUTHENTICATED);
       hooks.restore();
     });

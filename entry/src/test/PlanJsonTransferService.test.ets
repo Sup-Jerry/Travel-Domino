@@ -349,5 +349,48 @@ export default function planJsonTransferServiceTest() {
       PlanImportExportService.setDepsForTest(null);
       done();
     });
+
+    it('boundary: import_should_fail_before_transaction_when_store_not_ready', 0, async (done: () => void) => {
+      // Arrange
+      PlanImportExportService.setDepsForTest({
+        getStore: (): null => null,
+        createPlan: async (_title: string, _startDate: number): Promise<number> => 0,
+        updateAutoAmapRoute: async (_id: number, _enabled: boolean): Promise<void> => {},
+        updatePlanStatus: async (_id: number, _status: number): Promise<void> => {},
+        insertEvent: async (_planId: number, _item: TravelPlanItem): Promise<number> => 0,
+        hardDeletePlan: async (_id: number): Promise<void> => {}
+      });
+      let thrown = '';
+
+      // Act
+      try {
+        await PlanImportExportService.importPlanFromJson(buildValidPayloadJson());
+      } catch (error) {
+        thrown = error instanceof Error ? error.message : '';
+      } finally {
+        PlanImportExportService.setDepsForTest(null);
+      }
+
+      // Assert
+      expect(thrown).assertEqual('db_not_ready');
+      done();
+    });
+
+    it('regression: cancel_token_should_throw_immediately_after_manual_cancel', 0, () => {
+      // Arrange
+      const token = new PlanJsonImportCancelToken();
+      let thrown = '';
+
+      // Act
+      token.cancel();
+      try {
+        token.throwIfCancelled('manual_stage');
+      } catch (error) {
+        thrown = error instanceof Error ? error.message : '';
+      }
+
+      // Assert
+      expect(thrown).assertEqual('import_cancelled:manual_stage');
+    });
   });
 }

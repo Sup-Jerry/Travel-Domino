@@ -88,5 +88,20 @@ export default function huaweiAccountProviderTest() {
       expect(secondNormalized.authorizationCode).assertEqual('code_2');
       expect(firstNormalized.authorizationCode === secondNormalized.authorizationCode).assertFalse();
     });
+
+    it('invalid: silent_login_should_surface_provider_execution_error', 0, async (done: () => void) => {
+      // Arrange
+      const provider = HuaweiAccountProvider.getInstance();
+      let message = '';
+      // Act
+      try {
+        await provider.silentLogin();
+      } catch (error) {
+        message = error instanceof Error ? error.message : 'auth_provider_error';
+      }
+      // Assert
+      expect(message.length > 0).assertTrue();
+      done();
+    });
   });
 }

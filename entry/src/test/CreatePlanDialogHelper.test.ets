@@ -1,11 +1,40 @@
 import { describe, it, expect } from '@ohos/hypium';
 import {
   canCreatePlanWithTitle,
+  CreatePlanDialog,
   formatCreatePlanDateText
 } from '../main/ets/pages/components/dialogs/CreatePlanDialog';
 
+class DialogControllerMockCreatePlan {
+  close(): void {
+  }
+}
+
+interface CreatePlanDialogPrivateTest {
+  controller?: DialogControllerMockCreatePlan;
+  title: string;
+  selectedDate: Date;
+  effectiveTheme: string;
+  initialRender(): void;
+  setController(controller: DialogControllerMockCreatePlan): void;
+}
+
 export default function createPlanDialogHelperTest() {
   describe('unit_test_case_generator_autofill_CreatePlanDialogHelper', () => {
+    it('combined: create_plan_dialog_set_controller_should_replace_controller_reference', 0, () => {
+      // Arrange
+      const page = new CreatePlanDialog(undefined, {} as LocalStorage) as Object as CreatePlanDialogPrivateTest;
+      const first = new DialogControllerMockCreatePlan();
+      const second = new DialogControllerMockCreatePlan();
+      page.controller = first;
+
+      // Act
+      page.setController(second);
+
+      // Assert
+      expect(page.controller === second).assertTrue();
+    });
+
     it('normal: create_plan_should_allow_non_empty_title', 0, () => {
       // Arrange
       const title = '东京攻略';
@@ -61,6 +90,80 @@ export default function createPlanDialogHelperTest() {
       // Assert
       expect(canCreate).assertTrue();
       expect(dateText.length > 0).assertTrue();
+    });
+
+    it('normal: create_plan_dialog_initial_render_should_support_title_and_date_branch', 0, () => {
+      // Arrange
+      const page = new CreatePlanDialog(undefined, {} as LocalStorage) as Object as CreatePlanDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.title = 'xian trip';
+      page.selectedDate = new Date(2026, 3, 12);
+      page.effectiveTheme = 'dark';
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: create_plan_should_allow_title_after_trimming_outer_spaces', 0, () => {
+      // Arrange
+      const title = '  上海周末  ';
+      // Act
+      const canCreate = canCreatePlanWithTitle(title);
+      // Assert
+      expect(canCreate).assertTrue();
+    });
+
+    it('boundary: create_plan_date_text_should_format_leap_day_without_zero_padding', 0, () => {
+      // Arrange
+      const date = new Date(2028, 1, 29);
+      // Act
+      const dateText = formatCreatePlanDateText(date);
+      // Assert
+      expect(dateText).assertEqual('2028/2/29');
+    });
+
+    it('normal: create_plan_dialog_set_controller_should_replace_controller_reference', 0, () => {
+      // Arrange
+      const page = new CreatePlanDialog(undefined, {} as LocalStorage) as Object as CreatePlanDialogPrivateTest;
+      const first = new DialogControllerMockCreatePlan();
+      const second = new DialogControllerMockCreatePlan();
+      page.controller = first;
+
+      // Act
+      page.setController(second);
+
+      // Assert
+      expect(page.controller === second).assertTrue();
+    });
+
+    it('combined: create_plan_dialog_initial_render_should_support_light_theme_with_empty_title_matrix', 0, () => {
+      // Arrange
+      const page = new CreatePlanDialog(undefined, {} as LocalStorage) as Object as CreatePlanDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.title = '';
+      page.selectedDate = new Date(2027, 8, 9);
+      page.effectiveTheme = 'light';
+      try {
+        page.initialRender();
+        page.title = 'beijing trip';
+        page.selectedDate = new Date(2027, 10, 11);
+        page.effectiveTheme = 'dark';
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
   });
 }

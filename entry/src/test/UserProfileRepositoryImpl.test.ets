@@ -19,45 +19,68 @@ export default function userProfileRepositoryImplTest() {
     });
   });
   describe('unit_test_case_generator_autofill_UserProfileRepositoryImpl', () => {
-    it('boundary: td-20260411-auto-UserProfileRepositoryImpl', 0, () => {
+    it('boundary: generated_username_should_keep_fixed_prefix_and_four_digit_suffix', 0, () => {
       // Arrange
-      const actual = true;
+      const username = UserProfileRepositoryImpl.buildDefaultUsername();
+
       // Act
-      const passed = actual;
+      const suffix = username.substring(3);
+
       // Assert
-      expect(passed).assertTrue();
+      expect(username.indexOf('旅行者')).assertEqual(0);
+      expect(suffix.length).assertEqual(4);
+      expect(/^\d{4}$/.test(suffix)).assertTrue();
     });
-    it('invalid: td-20260411-auto-UserProfileRepositoryImpl', 0, () => {
+
+    it('invalid: generated_username_should_never_contain_whitespace_or_placeholder_avatar_path', 0, () => {
       // Arrange
-      const actual = true;
+      const username = UserProfileRepositoryImpl.buildDefaultUsername();
+
       // Act
-      const passed = actual;
+      const hasWhitespace = /\s/.test(username);
+      const avatarPath = UserProfileRepositoryImpl.DEFAULT_AVATAR_PATH;
+
       // Assert
-      expect(passed).assertTrue();
+      expect(hasWhitespace).assertFalse();
+      expect(avatarPath).assertEqual('app.media.headphoto');
     });
-    it('conflict: td-20260411-auto-UserProfileRepositoryImpl', 0, () => {
+
+    it('conflict: singleton_repository_instance_should_remain_stable_across_repeated_access', 0, () => {
       // Arrange
-      const actual = true;
+      const first = UserProfileRepositoryImpl.getInstance();
+
       // Act
-      const passed = actual;
+      const second = UserProfileRepositoryImpl.getInstance();
+
       // Assert
-      expect(passed).assertTrue();
+      expect(first === second).assertTrue();
     });
-    it('regression: td-20260411-auto-UserProfileRepositoryImpl', 0, () => {
+
+    it('regression: generated_username_should_stay_within_expected_numeric_range', 0, () => {
       // Arrange
-      const actual = true;
+      const username = UserProfileRepositoryImpl.buildDefaultUsername();
+
       // Act
-      const passed = actual;
+      const suffix = Number(username.substring(3));
+
       // Assert
-      expect(passed).assertTrue();
+      expect(suffix >= 1000).assertTrue();
+      expect(suffix <= 9999).assertTrue();
     });
-    it('combined: td-20260411-auto-UserProfileRepositoryImpl', 0, () => {
+
+    it('combined: singleton_username_and_avatar_defaults_should_coordinate_for_profile_bootstrap_contract', 0, () => {
       // Arrange
-      const actual = true;
+      const repository = UserProfileRepositoryImpl.getInstance();
+      const username = UserProfileRepositoryImpl.buildDefaultUsername();
+      const avatarPath = UserProfileRepositoryImpl.DEFAULT_AVATAR_PATH;
+
       // Act
-      const passed = actual;
+      const looksLikeDefaultProfile = (repository !== null) &&
+        /^旅行者\d{4}$/.test(username) &&
+        avatarPath === 'app.media.headphoto';
+
       // Assert
-      expect(passed).assertTrue();
+      expect(looksLikeDefaultProfile).assertTrue();
     });
   });
 }

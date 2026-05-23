@@ -87,4 +87,40 @@ describe('unit_test_case_generator_autofill_api_response_interceptor', () => {
     expect(result.requestId).toBe('req-combined');
     expect(result.data.meta.total).toBe(2);
   });
+
+  it('boundary: interceptor_should_keep_non_blank_request_id_header_without_trimming', async () => {
+    // Arrange
+    const interceptor = new ApiResponseInterceptor();
+    const context = buildContext(' req-kept ');
+    const next: CallHandler = { handle: () => of({ ok: 1 }) };
+    // Act
+    const result = await firstValueFrom(interceptor.intercept(context, next)) as { requestId: string };
+    // Assert
+    expect(result.requestId).toBe(' req-kept ');
+  });
+
+  it('combined: interceptor_should_wrap_null_payload_and_generated_request_id_together', async () => {
+    // Arrange
+    const interceptor = new ApiResponseInterceptor();
+    const context = buildContext('');
+    const next: CallHandler = { handle: () => of(null) };
+    // Act
+    const result = await firstValueFrom(interceptor.intercept(context, next)) as { requestId: string; data: null; code: number; message: string };
+    // Assert
+    expect(result.code).toBe(0);
+    expect(result.message).toBe('ok');
+    expect(result.data).toBeNull();
+    expect(result.requestId.startsWith('req_')).toBe(true);
+  });
+
+  it('boundary: interceptor_should_keep_string_zero_request_id_header', async () => {
+    // Arrange
+    const interceptor = new ApiResponseInterceptor();
+    const context = buildContext('0');
+    const next: CallHandler = { handle: () => of({ ok: true }) };
+    // Act
+    const result = await firstValueFrom(interceptor.intercept(context, next)) as { requestId: string };
+    // Assert
+    expect(result.requestId).toBe('0');
+  });
 });

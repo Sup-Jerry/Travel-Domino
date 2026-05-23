@@ -1,4 +1,4 @@
-﻿import { BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
 import { AuthService } from '../src/modules/auth/auth.service';
 import { GuestCreateDto, SocialLoginDto, UpdateAvatarDto } from '../src/modules/auth/dto/auth.dto';
@@ -143,6 +143,42 @@ describe('auth_service_core_branch_cover', () => {
     // Assert
     await expect(providerPromise).rejects.toBeInstanceOf(BadRequestException);
     await expect(uidPromise).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('boundary: social_login_should_use_empty_credential_object_when_dto_credential_missing', async () => {
+    // Arrange
+    // Act
+    // Assert
+    const pg = new PgServiceMock();
+    const service = createService(pg);
+    const dto = {
+      providerType: 'HUAWEI',
+      deviceInfo: { deviceId: 'd-1', deviceName: 'mate', platform: 'HarmonyOS' }
+    } as SocialLoginDto;
+
+    await expect(service.socialLogin(dto, '')).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('boundary: social_login_should_support_id_token_as_provider_uid_source', async () => {
+    // Arrange
+    // Act
+    // Assert
+    const pg = new PgServiceMock();
+    const service = createService(pg);
+    const dto = createSocialDto('HUAWEI', '', '', '');
+    dto.credential = { idToken: 'id-token-only' };
+
+    pg.enqueue(0, []);
+    pg.enqueue(1, []);
+    pg.enqueue(1, []);
+    pg.enqueue(1, []);
+    pg.enqueue(1, []);
+    enqueueProfileSelect(pg, 'u_id_token_1');
+
+    const result = await service.socialLogin(dto, '127.0.0.1') as { user: { userId: string } };
+
+    expect(result.user.userId.length > 0).toBe(true);
+    expect(String(pg.executed[0].params[1])).toBe('id-token-only');
   });
 
   it('conflict: must_session_should_reject_inactive_or_expired_rows', async () => {
@@ -391,5 +427,250 @@ describe('auth_service_core_branch_cover', () => {
     await expect(emptyPromise).rejects.toBeInstanceOf(BadRequestException);
     await expect(nonImagePromise).rejects.toBeInstanceOf(BadRequestException);
     await expect(nonBase64Promise).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('regression: social_login_should_wrap_unknown_query_failure_with_internal_phase_code', async () => {
+    // Arrange
+    // Act
+    // Assert
+    const pg = new PgServiceMock();
+    const service = createService(pg);
+    const dto = createSocialDto('HUAWEI', '', 'open_x', '');
+
+    pg.enqueue(1, [{ identity_id: 'idn_1', user_id: 'u_exist_1' }]);
+    pg.query = jest.fn()
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{ identity_id: 'idn_1', user_id: 'u_exist_1' }] })
+      .mockRejectedValueOnce(new Error('db_down')) as never;
+
+    await expect(service.socialLogin(dto, '127.0.0.1')).rejects.toThrow('social_login_internal_update_identity');
+  });
+
+  it('regression: social_login_should_map_non_error_failures_to_unknown_reason', async () => {
+    // Arrange
+    // Act
+    // Assert
+    const pg = new PgServiceMock();
+    const service = createService(pg);
+    const dto = createSocialDto('HUAWEI', '', 'open_primitive', '');
+    pg.query = jest.fn()
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{ identity_id: 'idn_1', user_id: 'u_exist_1' }] })
+      .mockRejectedValueOnce('primitive_failure') as never;
+
+    await expect(service.socialLogin(dto, '127.0.0.1')).rejects.toThrow('social_login_internal_update_identity');
+  });
+
+  it('boundary: issue_session_should_use_default_pg_executor_when_query_executor_missing', async () => {
+    // Arrange
+    // Act
+    // Assert
+    const pg = new PgServiceMock();
+    const service = createService(pg);
+    const internals = service as unknown as {
+      issueSession(
+        userId: string,
+        deviceId: string,
+        deviceName: string,
+        platform: string,
+        loginMethod: string,
+        ip: string
+      ): Promise<{ accessToken: string; refreshToken: string; expireAt: string; sessionId: string }>;
+    };
+    pg.enqueue(1, []);
+
+    const result = await internals.issueSession('u_issue_1', 'device_1', 'mate', 'HarmonyOS', 'HUAWEI', '10.0.0.1');
+
+    expect(result.sessionId.startsWith('s_')).toBe(true);
+    expect(result.accessToken.length > 0).toBe(true);
+    expect(result.refreshToken.length > 0).toBe(true);
+    expect(pg.executed).toHaveLength(1);
+    expect(pg.executed[0].sql).toContain('insert into user_session');
+  });
+
+  it('boundary: load_profile_should_fallback_default_login_method_to_guest_when_row_empty', async () => {
+    // Arrange
+    // Act
+    // Assert
+    const pg = new PgServiceMock();
+    const service = createService(pg);
+    const internals = service as unknown as {
+      loadProfile(userId: string): Promise<{ defaultLoginMethod: string; accountId: string }>;
+    };
+    pg.enqueue(1, [{
+      account_id: '',
+      user_id: 'u_guest_default',
+      nickname: '',
+      avatar_url: '',
+      mobile_masked: '',
+      profile_completed: false,
+      is_guest: false,
+      default_login_method: '',
+      status: 'ACTIVE'
+    }]);
+
+    const profile = await internals.loadProfile('u_guest_default');
+
+    expect(profile.defaultLoginMethod).toBe('GUEST');
+    expect(profile.accountId).toBe('');
+  });
+
+  it('boundary: social_login_should_fallback_empty_identity_fields_when_existing_row_has_blanks', async () => {
+    // Arrange
+    // Act
+    // Assert
+    const pg = new PgServiceMock();
+    const service = createService(pg);
+    const dto = createSocialDto('HUAWEI', '', 'open_blank', '');
+
+    pg.enqueue(1, [{ identity_id: '', user_id: '' }]);
+    pg.enqueue(1, []);
+    pg.enqueue(1, []);
+    pg.enqueue(1, []);
+    pg.enqueue(1, [{
+      account_id: '',
+      user_id: '',
+      nickname: '',
+      avatar_url: '',
+      mobile_masked: '',
+      profile_completed: false,
+      is_guest: false,
+      default_login_method: '',
+      status: 'ACTIVE'
+    }]);
+
+    const result = await service.socialLogin(dto, '127.0.0.1') as { user: { defaultLoginMethod: string } };
+
+    expect(result.user.defaultLoginMethod).toBe('GUEST');
+    expect(String(pg.executed[1].params?.[0] || '')).toBe('');
+    expect(String(pg.executed[1].params?.[2] || '')).toBe('');
+    expect(String(pg.executed[2].params?.[0] || '')).toBe('');
+  });
+
+  it('boundary: social_login_should_fallback_open_id_to_empty_string_when_existing_identity_updates', async () => {
+    // Arrange
+    // Act
+    // Assert
+    const pg = new PgServiceMock();
+    const service = createService(pg);
+    const dto = createSocialDto('HUAWEI', 'code_only', '', 'union_keep');
+
+    pg.enqueue(1, [{ identity_id: 'idn_open_fallback', user_id: 'u_open_fallback' }]);
+    pg.enqueue(1, []);
+    pg.enqueue(1, []);
+    pg.enqueue(1, []);
+    enqueueProfileSelect(pg, 'u_open_fallback');
+
+    const result = await service.socialLogin(dto, '127.0.0.1') as { user: { userId: string } };
+
+    expect(result.user.userId).toBe('u_open_fallback');
+    expect(String(pg.executed[1].params?.[1] || '')).toBe('');
+    expect(String(pg.executed[1].params?.[2] || '')).toBe('union_keep');
+  });
+
+  it('invalid: update_username_should_reject_illegal_characters', async () => {
+    // Arrange
+    // Act
+    // Assert
+    const pg = new PgServiceMock();
+    const service = createService(pg);
+    const token = makeAccessToken('u_name_2', 's_name_2');
+
+    pg.enqueue(1, [{ status: 'ACTIVE', expire_at: new Date(Date.now() + 60_000).toISOString() }]);
+    enqueueProfileSelect(pg, 'u_name_2');
+
+    await expect(service.updateUsername(`Bearer ${token}`, { username: 'bad#name' })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('boundary: username_and_avatar_internal_normalizers_should_fallback_when_raw_value_or_mime_missing', () => {
+    // Arrange
+    // Act
+    // Assert
+    const service = createService(new PgServiceMock());
+    const internals = service as unknown as {
+      normalizeAndValidateUsername(rawValue: string | undefined): string;
+      normalizeAndValidateAvatarDataUrl(rawDataUrl: string, rawMimeType: string | undefined): string;
+      buildProviderUid(credential: {
+        unionId?: string;
+        openId?: string;
+        authCode?: string;
+        idToken?: string;
+      }): string;
+    };
+
+    expect(() => internals.normalizeAndValidateUsername(undefined)).toThrow(BadRequestException);
+    expect(internals.normalizeAndValidateAvatarDataUrl('data:image/png;base64,abcd', undefined)).toBe('data:image/png;base64,abcd');
+    expect(internals.buildProviderUid({})).toBe('');
+  });
+
+  it('combined: update_avatar_should_accept_webp_and_reject_oversized_payload', async () => {
+    // Arrange
+    // Act
+    // Assert
+    const validPg = new PgServiceMock();
+    const validService = createService(validPg);
+    const validToken = makeAccessToken('u_avatar_webp', 's_avatar_webp');
+    const validDto = new UpdateAvatarDto();
+    validDto.imageDataUrl = 'data:image/webp;base64,abcd';
+    validDto.mimeType = 'image/webp';
+    validPg.enqueue(1, [{ status: 'ACTIVE', expire_at: new Date(Date.now() + 60_000).toISOString() }]);
+    enqueueProfileSelect(validPg, 'u_avatar_webp');
+    validPg.enqueue(1, []);
+    enqueueProfileSelect(validPg, 'u_avatar_webp');
+
+    const invalidPg = new PgServiceMock();
+    const invalidService = createService(invalidPg);
+    const invalidToken = makeAccessToken('u_avatar_big', 's_avatar_big');
+    const invalidDto = new UpdateAvatarDto();
+    invalidDto.imageDataUrl = `data:image/png;base64,${'a'.repeat(3_500_001)}`;
+    invalidDto.mimeType = 'image/png';
+    invalidPg.enqueue(1, [{ status: 'ACTIVE', expire_at: new Date(Date.now() + 60_000).toISOString() }]);
+    enqueueProfileSelect(invalidPg, 'u_avatar_big');
+
+    const validResult = await validService.updateAvatar(`Bearer ${validToken}`, validDto) as { avatarUrl: string };
+    const invalidPromise = invalidService.updateAvatar(`Bearer ${invalidToken}`, invalidDto);
+
+    expect(validResult.avatarUrl).toContain('data:image/png;base64,abc');
+    await expect(invalidPromise).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('boundary: issue_session_and_load_profile_should_use_default_executor_fallbacks', async () => {
+    // Arrange
+    // Act
+    // Assert
+    const pg = new PgServiceMock();
+    const service = createService(pg);
+    const internals = service as unknown as {
+      issueSession(
+        userId: string,
+        deviceId: string,
+        deviceName: string,
+        platform: string,
+        loginMethod: string,
+        ip: string,
+        queryExecutor: undefined
+      ): Promise<{ sessionId: string }>;
+      loadProfile(
+        userId: string,
+        queryExecutor: undefined
+      ): Promise<{ userId: string; defaultLoginMethod: string }>;
+    };
+    pg.enqueue(1, []);
+    enqueueProfileSelect(pg, 'u_default_executor');
+
+    const session = await internals.issueSession(
+      'u_default_executor',
+      'device_default',
+      'mate',
+      'HarmonyOS',
+      'HUAWEI',
+      '10.0.0.2',
+      undefined
+    );
+    const profile = await internals.loadProfile('u_default_executor', undefined);
+
+    expect(session.sessionId.startsWith('s_')).toBe(true);
+    expect(profile.userId).toBe('u_default_executor');
+    expect(profile.defaultLoginMethod).toBe('HUAWEI');
+    expect(pg.executed[0].sql).toContain('insert into user_session');
+    expect(pg.executed[1].sql).toContain('from user_account ua');
   });
 });

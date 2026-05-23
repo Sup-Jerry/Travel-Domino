@@ -1,4 +1,4 @@
-import { describe, expect, it } from '@ohos/hypium';
+﻿import { describe, expect, it } from '@ohos/hypium';
 import { AuthFacade } from '../main/ets/infrastructure/auth/AuthFacade';
 import { SessionManager } from '../main/ets/infrastructure/auth/SessionManager';
 import { AuthErrorCode } from '../main/ets/infrastructure/auth/AuthErrorCode';
@@ -187,25 +187,35 @@ export default function phase2BatchAKTest() {
       const bundle = createFacadeAK();
       const hooks = new AuthGatewayHooksAK();
       bundle.session.session = createSessionAK(false);
-      hooks.setMe(async (_token: string): Promise<AuthApiResponse<AuthMeResult>> => meResp(0, '  昵称AK  '));
+      hooks.setMe(async (_token: string): Promise<AuthApiResponse<AuthMeResult>> => meResp(0, '  鏄电ОAK  '));
       // Act
       let nickname = '';
       try {
-        nickname = await bundle.facade.getCurrentNickname('默认名');
+        nickname = await bundle.facade.getCurrentNickname('default_name_ak');
       } finally {
         hooks.restore();
       }
       // Assert
-      expect(nickname).assertEqual('昵称AK');
+      expect(nickname).assertEqual('鏄电ОAK');
     });
 
     it('boundary: auth_facade_get_current_nickname_should_return_default_when_no_session', 0, async () => {
       // Arrange
       const bundle = createFacadeAK();
       // Act
-      const nickname = await bundle.facade.getCurrentNickname('默认名');
+      const nickname = await bundle.facade.getCurrentNickname('default_name_ak');
       // Assert
-      expect(nickname).assertEqual('默认名');
+      expect(nickname).assertEqual('default_name_ak');
+    });
+
+    it('boundary: auth_facade_get_current_nickname_should_return_default_when_session_is_guest', 0, async () => {
+      // Arrange
+      const bundle = createFacadeAK();
+      bundle.session.session = createSessionAK(true);
+      // Act
+      const nickname = await bundle.facade.getCurrentNickname('default_guest_ak');
+      // Assert
+      expect(nickname).assertEqual('default_guest_ak');
     });
 
     it('invalid: auth_facade_get_current_nickname_should_return_default_when_gateway_failed', 0, async () => {
@@ -217,12 +227,12 @@ export default function phase2BatchAKTest() {
       // Act
       let nickname = '';
       try {
-        nickname = await bundle.facade.getCurrentNickname('默认名');
+        nickname = await bundle.facade.getCurrentNickname('default_name_ak');
       } finally {
         hooks.restore();
       }
       // Assert
-      expect(nickname).assertEqual('默认名');
+      expect(nickname).assertEqual('default_name_ak');
     });
 
     it('normal: auth_facade_explicit_login_should_success_with_given_credential', 0, async () => {
@@ -501,6 +511,28 @@ export default function phase2BatchAKTest() {
       // Assert
       expect(userState).assertEqual('UNAUTHENTICATED');
       expect(sessionState).assertEqual('EXPIRED');
+    });
+
+    it('conflict: auth_state_machine_should_prioritize_pending_before_guest_and_authenticated', 0, () => {
+      // Arrange
+      const expireAt = Date.now() + 60_000;
+      // Act
+      const userState = AuthStateMachine.resolveUserRuntimeState(true, true, false, true);
+      const sessionState = AuthStateMachine.resolveSessionRuntimeState(expireAt, false);
+      // Assert
+      expect(userState).assertEqual('AUTH_PENDING');
+      expect(sessionState).assertEqual('ACTIVE');
+    });
+
+    it('regression: auth_state_machine_should_output_guest_when_authenticated_guest_not_blocked_or_pending', 0, () => {
+      // Arrange
+      const expireAt = Date.now() + 60_000;
+      // Act
+      const userState = AuthStateMachine.resolveUserRuntimeState(true, true, false, false);
+      const sessionState = AuthStateMachine.resolveSessionRuntimeState(expireAt, false);
+      // Assert
+      expect(userState).assertEqual('GUEST');
+      expect(sessionState).assertEqual('ACTIVE');
     });
 
     it('normal: auth_error_code_should_keep_core_values', 0, () => {

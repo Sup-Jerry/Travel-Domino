@@ -47,6 +47,43 @@ function Fail {
   exit 1
 }
 
+function Invoke-WithRetry {
+  param(
+    [Parameter(Mandatory = $true)]
+    [scriptblock]$Action,
+
+    [Parameter(Mandatory = $true)]
+    [string]$Description,
+
+    [int]$MaxAttempts = 3,
+    [int]$InitialDelaySeconds = 2
+  )
+
+  $lastError = $null
+  $lastOutput = $null
+  for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+    try {
+      $lastOutput = & $Action
+      if ($LASTEXITCODE -eq 0) {
+        return $lastOutput
+      }
+      $lastError = "退出码: $LASTEXITCODE"
+    } catch {
+      $lastError = $_.Exception.Message
+    }
+
+    if ($attempt -ge $MaxAttempts) {
+      break
+    }
+
+    $delaySeconds = $InitialDelaySeconds * $attempt
+    Write-Warn ("{0} 失败，第 {1}/{2} 次，{3} 秒后重试。原因: {4}" -f $Description, $attempt, $MaxAttempts, $delaySeconds, $lastError)
+    Start-Sleep -Seconds $delaySeconds
+  }
+
+  throw ("{0} 失败，已重试 {1} 次。最后错误: {2}`n{3}" -f $Description, $MaxAttempts, $lastError, $lastOutput)
+}
+
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $gitFlowScript = Join-Path $scriptDir 'git-flow.ps1'
 if (-not (Test-Path $gitFlowScript)) {
@@ -109,12 +146,15 @@ if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction Sile
   $PSNativeCommandUseErrorActionPreference = $false
 }
 try {
-  $createOutput = gh pr create --base $BaseBranch --head $branch --title $Title --body $Body --draft 2>&1
-  if ($LASTEXITCODE -ne 0) {
-    Write-Warn "自动创建 Draft PR 失败: $createOutput"
+  try {
+    $createOutput = Invoke-WithRetry -Description '创建 Draft PR' -Action {
+      gh pr create --base $BaseBranch --head $branch --title $Title --body $Body --draft 2>&1
+    }
+    Write-Ok "Draft PR 已创建: $createOutput"
+  } catch {
+    Write-Warn "自动创建 Draft PR 失败: $($_.Exception.Message)"
     exit 0
   }
-  Write-Ok "Draft PR 已创建: $createOutput"
 } finally {
   if ($hasNativePref) {
     $PSNativeCommandUseErrorActionPreference = $prevNativePref

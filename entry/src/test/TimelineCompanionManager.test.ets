@@ -157,5 +157,64 @@ export default function timelineCompanionManagerTest() {
       expect(context.nextEvent?.id || 0).assertEqual(7);
       expect(context.actions.canStart).assertTrue();
     });
+
+    it('boundary: get_companion_context_should_generate_overdue_ready_hint_when_start_time_passed', 0, () => {
+      // Arrange
+      const pending = createScheduledEvent(8, 'pending');
+      const nowTs = Date.now();
+      pending.dynamic_start_time = nowTs - 12 * 60 * 1000;
+      const host = new CompanionHost();
+      host.setSchedule([pending]);
+      const manager = new TimelineCompanionManager(host);
+
+      // Act
+      const context = manager.getCompanionContext(nowTs);
+
+      // Assert
+      expect(context.runtimeState).assertEqual('READY');
+      expect(context.hint !== null).assertTrue();
+      expect((context.hint?.message || '').includes('已超过计划开始')).assertTrue();
+    });
+
+    it('invalid: get_companion_context_should_return_idle_when_schedule_has_no_active_or_pending', 0, () => {
+      // Arrange
+      const completed = createScheduledEvent(9, 'completed');
+      completed.completion_status = EventEntity.STATE_COMPLETED;
+      const skipped = createScheduledEvent(10, 'skipped');
+      skipped.completion_status = EventEntity.STATE_SKIPPED;
+      const host = new CompanionHost();
+      host.setSchedule([completed, skipped]);
+      const manager = new TimelineCompanionManager(host);
+
+      // Act
+      const context = manager.getCompanionContext();
+
+      // Assert
+      expect(context.runtimeState).assertEqual('IDLE');
+      expect(context.currentEvent === null).assertTrue();
+      expect(context.nextEvent === null).assertTrue();
+      expect(context.actions.canStart).assertFalse();
+    });
+
+    it('combined: get_real_active_event_should_prefer_explicit_active_and_return_null_when_pending_expired', 0, () => {
+      // Arrange
+      const pending = createScheduledEvent(11, 'pending');
+      pending.dynamic_end_time = Date.now() + 60 * 1000;
+      const active = createScheduledEvent(12, 'active');
+      active.actual_start_time = Date.now() - 60 * 1000;
+      const expiredPending = createScheduledEvent(13, 'expired');
+      expiredPending.dynamic_end_time = Date.now() - 60 * 1000;
+      const host = new CompanionHost();
+      host.setSchedule([pending, active]);
+      const manager = new TimelineCompanionManager(host);
+
+      // Act
+      const activePicked = manager.getRealActiveEvent();
+      const nullPicked = manager.getRealActiveEvent([expiredPending]);
+
+      // Assert
+      expect(activePicked?.id || 0).assertEqual(12);
+      expect(nullPicked === null).assertTrue();
+    });
   });
 }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from '@ohos/hypium';
+﻿import { describe, expect, it } from '@ohos/hypium';
 import { common } from '@kit.AbilityKit';
 import photoAccessHelper from '@ohos.file.photoAccessHelper';
 import { PreferenceManager } from '../main/ets/common/utils/PreferenceManager';
@@ -33,6 +33,10 @@ interface AppStartupCoordinatorPrivateBR {
 interface AmapWeatherServicePrivateBR {
   getWeatherBySdk: (cityName: string, context: Object) => Promise<WeatherInfo | null>;
   mapResponseToInfo: (response: Object) => WeatherInfo | null;
+  mapLiveNodeToInfo: (node?: Object) => WeatherInfo | null;
+  mapForecastNodeToInfo: (node?: Object) => WeatherInfo | null;
+  readAsText: (value?: string) => string;
+  readAsNumber: (value?: string) => number;
 }
 
 interface UserProfileRepositoryPrivateBR {
@@ -945,6 +949,51 @@ export default function phase2BatchBRTest() {
       }
       // Assert
       expect(info === null).assertTrue();
+    });
+
+    it('boundary: amap_weather_private_mappers_should_return_null_or_fallback_for_sparse_payloads', 0, () => {
+      // Arrange
+      const service = new AmapWeatherService();
+      const privateApi = service as Object as AmapWeatherServicePrivateBR;
+      const emptyResponse = new AmapForecastResponseBR();
+      const nightOnlyCast = new AmapForecastCastBR();
+      nightOnlyCast.dayweather = 'CLOUDY';
+      nightOnlyCast.daytemp = '  ';
+      nightOnlyCast.nighttemp = '18';
+      const forecastItem = new AmapForecastItemBR();
+      forecastItem.adcode = '330100';
+      forecastItem.casts = [nightOnlyCast];
+      const blankLive = new AmapLiveItemBR();
+      blankLive.weather = ' ';
+
+      // Act
+      const emptyInfo = privateApi.mapResponseToInfo(emptyResponse as Object);
+      const blankLiveInfo = privateApi.mapLiveNodeToInfo(blankLive as Object);
+      const nightOnlyInfo = privateApi.mapForecastNodeToInfo(forecastItem as Object);
+
+      // Assert
+      expect(emptyInfo === null).assertTrue();
+      expect(blankLiveInfo === null).assertTrue();
+      expect(nightOnlyInfo?.temperature || 0).assertEqual(18);
+      expect(nightOnlyInfo?.cityCode || '').assertEqual('330100');
+    });
+
+    it('combined: amap_weather_private_readers_should_trim_text_and_reject_invalid_number', 0, () => {
+      // Arrange
+      const service = new AmapWeatherService();
+      const privateApi = service as Object as AmapWeatherServicePrivateBR;
+
+      // Act
+      const text = privateApi.readAsText('  Hangzhou  ');
+      const emptyText = privateApi.readAsText(undefined);
+      const numberValue = privateApi.readAsNumber(' 12.5 ');
+      const invalidNumber = privateApi.readAsNumber('bad-number');
+
+      // Assert
+      expect(text).assertEqual('Hangzhou');
+      expect(emptyText).assertEqual('');
+      expect(numberValue).assertEqual(12.5);
+      expect(Number.isNaN(invalidNumber)).assertTrue();
     });
 
     it('boundary: amap_weather_get_weather_by_geo_point_should_return_null_when_city_code_missing', 0, async () => {

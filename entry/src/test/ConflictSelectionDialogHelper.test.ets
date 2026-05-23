@@ -1,11 +1,55 @@
 ﻿import { describe, it, expect } from '@ohos/hypium';
 import {
+  ConflictSelectionDialog,
   getConflictSelectionGapPrompt,
   shouldUseConflictAdvanceAdjust
 } from '../main/ets/pages/components/dialogs/ConflictSelectionDialog';
 
+class DialogControllerMockConflictSelection {
+  closeCount: number = 0;
+
+  close(): void {
+    this.closeCount += 1;
+  }
+}
+
+interface ConflictSelectionDialogPrivateTest {
+  controller?: DialogControllerMockConflictSelection;
+  gapMinutes: number;
+  initialRender(): void;
+  build(): void;
+  setController(controller: DialogControllerMockConflictSelection): void;
+  OptionCard: (
+    icon: string,
+    title: string,
+    desc: string,
+    bg: string,
+    color: string,
+    action: () => void
+  ) => void;
+  onDelayY: () => void;
+  onCompressX: () => void;
+  onShiftSameDay: () => void;
+  onAdvanceAdjust: () => void;
+  onCancel: () => void;
+}
+
 export default function conflictSelectionDialogHelperTest() {
   describe('unit_test_case_generator_autofill_ConflictSelectionDialogHelper', () => {
+    it('combined: conflict_selection_dialog_set_controller_should_replace_controller_reference', 0, () => {
+      // Arrange
+      const page = new ConflictSelectionDialog(undefined, {} as LocalStorage) as Object as ConflictSelectionDialogPrivateTest;
+      const first = new DialogControllerMockConflictSelection();
+      const second = new DialogControllerMockConflictSelection();
+      page.controller = first;
+
+      // Act
+      page.setController(second);
+
+      // Assert
+      expect(page.controller === second).assertTrue();
+    });
+
     it('normal: conflict_selection_gap_prompt_should_include_minutes', 0, () => {
       // Arrange
       const gapMinutes = 25;
@@ -66,5 +110,191 @@ export default function conflictSelectionDialogHelperTest() {
       expect(prompt.indexOf('12') >= 0).assertTrue();
       expect(useAdvance).assertTrue();
     });
+    it('normal: conflict_selection_dialog_initial_render_should_support_three_resolution_options', 0, () => {
+      // Arrange
+      const page = new ConflictSelectionDialog(undefined, {} as LocalStorage) as Object as ConflictSelectionDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.gapMinutes = 25;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: conflict_selection_gap_prompt_should_preserve_negative_gap_value', 0, () => {
+      // Arrange
+      const gapMinutes = -5;
+      // Act
+      const prompt = getConflictSelectionGapPrompt(gapMinutes);
+      // Assert
+      expect(prompt.indexOf('-5') >= 0).assertTrue();
+    });
+
+    it('combined: conflict_selection_advance_flag_should_be_direct_boolean_passthrough', 0, () => {
+      // Arrange
+      const enabled = true;
+      const disabled = false;
+      // Act
+      const useEnabled = shouldUseConflictAdvanceAdjust(enabled);
+      const useDisabled = shouldUseConflictAdvanceAdjust(disabled);
+      // Assert
+      expect(useEnabled).assertTrue();
+      expect(useDisabled).assertFalse();
+    });
+
+    it('combined: conflict_selection_dialog_initial_render_should_support_zero_and_negative_gap_matrix', 0, () => {
+      // Arrange
+      const page = new ConflictSelectionDialog(undefined, {} as LocalStorage) as Object as ConflictSelectionDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      try {
+        page.gapMinutes = 0;
+        page.initialRender();
+        page.gapMinutes = -15;
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('combined: conflict_selection_dialog_initial_render_should_support_large_gap_and_controller_replacement_matrix', 0, () => {
+      // Arrange
+      const page = new ConflictSelectionDialog(undefined, {} as LocalStorage) as Object as ConflictSelectionDialogPrivateTest;
+      const controller = new DialogControllerMockConflictSelection();
+      let threw = false;
+
+      // Act
+      page.setController(controller);
+      page.gapMinutes = 180;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+      const prompt = getConflictSelectionGapPrompt(page.gapMinutes);
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.controller === controller).assertTrue();
+      expect(prompt.indexOf('180') >= 0).assertTrue();
+      expect(shouldUseConflictAdvanceAdjust(true)).assertTrue();
+    });
+
+    it('regression: conflict_selection_dialog_should_close_and_dispatch_delay_and_compress_actions', 0, () => {
+      // Arrange
+      const page = new ConflictSelectionDialog(undefined, {} as LocalStorage) as Object as ConflictSelectionDialogPrivateTest;
+      const controller = new DialogControllerMockConflictSelection();
+      let delayCalls = 0;
+      let compressCalls = 0;
+      page.setController(controller);
+      page.onDelayY = () => {
+        delayCalls += 1;
+      };
+      page.onCompressX = () => {
+        compressCalls += 1;
+      };
+      page.OptionCard = (
+        _icon: string,
+        title: string,
+        _desc: string,
+        _bg: string,
+        _color: string,
+        action: () => void
+      ): void => {
+        if (title === '向后顺延' || title === '压缩前序') {
+          action();
+        }
+      };
+
+      // Act
+      page.initialRender();
+
+      // Assert
+      expect(controller.closeCount).assertEqual(2);
+      expect(delayCalls).assertEqual(1);
+      expect(compressCalls).assertEqual(1);
+    });
+
+    it('combined: conflict_selection_dialog_should_fallback_to_shift_same_day_when_advance_callback_is_missing', 0, () => {
+      // Arrange
+      const page = new ConflictSelectionDialog(undefined, {} as LocalStorage) as Object as ConflictSelectionDialogPrivateTest;
+      const controller = new DialogControllerMockConflictSelection();
+      let advanceCalls = 0;
+      let shiftCalls = 0;
+      page.setController(controller);
+      page.onAdvanceAdjust = () => {
+        advanceCalls += 1;
+      };
+      page.onShiftSameDay = () => {
+        shiftCalls += 1;
+      };
+      Reflect.set(page as Object, 'onAdvanceAdjust', undefined);
+      page.OptionCard = (
+        _icon: string,
+        title: string,
+        _desc: string,
+        _bg: string,
+        _color: string,
+        action: () => void
+      ): void => {
+        if (title === '前移调整') {
+          action();
+        }
+      };
+
+      // Act
+      page.initialRender();
+
+      // Assert
+      expect(controller.closeCount).assertEqual(1);
+      expect(advanceCalls).assertEqual(0);
+      expect(shiftCalls).assertEqual(1);
+    });
+
+    it('combined: conflict_selection_dialog_should_close_and_dispatch_advance_action_when_callback_exists', 0, () => {
+      // Arrange
+      const page = new ConflictSelectionDialog(undefined, {} as LocalStorage) as Object as ConflictSelectionDialogPrivateTest;
+      const controller = new DialogControllerMockConflictSelection();
+      let advanceCalls = 0;
+      let shiftCalls = 0;
+      page.setController(controller);
+      page.onAdvanceAdjust = () => {
+        advanceCalls += 1;
+      };
+      page.onShiftSameDay = () => {
+        shiftCalls += 1;
+      };
+      page.OptionCard = (
+        _icon: string,
+        title: string,
+        _desc: string,
+        _bg: string,
+        _color: string,
+        action: () => void
+      ): void => {
+        if (title === '前移调整') {
+          action();
+        }
+      };
+
+      // Act
+      page.initialRender();
+
+      // Assert
+      expect(controller.closeCount).assertEqual(1);
+      expect(advanceCalls).assertEqual(1);
+      expect(shiftCalls).assertEqual(0);
+    });
+
   });
 }

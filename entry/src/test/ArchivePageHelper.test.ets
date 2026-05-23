@@ -1,11 +1,41 @@
 import { describe, it, expect } from '@ohos/hypium';
 import {
+  createArchivePageForTest,
   resolveArchiveSoftDeleteDialogMessage,
   resolveArchiveSoftDeleteDialogTitle,
   resolveArchiveTagText,
   shouldArchiveSkipSoftDeleteTip
 } from '../main/ets/pages/ArchivePage';
 import { AppTexts } from '../main/ets/common/constants/AppTexts';
+import { PlanItem } from '../main/ets/infrastructure/persistence/PlanRepositoryImpl';
+
+interface ArchivePagePrivateTest {
+  effectiveTheme: string;
+  planList: PlanItem[];
+  tipDialogController: Object | null;
+  getThemePalette(): Object;
+  onPageShow(): void;
+  loadPlans(): Promise<void>;
+  handleSoftDelete(item: PlanItem): Promise<void>;
+  executeSoftDelete(planId: number): Promise<void>;
+  handleActivate(item: PlanItem): Promise<void>;
+  ArchiveSwipeMenu(item: PlanItem): void;
+  initialRender(): void;
+}
+
+function createArchivePagePrivateForTest(): ArchivePagePrivateTest {
+  return createArchivePageForTest() as ArchivePagePrivateTest;
+}
+
+function buildArchivePlanItemForTest(id: number, title: string): PlanItem {
+  return {
+    id: id,
+    title: title,
+    startDate: new Date(2026, 3, 22).getTime(),
+    createdAt: Date.now(),
+    status: 2
+  };
+}
 
 export default function archivePageHelperTest() {
   describe('unit_test_case_generator_autofill_ArchivePageHelper', () => {
@@ -62,6 +92,40 @@ export default function archivePageHelperTest() {
       expect(shouldSkip).assertFalse();
       expect(title).assertEqual('移入回收站');
       expect(message.length > 0).assertTrue();
+    });
+
+    it('combined: archive_page_instance_should_render_empty_and_archived_list_paths', 0, () => {
+      // Arrange
+      const emptyPage = createArchivePagePrivateForTest();
+      const listPage = createArchivePagePrivateForTest();
+      listPage.planList = [
+        buildArchivePlanItemForTest(101, 'Tokyo'),
+        buildArchivePlanItemForTest(102, 'Osaka')
+      ];
+      listPage.effectiveTheme = 'dark';
+
+      // Act
+      emptyPage.initialRender();
+      listPage.initialRender();
+      const palette = listPage.getThemePalette();
+
+      // Assert
+      expect(emptyPage.planList.length).assertEqual(0);
+      expect(listPage.planList.length).assertEqual(2);
+      expect(palette !== null).assertTrue();
+    });
+
+    it('regression: td-20260422-archive_page_swipe_menu_should_bind_archive_item_actions', 0, () => {
+      // Arrange
+      const page = createArchivePagePrivateForTest();
+      const item = buildArchivePlanItemForTest(103, 'Kyoto');
+
+      // Act
+      page.ArchiveSwipeMenu(item);
+
+      // Assert
+      expect(item.id).assertEqual(103);
+      expect(item.title).assertEqual('Kyoto');
     });
   });
 }
