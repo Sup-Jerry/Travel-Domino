@@ -15,6 +15,7 @@ interface IndexCompanionOverlayParamsTest {
 interface IndexCompanionOverlayPrivateTest {
   isVisible: boolean;
   overlayZIndex: number;
+  initialRender(): void;
   updateStateVars(params: IndexCompanionOverlayParamsTest): void;
 }
 
@@ -136,6 +137,27 @@ export default function indexCompanionOverlayHelperTest() {
       // Assert
       expect(page.isVisible).assertTrue();
       expect(page.overlayZIndex).assertEqual(24);
+    });
+
+    it('boundary: companion_overlay_initial_render_should_allow_hidden_overlay', 0, () => {
+      // Arrange
+      const page = new IndexCompanionOverlay(undefined, {} as LocalStorage) as Object as IndexCompanionOverlayPrivateTest;
+      page.updateStateVars({
+        isVisible: false,
+        overlayZIndex: 10
+      });
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.isVisible).assertFalse();
     });
   });
 }
