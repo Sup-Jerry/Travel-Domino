@@ -241,6 +241,25 @@ export default function companionSearchPageHelperTest() {
       expect(page.searchResults.length).assertEqual(0);
     });
 
+    it('boundary: search_page_render_should_keep_visible_empty_branch_when_fields_are_assigned_directly', 0, () => {
+      // Arrange
+      const page = new CompanionSearchPage(undefined, {} as LocalStorage) as Object as CompanionSearchPagePrivateTest;
+
+      // Act
+      page.showSearchPage = true;
+      page.searchKeyword = 'none';
+      page.searchResults = [];
+      page.safeTopInset = 3;
+      page.safeBottomInset = 5;
+      const shouldShowEmpty = shouldShowCompanionSearchEmptyState(page.searchResults.length);
+      const threw = runSearchPageRender(page);
+
+      // Assert
+      expect(shouldShowEmpty).assertTrue();
+      expect(threw).assertFalse();
+      expect(page.showSearchPage).assertTrue();
+    });
+
     it('conflict: search_page_render_should_keep_hidden_branch_independent_from_non_empty_results', 0, () => {
       // Arrange
       const page = new CompanionSearchPage(undefined, {} as LocalStorage) as Object as CompanionSearchPagePrivateTest;
