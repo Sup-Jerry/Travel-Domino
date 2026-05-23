@@ -592,6 +592,34 @@ export default function phase2BatchAJTest() {
       expect(nextId).assertEqual(55);
     });
 
+    it('boundary: find_next_pending_event_should_return_minus_one_when_after_missing_and_no_startable', 0, () => {
+      // Arrange
+      // Act
+      // Assert
+      const vm = new VmLikeForInteractionAJ();
+      const doneA = createEventAJ(57);
+      doneA.completion_status = EventEntity.STATE_COMPLETED;
+      const doneB = createEventAJ(58);
+      doneB.completion_status = EventEntity.STATE_COMPLETED;
+      Reflect.set(vm, 'executionCoordinator', new OrderedEventsCoordinatorAJ([doneA, doneB]));
+      const nextId = TimelineInteractionHelper.findNextPendingEventId(vm as Object as TimelineViewModel, 999);
+      expect(nextId).assertEqual(-1);
+    });
+
+    it('normal: find_next_pending_event_should_skip_non_startable_items_before_next_pending', 0, () => {
+      // Arrange
+      // Act
+      // Assert
+      const vm = new VmLikeForInteractionAJ();
+      const current = createEventAJ(59);
+      const completed = createEventAJ(60);
+      completed.completion_status = EventEntity.STATE_COMPLETED;
+      const pending = createEventAJ(61);
+      Reflect.set(vm, 'executionCoordinator', new OrderedEventsCoordinatorAJ([current, completed, pending]));
+      const nextId = TimelineInteractionHelper.findNextPendingEventId(vm as Object as TimelineViewModel, 59);
+      expect(nextId).assertEqual(61);
+    });
+
     it('invalid: find_next_pending_event_should_return_minus_one_when_no_startable', 0, () => {
       // Arrange
       // Act
