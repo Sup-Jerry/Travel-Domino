@@ -158,6 +158,19 @@ export default function phase1ZeroHitBatchATest() {
       expect(check.conflictMsg).assertEqual('');
     });
 
+    it('boundary: conflict_detector_should_treat_non_positive_parsed_minutes_as_zero', 0, () => {
+      // Arrange
+      const events: EventEntity[] = [createLockedEvent(32, 'station')];
+      const results: TravelPlanItem[] = [createPlanItem(true, 'need compress 0 minutes', 0)];
+      // Act
+      const check = ConflictDetector.checkConflicts(events, results);
+      // Assert
+      expect(check.hasConflict).assertTrue();
+      expect(check.conflictItemId).assertEqual(32);
+      expect(check.gapMinutes).assertEqual(0);
+      expect(check.conflictMsg).assertEqual('need compress 0 minutes');
+    });
+
     it('regression: td-20260412-phase1-user-behavior-tracker-threshold-should-stay-five', 0, () => {
       // Arrange
       const tracker = new UserBehaviorTracker();
