@@ -157,6 +157,29 @@ export default function indexWeatherHintBarHelperTest() {
       expect(threw).assertFalse();
     });
 
+    it('boundary: weather_hint_bar_initial_render_should_keep_visible_hint_without_route_score', 0, () => {
+      // Arrange
+      const page = new IndexWeatherHintBar(undefined, {} as LocalStorage) as Object as IndexWeatherHintBarPrivateTest;
+      let threw = false;
+
+      // Act
+      page.visible = true;
+      page.suggestionText = 'weather only';
+      page.routeScore = -1;
+      page.hintPopupVisible = false;
+      page.scorePopupVisible = false;
+      page.hintLines = ['h0', 'h1'];
+      page.scoreLines = [];
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
     it('combined: weather_hint_bar_update_state_vars_should_replace_visibility_and_lines', 0, () => {
       // Arrange
       const page = new IndexWeatherHintBar(undefined, {} as LocalStorage) as Object as IndexWeatherHintBarPrivateTest;
