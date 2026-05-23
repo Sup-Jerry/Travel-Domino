@@ -299,6 +299,35 @@ export default function authServiceTest() {
       expect(updated.message).assertEqual('avatar_invalid');
     });
 
+    it('boundary: update_avatar_should_reject_oversized_data_url', 0, () => {
+      // Arrange
+      const service = AuthService.getInstance();
+      const login = service.loginWithSocial('HUAWEI', makeSocialCredential(`uid_${Date.now()}_oversize_avatar`), new DeviceInfo('d_oversize_avatar', 'dev_oversize_avatar', 'HARMONY'));
+      expect(login.code).assertEqual(0);
+      const oversizedDataUrl = 'data:image/jpeg;base64,' + 'a'.repeat(3_500_001);
+
+      // Act
+      const updated = service.updateAvatar(login.data.session.accessToken, makeAvatarPayload(oversizedDataUrl));
+
+      // Assert
+      expect(updated.code).assertEqual(AuthErrorCode.AVATAR_INVALID);
+      expect(updated.message).assertEqual('avatar_invalid');
+    });
+
+    it('invalid: update_avatar_should_reject_data_url_without_base64_separator', 0, () => {
+      // Arrange
+      const service = AuthService.getInstance();
+      const login = service.loginWithSocial('HUAWEI', makeSocialCredential(`uid_${Date.now()}_no_base64_avatar`), new DeviceInfo('d_no_base64_avatar', 'dev_no_base64_avatar', 'HARMONY'));
+      expect(login.code).assertEqual(0);
+
+      // Act
+      const updated = service.updateAvatar(login.data.session.accessToken, makeAvatarPayload('data:image/jpeg,abcd'));
+
+      // Assert
+      expect(updated.code).assertEqual(AuthErrorCode.AVATAR_INVALID);
+      expect(updated.message).assertEqual('avatar_invalid');
+    });
+
     it('normal: get_me_should_return_guest_profile_for_active_guest_session', 0, () => {
       // Arrange
       const service = AuthService.getInstance();
