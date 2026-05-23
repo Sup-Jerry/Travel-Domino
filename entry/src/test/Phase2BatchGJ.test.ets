@@ -411,8 +411,11 @@ export default function phase2BatchGJTest() {
 
       Reflect.set(RdbHelper as Object, 'getInstance', (): RdbHelperMockGJ => rdbHelperMock);
 
-      stageSuccess.callbackErrorCode = 1001;
+      stageSuccess.callbackErrorCode = 0;
       rdbHelperMock.shouldReject = false;
+      host.runOnWindowStageCreate(stageSuccess);
+      await flushAsyncGJ();
+      stageSuccess.callbackErrorCode = 1001;
       host.runOnWindowStageCreate(stageSuccess);
       await flushAsyncGJ();
       rdbHelperMock.shouldReject = true;
@@ -420,6 +423,7 @@ export default function phase2BatchGJTest() {
       await flushAsyncGJ();
 
       expect(stageSuccess.routes[0]).assertEqual('pages/AuthGatePage');
+      expect(stageSuccess.routes[1]).assertEqual('pages/AuthGatePage');
       expect(stageFailure.routes[0]).assertEqual('pages/AuthGatePage');
 
       Reflect.set(RdbHelper as Object, 'getInstance', rdbOrigin);
