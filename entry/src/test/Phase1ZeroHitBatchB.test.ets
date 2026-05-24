@@ -85,6 +85,38 @@ class Base64HelperHooksB {
   }
 }
 
+class ThrowingTextDecoderStub {
+  constructor(_encoding?: string) {}
+
+  public static create(_encoding: string): ThrowingTextDecoderStub {
+    return new ThrowingTextDecoderStub();
+  }
+
+  public decodeToString(_bytes: Uint8Array): string {
+    throw new Error('decode_to_string_failed');
+  }
+
+  public decodeWithStream(_bytes: Uint8Array): string {
+    throw new Error('decode_with_stream_failed');
+  }
+}
+
+class TextDecoderHooksB {
+  private readonly originTextDecoder: Object;
+
+  constructor() {
+    this.originTextDecoder = Reflect.get(Reflect.get(globalThis, 'util') as Object, 'TextDecoder') as Object;
+  }
+
+  public use(stubCtor: Object): void {
+    Reflect.set(Reflect.get(globalThis, 'util') as Object, 'TextDecoder', stubCtor);
+  }
+
+  public restore(): void {
+    Reflect.set(Reflect.get(globalThis, 'util') as Object, 'TextDecoder', this.originTextDecoder);
+  }
+}
+
 export default function phase1ZeroHitBatchBTest() {
   describe('phase1ZeroHitBatchBTest', () => {
     it('normal: deep_link_should_round_trip_payload', 0, () => {
@@ -219,6 +251,43 @@ export default function phase1ZeroHitBatchBTest() {
 
       // Assert
       expect(restored).assertEqual('{"v":1,"p":{"t":"query"}}');
+    });
+
+    it('invalid: deep_link_parse_should_throw_invalid_base64_when_manual_decoder_sees_unsupported_chars', 0, () => {
+      // Arrange
+      const hooks = new Base64HelperHooksB();
+      const invalidUrl = 'travelapp://import?data=@@@';
+
+      // Act
+      // Assert
+      hooks.use(Base64DecodeThrowsStub as Object);
+      try {
+        assertThrow(() => DeepLinkService.parseShareLink(invalidUrl), 'invalid_base64_payload');
+      } finally {
+        hooks.restore();
+      }
+    });
+
+    it('combined: deep_link_parse_should_decode_multibyte_utf8_payload_with_manual_fallback', 0, () => {
+      // Arrange
+      const base64Hooks = new Base64HelperHooksB();
+      const decoderHooks = new TextDecoderHooksB();
+      const payload = String.fromCharCode(0x00A2, 0x4E2D, 0xD83D, 0xDE00);
+      const url = 'travelapp://import?data=wqLkuK3wn5iA';
+
+      // Act
+      let restored = '';
+      base64Hooks.use(Base64DecodeThrowsStub as Object);
+      decoderHooks.use(ThrowingTextDecoderStub as Object);
+      try {
+        restored = DeepLinkService.parseShareLink(url);
+      } finally {
+        decoderHooks.restore();
+        base64Hooks.restore();
+      }
+
+      // Assert
+      expect(restored).assertEqual(payload);
     });
 
     it('conflict: serializer_should_fallback_to_transport_mode_when_travel_mode_missing', 0, () => {
