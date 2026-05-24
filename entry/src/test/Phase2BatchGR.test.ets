@@ -69,6 +69,70 @@ export default function phase2BatchGRTest() {
       expect(shouldEnableIndexBottomBarAdd(true)).assertTrue();
     });
 
+    it('boundary: index_add_dialog_should_cover_invalid_schedule_ids_and_target_first_item_path', 0, () => {
+      // Arrange
+      const getLatestCreatedScheduleEvent =
+        getIndexAddDialogStaticGR<(EventEntity | undefined), [EventEntity[]]>('getLatestCreatedScheduleEvent');
+      const invalidIdEvent = buildEventGR(Number.NaN, 1, '09:00', '', 20, 0, 0);
+      const validIdEvent = buildEventGR(5, 1, '10:00', '', 30, 0, 0);
+      const latestValidEvent = buildEventGR(8, 1, '11:30', '', 15, 0, 0);
+      const events = [validIdEvent, buildEventGR(9, 1, '12:00', '', 10, 0, 0)];
+      // Act
+      const latest = getLatestCreatedScheduleEvent([invalidIdEvent, validIdEvent, latestValidEvent]);
+      const suggested = IndexAddDialogHelper.calculateSmartTime(events, 5);
+      // Assert
+      expect(latest?.id ?? -1).assertEqual(8);
+      expect(suggested).assertEqual('09:00');
+    });
+
+    it('boundary: index_add_dialog_should_cover_empty_defaults_without_scheduled_event', 0, () => {
+      // Arrange
+      const pending = buildEventGR(3, 0, '09:00', '', 30, 2, 2);
+      // Act
+      const defaults = IndexAddDialogHelper.resolveAddDialogDefaults([pending]);
+      // Assert
+      expect(defaults.dayOffset).assertEqual(0);
+      expect(defaults.suggestedTime).assertEqual('08:00');
+    });
+
+    it('normal: index_add_dialog_should_cover_target_middle_item_previous_end_time_path', 0, () => {
+      // Arrange
+      const events = [
+        buildEventGR(1, 1, '09:00', '', 20, 0, 0),
+        buildEventGR(2, 1, '10:00', '', 30, 0, 0),
+        buildEventGR(3, 1, '11:00', '', 40, 0, 0)
+      ];
+      // Act
+      const suggested = IndexAddDialogHelper.calculateSmartTime(events, 2);
+      // Assert
+      expect(suggested).assertEqual('09:20');
+    });
+
+    it('regression: index_add_dialog_should_cover_invalid_id_as_left_sort_operand', 0, () => {
+      // Arrange
+      const getLatestCreatedScheduleEvent =
+        getIndexAddDialogStaticGR<(EventEntity | undefined), [EventEntity[]]>('getLatestCreatedScheduleEvent');
+      const invalidA = buildEventGR(Number.NaN, 1, '09:00', '', 10, 0, 0);
+      const invalidB = buildEventGR(Number.POSITIVE_INFINITY, 1, '09:10', '', 10, 0, 0);
+      const valid5 = buildEventGR(5, 1, '10:00', '', 20, 0, 0);
+      const valid9 = buildEventGR(9, 1, '11:00', '', 20, 0, 0);
+      const permutations: EventEntity[][] = [
+        [invalidA, valid5, valid9],
+        [valid5, invalidA, valid9],
+        [valid9, valid5, invalidA],
+        [invalidB, valid9, valid5],
+        [valid9, invalidB, valid5],
+        [valid5, valid9, invalidB]
+      ];
+      let latestId = -1;
+      // Act
+      for (const items of permutations) {
+        latestId = getLatestCreatedScheduleEvent(items)?.id ?? -1;
+      }
+      // Assert
+      expect(latestId).assertEqual(9);
+    });
+
     it('normal: validator_marker_should_cover_normal_case', 0, () => {
       // Arrange
       const marker = true;
