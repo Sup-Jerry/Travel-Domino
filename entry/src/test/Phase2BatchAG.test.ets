@@ -378,6 +378,45 @@ export default function phase2BatchAGTest() {
       expect(result.hasDayOffsetChanged).assertFalse();
     });
 
+    it('boundary: calculation_recalculate_from_index_should_fallback_to_default_start_when_time_invalid', 0, () => {
+      // Arrange
+      const events = [createEventForAG(1, 'a')];
+      const orchestrator = new OrchestratorMockForAG();
+      // Act
+      TimelineCalculationService.recalculateFromIndex(
+        events,
+        0,
+        'bad-time',
+        601,
+        orchestrator as Object as ScheduleOrchestrator,
+        new TimelineOptionsForAG(),
+        () => ({ changed: false, dayOffsetChanged: false })
+      );
+      // Assert
+      expect(orchestrator.calls.length).assertEqual(1);
+      expect(orchestrator.calls[0].globalStart).assertEqual('08:00');
+    });
+
+    it('boundary: calculation_recalculate_from_index_should_collect_day_offset_change_flag', 0, () => {
+      // Arrange
+      const events = [createEventForAG(1, 'a'), createEventForAG(2, 'b')];
+      const orchestrator = new OrchestratorMockForAG();
+      orchestrator.calculated = [createCalculatedItemForAG(), createCalculatedItemForAG()];
+      // Act
+      const result = TimelineCalculationService.recalculateFromIndex(
+        events,
+        1,
+        '08:30',
+        602,
+        orchestrator as Object as ScheduleOrchestrator,
+        new TimelineOptionsForAG(),
+        (entity: EventEntity) => ({ changed: false, dayOffsetChanged: entity.id === 2 })
+      );
+      // Assert
+      expect(result.hasFieldChanged).assertFalse();
+      expect(result.hasDayOffsetChanged).assertTrue();
+    });
+
     it('normal: calculation_recalculate_traffic_only_should_update_fields_and_persist_pretravel', 0, () => {
       // Arrange
       const event = createEventForAG(1, 'a');
@@ -452,6 +491,46 @@ export default function phase2BatchAGTest() {
       expect(event.dynamic_day_offset).assertEqual(2);
       expect(result.hasFieldChanged).assertFalse();
       expect(result.hasDayOffsetChanged).assertFalse();
+    });
+
+    it('boundary: calculation_recalculate_traffic_only_should_fallback_to_day_offset_when_dynamic_day_offset_missing', 0, () => {
+      // Arrange
+      const event = createEventForAG(1, 'a');
+      event.dynamic_day_offset = 0;
+      const orchestrator = new OrchestratorMockForAG();
+      orchestrator.calculated = [{ dayOffset: 3 }];
+      // Act
+      const result = TimelineCalculationService.recalculateTrafficOnly(
+        [event],
+        '08:00',
+        703,
+        orchestrator as Object as ScheduleOrchestrator,
+        new TimelineOptionsForAG(),
+        (_entity: EventEntity, _minutes: number) => { return; }
+      );
+      // Assert
+      expect(event.dynamic_day_offset).assertEqual(3);
+      expect(result.hasFieldChanged).assertTrue();
+      expect(result.hasDayOffsetChanged).assertTrue();
+    });
+
+    it('boundary: calculation_recalculate_traffic_only_should_fallback_to_default_start_when_time_invalid', 0, () => {
+      // Arrange
+      const event = createEventForAG(1, 'a');
+      const orchestrator = new OrchestratorMockForAG();
+      orchestrator.calculated = [{ dayOffset: event.day_offset }];
+      // Act
+      TimelineCalculationService.recalculateTrafficOnly(
+        [event],
+        'bad-time',
+        704,
+        orchestrator as Object as ScheduleOrchestrator,
+        new TimelineOptionsForAG(),
+        (_entity: EventEntity, _minutes: number) => { return; }
+      );
+      // Assert
+      expect(orchestrator.calls.length).assertEqual(1);
+      expect(orchestrator.calls[0].globalStart).assertEqual('08:00');
     });
 
     it('normal: conflict_resolver_is_date_conflict_should_return_true_for_earlier_day', 0, () => {
