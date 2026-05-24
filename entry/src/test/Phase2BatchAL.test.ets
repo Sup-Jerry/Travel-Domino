@@ -631,6 +631,50 @@ export default function phase2BatchALTest() {
       expect(text.includes('原策略')).assertTrue();
     });
 
+    it('boundary: strategy_service_weather_constraint_should_hit_density_rain_branch_without_mode', 0, () => {
+      // Arrange
+      const strategy = createStrategy();
+      strategy.density = 2;
+      // Act
+      const text = StrategyService.buildWeatherAwareConstraint(strategy, 65, ['RAIN'], 'RAIN_PERSIST');
+      const soldierText = StrategyService.buildWeatherAwareConstraint(createStrategy(), 65, ['RAIN'], 'RAIN_PERSIST', 1);
+      // Assert
+      expect(text.length > 0).assertTrue();
+      expect(text).assertEqual(soldierText);
+    });
+
+    it('boundary: strategy_service_weather_constraint_should_hit_density_stable_branch_without_mode', 0, () => {
+      // Arrange
+      const strategy = createStrategy();
+      strategy.density = 0;
+      // Act
+      const text = StrategyService.buildWeatherAwareConstraint(strategy, 90, [], 'STABLE');
+      const leisureText = StrategyService.buildWeatherAwareConstraint(createStrategy(), 90, [], 'STABLE', 2);
+      // Assert
+      expect(text.length > 0).assertTrue();
+      expect(text).assertEqual(leisureText);
+    });
+
+    it('boundary: strategy_service_weather_constraint_should_hit_warming_branch', 0, () => {
+      // Arrange
+      // Act
+      const text = StrategyService.buildWeatherAwareConstraint(createStrategy(), 65, [], 'WARMING');
+      const generic = StrategyService.buildWeatherAwareConstraint(createStrategy(), 80, [], 'UNKNOWN', 0);
+      // Assert
+      expect(text.length > 0).assertTrue();
+      expect(text === generic).assertFalse();
+    });
+
+    it('boundary: strategy_service_weather_constraint_should_hit_low_route_score_branch', 0, () => {
+      // Arrange
+      // Act
+      const text = StrategyService.buildWeatherAwareConstraint(createStrategy(), 55, [], 'UNKNOWN');
+      const generic = StrategyService.buildWeatherAwareConstraint(createStrategy(), 80, [], 'UNKNOWN', 0);
+      // Assert
+      expect(text.length > 0).assertTrue();
+      expect(text === generic).assertFalse();
+    });
+
     it('invalid: strategy_service_weather_constraint_should_fallback_generic_when_no_rule_matches', 0, () => {
       // Arrange
       // Act
