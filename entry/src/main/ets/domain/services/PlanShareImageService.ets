@@ -98,7 +98,7 @@ export class PlanShareImageService {
     let y = PlanShareImageService.PADDING + 36;
     const title = options.planTitle.trim().length > 0 ? options.planTitle.trim() : 'Travel Plan';
     const dateText = PlanShareImageService.formatDateRange(options.startDate, options.endDate);
-    const stats = `${Math.max(1, options.totalDays)} days 路 ${Math.max(0, options.totalEvents)} events`;
+    const stats = `${Math.max(1, options.totalDays)} days · ${Math.max(0, options.totalEvents)} events`;
 
     PlanShareImageService.drawText(canvas, title, PlanShareImageService.PADDING, y, 40, PlanShareImageService.COLOR_PRIMARY);
     y += 42;
@@ -213,7 +213,7 @@ export class PlanShareImageService {
   private static drawEventLine(canvas: drawing.Canvas, eventItem: ShareEventItem, x: number, y: number): number {
     const title = `${eventItem.icon} ${eventItem.name}`.trim();
     const timeline = `${eventItem.startTime} - ${eventItem.endTime}`;
-    const subline = `${eventItem.location} 路 ${eventItem.duration}h 路 ${eventItem.category}`;
+    const subline = `${eventItem.location} · ${eventItem.duration}h · ${eventItem.category}`;
 
     PlanShareImageService.drawText(canvas, title, x, y + 24, 24, PlanShareImageService.COLOR_PRIMARY);
     PlanShareImageService.drawText(canvas, timeline, x, y + 46, 20, PlanShareImageService.COLOR_SECONDARY);
