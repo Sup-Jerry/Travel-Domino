@@ -1,4 +1,4 @@
-// 文件路径: ets/pages/components/TipDialog.ets
+﻿// 文件路径: ets/pages/components/TipDialog.ets
 import { PreferenceManager } from '../../../common/utils/PreferenceManager'; // 修改点：引入管理器
 
 export function toggleTipDialogChecked(current: boolean): boolean {
