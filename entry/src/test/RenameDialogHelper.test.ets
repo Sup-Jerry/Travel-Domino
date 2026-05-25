@@ -9,7 +9,7 @@ export default function renameDialogHelperTest() {
   describe('unit_test_case_generator_autofill_RenameDialogHelper', () => {
     it('normal: rename_dialog_should_accept_regular_name', 0, () => {
       // Arrange
-      const input = '涓滀含琛岀▼';
+      const input = '东京行程';
       // Act
       const canSubmit = canRenameDialogSubmit(input);
       // Assert
