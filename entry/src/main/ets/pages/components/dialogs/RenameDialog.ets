@@ -1,4 +1,4 @@
-// 文件路径: ets/pages/components/RenameDialog.ets
+﻿// 文件路径: ets/pages/components/RenameDialog.ets
 
 export function normalizeRenameDialogName(input: string): string {
   return (input || '').trim();
@@ -73,11 +73,3 @@ export struct RenameDialog {
     .width('80%') // 弹窗宽度
   }
 }
-
-
-
-
-
-
-
-
