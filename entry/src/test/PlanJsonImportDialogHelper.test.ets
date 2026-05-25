@@ -1,5 +1,6 @@
 import { describe, it, expect } from '@ohos/hypium';
 import {
+  cancelPlanJsonImport,
   canStartPlanJsonImport,
   normalizePlanJsonImportInput,
   PlanJsonImportDialog
@@ -23,6 +24,14 @@ interface PlanJsonImportDialogPrivateTest {
   doImport(): Promise<void>;
   initialRender(): void;
   setController(controller: DialogControllerMockPlanJsonImport): void;
+}
+
+class CancelTokenStubPlanJsonImport extends PlanJsonImportCancelToken {
+  cancelCount: number = 0;
+
+  cancel(): void {
+    this.cancelCount += 1;
+  }
 }
 
 export default function planJsonImportDialogHelperTest() {
@@ -169,6 +178,34 @@ export default function planJsonImportDialogHelperTest() {
 
       // Assert
       expect(threw).assertFalse();
+    });
+
+    it('normal: plan_json_import_cancel_should_abort_active_import_before_close', 0, () => {
+      // Arrange
+      const token = new CancelTokenStubPlanJsonImport();
+      let closeCount = 0;
+
+      // Act
+      cancelPlanJsonImport(true, token, (): void => {
+        closeCount += 1;
+      });
+
+      // Assert
+      expect(token.cancelCount).assertEqual(1);
+      expect(closeCount).assertEqual(1);
+    });
+
+    it('invalid: plan_json_import_cancel_should_close_directly_without_token', 0, () => {
+      // Arrange
+      let closeCount = 0;
+
+      // Act
+      cancelPlanJsonImport(false, null, (): void => {
+        closeCount += 1;
+      });
+
+      // Assert
+      expect(closeCount).assertEqual(1);
     });
   });
 }
