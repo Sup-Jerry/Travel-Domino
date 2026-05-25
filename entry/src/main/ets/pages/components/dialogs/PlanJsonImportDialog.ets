@@ -1,4 +1,4 @@
-import { promptAction } from '@kit.ArkUI';
+﻿import { promptAction } from '@kit.ArkUI';
 import { PlanJsonImportCancelToken } from '../../../infrastructure/services/PlanImportExportService';
 
 export function normalizePlanJsonImportInput(inputJson: string): string {
