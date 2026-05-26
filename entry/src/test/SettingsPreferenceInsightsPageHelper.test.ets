@@ -365,6 +365,30 @@ export default function settingsPreferenceInsightsPageHelperTest() {
       expect(zeroWidth).assertEqual('0%');
     });
 
+    it('boundary: settings_preference_instance_should_cover_loading_refresh_branch', 0, () => {
+      // Arrange
+      const page = createSettingsPreferenceInsightsPageForTest() as SettingsPreferenceInsightsPagePrivateTest;
+      page.loading = true;
+      page.savingWeather = false;
+      page.savingProfile = false;
+      page.weatherFeatureEnabled = true;
+      page.weatherPreference = buildSettingsWeatherPreferenceForTest();
+      page.profile = buildSettingsPreferenceProfileForTest();
+      page.modeFrequency = page.parseModeFrequency(page.profile.modeFrequency);
+      page.syncEditableState();
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
     it('invalid: settings_preference_clamp_should_return_min_for_non_finite_value', 0, () => {
       // Arrange
       const value = Number.NaN;
@@ -422,6 +446,27 @@ export default function settingsPreferenceInsightsPageHelperTest() {
       expect(items[1].count).assertEqual(3);
       expect(items[2].count).assertEqual(2);
       expect(items[3].count).assertEqual(7);
+    });
+
+    it('combined: settings_preference_instance_should_cover_manual_override_disabled_branch', 0, () => {
+      // Arrange
+      const page = createSettingsPreferenceInsightsPageForTest() as SettingsPreferenceInsightsPagePrivateTest;
+      page.weatherPreference = buildSettingsWeatherPreferenceForTest();
+      page.profile = buildSettingsPreferenceProfileForTest();
+      page.profile.manualOverrideEnabled = false;
+      page.modeFrequency = page.parseModeFrequency(page.profile.modeFrequency);
+      page.syncEditableState();
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
   });
 }
