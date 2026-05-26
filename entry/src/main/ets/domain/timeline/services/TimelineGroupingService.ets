@@ -105,9 +105,7 @@ export class TimelineGroupingService {
         lastDayOffset = renderDayOffset;
       }
 
-      if (currentGroup) {
-        currentGroup.events.push(item);
-      }
+      currentGroup!.events.push(item);
     });
     return nextGroups;
   }

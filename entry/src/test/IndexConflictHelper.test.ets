@@ -223,6 +223,17 @@ export default function indexConflictHelperTest() {
       expect(gap).assertEqual(0);
     });
 
+    it('boundary: resolve_conflict_gap_should_fallback_when_message_number_is_not_positive', 0, () => {
+      // Arrange
+      const event = buildConflictEvent(40);
+      event.gap_minutes = 0;
+      event.conflict_msg = '冲突剩余 0 分钟';
+      // Act
+      const gap = IndexConflictHelper.resolveConflictGapMinutes(event, 7);
+      // Assert
+      expect(gap).assertEqual(7);
+    });
+
     it('conflict: get_conflict_target_time_should_use_default_when_time_invalid', 0, () => {
       // Arrange
       const event = buildConflictEvent(4);
@@ -817,6 +828,17 @@ export default function indexConflictHelperTest() {
       // Assert
       expect(vm.called).assertFalse();
       expect(doneCalled).assertTrue();
+      done();
+    });
+
+    it('boundary: save_conflict_time_should_skip_on_done_when_callback_missing', 0, async (done: Function) => {
+      // Arrange
+      const event = buildConflictEvent(41);
+      const vm = new SaveConflictVmMock(event);
+      // Act
+      await IndexConflictHelper.saveConflictTime(vm as Object as TimelineViewModel, event, '10:20');
+      // Assert
+      expect(vm.called).assertTrue();
       done();
     });
 

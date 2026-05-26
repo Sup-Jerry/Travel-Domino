@@ -1124,6 +1124,119 @@ export default function phase2BatchATTest() {
       expect(target.duration).assertEqual(60);
     });
 
+    it('boundary: timeline_distribution_resolve_gap_by_distribution_should_skip_when_capped_add_is_zero', 0, async () => {
+      // Arrange
+      const updateHooks = new StaticHooksForAT(EventRepositoryImpl as Object, ['updateSingleField']);
+      const host = new TimelineDistributionHostForAT();
+      const candidate = createEventForAT(24, 'full');
+      candidate.duration = 240;
+      const gap = createEventForAT(25, 'gap');
+      gap.has_gap = true;
+      gap.gap_minutes = 15;
+      host.events = [candidate, gap];
+      let updateCalls = 0;
+      updateHooks.set('updateSingleField', async (): Promise<void> => {
+        updateCalls += 1;
+      });
+      const service = new TimelineDistributionService(host);
+
+      // Act
+      await service.resolveGapByDistribution(gap);
+
+      // Assert
+      updateHooks.restore();
+      expect(candidate.duration).assertEqual(240);
+      expect(updateCalls).assertEqual(0);
+      expect(host.recalculateFromIndexCalls.length).assertEqual(1);
+      expect(host.recalculateFromIndexCalls[0]).assertEqual(0);
+    });
+
+    it('boundary: timeline_distribution_resolve_gap_by_distribution_should_skip_repository_update_when_item_id_is_zero', 0, async () => {
+      // Arrange
+      const updateHooks = new StaticHooksForAT(EventRepositoryImpl as Object, ['updateSingleField']);
+      const host = new TimelineDistributionHostForAT();
+      const candidate = createEventForAT(0, 'temp');
+      const gap = createEventForAT(26, 'gap');
+      gap.has_gap = true;
+      gap.gap_minutes = 10;
+      host.events = [candidate, gap];
+      let updateCalls = 0;
+      updateHooks.set('updateSingleField', async (): Promise<void> => {
+        updateCalls += 1;
+      });
+      const service = new TimelineDistributionService(host);
+
+      // Act
+      await service.resolveGapByDistribution(gap);
+
+      // Assert
+      updateHooks.restore();
+      expect(candidate.duration).assertEqual(70);
+      expect(updateCalls).assertEqual(0);
+    });
+
+    it('boundary: timeline_distribution_get_safety_cap_should_keep_min_buffer_when_locked_item_buffer_is_larger', 0, () => {
+      // Arrange
+      const host = new TimelineDistributionHostForAT();
+      const candidate = createEventForAT(27, 'cand');
+      const locked = createEventForAT(28, 'locked');
+      const gap = createEventForAT(29, 'gap');
+      locked.lock_status = 1;
+      locked.fixed_start_time = '12:00';
+      gap.gap_minutes = 30;
+      host.events = [candidate, locked, gap];
+      host.naturalArrivalMap.set(1, 10 * 60);
+      const service = new TimelineDistributionService(host);
+
+      // Act
+      const cap = service.getSafetyCap(candidate, gap);
+
+      // Assert
+      expect(cap).assertEqual(30);
+    });
+
+    it('boundary: timeline_distribution_get_sorted_gaps_should_skip_first_item_of_day', 0, () => {
+      // Arrange
+      const host = new TimelineDistributionHostForAT();
+      const item = createEventForAT(30, 'first-gap');
+      item.status = 1;
+      item.has_gap = true;
+      item.gap_minutes = 30;
+      host.events = [item];
+      const service = new TimelineDistributionService(host);
+
+      // Act
+      const gaps = service.getSortedGaps();
+
+      // Assert
+      expect(gaps.length).assertEqual(0);
+    });
+
+    it('boundary: timeline_distribution_apply_distribution_should_skip_when_capped_add_is_zero', 0, async () => {
+      // Arrange
+      const updateHooks = new StaticHooksForAT(EventRepositoryImpl as Object, ['updateSingleField']);
+      const host = new TimelineDistributionHostForAT();
+      const item = createEventForAT(31, 'full-apply');
+      item.duration = 240;
+      host.events = [item];
+      let updateCalls = 0;
+      updateHooks.set('updateSingleField', async (): Promise<void> => {
+        updateCalls += 1;
+      });
+      const service = new TimelineDistributionService(host);
+      const distribution = new Map<number, number>();
+      distribution.set(31, 12);
+
+      // Act
+      await service.applyDistribution(distribution);
+
+      // Assert
+      updateHooks.restore();
+      expect(item.duration).assertEqual(240);
+      expect(updateCalls).assertEqual(0);
+      expect(host.recalculateFromIndexCalls.length).assertEqual(0);
+    });
+
     it('conflict: timeline_distribution_calculate_preview_should_break_when_total_weight_is_zero', 0, () => {
       // Arrange
       const host = new TimelineDistributionHostForAT();

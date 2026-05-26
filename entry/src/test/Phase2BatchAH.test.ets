@@ -1400,6 +1400,19 @@ export default function phase2BatchAHTest() {
       expect(groups.length).assertEqual(0);
     });
 
+    it('boundary: timeline_grouping_generate_groups_should_mark_negative_day_offset_as_conflict_header', 0, () => {
+      // Arrange
+      const e1 = createEventForAH(85, 'conflict-day');
+      e1.day_offset = -1;
+      e1.dynamic_day_offset = -1;
+      // Act
+      const groups = TimelineGroupingService.generateGroups([e1], Date.now());
+      // Assert
+      expect(groups.length).assertEqual(1);
+      expect(groups[0].dayOffset).assertEqual(-1);
+      expect(groups[0].dateHeader.indexOf('Day')).assertEqual(-1);
+    });
+
     it('normal: timeline_grouping_get_ordered_schedule_events_should_sort_by_day_then_order', 0, () => {
       // Arrange
       // Act
@@ -1430,6 +1443,28 @@ export default function phase2BatchAHTest() {
       const ordered = TimelineGroupingService.getOrderedScheduleEvents([e1, e2]);
       expect(ordered[0].id).assertEqual(69);
       expect(ordered[1].id).assertEqual(70);
+    });
+
+    it('boundary: timeline_grouping_get_ordered_schedule_events_should_keep_stable_input_order_when_sort_order_equal', 0, () => {
+      // Arrange
+      const e1 = createEventForAH(86, 'same-order-b');
+      const e2 = createEventForAH(85, 'same-order-a');
+      const e3 = createEventForAH(87, 'same-order-c');
+      e1.day_offset = 0;
+      e2.day_offset = 0;
+      e3.day_offset = 0;
+      e1.dynamic_day_offset = 0;
+      e2.dynamic_day_offset = 0;
+      e3.dynamic_day_offset = 0;
+      e1.sort_order = 100;
+      e2.sort_order = 100;
+      e3.sort_order = 100;
+      // Act
+      const ordered = TimelineGroupingService.getOrderedScheduleEvents([e1, e2, e3]);
+      // Assert
+      expect(ordered[0].id).assertEqual(86);
+      expect(ordered[1].id).assertEqual(85);
+      expect(ordered[2].id).assertEqual(87);
     });
 
     it('invalid: timeline_grouping_get_ordered_schedule_events_should_ignore_non_schedule_items', 0, () => {
@@ -1516,6 +1551,28 @@ export default function phase2BatchAHTest() {
       e1.actual_end_time = 0;
       const summary = TimelineGroupingService.getPlaceCheckinSummary([e1], 'lake');
       expect(summary.totalRecords).assertEqual(0);
+    });
+
+    it('combined: timeline_grouping_get_place_checkin_summary_should_keep_in_progress_record_and_sort_by_end_or_start', 0, () => {
+      // Arrange
+      const active = createEventForAH(88, 'tower');
+    active.completion_status = EventEntity.STATE_PENDING;
+      active.actual_start_time = 80 * 60000;
+      active.actual_end_time = 0;
+      const completed = createEventForAH(89, 'tower');
+      completed.completion_status = EventEntity.STATE_COMPLETED;
+      completed.actual_start_time = 20 * 60000;
+      completed.actual_end_time = 40 * 60000;
+
+      // Act
+      const summary = TimelineGroupingService.getPlaceCheckinSummary([active, completed], 'tower');
+
+      // Assert
+      expect(summary.totalRecords).assertEqual(2);
+      expect(summary.completedRecords).assertEqual(1);
+      expect(summary.skippedRecords).assertEqual(0);
+      expect(summary.records[0].id).assertEqual(88);
+      expect(summary.records[1].id).assertEqual(89);
     });
 
     it('normal: timeline_grouping_get_all_place_checkin_summaries_should_build_multi_place_result', 0, () => {
