@@ -346,18 +346,13 @@ export class IndexConflictHelper {
       return;
     }
 
-    const conflictItem = vm.events.find(e => e.id === preview.conflictItemId);
-    if (!conflictItem) {
+    const conflictIndex = vm.events.findIndex(e => e.id === preview.conflictItemId);
+    if (conflictIndex < 0) {
       hilog.warn(0x0000, 'Index', `[SHIFT_UI][fallback_apply] conflict item not found, date=${normalizedTimestamp}`);
       vm.updatePlanDate(normalizedTimestamp);
       return;
     }
-
-    const conflictIndex = vm.events.indexOf(conflictItem);
-    if (conflictIndex < 0) {
-      vm.updatePlanDate(normalizedTimestamp);
-      return;
-    }
+    const conflictItem = vm.events[conflictIndex];
 
     const targetTime = IndexConflictHelper.getConflictTargetTime(conflictItem);
     const conflictGap = IndexConflictHelper.resolveConflictGapMinutes(conflictItem, preview.gapMinutes);
