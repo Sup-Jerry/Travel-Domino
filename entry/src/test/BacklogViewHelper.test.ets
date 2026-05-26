@@ -123,6 +123,24 @@ export default function backlogViewHelperTest() {
       expect(threw).assertFalse();
     });
 
+    it('boundary: backlog_initial_render_should_cover_collapsed_branch', 0, () => {
+      // Arrange
+      const page = new BacklogView(undefined, {} as LocalStorage) as Object as BacklogViewPrivateTest;
+      let threw = false;
+
+      // Act
+      page.items = [{ id: 3, name: 'cafe' }];
+      page.isExpanded = false;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
     it('boundary: backlog_view_state_should_aggregate_collapsed_zero_item_fields', 0, () => {
       // Arrange
       const expanded = false;
