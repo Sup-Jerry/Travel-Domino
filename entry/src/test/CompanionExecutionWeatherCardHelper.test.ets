@@ -463,6 +463,29 @@ export default function companionExecutionWeatherCardHelperTest() {
       expect(page.executionWeatherSuggestions.length).assertEqual(1);
       expect(page.showWeatherSuggestionPopup).assertFalse();
     });
+
+    it('combined: weather_card_initial_render_should_cover_notice_and_info_hint_colors', 0, () => {
+      // Arrange
+      const noticePage = new CompanionExecutionWeatherCard(undefined, {} as LocalStorage) as Object as CompanionExecutionWeatherCardPrivateTest;
+      const infoPage = new CompanionExecutionWeatherCard(undefined, {} as LocalStorage) as Object as CompanionExecutionWeatherCardPrivateTest;
+
+      // Act
+      noticePage.weatherExpanded = true;
+      noticePage.executionWeatherHint = '阵雨临近';
+      noticePage.executionWeatherLevel = 'NOTICE';
+      noticePage.effectiveTheme = 'light';
+      noticePage.initialRender();
+
+      infoPage.weatherExpanded = true;
+      infoPage.executionWeatherHint = '轻微波动';
+      infoPage.executionWeatherLevel = 'INFO';
+      infoPage.effectiveTheme = 'light';
+      infoPage.initialRender();
+
+      // Assert
+      expect(noticePage.executionWeatherLevel).assertEqual('NOTICE');
+      expect(infoPage.executionWeatherLevel).assertEqual('INFO');
+    });
   });
 }
 

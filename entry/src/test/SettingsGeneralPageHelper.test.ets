@@ -8,7 +8,7 @@ import {
   resolveSettingsGeneralThemeModeText,
   SettingsGeneralAiPoiInputState
 } from '../main/ets/pages/SettingsGeneralPage';
-import { AiDailyPoiRangeConfig } from '../main/ets/common/utils/PreferenceManager';
+import { AiDailyPoiRangeConfig, PreferenceManager } from '../main/ets/common/utils/PreferenceManager';
 
 interface SettingsGeneralPagePrivateTest {
   weatherFeatureEnabled: boolean;
@@ -28,6 +28,37 @@ interface SettingsGeneralPagePrivateTest {
   effectiveTheme: string;
   initialRender(): void;
   getThemeModeText(): string;
+  onWeatherFeatureChanged(value: boolean): Promise<void>;
+  onIdleGapDetectionChanged(value: boolean): Promise<void>;
+  safeShowToast(message: string): void;
+}
+
+interface SettingsGeneralPreferencePortTest {
+  setWeatherFeatureEnabled(value: boolean): Promise<void>;
+  isWeatherFeatureEnabled(): Promise<boolean>;
+  setIdleGapDetectionEnabled(value: boolean): Promise<void>;
+  getIdleGapDetectionEnabled(): Promise<boolean>;
+}
+
+class SettingsGeneralPreferenceStubTest implements SettingsGeneralPreferencePortTest {
+  weatherEnabled: boolean = false;
+  idleGapEnabled: boolean = false;
+
+  async setWeatherFeatureEnabled(value: boolean): Promise<void> {
+    this.weatherEnabled = value;
+  }
+
+  async isWeatherFeatureEnabled(): Promise<boolean> {
+    return this.weatherEnabled;
+  }
+
+  async setIdleGapDetectionEnabled(value: boolean): Promise<void> {
+    this.idleGapEnabled = value;
+  }
+
+  async getIdleGapDetectionEnabled(): Promise<boolean> {
+    return this.idleGapEnabled;
+  }
 }
 
 function createSettingsGeneralPagePrivateForTest(): SettingsGeneralPagePrivateTest {
@@ -265,6 +296,38 @@ export default function settingsGeneralPageHelperTest() {
       expect(config.soldierMax).assertEqual(12);
       expect(config.leisureMin).assertEqual(1);
       expect(config.leisureMax).assertEqual(5);
+    });
+
+    it('combined: settings_general_toggle_handlers_should_cover_weather_true_false_and_idle_false_toasts', 0, async () => {
+      // Arrange
+      const page = createSettingsGeneralPagePrivateForTest();
+      const preference = new SettingsGeneralPreferenceStubTest();
+      const originalGetInstance = Reflect.get(PreferenceManager as Object, 'getInstance') as (() => Object);
+      const toastMessages: string[] = [];
+      Reflect.set(page as Object, 'safeShowToast', (message: string): void => {
+        toastMessages.push(message);
+      });
+      Reflect.set(PreferenceManager as Object, 'getInstance', (): Object => preference as Object);
+
+      try {
+        // Act
+        preference.weatherEnabled = true;
+        await page.onWeatherFeatureChanged(true);
+        preference.weatherEnabled = false;
+        await page.onWeatherFeatureChanged(false);
+        preference.idleGapEnabled = false;
+        await page.onIdleGapDetectionChanged(false);
+      } finally {
+        Reflect.set(PreferenceManager as Object, 'getInstance', originalGetInstance);
+      }
+
+      // Assert
+      expect(toastMessages.length).assertEqual(3);
+      expect(toastMessages[0]).assertEqual('已开启天气功能');
+      expect(toastMessages[1]).assertEqual('已关闭天气功能');
+      expect(toastMessages[2]).assertEqual('已关闭空闲时间检测');
+      expect(page.weatherFeatureEnabled).assertFalse();
+      expect(page.enableIdleGapDetection).assertFalse();
     });
   });
 }
