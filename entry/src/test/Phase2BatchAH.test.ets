@@ -944,6 +944,40 @@ export default function phase2BatchAHTest() {
       expect(service.findCurrentActiveEvent() === null).assertTrue();
     });
 
+    it('boundary: timeline_execution_find_current_active_event_should_ignore_dynamic_window_when_now_outside_range', 0, () => {
+      // Arrange
+      const host = new TimelineExecutionHostForAH();
+      const now = Date.now();
+      const item = createEventForAH(4, 'window_miss');
+      item.dynamic_start_time = now + 60000;
+      item.dynamic_end_time = now + 120000;
+      host.events = [item];
+      const service = new TimelineExecutionService(host);
+
+      // Act
+      const result = service.findCurrentActiveEvent();
+
+      // Assert
+      expect(result === null).assertTrue();
+    });
+
+    it('boundary: timeline_execution_find_current_active_event_should_skip_when_dynamic_window_incomplete', 0, () => {
+      // Arrange
+      const host = new TimelineExecutionHostForAH();
+      const now = Date.now();
+      const item = createEventForAH(5, 'window_incomplete');
+      item.dynamic_start_time = now - 60000;
+      item.dynamic_end_time = 0;
+      host.events = [item];
+      const service = new TimelineExecutionService(host);
+
+      // Act
+      const result = service.findCurrentActiveEvent();
+
+      // Assert
+      expect(result === null).assertTrue();
+    });
+
     it('normal: timeline_execution_checkout_event_should_apply_end_transition_for_valid_id', 0, async () => {
       // Arrange
       // Act
@@ -1164,6 +1198,22 @@ export default function phase2BatchAHTest() {
       expect(item.completion_status).assertEqual(EventEntity.STATE_COMPLETED);
     });
 
+    it('invalid: timeline_execution_skip_event_should_return_when_runtime_transition_fails', 0, async () => {
+      // Arrange
+      const host = new TimelineExecutionHostForAH();
+      host.allowTransition = false;
+      const item = createEventForAH(46, 'skip_fail');
+      host.events = [item];
+      const service = new TimelineExecutionService(host);
+
+      // Act
+      await service.skipEvent(item);
+
+      // Assert
+      expect(item.completion_status).assertEqual(EventEntity.STATE_PENDING);
+      expect(host.recalculateCalls).assertEqual(0);
+    });
+
     it('normal: timeline_execution_reopen_skipped_event_should_reset_status_to_pending', 0, async () => {
       // Arrange
       // Act
@@ -1251,6 +1301,45 @@ export default function phase2BatchAHTest() {
       const service = new TimelineExecutionService(host);
       service.calculateRealtimeSchedule();
       expect(item.forecast_start_time).assertEqual('xxxx');
+    });
+
+    it('boundary: timeline_execution_calculate_realtime_schedule_should_mark_next_day_forecast_label', 0, () => {
+      // Arrange
+      const host = new TimelineExecutionHostForAH();
+      host.planStartDate = new Date('2026-05-26T00:00:00+08:00').getTime();
+      const itemA = createEventForAH(51, 'late_started');
+      itemA.actual_start_time = new Date('2026-05-26T23:50:00+08:00').getTime();
+      itemA.actual_end_time = new Date('2026-05-27T00:20:00+08:00').getTime();
+      itemA.duration = 30;
+      const itemB = createEventForAH(52, 'next_day');
+      itemB.duration = 20;
+      host.events = [itemA, itemB];
+      const service = new TimelineExecutionService(host);
+
+      // Act
+      service.calculateRealtimeSchedule();
+
+      // Assert
+      expect(itemB.forecast_start_time.startsWith('次日 ')).assertTrue();
+    });
+
+    it('boundary: timeline_execution_update_actual_time_should_skip_plan_state_machine_when_plan_id_not_positive', 0, async () => {
+      // Arrange
+      const hooks = new EventRepoHooksForAH();
+      hooks.setFindGlobalActiveEvent(async (): Promise<StartConflictInfo | null> => null);
+      const host = new TimelineExecutionHostForAH();
+      host.planId = 0;
+      const item = createEventForAH(53, 'zero_plan');
+      host.events = [item];
+      const service = new TimelineExecutionService(host);
+
+      // Act
+      const ok = await service.updateActualTime(item.id, 'actual_start_time', Date.now());
+      hooks.restore();
+
+      // Assert
+      expect(ok).assertTrue();
+      expect(host.currentPlanStatus).assertEqual(PlanStatus.READY);
     });
   });
 
