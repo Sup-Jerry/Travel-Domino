@@ -1,5 +1,6 @@
 import { describe, it, expect } from '@ohos/hypium';
 import {
+  handleIndexToolbarSettingsClick,
   IndexToolbar,
   IndexToolbarTheme,
   resolveIndexToolbarDisplayTitle,
@@ -168,6 +169,29 @@ export default function indexToolbarHelperTest() {
       expect(threw).assertFalse();
     });
 
+    it('boundary: toolbar_initial_render_should_cover_weather_loading_label_branch', 0, () => {
+      // Arrange
+      const page = new IndexToolbar(undefined, {} as LocalStorage) as Object as IndexToolbarPrivateTest;
+      let threw = false;
+
+      // Act
+      page.planTitle = 'weather';
+      page.strategyMode = 0;
+      page.currentStrategyExplanation = '';
+      page.isCompanionMode = false;
+      page.isArchived = false;
+      page.weatherFeatureEnabled = true;
+      page.weatherLoading = true;
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
     it('combined: toolbar_state_sync_should_cover_generated_prop_update_and_callbacks', 0, () => {
       // Arrange
       const page = new IndexToolbar(undefined, {} as LocalStorage) as Object as IndexToolbarPrivateTest;
@@ -269,6 +293,24 @@ export default function indexToolbarHelperTest() {
       expect(leisure).assertEqual('#4CAF50');
       expect(custom).assertEqual('#2196F3');
       expect(fallback).assertEqual(fallbackColor);
+    });
+
+    it('combined: toolbar_settings_click_should_cover_archived_and_open_paths', 0, () => {
+      // Arrange
+      let openCount = 0;
+
+      // Act
+      const archivedResult = handleIndexToolbarSettingsClick(true, () => {
+        openCount += 1;
+      });
+      const activeResult = handleIndexToolbarSettingsClick(false, () => {
+        openCount += 1;
+      });
+
+      // Assert
+      expect(archivedResult).assertFalse();
+      expect(activeResult).assertTrue();
+      expect(openCount).assertEqual(1);
     });
   });
 }
