@@ -372,6 +372,46 @@ export default function companionFocusedCardHostHelperTest() {
       expect(emptyThrew).assertFalse();
     });
 
+    it('boundary: focused_card_host_initial_render_should_cover_switch_cards_build_branch_via_direct_props', 0, () => {
+      // Arrange
+      const page = new CompanionFocusedCardHost(undefined, {} as LocalStorage) as Object as CompanionFocusedCardHostPrivateTest;
+      page.canRenderSwitchCards = true;
+      page.outgoingEvent = buildEvent(72);
+      page.incomingEvent = buildEvent(73);
+      page.stableEvent = null;
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: focused_card_host_initial_render_should_cover_stable_build_branch_via_direct_props', 0, () => {
+      // Arrange
+      const page = new CompanionFocusedCardHost(undefined, {} as LocalStorage) as Object as CompanionFocusedCardHostPrivateTest;
+      page.canRenderSwitchCards = false;
+      page.outgoingEvent = null;
+      page.incomingEvent = null;
+      page.stableEvent = buildEvent(74);
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
     it('normal: focused_card_host_initial_render_should_support_active_action_branch_with_custom_getters', 0, () => {
       // Arrange
       const page = new CompanionFocusedCardHost(undefined, {} as LocalStorage) as Object as CompanionFocusedCardHostPrivateTest;
