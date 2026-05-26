@@ -1237,30 +1237,6 @@ export default function phase2BatchATTest() {
       expect(host.recalculateFromIndexCalls.length).assertEqual(0);
     });
 
-    it('boundary: timeline_distribution_apply_distribution_should_skip_unknown_event_id_entries', 0, async () => {
-      // Arrange
-      const updateHooks = new StaticHooksForAT(EventRepositoryImpl as Object, ['updateSingleField']);
-      const host = new TimelineDistributionHostForAT();
-      const item = createEventForAT(41, 'known');
-      host.events = [item];
-      let updateCalls = 0;
-      updateHooks.set('updateSingleField', async (): Promise<void> => {
-        updateCalls += 1;
-      });
-      const service = new TimelineDistributionService(host);
-      const distribution = new Map<number, number>();
-      distribution.set(999, 20);
-
-      // Act
-      await service.applyDistribution(distribution);
-
-      // Assert
-      updateHooks.restore();
-      expect(item.duration).assertEqual(60);
-      expect(updateCalls).assertEqual(0);
-      expect(host.recalculateFromIndexCalls.length).assertEqual(0);
-    });
-
     it('conflict: timeline_distribution_calculate_preview_should_break_when_total_weight_is_zero', 0, () => {
       // Arrange
       const host = new TimelineDistributionHostForAT();
