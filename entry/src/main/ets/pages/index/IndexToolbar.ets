@@ -21,6 +21,14 @@ export function shouldShowIndexToolbarWeatherAction(isCompanionMode: boolean, we
   return !isCompanionMode && weatherFeatureEnabled;
 }
 
+export function handleIndexToolbarSettingsClick(isArchived: boolean, onOpenSettings: () => void): boolean {
+  if (isArchived) {
+    return false;
+  }
+  onOpenSettings();
+  return true;
+}
+
 export function resolveIndexToolbarModeLabel(strategyMode: number): string {
   if (strategyMode === 1) {
     return '🚀 特种兵模式';
@@ -111,12 +119,7 @@ export struct IndexToolbar {
       }
       .layoutWeight(1)
       .justifyContent(FlexAlign.Center)
-      .onClick(() => {
-        if (this.isArchived) {
-          return;
-        }
-        this.onOpenSettings();
-      })
+      .onClick(() => handleIndexToolbarSettingsClick(this.isArchived, this.onOpenSettings))
 
       Row() {
         Text('🚀').fontSize(18)
