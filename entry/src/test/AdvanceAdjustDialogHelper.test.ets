@@ -18,7 +18,10 @@ import {
 } from '../main/ets/viewmodel/TimelineViewModel';
 
 class DialogControllerMockAdvanceAdjust {
+  closeCount: number = 0;
+
   close(): void {
+    this.closeCount += 1;
   }
 }
 
@@ -29,9 +32,11 @@ interface AdvanceAdjustDialogPrivateTest {
   selectedIds: Set<number>;
   targetStartTime: string;
   preview: AdvanceAdjustPreview | null;
+  onConfirm: (selectedIds: number[], targetStartTime: string) => void;
   timeToMinutes(time: string): number;
   minutesToTime(minutes: number): string;
   toggleOne(id: number, checked: boolean): void;
+  confirmAdvanceAdjust(): void;
   initialRender(): void;
   setController(controller: DialogControllerMockAdvanceAdjust): void;
 }
@@ -280,6 +285,45 @@ export default function advanceAdjustDialogHelperTest() {
       expect(threw).assertFalse();
     });
 
+    it('boundary: advance_adjust_dialog_initial_render_should_show_invalid_preview_message_branch', 0, () => {
+      // Arrange
+      const page = new AdvanceAdjustDialog(undefined, {} as LocalStorage) as Object as AdvanceAdjustDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.targetName = '午餐';
+      page.context = {
+        targetIndex: 2,
+        targetId: 200,
+        targetDayOffset: 0,
+        candidates: [
+          buildAdvanceAdjustCandidateTest(1, 0, '早餐', '08:00', '09:00', 60)
+        ]
+      };
+      page.selectedIds = new Set<number>([1]);
+      page.targetStartTime = '07:30';
+      page.preview = {
+        valid: false,
+        message: '当前选择无效',
+        selectedCount: 1,
+        shiftMinutes: 30,
+        requiredGapMinutes: 50,
+        remainingGapMinutes: 20,
+        firstNewStartTime: '07:30',
+        lastNewEndTime: '08:30',
+        items: []
+      };
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.preview?.valid ?? true).assertFalse();
+    });
+
     it('regression: advance_adjust_dialog_initial_render_should_support_empty_context_branch', 0, () => {
       // Arrange
       const page = new AdvanceAdjustDialog(undefined, {} as LocalStorage) as Object as AdvanceAdjustDialogPrivateTest;
@@ -299,6 +343,54 @@ export default function advanceAdjustDialogHelperTest() {
 
       // Assert
       expect(threw).assertFalse();
+    });
+
+    it('combined: advance_adjust_dialog_confirm_should_skip_invalid_and_submit_valid_preview', 0, () => {
+      // Arrange
+      const page = new AdvanceAdjustDialog(undefined, {} as LocalStorage) as Object as AdvanceAdjustDialogPrivateTest;
+      const controller = new DialogControllerMockAdvanceAdjust();
+      let confirmedIds: number[] = [];
+      let confirmedStartTime = '';
+      page.controller = controller;
+      page.selectedIds = new Set<number>([1, 2]);
+      page.targetStartTime = '07:30';
+      page.onConfirm = (selectedIds: number[], targetStartTime: string): void => {
+        confirmedIds = selectedIds;
+        confirmedStartTime = targetStartTime;
+      };
+
+      // Act
+      page.preview = {
+        valid: false,
+        message: 'invalid',
+        selectedCount: 2,
+        shiftMinutes: 10,
+        requiredGapMinutes: 20,
+        remainingGapMinutes: 10,
+        firstNewStartTime: '07:30',
+        lastNewEndTime: '09:00',
+        items: []
+      };
+      page.confirmAdvanceAdjust();
+      page.preview = {
+        valid: true,
+        message: 'ok',
+        selectedCount: 2,
+        shiftMinutes: 20,
+        requiredGapMinutes: 20,
+        remainingGapMinutes: 0,
+        firstNewStartTime: '07:30',
+        lastNewEndTime: '09:00',
+        items: []
+      };
+      page.confirmAdvanceAdjust();
+
+      // Assert
+      expect(controller.closeCount).assertEqual(1);
+      expect(confirmedIds.length).assertEqual(2);
+      expect(confirmedIds[0]).assertEqual(1);
+      expect(confirmedIds[1]).assertEqual(2);
+      expect(confirmedStartTime).assertEqual('07:30');
     });
 
     it('boundary: advance_adjust_time_to_minutes_should_clamp_hour_and_minute_overflows', 0, () => {

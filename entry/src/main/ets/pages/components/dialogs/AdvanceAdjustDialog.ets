@@ -143,6 +143,14 @@ export struct AdvanceAdjustDialog {
     this.refreshPreview();
   }
 
+  private confirmAdvanceAdjust(): void {
+    if (!(this.preview?.valid ?? false)) {
+      return;
+    }
+    this.controller.close();
+    this.onConfirm(Array.from(this.selectedIds), this.targetStartTime);
+  }
+
   build() {
     Column() {
       Text('前移调整')
@@ -257,11 +265,7 @@ export struct AdvanceAdjustDialog {
           .fontColor(Color.White)
           .enabled(this.preview?.valid ?? false)
           .onClick(() => {
-            if (!(this.preview?.valid ?? false)) {
-              return;
-            }
-            this.controller.close();
-            this.onConfirm(Array.from(this.selectedIds), this.targetStartTime);
+            this.confirmAdvanceAdjust();
           })
       }
       .width('100%')
