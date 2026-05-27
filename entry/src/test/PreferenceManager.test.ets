@@ -3,6 +3,8 @@ import { PreferenceManager } from '../main/ets/common/utils/PreferenceManager';
 import { AvatarProfile } from '../main/ets/domain/auth/AvatarModels';
 import { DEFAULT_USER_PROFILE, UserStrategyProfile } from '../main/ets/domain/strategy/UserStrategyProfile';
 
+class PlainPreferenceFailureForPreferenceTest {}
+
 class PreferenceStoreMockForPreferenceTest {
   private readonly values: Map<string, Object> = new Map<string, Object>();
 
@@ -338,6 +340,73 @@ export default function preferenceManagerTest() {
       expect(Number(saved['consistencyMatchCount'])).assertEqual(0);
       expect(Number(saved['consistencyMismatchCount'])).assertEqual(0);
       expect(Number(saved['lastConsistencyCheckAt'])).assertEqual(0);
+    });
+
+    it('boundary: preference_manager_get_strategy_profile_should_keep_positive_default_counters', 0, async () => {
+      // Arrange
+      const store = attachPreferenceStoreForPreferenceTest();
+      const manager = PreferenceManager.getInstance();
+      const originalMatch = DEFAULT_USER_PROFILE.consistencyMatchCount;
+      const originalMismatch = DEFAULT_USER_PROFILE.consistencyMismatchCount;
+      const originalLastCheck = DEFAULT_USER_PROFILE.lastConsistencyCheckAt;
+      DEFAULT_USER_PROFILE.consistencyMatchCount = 3.9;
+      DEFAULT_USER_PROFILE.consistencyMismatchCount = 4.8;
+      DEFAULT_USER_PROFILE.lastConsistencyCheckAt = 56789;
+      store.setRaw(
+        PreferenceManager.KEY_USER_STRATEGY_PROFILE,
+        JSON.stringify({
+          consistencyMatchCount: 'bad',
+          consistencyMismatchCount: 'bad',
+          lastConsistencyCheckAt: 'bad'
+        }) as Object
+      );
+
+      // Act
+      const profile = await manager.getUserStrategyProfile();
+
+      // Assert
+      expect(profile.consistencyMatchCount).assertEqual(3);
+      expect(profile.consistencyMismatchCount).assertEqual(4);
+      expect(profile.lastConsistencyCheckAt).assertEqual(56789);
+      DEFAULT_USER_PROFILE.consistencyMatchCount = originalMatch;
+      DEFAULT_USER_PROFILE.consistencyMismatchCount = originalMismatch;
+      DEFAULT_USER_PROFILE.lastConsistencyCheckAt = originalLastCheck;
+    });
+
+    it('regression: preference_manager_get_strategy_profile_should_clone_positive_default_counters_after_parse_failure', 0, async () => {
+      // Arrange
+      const store = attachPreferenceStoreForPreferenceTest();
+      const manager = PreferenceManager.getInstance();
+      const originalMatch = DEFAULT_USER_PROFILE.consistencyMatchCount;
+      const originalMismatch = DEFAULT_USER_PROFILE.consistencyMismatchCount;
+      const originalLastCheck = DEFAULT_USER_PROFILE.lastConsistencyCheckAt;
+      DEFAULT_USER_PROFILE.consistencyMatchCount = 5.2;
+      DEFAULT_USER_PROFILE.consistencyMismatchCount = 6.1;
+      DEFAULT_USER_PROFILE.lastConsistencyCheckAt = 76543;
+      store.setRaw(PreferenceManager.KEY_USER_STRATEGY_PROFILE, '{bad_json' as Object);
+
+      // Act
+      const profile = await manager.getUserStrategyProfile();
+
+      // Assert
+      expect(profile.consistencyMatchCount).assertEqual(5);
+      expect(profile.consistencyMismatchCount).assertEqual(6);
+      expect(profile.lastConsistencyCheckAt).assertEqual(76543);
+      DEFAULT_USER_PROFILE.consistencyMatchCount = originalMatch;
+      DEFAULT_USER_PROFILE.consistencyMismatchCount = originalMismatch;
+      DEFAULT_USER_PROFILE.lastConsistencyCheckAt = originalLastCheck;
+    });
+
+    it('invalid: preference_manager_set_value_should_wrap_non_error_reason', 0, async () => {
+      // Arrange
+      const manager = PreferenceManager.getInstance();
+      const sanitize = Reflect.get(manager as Object, 'sanitizeError') as (error: Object) => string;
+      const failure = new PlainPreferenceFailureForPreferenceTest();
+      // Act
+      const message = sanitize(failure as Object);
+
+      // Assert
+      expect(message).assertEqual('unknown_error');
     });
   });
 }
