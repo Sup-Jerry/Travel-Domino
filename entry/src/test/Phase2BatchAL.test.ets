@@ -99,6 +99,13 @@ class PreferenceManagerStubAL {
   }
 }
 
+class UserProfileModeFrequencyTest {
+  modeCustom: number = 0;
+  modeDefault: number = 0;
+  modeSoldier: number = 0;
+  modeLeisure: number = 0;
+}
+
 function cloneDefaultProfile(overrides?: UserStrategyProfile): UserStrategyProfile {
   const base: UserStrategyProfile = {
     avgDensity: DEFAULT_USER_PROFILE.avgDensity,
@@ -1122,6 +1129,65 @@ export default function phase2BatchALTest() {
         hooks.restore();
       }
       expect(hint).assertEqual('');
+    });
+
+    it('boundary: user_profile_service_private_style_text_should_cover_leisure_and_custom_wins', 0, () => {
+      // Arrange
+      const styleText = Reflect.get(UserProfileService as Object, 'getStyleText') as (frequency: Object, avgPace: number) => string;
+      const leisureFrequency = new UserProfileModeFrequencyTest();
+      leisureFrequency.modeDefault = 1;
+      leisureFrequency.modeLeisure = 3;
+      const customFrequency = new UserProfileModeFrequencyTest();
+      customFrequency.modeCustom = 4;
+      customFrequency.modeDefault = 1;
+      customFrequency.modeSoldier = 2;
+      customFrequency.modeLeisure = 3;
+
+      // Act
+      const leisure = styleText(leisureFrequency as Object, 1);
+      const custom = styleText(customFrequency as Object, 1);
+
+      // Assert
+      expect(leisure.length > 0).assertTrue();
+      expect(custom.length > 0).assertTrue();
+      expect(leisure === custom).assertFalse();
+    });
+
+    it('boundary: user_profile_service_private_style_and_density_should_cover_pace_edges', 0, () => {
+      // Arrange
+      const styleText = Reflect.get(UserProfileService as Object, 'getStyleText') as (frequency: Object, avgPace: number) => string;
+      const densityText = Reflect.get(UserProfileService as Object, 'getDensityText') as (avgDensity: number) => string;
+      const balancedFrequency = new UserProfileModeFrequencyTest();
+      balancedFrequency.modeDefault = 1;
+      balancedFrequency.modeSoldier = 1;
+      balancedFrequency.modeLeisure = 1;
+
+      // Act
+      const highPace = styleText(balancedFrequency as Object, 1.6);
+      const lowPace = styleText(balancedFrequency as Object, 0.4);
+      const lowDensity = densityText(0.4);
+
+      // Assert
+      expect(highPace.length > 0).assertTrue();
+      expect(lowPace.length > 0).assertTrue();
+      expect(highPace === lowPace).assertFalse();
+      expect(lowDensity.length > 0).assertTrue();
+    });
+
+    it('invalid: user_profile_service_private_parse_and_counter_should_zero_non_positive_values', 0, () => {
+      // Arrange
+      const parseModeCount = Reflect.get(UserProfileService as Object, 'parseModeCount') as (raw: string, key: string) => number;
+      const getSafeCounter = Reflect.get(UserProfileService as Object, 'getSafeCounter') as (raw: number | undefined) => number;
+
+      // Act
+      const zeroCount = parseModeCount('{"1":0}', '1');
+      const invalidCounter = getSafeCounter(Number.NaN);
+      const undefinedCounter = getSafeCounter(undefined);
+
+      // Assert
+      expect(zeroCount).assertEqual(0);
+      expect(invalidCounter).assertEqual(0);
+      expect(undefinedCounter).assertEqual(0);
     });
 
     it('normal: user_profile_service_load_profile_should_delegate_to_preference_manager', 0, async () => {

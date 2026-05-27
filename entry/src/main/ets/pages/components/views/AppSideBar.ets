@@ -54,6 +54,13 @@ export struct AppSideBar {
     }
   }
 
+  private handleNavClick(target: AppNavKey): void {
+    this.isSideBarShow = false;
+    if (shouldAppSideBarNavigate(this.current, target)) {
+      void this.safeReplaceUrl(getAppSideBarRouteByKey(target));
+    }
+  }
+
   @Builder
   private NavItem(title: string, icon: string, active: boolean, onClick: () => void) {
     Row() {
@@ -68,10 +75,7 @@ export struct AppSideBar {
     }
     .width('100%')
     .height(60)
-    .onClick(() => {
-      this.isSideBarShow = false;
-      onClick();
-    });
+    .onClick(() => onClick());
   }
 
   build() {
@@ -82,33 +86,17 @@ export struct AppSideBar {
         .fontColor(this.getPalette().textPrimary)
         .margin({ top: 25, bottom: 40 });
 
-      this.NavItem('All Plans', '[P]', this.current === 'plans', () => {
-        if (shouldAppSideBarNavigate(this.current, 'plans')) {
-          void this.safeReplaceUrl(getAppSideBarRouteByKey('plans'));
-        }
-      });
+      this.NavItem('All Plans', '[P]', this.current === 'plans', () => this.handleNavClick('plans'));
 
-      this.NavItem('Archive', '[A]', this.current === 'archive', () => {
-        if (shouldAppSideBarNavigate(this.current, 'archive')) {
-          void this.safeReplaceUrl(getAppSideBarRouteByKey('archive'));
-        }
-      });
+      this.NavItem('Archive', '[A]', this.current === 'archive', () => this.handleNavClick('archive'));
 
-      this.NavItem('Trash', '[T]', this.current === 'trash', () => {
-        if (shouldAppSideBarNavigate(this.current, 'trash')) {
-          void this.safeReplaceUrl(getAppSideBarRouteByKey('trash'));
-        }
-      });
+      this.NavItem('Trash', '[T]', this.current === 'trash', () => this.handleNavClick('trash'));
 
       Divider()
         .color(this.getPalette().divider)
         .margin({ top: 12, bottom: 12, right: 20 });
 
-      this.NavItem('Settings', '[S]', this.current === 'settings', () => {
-        if (shouldAppSideBarNavigate(this.current, 'settings')) {
-          void this.safeReplaceUrl(getAppSideBarRouteByKey('settings'));
-        }
-      });
+      this.NavItem('Settings', '[S]', this.current === 'settings', () => this.handleNavClick('settings'));
 
       Blank();
     }
