@@ -76,6 +76,9 @@ interface IndexTimelineViewPrivateTest {
   shouldRenderGroupItems(dayOffset: number): boolean;
   shouldEnableSwipeAction(): boolean;
   shouldRenderGapHint(): boolean;
+  resolveVisibleGroupEvents(group: IndexTimelineGroupTest): EventEntity[];
+  resolveSwipeAction(item: EventEntity): Object | undefined;
+  resolveGapHintCounts(): number[];
   setInitiallyProvidedValue(params: IndexTimelineViewParamsTest): void;
   updateStateVars(params: IndexTimelineViewParamsTest): void;
   buildDateHeader(text: string, dayOffset: number, placeCount: number): void;
@@ -823,6 +826,66 @@ export default function indexTimelineViewHelperTest() {
       expect(visible).assertTrue();
       expect(hiddenByArchive).assertFalse();
       expect(hiddenByZero).assertFalse();
+    });
+
+    it('boundary: timeline_view_helper_should_resolve_visible_group_events_to_empty_when_collapsed', 0, () => {
+      // Arrange
+      const page = new IndexTimelineView(undefined, {} as LocalStorage) as Object as IndexTimelineViewPrivateTest;
+      const first = buildTimelineEvent(101);
+      const second = buildTimelineEvent(102);
+      const group: IndexTimelineGroupTest = {
+        dayOffset: 12,
+        actualDateMs: 120,
+        dateHeader: 'Day 12',
+        events: [first, second]
+      };
+      page.onIsDayCollapsed = (dayOffset: number) => dayOffset === 12;
+
+      // Act
+      const hidden = page.resolveVisibleGroupEvents(group);
+      page.onIsDayCollapsed = (_dayOffset: number) => false;
+      const visible = page.resolveVisibleGroupEvents(group);
+
+      // Assert
+      expect(hidden.length).assertEqual(0);
+      expect(visible.length).assertEqual(2);
+    });
+
+    it('boundary: timeline_view_helper_should_resolve_swipe_action_only_when_not_archived', 0, () => {
+      // Arrange
+      const page = new IndexTimelineView(undefined, {} as LocalStorage) as Object as IndexTimelineViewPrivateTest;
+      const event = buildTimelineEvent(103);
+      page.isArchived = true;
+
+      // Act
+      const disabled = page.resolveSwipeAction(event);
+      page.isArchived = false;
+      const enabled = page.resolveSwipeAction(event);
+
+      // Assert
+      expect(disabled === undefined).assertTrue();
+      expect(enabled !== undefined).assertTrue();
+    });
+
+    it('combined: timeline_view_helper_should_resolve_gap_hint_count_list_for_active_positive_gaps', 0, () => {
+      // Arrange
+      const page = new IndexTimelineView(undefined, {} as LocalStorage) as Object as IndexTimelineViewPrivateTest;
+      page.isArchived = false;
+      page.gapsCount = 3;
+
+      // Act
+      const visible = page.resolveGapHintCounts();
+      page.isArchived = true;
+      const hiddenByArchive = page.resolveGapHintCounts();
+      page.isArchived = false;
+      page.gapsCount = 0;
+      const hiddenByZero = page.resolveGapHintCounts();
+
+      // Assert
+      expect(visible.length).assertEqual(1);
+      expect(visible[0]).assertEqual(3);
+      expect(hiddenByArchive.length).assertEqual(0);
+      expect(hiddenByZero.length).assertEqual(0);
     });
   });
 }
