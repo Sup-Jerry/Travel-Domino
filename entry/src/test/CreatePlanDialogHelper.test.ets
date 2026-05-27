@@ -6,7 +6,10 @@ import {
 } from '../main/ets/pages/components/dialogs/CreatePlanDialog';
 
 class DialogControllerMockCreatePlan {
+  closed: boolean = false;
+
   close(): void {
+    this.closed = true;
   }
 }
 
@@ -16,7 +19,10 @@ interface CreatePlanDialogPrivateTest {
   selectedDate: Date;
   effectiveTheme: string;
   initialRender(): void;
+  confirmCreatePlan(): Promise<void>;
   setController(controller: DialogControllerMockCreatePlan): void;
+  onCreatePlan: (title: string, startDate: number) => Promise<number>;
+  onPlanCreated: (planId: number, title: string) => void;
 }
 
 export default function createPlanDialogHelperTest() {
@@ -164,6 +170,76 @@ export default function createPlanDialogHelperTest() {
 
       // Assert
       expect(threw).assertFalse();
+    });
+
+    it('boundary: create_plan_dialog_confirm_should_skip_when_title_invalid', 0, async () => {
+      // Arrange
+      const page = new CreatePlanDialog(undefined, {} as LocalStorage) as Object as CreatePlanDialogPrivateTest;
+      const controller = new DialogControllerMockCreatePlan();
+      let createCalls = 0;
+      page.controller = controller;
+      page.title = '   ';
+      page.onCreatePlan = async (): Promise<number> => {
+        createCalls += 1;
+        return 1;
+      };
+
+      // Act
+      await page.confirmCreatePlan();
+
+      // Assert
+      expect(createCalls).assertEqual(0);
+      expect(controller.closed).assertFalse();
+    });
+
+    it('boundary: create_plan_dialog_confirm_should_keep_dialog_open_when_create_fails', 0, async () => {
+      // Arrange
+      const page = new CreatePlanDialog(undefined, {} as LocalStorage) as Object as CreatePlanDialogPrivateTest;
+      const controller = new DialogControllerMockCreatePlan();
+      let notified = 0;
+      page.controller = controller;
+      page.title = 'hangzhou trip';
+      page.selectedDate = new Date(2026, 4, 1);
+      page.onCreatePlan = async (): Promise<number> => 0;
+      page.onPlanCreated = (): void => {
+        notified += 1;
+      };
+
+      // Act
+      await page.confirmCreatePlan();
+
+      // Assert
+      expect(notified).assertEqual(0);
+      expect(controller.closed).assertFalse();
+    });
+
+    it('normal: create_plan_dialog_confirm_should_notify_and_close_when_create_succeeds', 0, async () => {
+      // Arrange
+      const page = new CreatePlanDialog(undefined, {} as LocalStorage) as Object as CreatePlanDialogPrivateTest;
+      const controller = new DialogControllerMockCreatePlan();
+      let createdPlanId = -1;
+      let createdTitle = '';
+      let passedStartDate = 0;
+      page.controller = controller;
+      page.title = 'nanjing trip';
+      page.selectedDate = new Date(2026, 6, 3);
+      page.onCreatePlan = async (_title: string, startDate: number): Promise<number> => {
+        passedStartDate = startDate;
+        return 42;
+      };
+      page.onPlanCreated = (planId: number, title: string): void => {
+        createdPlanId = planId;
+        createdTitle = title;
+      };
+
+      // Act
+      await page.confirmCreatePlan();
+
+      // Assert
+      expect(passedStartDate).assertEqual(page.selectedDate.getTime());
+      expect(createdPlanId).assertEqual(42);
+      expect(createdTitle).assertEqual('nanjing trip');
+      expect(controller.closed).assertTrue();
     });
   });
 }
