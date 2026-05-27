@@ -1390,6 +1390,33 @@ export default function phase2BatchAHTest() {
       expect(groups[0].events[0].id).assertEqual(64);
     });
 
+    it('boundary: timeline_grouping_generate_groups_should_sort_by_custom_effective_day_offset', 0, () => {
+      // Arrange
+      const base = new Date(2026, 3, 1).getTime();
+      const e1 = createEventForAH(651, 'custom-a');
+      const e2 = createEventForAH(652, 'custom-b');
+      e1.day_offset = 1;
+      e2.day_offset = 0;
+      e1.dynamic_day_offset = 1;
+      e2.dynamic_day_offset = 0;
+      e1.sort_order = 200;
+      e2.sort_order = 100;
+      // Act
+      const groups = TimelineGroupingService.generateGroups(
+        [e1, e2],
+        base,
+        undefined,
+        undefined,
+        (event: EventEntity): number => event.id === 651 ? -1 : 2
+      );
+      // Assert
+      expect(groups.length).assertEqual(2);
+      expect(groups[0].events[0].id).assertEqual(651);
+      expect(groups[0].dayOffset).assertEqual(1);
+      expect(groups[1].events[0].id).assertEqual(652);
+      expect(groups[1].dayOffset).assertEqual(0);
+    });
+
     it('invalid: timeline_grouping_generate_groups_should_return_empty_when_no_schedule_events', 0, () => {
       // Arrange
       // Act
@@ -1502,6 +1529,24 @@ export default function phase2BatchAHTest() {
       expect(result[1].id).assertEqual(74);
     });
 
+    it('boundary: timeline_grouping_get_events_by_place_name_should_fallback_to_id_sort_when_order_equal', 0, () => {
+      // Arrange
+      const e1 = createEventForAH(761, 'gallery');
+      const e2 = createEventForAH(760, 'gallery');
+      e1.sort_order = 100;
+      e2.sort_order = 100;
+      e1.day_offset = 0;
+      e2.day_offset = 0;
+      e1.dynamic_day_offset = 0;
+      e2.dynamic_day_offset = 0;
+      // Act
+      const result = TimelineGroupingService.getEventsByPlaceName([e1, e2], 'gallery');
+      // Assert
+      expect(result.length).assertEqual(2);
+      expect(result[0].id).assertEqual(760);
+      expect(result[1].id).assertEqual(761);
+    });
+
     it('invalid: timeline_grouping_get_events_by_place_name_should_return_empty_when_place_blank', 0, () => {
       // Arrange
       // Act
@@ -1573,6 +1618,24 @@ export default function phase2BatchAHTest() {
       expect(summary.skippedRecords).assertEqual(0);
       expect(summary.records[0].id).assertEqual(88);
       expect(summary.records[1].id).assertEqual(89);
+    });
+
+    it('boundary: timeline_grouping_get_place_checkin_summary_should_sort_records_by_actual_start_when_end_missing', 0, () => {
+      // Arrange
+      const first = createEventForAH(891, 'dock');
+      first.completion_status = EventEntity.STATE_PENDING;
+      first.actual_start_time = 120 * 60000;
+      first.actual_end_time = 0;
+      const second = createEventForAH(892, 'dock');
+      second.completion_status = EventEntity.STATE_PENDING;
+      second.actual_start_time = 40 * 60000;
+      second.actual_end_time = 0;
+      // Act
+      const summary = TimelineGroupingService.getPlaceCheckinSummary([second, first], 'dock');
+      // Assert
+      expect(summary.totalRecords).assertEqual(2);
+      expect(summary.records[0].id).assertEqual(891);
+      expect(summary.records[1].id).assertEqual(892);
     });
 
     it('normal: timeline_grouping_get_all_place_checkin_summaries_should_build_multi_place_result', 0, () => {

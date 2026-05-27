@@ -272,9 +272,6 @@ export class TimelineDistributionService implements ITimelineDistributionService
   private isSameDayGapWithPreviousScheduleItem(item: EventEntity): boolean {
     const schedule = this.host.getOrderedScheduleEvents();
     const idx = schedule.findIndex((event: EventEntity) => event.id === item.id);
-    if (idx <= 0) {
-      return false;
-    }
     const prev = schedule[idx - 1];
     return this.host.getEffectiveDayOffset(prev) === this.host.getEffectiveDayOffset(item);
   }
