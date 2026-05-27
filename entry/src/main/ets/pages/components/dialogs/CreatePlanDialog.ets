@@ -25,6 +25,17 @@ export struct CreatePlanDialog {
     return ThemeCenter.getPalette(this.effectiveTheme);
   }
 
+  async confirmCreatePlan(): Promise<void> {
+    if (!canCreatePlanWithTitle(this.title)) {
+      return;
+    }
+    const newPlanId = await this.onCreatePlan(this.title, this.selectedDate.getTime());
+    if (newPlanId > 0) {
+      this.onPlanCreated(newPlanId, this.title);
+      this.controller.close();
+    }
+  }
+
   build() {
     Column() {
       Text('创建新计划')
@@ -94,13 +105,7 @@ export struct CreatePlanDialog {
           .backgroundColor(this.getPalette().primary)
           .fontColor(Color.White)
           .onClick(async () => {
-            if (canCreatePlanWithTitle(this.title)) {
-              const newPlanId = await this.onCreatePlan(this.title, this.selectedDate.getTime());
-              if (newPlanId > 0) {
-                this.onPlanCreated(newPlanId, this.title);
-                this.controller.close();
-              }
-            }
+            await this.confirmCreatePlan();
           })
           .width('40%')
       }

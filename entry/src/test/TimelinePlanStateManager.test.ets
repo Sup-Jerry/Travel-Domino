@@ -472,6 +472,23 @@ export default function timelinePlanStateManagerTest() {
       expect(machine.locationListener === null).assertTrue();
     });
 
+    it('boundary: bind_plan_state_should_skip_sync_when_host_plan_id_non_positive', 0, () => {
+      // Arrange
+      const host = new FakeTimelinePlanStateHost();
+      const machine = new FakePlanStateMachineForPlanStateTest();
+      host.planId = 0;
+      host.planStateMachine = machine as Object as PlanStateMachine;
+      const manager = new TimelinePlanStateManager(host);
+
+      // Act
+      manager.bindPlanState(10);
+      manager.unbindPlanState();
+
+      // Assert
+      expect(machine.status).assertEqual(PlanStatus.DRAFT);
+      expect(machine.evaluateCount).assertEqual(0);
+    });
+
     it('combined: location_samples_should_ignore_invalid_values_and_track_motion_distance', 0, () => {
       // Arrange
       const host = new FakeTimelinePlanStateHost();
@@ -532,6 +549,26 @@ export default function timelinePlanStateManagerTest() {
       expect(machine.status).assertEqual(PlanStatus.COMPLETED);
     });
 
+    it('normal: bind_plan_state_should_confirm_and_evaluate_when_schedule_exists_but_not_all_completed', 0, () => {
+      // Arrange
+      const host = new FakeTimelinePlanStateHost();
+      const machine = new FakePlanStateMachineForPlanStateTest();
+      const pending = new EventEntity();
+      pending.status = 1;
+      pending.completion_status = EventEntity.STATE_PENDING;
+      host.events = [pending];
+      host.planStateMachine = machine as Object as PlanStateMachine;
+      const manager = new TimelinePlanStateManager(host);
+
+      // Act
+      manager.bindPlanState(host.planId);
+      manager.unbindPlanState();
+
+      // Assert
+      expect(machine.status).assertEqual(PlanStatus.CONFIRMED);
+      expect(machine.evaluateCount > 0).assertTrue();
+    });
+
     it('normal: resume_success_should_update_weather_hint_and_recalculate', 0, () => {
       // Arrange
       const host = new FakeTimelinePlanStateHost();
@@ -586,6 +623,29 @@ export default function timelinePlanStateManagerTest() {
       expect(host.stopSchedulerCount > 0).assertTrue();
       expect(host.executionWeatherHint).assertEqual('');
       expect(host.executionWeatherSuggestions.length).assertEqual(0);
+    });
+
+    it('boundary: draft_transition_should_stop_scheduler_without_clearing_execution_weather_cache', 0, () => {
+      // Arrange
+      const host = new FakeTimelinePlanStateHost();
+      host.weatherFeatureEnabled = true;
+      host.executionWeatherHint = 'keep_hint_for_draft';
+      host.executionWeatherSuggestions = [{} as WeatherSuggestion];
+      const machine = new FakePlanStateMachineForPlanStateTest();
+      machine.status = PlanStatus.CONFIRMED;
+      host.planStateMachine = machine as Object as PlanStateMachine;
+      const manager = new TimelinePlanStateManager(host);
+
+      // Act
+      manager.bindPlanState(host.planId);
+      machine.emitTransition(PlanStatus.DRAFT);
+      manager.unbindPlanState();
+
+      // Assert
+      expect(host.currentPlanStatus).assertEqual(PlanStatus.DRAFT);
+      expect(host.stopSchedulerCount > 0).assertTrue();
+      expect(host.executionWeatherHint).assertEqual('keep_hint_for_draft');
+      expect(host.executionWeatherSuggestions.length).assertEqual(1);
     });
 
     it('conflict: location_change_should_not_refresh_execution_weather_when_policy_disables_location_trigger', 0, () => {
