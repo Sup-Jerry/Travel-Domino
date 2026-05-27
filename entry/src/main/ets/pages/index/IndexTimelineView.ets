@@ -11,6 +11,16 @@ export interface IndexTimelineTheme {
   warning: string;
 }
 
+interface IndexTimelineSwipeActionItem {
+  builder: () => void;
+  actionAreaDistance: number;
+}
+
+interface IndexTimelineSwipeActionConfig {
+  start: IndexTimelineSwipeActionItem;
+  end: IndexTimelineSwipeActionItem;
+}
+
 export function resolveIndexTimelineVisiblePlaceCount(placeCount: number): number {
   return Math.max(0, placeCount);
 }
@@ -80,6 +90,34 @@ export struct IndexTimelineView {
     return shouldShowIndexTimelineGapHint(this.isArchived, this.gapsCount);
   }
 
+  private resolveVisibleGroupEvents(group: DateGroup): EventEntity[] {
+    return this.shouldRenderGroupItems(group.dayOffset) ? group.events : [];
+  }
+
+  private resolveSwipeAction(item: EventEntity): IndexTimelineSwipeActionConfig | undefined {
+    if (!this.shouldEnableSwipeAction()) {
+      return undefined;
+    }
+    return {
+      start: {
+        builder: () => {
+          this.swipeStartAction(item);
+        },
+        actionAreaDistance: 60
+      },
+      end: {
+        builder: () => {
+          this.swipeEndAction(item);
+        },
+        actionAreaDistance: 60
+      }
+    };
+  }
+
+  private resolveGapHintCounts(): number[] {
+    return this.shouldRenderGapHint() ? [this.gapsCount] : [];
+  }
+
   @Builder
   private buildDateHeader(text: string, dayOffset: number, placeCount: number) {
     Row() {
@@ -141,57 +179,42 @@ export struct IndexTimelineView {
       List({ space: 0 }) {
         ForEach(this.groupedEvents, (group: DateGroup) => {
           ListItemGroup({ header: this.buildDateHeader(group.dateHeader, group.dayOffset, group.events.length) }) {
-            if (this.shouldRenderGroupItems(group.dayOffset)) {
-              ForEach(group.events, (item: EventEntity, dayIndex: number) => {
-                ListItem() {
-                  EventItemView({
-                    event: item,
-                    isCompanionMode: this.isCompanionMode,
-                    showWeather: this.showWeather,
-                    showTravelIndicator: dayIndex > 0,
-                    index: this.allEvents.indexOf(item),
-                    totalCount: this.allEvents.length,
-                    onMoveUp: () => this.onMoveUp(item),
-                    onMoveDown: () => this.onMoveDown(item),
-                    onMainContentClick: () => this.onMainContentClick(item),
-                    onTimeClick: () => this.onTimeClick(item),
-                    onTravelModeChange: (mode: number) => this.onTravelModeChange(item, mode),
-                    onManualTravelInput: (minutes: number) => this.onManualTravelInput(item, minutes),
-                    onCommuteChange: (minutes: number) => this.onCommuteChange(item, minutes),
-                    onConflictAction: (targetItem: EventEntity, strategy: ConflictActionStrategy, gapMinutes: number) => {
-                      this.onConflictAction(targetItem, strategy, gapMinutes);
-                    }
-                  })
-                    .enabled(shouldEnableIndexTimelineItem(this.isArchived));
-                }
-                .swipeAction(!this.shouldEnableSwipeAction() ? undefined : {
-                  start: {
-                    builder: () => {
-                      this.swipeStartAction(item);
-                    },
-                    actionAreaDistance: 60
-                  },
-                  end: {
-                    builder: () => {
-                      this.swipeEndAction(item);
-                    },
-                    actionAreaDistance: 60
+            ForEach(this.resolveVisibleGroupEvents(group), (item: EventEntity, dayIndex: number) => {
+              ListItem() {
+                EventItemView({
+                  event: item,
+                  isCompanionMode: this.isCompanionMode,
+                  showWeather: this.showWeather,
+                  showTravelIndicator: dayIndex > 0,
+                  index: this.allEvents.indexOf(item),
+                  totalCount: this.allEvents.length,
+                  onMoveUp: () => this.onMoveUp(item),
+                  onMoveDown: () => this.onMoveDown(item),
+                  onMainContentClick: () => this.onMainContentClick(item),
+                  onTimeClick: () => this.onTimeClick(item),
+                  onTravelModeChange: (mode: number) => this.onTravelModeChange(item, mode),
+                  onManualTravelInput: (minutes: number) => this.onManualTravelInput(item, minutes),
+                  onCommuteChange: (minutes: number) => this.onCommuteChange(item, minutes),
+                  onConflictAction: (targetItem: EventEntity, strategy: ConflictActionStrategy, gapMinutes: number) => {
+                    this.onConflictAction(targetItem, strategy, gapMinutes);
                   }
-                });
-              }, (item: EventEntity) => `${item.id}_${item.sort_order}_${item.status}`);
-            }
+                })
+                  .enabled(shouldEnableIndexTimelineItem(this.isArchived));
+              }
+              .swipeAction(this.resolveSwipeAction(item));
+            }, (item: EventEntity) => `${item.id}_${item.sort_order}_${item.status}`);
           }
           .divider({ strokeWidth: 0 });
         }, (group: DateGroup) => `${group.dayOffset}_${group.actualDateMs}_${group.events.length}`);
 
-        if (this.shouldRenderGapHint()) {
+        ForEach(this.resolveGapHintCounts(), (gapCount: number) => {
           ListItem() {
             Row() {
               Text('→')
                 .fontSize(14)
                 .fontColor(this.theme.textTertiary);
 
-              Text(`检测到 ${this.gapsCount} 处空闲时间，是否立即优化？`)
+              Text(`检测到 ${gapCount} 处空闲时间，是否立即优化？`)
                 .fontSize(13)
                 .fontColor(this.theme.textSecondary)
                 .layoutWeight(1);
@@ -200,8 +223,8 @@ export struct IndexTimelineView {
             .padding({ top: 12, bottom: 12, left: 16, right: 16 })
             .justifyContent(FlexAlign.Center)
             .onClick(() => this.onOpenGapOptimize());
-          }
-        }
+          };
+        });
 
         ListItem().height(resolveIndexTimelineBottomSpacerHeight(this.isCompanionMode));
       }
