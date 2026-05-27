@@ -73,6 +73,9 @@ interface IndexTimelineViewPrivateTest {
   onMoveToBacklog: (item: EventEntity) => void;
   onDeleteEvent: (item: EventEntity) => void;
   onOpenGapOptimize: () => void;
+  shouldRenderGroupItems(dayOffset: number): boolean;
+  shouldEnableSwipeAction(): boolean;
+  shouldRenderGapHint(): boolean;
   setInitiallyProvidedValue(params: IndexTimelineViewParamsTest): void;
   updateStateVars(params: IndexTimelineViewParamsTest): void;
   buildDateHeader(text: string, dayOffset: number, placeCount: number): void;
@@ -771,6 +774,55 @@ export default function indexTimelineViewHelperTest() {
       expect(gapHintVisible).assertTrue();
       expect(resolveIndexTimelineBottomSpacerHeight(false)).assertEqual(100);
       expect(header.indexOf('Day 10') >= 0).assertTrue();
+    });
+
+    it('boundary: timeline_view_helper_should_hide_group_items_when_day_is_collapsed', 0, () => {
+      // Arrange
+      const page = new IndexTimelineView(undefined, {} as LocalStorage) as Object as IndexTimelineViewPrivateTest;
+      page.onIsDayCollapsed = (dayOffset: number) => dayOffset === 3;
+
+      // Act
+      const hidden = page.shouldRenderGroupItems(3);
+      const visible = page.shouldRenderGroupItems(4);
+
+      // Assert
+      expect(hidden).assertFalse();
+      expect(visible).assertTrue();
+    });
+
+    it('boundary: timeline_view_helper_should_disable_swipe_action_when_archived', 0, () => {
+      // Arrange
+      const page = new IndexTimelineView(undefined, {} as LocalStorage) as Object as IndexTimelineViewPrivateTest;
+      page.isArchived = true;
+
+      // Act
+      const disabled = page.shouldEnableSwipeAction();
+      page.isArchived = false;
+      const enabled = page.shouldEnableSwipeAction();
+
+      // Assert
+      expect(disabled).assertFalse();
+      expect(enabled).assertTrue();
+    });
+
+    it('combined: timeline_view_helper_should_show_gap_hint_only_for_active_positive_gaps', 0, () => {
+      // Arrange
+      const page = new IndexTimelineView(undefined, {} as LocalStorage) as Object as IndexTimelineViewPrivateTest;
+      page.isArchived = false;
+      page.gapsCount = 2;
+
+      // Act
+      const visible = page.shouldRenderGapHint();
+      page.isArchived = true;
+      const hiddenByArchive = page.shouldRenderGapHint();
+      page.isArchived = false;
+      page.gapsCount = 0;
+      const hiddenByZero = page.shouldRenderGapHint();
+
+      // Assert
+      expect(visible).assertTrue();
+      expect(hiddenByArchive).assertFalse();
+      expect(hiddenByZero).assertFalse();
     });
   });
 }

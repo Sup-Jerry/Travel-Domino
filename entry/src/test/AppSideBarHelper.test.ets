@@ -49,6 +49,7 @@ interface AppSideBarPrivateTest {
   getPalette(): AppSideBarPaletteTest;
   createRouteOptions(url: string): AppSideBarRouteOptionsTest;
   safeReplaceUrl(url: string): Promise<void>;
+  handleNavClick(target: AppNavKey): void;
   initialRender(): void;
 }
 
@@ -270,6 +271,59 @@ export default function appSideBarHelperTest() {
       // Assert
       expect(threw).assertFalse();
       expect(page.current).assertEqual('plans');
+    });
+
+    it('boundary: app_sidebar_handle_nav_click_should_close_without_navigation_when_target_is_current', 0, async () => {
+      // Arrange
+      const page = createAppSideBarForTest();
+      const router = new AppSideBarRouterMockTest();
+      page.getUIContext = (): AppSideBarUiContextTest => new AppSideBarUiContextMockTest(router);
+      page.isSideBarShow = true;
+      page.current = 'plans';
+
+      // Act
+      page.handleNavClick('plans');
+      await Promise.resolve();
+
+      // Assert
+      expect(page.isSideBarShow).assertFalse();
+      expect(router.urls.length).assertEqual(0);
+    });
+
+    it('normal: app_sidebar_handle_nav_click_should_navigate_archive_when_target_differs', 0, async () => {
+      // Arrange
+      const page = createAppSideBarForTest();
+      const router = new AppSideBarRouterMockTest();
+      page.getUIContext = (): AppSideBarUiContextTest => new AppSideBarUiContextMockTest(router);
+      page.isSideBarShow = true;
+      page.current = 'plans';
+
+      // Act
+      page.handleNavClick('archive');
+      await Promise.resolve();
+
+      // Assert
+      expect(page.isSideBarShow).assertFalse();
+      expect(router.urls.length).assertEqual(1);
+      expect(router.urls[0]).assertEqual('pages/ArchivePage');
+    });
+
+    it('combined: app_sidebar_handle_nav_click_should_cover_trash_and_settings_routes', 0, async () => {
+      // Arrange
+      const page = createAppSideBarForTest();
+      const router = new AppSideBarRouterMockTest();
+      page.getUIContext = (): AppSideBarUiContextTest => new AppSideBarUiContextMockTest(router);
+      page.current = 'archive';
+
+      // Act
+      page.handleNavClick('trash');
+      page.handleNavClick('settings');
+      await Promise.resolve();
+
+      // Assert
+      expect(router.urls.length).assertEqual(2);
+      expect(router.urls[0]).assertEqual('pages/TrashPage');
+      expect(router.urls[1]).assertEqual('pages/SettingsPage');
     });
   });
 }

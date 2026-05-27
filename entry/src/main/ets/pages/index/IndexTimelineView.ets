@@ -68,6 +68,18 @@ export struct IndexTimelineView {
   onDeleteEvent: (item: EventEntity) => void = (_item: EventEntity) => {};
   onOpenGapOptimize: () => void = () => {};
 
+  private shouldRenderGroupItems(dayOffset: number): boolean {
+    return shouldShowIndexTimelineGroupItems(this.onIsDayCollapsed(dayOffset));
+  }
+
+  private shouldEnableSwipeAction(): boolean {
+    return shouldEnableIndexTimelineItem(this.isArchived);
+  }
+
+  private shouldRenderGapHint(): boolean {
+    return shouldShowIndexTimelineGapHint(this.isArchived, this.gapsCount);
+  }
+
   @Builder
   private buildDateHeader(text: string, dayOffset: number, placeCount: number) {
     Row() {
@@ -129,7 +141,7 @@ export struct IndexTimelineView {
       List({ space: 0 }) {
         ForEach(this.groupedEvents, (group: DateGroup) => {
           ListItemGroup({ header: this.buildDateHeader(group.dateHeader, group.dayOffset, group.events.length) }) {
-            if (shouldShowIndexTimelineGroupItems(this.onIsDayCollapsed(group.dayOffset))) {
+            if (this.shouldRenderGroupItems(group.dayOffset)) {
               ForEach(group.events, (item: EventEntity, dayIndex: number) => {
                 ListItem() {
                   EventItemView({
@@ -152,7 +164,7 @@ export struct IndexTimelineView {
                   })
                     .enabled(shouldEnableIndexTimelineItem(this.isArchived));
                 }
-                .swipeAction(!shouldEnableIndexTimelineItem(this.isArchived) ? undefined : {
+                .swipeAction(!this.shouldEnableSwipeAction() ? undefined : {
                   start: {
                     builder: () => {
                       this.swipeStartAction(item);
@@ -172,7 +184,7 @@ export struct IndexTimelineView {
           .divider({ strokeWidth: 0 });
         }, (group: DateGroup) => `${group.dayOffset}_${group.actualDateMs}_${group.events.length}`);
 
-        if (shouldShowIndexTimelineGapHint(this.isArchived, this.gapsCount)) {
+        if (this.shouldRenderGapHint()) {
           ListItem() {
             Row() {
               Text('→')
