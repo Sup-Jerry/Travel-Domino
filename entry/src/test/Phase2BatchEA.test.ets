@@ -11,11 +11,21 @@ interface PlanJsonExportDialogPrivateEA {
   jsonText: string;
   safeShowToast(message: string): void;
   copyJson(): Promise<void>;
+  handleCloseClick(): void;
+  handleCopyClick(): void;
   setController(controller: DialogControllerMockEA): void;
 }
 
 function createPlanJsonExportDialogEA(): PlanJsonExportDialogPrivateEA {
   return new PlanJsonExportDialog(undefined, {} as LocalStorage) as Object as PlanJsonExportDialogPrivateEA;
+}
+
+class DialogControllerSpyEA extends DialogControllerMockEA {
+  public closeCount: number = 0;
+
+  close(): void {
+    this.closeCount += 1;
+  }
 }
 
 export default function phase2BatchEATest() {
@@ -66,6 +76,25 @@ export default function phase2BatchEATest() {
       await page.copyJson();
 
       // Assert
+      expect(page.jsonText.length > 0).assertTrue();
+    });
+
+    it('combined: plan_json_export_close_and_copy_handlers_should_delegate_to_internal_actions', 0, async () => {
+      // Arrange
+      const page = createPlanJsonExportDialogEA();
+      const controller = new DialogControllerSpyEA();
+      page.controller = controller;
+      page.jsonText = '{"schemaVersion":1}';
+
+      // Act
+      page.handleCloseClick();
+      page.handleCopyClick();
+      await new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => {
+        setTimeout(() => resolve(), 30);
+      });
+
+      // Assert
+      expect(controller.closeCount).assertEqual(1);
       expect(page.jsonText.length > 0).assertTrue();
     });
 

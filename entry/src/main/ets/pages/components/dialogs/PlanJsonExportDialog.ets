@@ -32,6 +32,14 @@ export struct PlanJsonExportDialog {
     }
   }
 
+  private handleCloseClick(): void {
+    this.controller.close();
+  }
+
+  private handleCopyClick(): void {
+    void this.copyJson();
+  }
+
   build() {
     Column() {
       Text('导出计划 JSON')
@@ -56,7 +64,7 @@ export struct PlanJsonExportDialog {
           .fontColor($r('app.color.text_secondary'))
           .width('42%')
           .onClick(() => {
-            this.controller.close();
+            this.handleCloseClick();
           })
 
         Button('复制JSON')
@@ -64,7 +72,7 @@ export struct PlanJsonExportDialog {
           .fontColor(Color.White)
           .width('42%')
           .onClick(() => {
-            void this.copyJson();
+            this.handleCopyClick();
           })
       }
       .justifyContent(FlexAlign.SpaceBetween)
