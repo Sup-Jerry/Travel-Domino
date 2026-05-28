@@ -71,6 +71,10 @@ export function resolvePlanSearchResultText(searching: boolean, loadingMore: boo
   return `结果 ${safeCount} 条`;
 }
 
+export function shouldPlanSearchTriggerLoadMoreOnScroll(end: number, resultCount: number): boolean {
+  return end >= resultCount - 1;
+}
+
 @Entry
 @Component
 struct PlanSearchPage {
@@ -347,7 +351,7 @@ struct PlanSearchPage {
           .layoutWeight(1)
           .padding({ left: 16, right: 16, top: 8, bottom: 90 })
           .onScrollIndex((start: number, end: number, _center: number) => {
-            if (end >= this.resultList.length - 1) {
+            if (shouldPlanSearchTriggerLoadMoreOnScroll(end, this.resultList.length)) {
               void this.loadMoreIfNeeded();
             }
           });
