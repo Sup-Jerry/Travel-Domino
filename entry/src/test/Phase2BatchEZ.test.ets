@@ -284,6 +284,25 @@ export default function phase2BatchEZTest() {
       }, 'invalid_event:coordinate_nan:index=0');
     });
 
+    it('boundary: plan_serializer_should_fallback_duration_to_30_when_non_positive_in_normalize_helpers', 0, () => {
+      // Arrange
+      const zeroDuration = buildEventEZ('zero_duration_ez');
+      zeroDuration.duration = 0;
+
+      // Act
+      const exported = JSON.parse(PlanSerializer.serializePlan({
+        title: 'Duration Fallback',
+        startDate: 1713000000000,
+        status: 1,
+        enableAutoAmapRoute: 1
+      }, [zeroDuration])) as PlanPayloadEZ;
+      const imported = PlanSerializer.normalizeImportEvent(zeroDuration, 0);
+
+      // Assert
+      expect(exported.events[0].duration || 0).assertEqual(30);
+      expect(imported.duration || 0).assertEqual(30);
+    });
+
     it('normal: validator_marker_should_cover_normal_case', 0, () => {
       // Arrange
       const marker = true;

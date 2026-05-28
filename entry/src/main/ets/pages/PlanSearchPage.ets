@@ -214,6 +214,12 @@ struct PlanSearchPage {
     }
   }
 
+  private handleScrollIndexEnd(end: number): void {
+    if (shouldPlanSearchTriggerLoadMoreOnScroll(end, this.resultList.length)) {
+      void this.loadMoreIfNeeded();
+    }
+  }
+
   private openPlan(item: PlanItem): void {
     hilog.info(0x0000, TAG, `[PLAN_SEARCH][select] planId=${item.id}, title=${item.title}`);
     try {
@@ -351,9 +357,7 @@ struct PlanSearchPage {
           .layoutWeight(1)
           .padding({ left: 16, right: 16, top: 8, bottom: 90 })
           .onScrollIndex((start: number, end: number, _center: number) => {
-            if (shouldPlanSearchTriggerLoadMoreOnScroll(end, this.resultList.length)) {
-              void this.loadMoreIfNeeded();
-            }
+            this.handleScrollIndexEnd(end);
           });
         }
       }

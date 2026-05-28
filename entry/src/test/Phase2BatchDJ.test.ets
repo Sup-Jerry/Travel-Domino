@@ -33,6 +33,7 @@ interface PlanSearchPagePrivateDJ {
   scheduleSearch(value: string): void;
   runSearch(rawKeyword: string): Promise<void>;
   loadMoreIfNeeded(): Promise<void>;
+  handleScrollIndexEnd(end: number): void;
 }
 
 class SearchRepositoryMockDJ {
@@ -342,6 +343,28 @@ export default function phase2BatchDJTest() {
       // Assert
       expect(shouldLoadAtTail).assertTrue();
       expect(shouldSkipBeforeTail).assertFalse();
+    });
+
+    it('combined: plan_search_handle_scroll_index_end_should_trigger_only_at_tail', 0, async () => {
+      // Arrange
+      const repo = new SearchRepositoryMockDJ();
+      repo.pages.set('scroll:0', buildPlansDJ(40, 3000));
+      repo.pages.set('scroll:40', [buildPlanDJ(4000, 'scroll-more')]);
+      const patch = patchSearchRepoDJ(repo);
+      const page = createPageDJ();
+      await page.runSearch('scroll');
+
+      // Act
+      page.handleScrollIndexEnd(10);
+      await flushMicrotasksDJ();
+      page.handleScrollIndexEnd(39);
+      await flushMicrotasksDJ();
+      patch.restore();
+
+      // Assert
+      expect(repo.calls.length).assertEqual(2);
+      expect(page.resultList.length).assertEqual(41);
+      expect(page.currentOffset).assertEqual(41);
     });
   });
 }
