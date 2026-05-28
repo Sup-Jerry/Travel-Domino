@@ -236,5 +236,52 @@ export default function timelineHistoryManagerTest() {
       expect(summary.planName).assertEqual('计划 #17');
       expect(summary.activeCount).assertEqual(0);
     });
+
+    it('conflict: latest_event_should_break_zero_timestamp_tie_by_id_and_history_items_should_sort_equal_display_ts_by_id', 0, () => {
+      // Arrange
+      const older = createScheduleEvent(68, '零时间点', 0, 100);
+      const newer = createScheduleEvent(69, '零时间点', 0, 200);
+      const first = createScheduleEvent(70, '并列到达A', 0, 300);
+      const second = createScheduleEvent(71, '并列到达B', 0, 400);
+      first.actual_start_time = 500_000;
+      second.actual_start_time = 500_000;
+      const manager = new TimelineHistoryManager({ events: [older, newer, second, first], planId: 18, planName: '同时刻行程' });
+
+      // Act
+      const latest = manager.getLatestEventForPlace('零时间点');
+      const items = manager.getCurrentPlanHistoryTimelineItems();
+
+      // Assert
+      expect(latest !== null).assertTrue();
+      expect(latest?.id || 0).assertEqual(69);
+      expect(items.length).assertEqual(2);
+      expect(items[0].eventId).assertEqual(70);
+      expect(items[1].eventId).assertEqual(71);
+    });
+
+    it('combined: latest_event_should_use_actual_end_priority_and_active_item_should_keep_actual_start_group_key', 0, () => {
+      // Arrange
+      const byStart = createScheduleEvent(72, '真实时间点', 0, 100);
+      byStart.actual_start_time = 600_000;
+      const byEnd = createScheduleEvent(73, '真实时间点', 0, 200);
+      byEnd.actual_end_time = 700_000;
+      const active = createScheduleEvent(74, '进行中点', 0, 300);
+      active.dynamic_start_time = 800_000;
+      active.actual_start_time = 810_000;
+      const manager = new TimelineHistoryManager({ events: [byStart, byEnd, active], planId: 19, planName: '真实时间行程' });
+
+      // Act
+      const latest = manager.getLatestEventForPlace('真实时间点');
+      const items = manager.getCurrentPlanHistoryTimelineItems();
+      const activeItem = items.find((item) => item.eventId === 74);
+
+      // Assert
+      expect(latest !== null).assertTrue();
+      expect(latest?.id || 0).assertEqual(73);
+      expect(activeItem !== undefined).assertTrue();
+      expect(activeItem?.actionType || '').assertEqual('ACTIVE');
+      expect(activeItem?.displayTs || 0).assertEqual(810_000);
+      expect(activeItem?.groupDateKey === '未定').assertFalse();
+    });
   });
 }
