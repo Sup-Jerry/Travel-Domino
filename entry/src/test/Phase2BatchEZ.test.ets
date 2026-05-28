@@ -183,6 +183,57 @@ export default function phase2BatchEZTest() {
       }, 'invalid_field:events[0].transportMode:invalid_enum:9');
     });
 
+    it('boundary: plan_serializer_should_reject_oversized_raw_before_json_parse', 0, () => {
+      // Arrange
+      const oversizedRaw = repeatTextEZ('x', 1024 * 1024 + 1);
+
+      // Act
+      // Assert
+      assertThrowEZ((): void => {
+        PlanSerializer.deserializePlan(oversizedRaw);
+      }, `invalid_payload:json_too_large:${oversizedRaw.length}`);
+    });
+
+    it('invalid: plan_serializer_should_reject_not_number_plan_and_event_fields', 0, () => {
+      // Arrange
+      const badPlan = buildPayloadEZ([buildEventEZ('bad_plan_number_ez')]);
+      const badEvent = buildPayloadEZ([buildEventEZ('bad_event_number_ez')]);
+
+      // Act
+      Reflect.set(badPlan.plan as Object, 'startDate', 'bad');
+      Reflect.set(badEvent.events[0] as Object, 'status', 'bad');
+
+      // Assert
+      assertThrowEZ((): void => {
+        PlanSerializer.deserializePlan(stringifyPayloadEZ(badPlan));
+      }, 'invalid_field:plan.startDate:not_number');
+      assertThrowEZ((): void => {
+        PlanSerializer.deserializePlan(stringifyPayloadEZ(badEvent));
+      }, 'invalid_field:events[0].status:not_number');
+    });
+
+    it('combined: plan_serializer_should_reject_too_long_note_reasoning_and_address', 0, () => {
+      // Arrange
+      const noteEvent = buildEventEZ('note_too_long_ez');
+      const reasoningEvent = buildEventEZ('reasoning_too_long_ez');
+      const addressEvent = buildEventEZ('address_too_long_ez');
+      noteEvent.note = repeatTextEZ('n', 2001);
+      reasoningEvent.aiReasoning = repeatTextEZ('r', 4001);
+      addressEvent.address = repeatTextEZ('a', 2001);
+
+      // Act
+      // Assert
+      assertThrowEZ((): void => {
+        PlanSerializer.deserializePlan(stringifyPayloadEZ(buildPayloadEZ([noteEvent])));
+      }, 'invalid_event:note_too_long:index=0');
+      assertThrowEZ((): void => {
+        PlanSerializer.deserializePlan(stringifyPayloadEZ(buildPayloadEZ([reasoningEvent])));
+      }, 'invalid_event:reasoning_too_long:index=0');
+      assertThrowEZ((): void => {
+        PlanSerializer.deserializePlan(stringifyPayloadEZ(buildPayloadEZ([addressEvent])));
+      }, 'invalid_event:address_too_long:index=0');
+    });
+
     it('normal: validator_marker_should_cover_normal_case', 0, () => {
       // Arrange
       const marker = true;
