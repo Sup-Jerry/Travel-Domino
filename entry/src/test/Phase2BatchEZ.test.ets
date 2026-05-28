@@ -234,6 +234,56 @@ export default function phase2BatchEZTest() {
       }, 'invalid_event:address_too_long:index=0');
     });
 
+    it('boundary: plan_serializer_should_normalize_export_and_import_with_numeric_fallbacks', 0, () => {
+      // Arrange
+      const rawEvent = buildEventEZ('');
+      Reflect.set(rawEvent as Object, 'duration', 'bad');
+      Reflect.set(rawEvent as Object, 'travelMode', 'bad');
+      Reflect.set(rawEvent as Object, 'latitude', 'bad');
+      Reflect.set(rawEvent as Object, 'actualStartTime', -3);
+      rawEvent.transportMode = undefined;
+
+      // Act
+      const exported = JSON.parse(PlanSerializer.serializePlan({
+        title: 'Fallback Plan',
+        startDate: 1713000000000,
+        status: 1,
+        enableAutoAmapRoute: 1
+      }, [rawEvent])) as PlanPayloadEZ;
+      const imported = PlanSerializer.normalizeImportEvent(rawEvent, 2);
+
+      // Assert
+      expect(exported.events[0].duration || 0).assertEqual(30);
+      expect(exported.events[0].travelMode || 0).assertEqual(2);
+      expect(exported.events[0].transportMode || 0).assertEqual(2);
+      expect(exported.events[0].latitude || 0).assertEqual(0);
+      expect(exported.events[0].actualStartTime || 0).assertEqual(0);
+      expect(imported.duration || 0).assertEqual(30);
+      expect(imported.travelMode || 0).assertEqual(2);
+      expect(imported.transportMode || 0).assertEqual(2);
+      expect(imported.longitude || 0).assertEqual(0);
+    });
+
+    it('invalid: plan_serializer_should_allow_missing_transport_mode_but_reject_coordinate_nan_when_provided', 0, () => {
+      // Arrange
+      const noTransport = buildEventEZ('no_transport_mode_ez');
+      noTransport.transportMode = undefined;
+      const payloadWithoutTransport = buildPayloadEZ([noTransport]);
+
+      const badCoordinate = buildEventEZ('coordinate_nan_ez');
+      Reflect.set(badCoordinate as Object, 'latitude', 'bad');
+      const payloadWithBadCoordinate = buildPayloadEZ([badCoordinate]);
+
+      // Act
+      const parsed = PlanSerializer.deserializePlan(stringifyPayloadEZ(payloadWithoutTransport));
+
+      // Assert
+      expect(parsed.events.length).assertEqual(1);
+      assertThrowEZ((): void => {
+        PlanSerializer.deserializePlan(stringifyPayloadEZ(payloadWithBadCoordinate));
+      }, 'invalid_event:coordinate_nan:index=0');
+    });
+
     it('normal: validator_marker_should_cover_normal_case', 0, () => {
       // Arrange
       const marker = true;
