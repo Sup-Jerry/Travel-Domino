@@ -2,6 +2,7 @@ import { describe, it, expect } from '@ohos/hypium';
 import { WeatherRiskEvaluator } from '../main/ets/domain/services/WeatherRiskEvaluator';
 import { EventEntity } from '../main/ets/model/entity/EventEntity';
 import {
+  PlanNodeWeatherBinding,
   WeatherCollabContext,
   WeatherSnapshot,
   WeatherUserPreference
@@ -304,6 +305,63 @@ export default function weatherRiskEvaluatorTest() {
       expect(route.routeScore).assertEqual(0);
       expect(route.riskTags.includes('RAIN')).assertEqual(true);
       expect(route.riskTags.includes('HEAT')).assertEqual(true);
+    });
+
+    it('combined: public_node_suitability_should_skip_outdoor_penalties_for_indoor_event_even_under_rain_and_heat', 0, () => {
+      // Arrange
+      const evaluator = new WeatherRiskEvaluator();
+      const event = buildEvent(2);
+      const weather: WeatherSnapshot = {
+        locationKey: 'indoor-safe',
+        sourceType: 'PLAN_LOCATION',
+        weatherTime: Date.now(),
+        fetchTime: Date.now(),
+        conditionCode: 'RAIN',
+        conditionText: 'rain',
+        temperatureCelsius: 38
+      };
+      // Act
+      const result = evaluator.evaluateNodeSuitability(event, weather);
+      // Assert
+      expect(result.score).assertEqual(100);
+      expect(result.riskTags.length).assertEqual(0);
+    });
+
+    it('regression: route_summary_should_change_across_high_low_and_medium_preference_hints', 0, () => {
+      // Arrange
+      const evaluator = new WeatherRiskEvaluator();
+      const binding: PlanNodeWeatherBinding = {
+        nodeId: 'pref-1',
+        eventId: 1,
+        suitabilityScore: 80,
+        riskTags: []
+      };
+      const bindings: PlanNodeWeatherBinding[] = [binding];
+      const highPref: WeatherUserPreference = {
+        heatSensitivity: 2,
+        rainSensitivity: 2,
+        weatherRiskTolerance: 2
+      };
+      const lowPref: WeatherUserPreference = {
+        heatSensitivity: 0,
+        rainSensitivity: 0,
+        weatherRiskTolerance: 0
+      };
+      const mediumPref: WeatherUserPreference = {
+        heatSensitivity: 1,
+        rainSensitivity: 1,
+        weatherRiskTolerance: 1
+      };
+      // Act
+      const highSummary = evaluator.evaluateRouteSuitability(bindings, highPref).summaryText;
+      const lowSummary = evaluator.evaluateRouteSuitability(bindings, lowPref).summaryText;
+      const mediumSummary = evaluator.evaluateRouteSuitability(bindings, mediumPref).summaryText;
+      // Assert
+      expect(highSummary.length > 0).assertTrue();
+      expect(lowSummary.length > 0).assertTrue();
+      expect(mediumSummary.length > 0).assertTrue();
+      expect(highSummary === lowSummary).assertFalse();
+      expect(lowSummary === mediumSummary).assertFalse();
     });
   });
 }

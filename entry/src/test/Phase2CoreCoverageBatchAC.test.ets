@@ -5,6 +5,8 @@ import { RdbHelper } from '../main/ets/common/utils/RdbHelper';
 class FakeResultSetForAC {
   hasFirstRow: boolean = false;
   closeCount: number = 0;
+  rowIds: number[] = [];
+  private rowCursor: number = -1;
   longValues: Map<number, number> = new Map<number, number>();
   stringValues: Map<number, string> = new Map<number, string>();
 
@@ -12,11 +14,19 @@ class FakeResultSetForAC {
     return this.hasFirstRow;
   }
 
+  goToNextRow(): boolean {
+    this.rowCursor++;
+    return this.rowCursor < this.rowIds.length;
+  }
+
   getColumnIndex(_name: string): number {
     return 0;
   }
 
   getLong(_index: number): number {
+    if (this.rowIds.length > 0) {
+      return this.rowIds[this.rowCursor] ?? 0;
+    }
     return this.longValues.get(_index) ?? 0;
   }
 
@@ -26,7 +36,16 @@ class FakeResultSetForAC {
 
   close(): void {
     this.closeCount++;
+    this.rowCursor = -1;
   }
+}
+
+class NonErrorDeleteFailureForAC {
+  code: string = 'delete_failed_object_ac';
+}
+
+class NonErrorUpdateFailureForAC {
+  code: string = 'update_failed_object_ac';
 }
 
 class FakeRdbStoreForAC {
@@ -37,8 +56,11 @@ class FakeRdbStoreForAC {
   updateCount: number = 0;
   queryCount: number = 0;
   deleteShouldThrow: boolean = false;
+  deleteShouldThrowObject: boolean = false;
   updateShouldThrow: boolean = false;
+  updateShouldThrowObject: boolean = false;
   queryShouldThrow: boolean = false;
+  deleteReturnValue: number = 1;
   resultSet: FakeResultSetForAC = new FakeResultSetForAC();
 
   beginTransaction(): void {
@@ -58,13 +80,19 @@ class FakeRdbStoreForAC {
     if (this.deleteShouldThrow) {
       throw new Error('delete_failed_ac');
     }
-    return 1;
+    if (this.deleteShouldThrowObject) {
+      return Promise.reject(new NonErrorDeleteFailureForAC());
+    }
+    return this.deleteReturnValue;
   }
 
   async update(_valueBucket: Object, _predicates: Object): Promise<number> {
     this.updateCount++;
     if (this.updateShouldThrow) {
       throw new Error('update_failed_ac');
+    }
+    if (this.updateShouldThrowObject) {
+      return Promise.reject(new NonErrorUpdateFailureForAC());
     }
     return 1;
   }
@@ -332,6 +360,52 @@ export default function phase2CoreCoverageBatchACTest() {
       // Assert
       expect(store.updateCount).assertEqual(1);
       expect(dirty.length).assertEqual(0);
+    });
+
+    it('combined: plan_repository_should_wrap_non_error_failures_with_method_specific_messages', 0, async () => {
+      // Arrange
+      clearDirtyPoolForAC();
+      const store = new FakeRdbStoreForAC();
+      store.deleteShouldThrowObject = true;
+      store.updateShouldThrowObject = true;
+      const hooks = new StaticHooksForAC();
+      hooks.setGetInstance((): Object => createHelperInstanceForAC(store as Object));
+      const messages: string[] = [];
+      // Act
+      try { await PlanRepositoryImpl.restorePlan(201); } catch (err) { messages.push((err as Error).message); }
+      try { await PlanRepositoryImpl.hardDeletePlan(202); } catch (err) { messages.push((err as Error).message); }
+      try { await PlanRepositoryImpl.updatePlanStatus(203, 2); } catch (err) { messages.push((err as Error).message); }
+      try { await PlanRepositoryImpl.updateStrategyDimensions(204, 1, 2, 3, 4); } catch (err) { messages.push((err as Error).message); }
+      try { await PlanRepositoryImpl.softDeletePlan(205); } catch (err) { messages.push((err as Error).message); }
+      try { await PlanRepositoryImpl.updateStartDate(206, 1000); } catch (err) { messages.push((err as Error).message); }
+      try { await PlanRepositoryImpl.updatePlanName(207, 'wrapped'); } catch (err) { messages.push((err as Error).message); }
+      try { await PlanRepositoryImpl.updateAutoAmapRoute(208, true); } catch (err) { messages.push((err as Error).message); }
+      hooks.restore();
+      // Assert
+      expect(messages.length).assertEqual(8);
+      expect(messages[0].includes('restore_plan_failed')).assertTrue();
+      expect(messages[1].includes('hard_delete_plan_failed')).assertTrue();
+      expect(messages[2].includes('update_plan_status_failed')).assertTrue();
+      expect(messages[3].includes('update_strategy_dimensions_failed')).assertTrue();
+      expect(messages[4].includes('soft_delete_plan_failed')).assertTrue();
+      expect(messages[5].includes('update_start_date_failed')).assertTrue();
+      expect(messages[6].includes('update_plan_name_failed')).assertTrue();
+      expect(messages[7].includes('update_auto_amap_route_failed')).assertTrue();
+    });
+
+    it('boundary: purge_old_trash_should_return_zero_when_no_expired_plan_ids_are_found', 0, async () => {
+      // Arrange
+      clearDirtyPoolForAC();
+      const store = new FakeRdbStoreForAC();
+      const hooks = new StaticHooksForAC();
+      hooks.setGetInstance((): Object => createHelperInstanceForAC(store as Object));
+      // Act
+      const emptyDeleted = await PlanRepositoryImpl.purgeOldTrash();
+      hooks.restore();
+      // Assert
+      expect(emptyDeleted).assertEqual(0);
+      expect(store.beginTxCount).assertEqual(0);
+      expect(store.deleteCount).assertEqual(0);
     });
   });
 }
