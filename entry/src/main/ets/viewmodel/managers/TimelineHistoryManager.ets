@@ -65,10 +65,6 @@ export class TimelineHistoryManager {
     const items: HistoryTimelineItem[] = [];
     for (let i = 0; i < schedule.length; i++) {
       const event = schedule[i];
-      if (!TimelineExecutionState.isScheduled(event)) {
-        continue;
-      }
-
       const plannedStart = event.dynamic_start_time > 0 ? event.dynamic_start_time : 0;
       const actualStart = event.actual_start_time > 0 ? event.actual_start_time : 0;
       const actualEnd = event.actual_end_time > 0 ? event.actual_end_time : 0;
@@ -106,7 +102,7 @@ export class TimelineHistoryManager {
       }
 
       if (TimelineExecutionState.isActive(event)) {
-        const activeTs = actualStart > 0 ? actualStart : plannedStart;
+        const activeTs = actualStart;
         items.push({
           id: event.id * 10 + 4,
           eventId: event.id,
