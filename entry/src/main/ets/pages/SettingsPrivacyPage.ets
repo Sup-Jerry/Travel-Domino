@@ -53,6 +53,10 @@ struct SettingsPrivacyPage {
     }
   }
 
+  private async handleAmapRouteApiToggle(value: boolean): Promise<void> {
+    await this.onAmapRouteApiChanged(value);
+  }
+
   build() {
     Column({ space: 10 }) {
       SettingsSubPageHeader({ title: '隐私与权限' });
@@ -66,7 +70,7 @@ struct SettingsPrivacyPage {
         textSecondary: this.getThemePalette().textSecondary,
         cardBg: this.getThemePalette().cardBg,
         onToggle: async (value: boolean) => {
-          await this.onAmapRouteApiChanged(value);
+          await this.handleAmapRouteApiToggle(value);
         }
       });
 
