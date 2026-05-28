@@ -234,5 +234,76 @@ export default function weatherRiskEvaluatorTest() {
       expect(route.riskTags.includes('HEAT')).assertEqual(true);
       expect(route.summaryText.length > 0).assertEqual(true);
     });
+
+    it('boundary: cold_outdoor_weather_should_add_cold_tag_and_reduce_score', 0, () => {
+      // Arrange
+      const evaluator = new WeatherRiskEvaluator();
+      const event = buildEvent(0);
+      const weather: WeatherSnapshot = {
+        locationKey: 'cold',
+        sourceType: 'PLAN_LOCATION',
+        weatherTime: Date.now(),
+        fetchTime: Date.now(),
+        conditionCode: 'CLEAR',
+        conditionText: 'clear',
+        temperatureCelsius: 3
+      };
+      // Act
+      const result = evaluator.evaluateNodeSuitability(event, weather);
+      // Assert
+      expect(result.riskTags.includes('COLD')).assertEqual(true);
+      expect(result.score < 100).assertEqual(true);
+    });
+
+    it('regression: td-20260528-route_score_should_use_medium_risk_summary_when_score_between_70_and_84', 0, () => {
+      // Arrange
+      const evaluator = new WeatherRiskEvaluator();
+      const collab: WeatherCollabContext = {
+        dayWindows: [],
+        cityBuckets: [],
+        collabSummary: '   ',
+        dayWindowCount: 0,
+        cityGroupCount: 0,
+        cityCappedCount: 0,
+        cityMissCount: 0,
+        trendTag: 'STABLE',
+        fallbackPath: ''
+      };
+      // Act
+      const route = evaluator.evaluateRouteSuitability([
+        { nodeId: 'm1', eventId: 1, suitabilityScore: 80, riskTags: [] }
+      ], undefined, collab);
+      // Assert
+      expect(route.routeScore).assertEqual(80);
+      expect(route.summaryText.length > 0).assertEqual(true);
+      expect(route.riskTags.length).assertEqual(0);
+    });
+
+    it('combined: route_score_should_clamp_negative_value_after_trend_adjustment', 0, () => {
+      // Arrange
+      const evaluator = new WeatherRiskEvaluator();
+      const collab: WeatherCollabContext = {
+        dayWindows: [
+          { dayOffset: 0, windowScore: 1, riskTags: ['RAIN'], trendTag: 'RAIN_PERSIST' },
+          { dayOffset: 1, windowScore: 1, riskTags: ['HEAT'], trendTag: 'WARMING' }
+        ],
+        cityBuckets: [],
+        collabSummary: '',
+        dayWindowCount: 2,
+        cityGroupCount: 0,
+        cityCappedCount: 0,
+        cityMissCount: 0,
+        trendTag: 'RAIN_PERSIST',
+        fallbackPath: ''
+      };
+      // Act
+      const route = evaluator.evaluateRouteSuitability([
+        { nodeId: 'c1', eventId: 1, suitabilityScore: 1, riskTags: [] }
+      ], undefined, collab);
+      // Assert
+      expect(route.routeScore).assertEqual(0);
+      expect(route.riskTags.includes('RAIN')).assertEqual(true);
+      expect(route.riskTags.includes('HEAT')).assertEqual(true);
+    });
   });
 }
