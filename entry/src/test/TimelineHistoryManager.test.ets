@@ -187,5 +187,54 @@ export default function timelineHistoryManagerTest() {
       expect(items[0].groupDateKey).assertEqual('未定');
       expect(items[0].displayTs).assertEqual(0);
     });
+
+    it('boundary: history_items_should_skip_pending_event_when_no_actual_times_exist', 0, () => {
+      // Arrange
+      const pending = createScheduleEvent(63, '待出发点', 0, 100);
+      pending.dynamic_start_time = 90_000;
+      const manager = new TimelineHistoryManager({ events: [pending], planId: 15, planName: '空历史行程' });
+
+      // Act
+      const items = manager.getCurrentPlanHistoryTimelineItems();
+
+      // Assert
+      expect(items.length).assertEqual(0);
+    });
+
+    it('combined: history_items_should_use_actual_start_for_skip_when_end_and_planned_start_missing', 0, () => {
+      // Arrange
+      const skipped = createScheduleEvent(64, '跳过点', 0, 100);
+      skipped.completion_status = EventEntity.STATE_SKIPPED;
+      skipped.actual_start_time = 123_000;
+      skipped.dynamic_start_time = 0;
+      const manager = new TimelineHistoryManager({ events: [skipped], planId: 16, planName: '跳过行程' });
+
+      // Act
+      const items = manager.getCurrentPlanHistoryTimelineItems();
+
+      // Assert
+      expect(items.length).assertEqual(1);
+      expect(items[0].actionType).assertEqual('SKIP');
+      expect(items[0].displayTs).assertEqual(123_000);
+      expect(items[0].groupDateKey === '未定').assertFalse();
+    });
+
+    it('conflict: latest_event_and_summary_should_fallback_by_id_and_default_plan_name', 0, () => {
+      // Arrange
+      const older = createScheduleEvent(65, '同名点', 0, 100);
+      const newer = createScheduleEvent(66, '同名点', 0, 100);
+      const pending = createScheduleEvent(67, '待定点', 0, 200);
+      const manager = new TimelineHistoryManager({ events: [older, newer, pending], planId: 17, planName: '   ' });
+
+      // Act
+      const latest = manager.getLatestEventForPlace('同名点');
+      const summary = manager.getCurrentPlanHistorySummary();
+
+      // Assert
+      expect(latest !== null).assertTrue();
+      expect(latest?.id || 0).assertEqual(66);
+      expect(summary.planName).assertEqual('计划 #17');
+      expect(summary.activeCount).assertEqual(0);
+    });
   });
 }
