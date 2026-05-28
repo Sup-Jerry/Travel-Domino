@@ -44,10 +44,50 @@ class ProfileRecordForUserProfileTest {
 }
 
 interface UserProfileRepositoryPrivateForTest {
+  bindContext: (context: Object) => void;
   ensureCloudDbZone: () => Promise<Object>;
+  openCloudDbZoneInternal: () => Promise<Object>;
   toEntity: (record: Object) => UserProfileEntity;
   toCloudRecord: (entity: UserProfileEntity) => Object;
   toTimestamp: (rawValue: Object | number | undefined) => number;
+}
+
+class NumericStringCarrierForUserProfileTest implements TimestampCarrierForUserProfileTest {
+  toString(): string {
+    return '42';
+  }
+}
+
+class FakeSnapshotForUserProfileTest {
+  getSnapshotObjects(): Object[] | undefined {
+    return undefined;
+  }
+}
+
+class FakeZoneForUserProfileQueryTest {
+  async executeQuery(_query: Object): Promise<FakeSnapshotForUserProfileTest> {
+    return new FakeSnapshotForUserProfileTest();
+  }
+}
+
+class FakeCloudDbForUserProfileTest {
+  openCount: number = 0;
+  readonly zone: Object;
+
+  constructor(zone: Object) {
+    this.zone = zone;
+  }
+
+  async openCloudDBZone(_config: Object): Promise<Object> {
+    this.openCount++;
+    return this.zone;
+  }
+}
+
+class FakeContextForUserProfileTest {
+  getApplicationContext(): Object {
+    return new Object();
+  }
 }
 
 export default function userProfileRepositoryImplTest() {
@@ -198,6 +238,37 @@ export default function userProfileRepositoryImplTest() {
       const timestamp = repo.toTimestamp(carrier as Object);
       // Assert
       expect(timestamp).assertEqual(0);
+    });
+
+    it('combined: private_helpers_should_parse_numeric_string_and_return_null_when_snapshot_rows_missing', 0, async () => {
+      // Arrange
+      const repo = new UserProfileRepositoryImpl() as Object as UserProfileRepositoryPrivateForTest;
+      Reflect.set(repo as Object, 'ensureCloudDbZone', async (): Promise<Object> => {
+        return new FakeZoneForUserProfileQueryTest() as Object;
+      });
+      const carrier = new NumericStringCarrierForUserProfileTest();
+      // Act
+      const timestamp = repo.toTimestamp(carrier as Object);
+      const profile = await (repo as Object as UserProfileRepositoryImpl).getByAccountId('acc_missing_rows');
+      // Assert
+      expect(timestamp).assertEqual(42);
+      expect(profile === null).assertTrue();
+    });
+
+    it('boundary: create_default_profile_should_short_circuit_when_existing_profile_already_present', 0, async () => {
+      // Arrange
+      const repo = new UserProfileRepositoryImpl() as Object as UserProfileRepositoryPrivateForTest;
+      const existing = new UserProfileEntity();
+      existing.accountId = 'existing_acc';
+      existing.profileId = 'existing_acc';
+      existing.username = 'existing_user';
+      Reflect.set(repo as Object, 'getByAccountId', async (): Promise<UserProfileEntity> => {
+        return existing;
+      });
+      // Act
+      const result = await (repo as Object as UserProfileRepositoryImpl).createDefaultProfile('existing_acc');
+      // Assert
+      expect(result === existing).assertTrue();
     });
   });
 }
