@@ -47,6 +47,24 @@ class SearchRepositoryMockDJ {
   }
 }
 
+class DeferredSearchResultDJ {
+  public promise: Promise<PlanItem[]>;
+  private resolver: ((value: PlanItem[]) => void) | null = null;
+
+  constructor() {
+    this.promise = new Promise<PlanItem[]>((resolve: (value: PlanItem[]) => void) => {
+      this.resolver = resolve;
+    });
+  }
+
+  resolve(value: PlanItem[]): void {
+    if (this.resolver) {
+      this.resolver(value);
+      this.resolver = null;
+    }
+  }
+}
+
 class StaticPatchDJ {
   private readonly target: Object;
   private readonly key: string;
@@ -226,6 +244,71 @@ export default function phase2BatchDJTest() {
       expect(page.debounceTimer).assertEqual(-1);
       expect(page.loaded).assertTrue();
       expect(page.resultList.length).assertEqual(1);
+    });
+
+    it('conflict: plan_search_run_search_should_ignore_stale_slow_result_when_newer_query_finishes_first', 0, async () => {
+      // Arrange
+      const deferred = new DeferredSearchResultDJ();
+      const page = createPageDJ();
+      const patch = new StaticPatchDJ(
+        PlanRepositoryImpl as Object,
+        'searchAllPlansPaged',
+        async (keyword: string, _offset: number, _limit: number): Promise<PlanItem[]> => {
+          if (keyword === 'slow') {
+            return deferred.promise;
+          }
+          return [buildPlanDJ(901, 'fast-result')];
+        }
+      );
+
+      // Act
+      const slowPromise = page.runSearch('slow');
+      await page.runSearch('fast');
+      deferred.resolve([buildPlanDJ(900, 'slow-result')]);
+      await slowPromise;
+      patch.restore();
+
+      // Assert
+      expect(page.currentKeyword).assertEqual('fast');
+      expect(page.resultList.length).assertEqual(1);
+      expect(page.resultList[0].title).assertEqual('fast-result');
+      expect(page.searchCache.has('fast')).assertTrue();
+    });
+
+    it('combined: plan_search_load_more_should_ignore_stale_more_page_after_keyword_switch', 0, async () => {
+      // Arrange
+      const deferred = new DeferredSearchResultDJ();
+      const page = createPageDJ();
+      const patch = new StaticPatchDJ(
+        PlanRepositoryImpl as Object,
+        'searchAllPlansPaged',
+        async (keyword: string, offset: number, _limit: number): Promise<PlanItem[]> => {
+          if (keyword === 'osaka' && offset === 0) {
+            return buildPlansDJ(40, 1000);
+          }
+          if (keyword === 'osaka' && offset === 40) {
+            return deferred.promise;
+          }
+          if (keyword === 'kyoto' && offset === 0) {
+            return [buildPlanDJ(2000, 'kyoto-only')];
+          }
+          return [];
+        }
+      );
+
+      // Act
+      await page.runSearch('osaka');
+      const loadingMorePromise = page.loadMoreIfNeeded();
+      await page.runSearch('kyoto');
+      deferred.resolve([buildPlanDJ(1001, 'stale-osaka-more')]);
+      await loadingMorePromise;
+      patch.restore();
+
+      // Assert
+      expect(page.currentKeyword).assertEqual('kyoto');
+      expect(page.resultList.length).assertEqual(1);
+      expect(page.resultList[0].title).assertEqual('kyoto-only');
+      expect(page.searchCache.has('kyoto')).assertTrue();
     });
   });
 }
