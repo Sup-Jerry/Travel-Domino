@@ -43,6 +43,10 @@ struct SettingsAccountSecurityPage {
     }
   }
 
+  private handleLogoutClick(): void {
+    void this.doLogout();
+  }
+
   build() {
     Column({ space: 12 }) {
       SettingsSubPageHeader({ title: '账号与安全' });
@@ -67,7 +71,7 @@ struct SettingsAccountSecurityPage {
           .fontColor('#FFFFFF')
           .borderRadius(10)
           .onClick(() => {
-            void this.doLogout();
+            this.handleLogoutClick();
           });
       }
       .width('100%')
