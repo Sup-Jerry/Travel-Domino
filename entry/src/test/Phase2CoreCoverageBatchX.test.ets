@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@ohos/hypium';
 import { PlanRepositoryImpl } from '../main/ets/infrastructure/persistence/PlanRepositoryImpl';
+import { RdbHelper } from '../main/ets/common/utils/RdbHelper';
 import { PlanEntity } from '../main/ets/model/entity/PlanEntity';
 
 class PageWindowForX {
@@ -84,6 +85,48 @@ class BrokenResultSetForX {
   }
 }
 
+class FakeRdbStoreForX {
+  queryCount: number = 0;
+  private readonly rows: Array<Map<string, number | string>>;
+
+  constructor(rows: Array<Map<string, number | string>>) {
+    this.rows = rows;
+  }
+
+  async query(_predicates: Object): Promise<FakeResultSetForX> {
+    this.queryCount++;
+    return new FakeResultSetForX(this.rows);
+  }
+}
+
+class FakeHelperForX {
+  private readonly store: Object | null;
+
+  constructor(store: Object | null) {
+    this.store = store;
+  }
+
+  getRdbStore(): Object | null {
+    return this.store;
+  }
+}
+
+class StaticHooksForX {
+  private readonly originGetInstance: Object;
+
+  constructor() {
+    this.originGetInstance = Reflect.get(RdbHelper, 'getInstance') as Object;
+  }
+
+  setGetInstance(fn: () => Object): void {
+    Reflect.set(RdbHelper, 'getInstance', fn);
+  }
+
+  restore(): void {
+    Reflect.set(RdbHelper, 'getInstance', this.originGetInstance);
+  }
+}
+
 function getPrivateNormalizePageForX(): (offset: number, limit: number) => PageWindowForX {
   return Reflect.get(PlanRepositoryImpl as Object, 'normalizePage') as (offset: number, limit: number) => PageWindowForX;
 }
@@ -94,6 +137,10 @@ function getPrivateParseResultSetForX(): (resultSet: Object) => Object[] {
 
 function clearDirtyPoolForX(): void {
   PlanRepositoryImpl.consumeDirtyPlanIds();
+}
+
+function createHelperInstanceForX(store: Object | null): Object {
+  return new FakeHelperForX(store) as Object;
 }
 
 export default function phase2CoreCoverageBatchXTest() {
@@ -141,6 +188,16 @@ export default function phase2CoreCoverageBatchXTest() {
       expect(low.limit).assertEqual(1);
       expect(high.offset).assertEqual(11);
       expect(high.limit).assertEqual(200);
+    });
+
+    it('boundary: plan_repository_normalize_page_should_fallback_to_default_limit_when_limit_not_finite', 0, () => {
+      // Arrange
+      const normalize = getPrivateNormalizePageForX();
+      // Act
+      const page = normalize(Number.POSITIVE_INFINITY, Number.NaN);
+      // Assert
+      expect(page.offset).assertEqual(0);
+      expect(page.limit).assertEqual(40);
     });
 
     it('invalid: plan_repository_create_plan_should_return_negative_one_when_rdb_not_initialized', 0, async () => {
@@ -196,6 +253,46 @@ export default function phase2CoreCoverageBatchXTest() {
       expect(trash.length).assertEqual(0);
       expect(archived.length).assertEqual(0);
       expect(searched.length).assertEqual(0);
+    });
+
+    it('combined: plan_repository_query_paths_should_return_rows_when_store_and_result_set_exist', 0, async () => {
+      // Arrange
+      clearDirtyPoolForX();
+      const row = new Map<string, number | string>();
+      row.set(PlanEntity.ID, 8);
+      row.set(PlanEntity.NAME, 'plan_store_x');
+      row.set(PlanEntity.CREATED_AT, 8000);
+      row.set(PlanEntity.START_DATE, 8100);
+      row.set(PlanEntity.STATUS, 2);
+      row.set(PlanEntity.DEL_FLAG, 1);
+      row.set(PlanEntity.DELETE_TIME, 8200);
+      row.set(PlanEntity.ENABLE_AUTO_AMAP_ROUTE, 0);
+      row.set(PlanEntity.STRATEGY_MODE, 3);
+      row.set(PlanEntity.STRATEGY_VERSION, 1);
+      row.set(PlanEntity.LAST_AI_PROMPT, 'prompt_store_x');
+      row.set(PlanEntity.LAST_STRATEGY_EXPLANATION, 'explain_store_x');
+      row.set(PlanEntity.STRATEGY_DENSITY, 1);
+      row.set(PlanEntity.STRATEGY_PACE, 2);
+      row.set(PlanEntity.STRATEGY_PREFERENCE, 3);
+      row.set(PlanEntity.STRATEGY_ENERGY, 4);
+      const store = new FakeRdbStoreForX([row]);
+      const hooks = new StaticHooksForX();
+      hooks.setGetInstance((): Object => createHelperInstanceForX(store as Object));
+      // Act
+      const list = await PlanRepositoryImpl.getPlanList();
+      const trash = await PlanRepositoryImpl.getTrashPlans();
+      const archived = await PlanRepositoryImpl.getArchivedPlans();
+      const searched = await PlanRepositoryImpl.searchPlans('plan_store_x');
+      const searchedTrash = await PlanRepositoryImpl.searchTrashPlans('plan_store_x');
+      hooks.restore();
+      // Assert
+      expect(store.queryCount).assertEqual(5);
+      expect(list.length > 0).assertTrue();
+      expect(trash.length > 0).assertTrue();
+      expect(archived.length > 0).assertTrue();
+      expect(searched.length > 0).assertTrue();
+      expect(searchedTrash.length > 0).assertTrue();
+      expect(Reflect.get(list[0] as Object, 'id') as number).assertEqual(8);
     });
   });
 }
