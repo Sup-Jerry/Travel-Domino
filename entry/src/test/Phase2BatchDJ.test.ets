@@ -3,7 +3,10 @@ import {
   PlanRepositoryImpl,
   PlanItem
 } from '../main/ets/infrastructure/persistence/PlanRepositoryImpl';
-import { createPlanSearchPageForTest } from '../main/ets/pages/PlanSearchPage';
+import {
+  createPlanSearchPageForTest,
+  shouldPlanSearchTriggerLoadMoreOnScroll
+} from '../main/ets/pages/PlanSearchPage';
 
 interface PlanSearchCacheEntryDJ {
   ts: number;
@@ -309,6 +312,36 @@ export default function phase2BatchDJTest() {
       expect(page.resultList.length).assertEqual(1);
       expect(page.resultList[0].title).assertEqual('kyoto-only');
       expect(page.searchCache.has('kyoto')).assertTrue();
+    });
+
+    it('boundary: plan_search_about_to_disappear_should_noop_when_no_timer_and_schedule_search_should_replace_existing_timer', 0, async () => {
+      // Arrange
+      const page = createPageDJ();
+      page.debounceTimer = 7;
+
+      // Act
+      page.scheduleSearch('reload');
+      const replacedTimer = page.debounceTimer;
+      page.aboutToDisappear();
+      const clearedTimer = page.debounceTimer;
+      page.aboutToDisappear();
+
+      // Assert
+      expect(page.keyword).assertEqual('reload');
+      expect(replacedTimer > 0).assertTrue();
+      expect(clearedTimer).assertEqual(-1);
+      expect(page.debounceTimer).assertEqual(-1);
+    });
+
+    it('combined: plan_search_scroll_helper_should_distinguish_tail_and_non_tail_ranges', 0, () => {
+      // Arrange
+      // Act
+      const shouldLoadAtTail = shouldPlanSearchTriggerLoadMoreOnScroll(4, 5);
+      const shouldSkipBeforeTail = shouldPlanSearchTriggerLoadMoreOnScroll(2, 5);
+
+      // Assert
+      expect(shouldLoadAtTail).assertTrue();
+      expect(shouldSkipBeforeTail).assertFalse();
     });
   });
 }
