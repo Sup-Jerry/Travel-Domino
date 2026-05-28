@@ -11,6 +11,10 @@ export interface ITimelineHistoryHost {
   planName: string;
 }
 
+export function resolveLatestEventSortTs(event: EventEntity): number {
+  return event.actual_end_time > 0 ? event.actual_end_time : (event.actual_start_time > 0 ? event.actual_start_time : 0);
+}
+
 export class TimelineHistoryManager {
   private host: ITimelineHistoryHost;
 
@@ -44,8 +48,8 @@ export class TimelineHistoryManager {
       return null;
     }
     events.sort((a: EventEntity, b: EventEntity) => {
-      const aTs = a.actual_end_time > 0 ? a.actual_end_time : (a.actual_start_time > 0 ? a.actual_start_time : 0);
-      const bTs = b.actual_end_time > 0 ? b.actual_end_time : (b.actual_start_time > 0 ? b.actual_start_time : 0);
+      const aTs = resolveLatestEventSortTs(a);
+      const bTs = resolveLatestEventSortTs(b);
       if (bTs !== aTs) {
         return bTs - aTs;
       }
