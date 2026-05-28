@@ -20,6 +20,7 @@ interface SettingsPrivacyPagePrivateDO {
   safeShowToast(message: string): void;
   reload(): Promise<void>;
   onAmapRouteApiChanged(value: boolean): Promise<void>;
+  handleAmapRouteApiToggle(value: boolean): Promise<void>;
   initialRender(): void;
 }
 
@@ -168,6 +169,22 @@ export default function phase2BatchDOTest() {
       expect(pref.setCalls.length).assertEqual(2);
       expect(page.enableAmapRouteApi).assertFalse();
       expect(resolveAmapRouteApiToggleToast(page.enableAmapRouteApi).indexOf('API') >= 0).assertTrue();
+    });
+
+    it('combined: settings_privacy_toggle_handler_should_delegate_to_change_logic', 0, async () => {
+      // Arrange
+      const pref = new PreferenceMockDO();
+      const patch = patchPreferenceDO(pref);
+      const page = createPageDO();
+
+      // Act
+      await page.handleAmapRouteApiToggle(true);
+      patch.restore();
+
+      // Assert
+      expect(pref.setCalls.length).assertEqual(1);
+      expect(pref.setCalls[0]).assertTrue();
+      expect(page.enableAmapRouteApi).assertTrue();
     });
 
     it('combined: settings_privacy_render_and_palette_should_handle_loading_and_enabled_states', 0, () => {
