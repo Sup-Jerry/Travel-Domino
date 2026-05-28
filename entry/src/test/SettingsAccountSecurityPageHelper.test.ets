@@ -9,6 +9,7 @@ interface SettingsAccountSecurityPagePrivateTest {
   effectiveTheme: string;
   getThemePalette(): Object;
   doLogout(): Promise<void>;
+  handleLogoutClick(): void;
   initialRender(): void;
   getUIContext(): SettingsAccountSecurityUiContextTest;
 }
@@ -207,6 +208,25 @@ export default function settingsAccountSecurityPageHelperTest() {
       await page.doLogout();
 
       // Assert
+      expect(router.urls.length).assertEqual(1);
+      expect(router.urls[0]).assertEqual(resolveLogoutRedirectUrl());
+    });
+
+    it('combined: settings_account_security_logout_click_should_trigger_async_logout_flow', 0, async () => {
+      // Arrange
+      const authFacade = new SettingsAccountSecurityAuthFacadeMockTest();
+      const router = new SettingsAccountSecurityRouterMockTest();
+      const page = createSettingsAccountSecurityPrivateForTest(authFacade, router);
+
+      // Act
+      page.handleLogoutClick();
+      await new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => {
+        setTimeout(() => resolve(), 30);
+      });
+
+      // Assert
+      expect(authFacade.bindCount).assertEqual(1);
+      expect(authFacade.logoutCount).assertEqual(1);
       expect(router.urls.length).assertEqual(1);
       expect(router.urls[0]).assertEqual(resolveLogoutRedirectUrl());
     });
