@@ -1,5 +1,5 @@
 ﻿import { describe, expect, it } from '@ohos/hypium';
-import { TimelineHistoryManager } from '../main/ets/viewmodel/managers/TimelineHistoryManager';
+import { TimelineHistoryManager, resolveLatestEventSortTs } from '../main/ets/viewmodel/managers/TimelineHistoryManager';
 import { EventEntity } from '../main/ets/model/entity/EventEntity';
 
 function createScheduleEvent(id: number, name: string, dayOffset: number, sortOrder: number): EventEntity {
@@ -282,6 +282,25 @@ export default function timelineHistoryManagerTest() {
       expect(activeItem?.actionType || '').assertEqual('ACTIVE');
       expect(activeItem?.displayTs || 0).assertEqual(810_000);
       expect(activeItem?.groupDateKey === '未定').assertFalse();
+    });
+
+    it('boundary: latest_event_sort_ts_should_prefer_actual_end_then_actual_start_then_zero', 0, () => {
+      // Arrange
+      const endFirst = createScheduleEvent(75, '排序点A', 0, 100);
+      endFirst.actual_end_time = 920_000;
+      const startOnly = createScheduleEvent(76, '排序点B', 0, 200);
+      startOnly.actual_start_time = 910_000;
+      const empty = createScheduleEvent(77, '排序点C', 0, 300);
+
+      // Act
+      const endTs = resolveLatestEventSortTs(endFirst);
+      const startTs = resolveLatestEventSortTs(startOnly);
+      const emptyTs = resolveLatestEventSortTs(empty);
+
+      // Assert
+      expect(endTs).assertEqual(920_000);
+      expect(startTs).assertEqual(910_000);
+      expect(emptyTs).assertEqual(0);
     });
   });
 }
