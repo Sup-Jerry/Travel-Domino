@@ -23,10 +23,14 @@ interface PlanListPagePrivateTest {
   isRefreshing: boolean;
   isArrivalDialogOpen: boolean;
   effectiveTheme: string;
+  lastNotifyPermissionPromptAt: number;
+  lastLocationPermissionPromptAt: number;
   getThemePalette(): PlanListPaletteTest;
   canRepromptPermission(now: number, lastPromptAt: number, hasPromptedBefore: boolean): boolean;
   convertToShareEvents(events: TravelPlanItem[]): Object[];
   sortEventsForShare(events: TravelPlanItem[]): TravelPlanItem[];
+  startGlobalArrivalEngine(): void;
+  bindArrivalReminderSubscription(): void;
   consumeNotificationNavRoute(): void;
   loadPlans(): Promise<void>;
   handlePullRefresh(): Promise<void>;
@@ -35,6 +39,7 @@ interface PlanListPagePrivateTest {
   handleHardDelete(item: PlanItem): void;
   onPageShow(): void;
   aboutToDisappear(): void;
+  ensureArrivalPermissionPromptOnFirstEntry(): Promise<void>;
   ensureNotificationPermissionPrompt(context: Object): Promise<void>;
   ensureLocationPermissionPrompt(context: Object): Promise<void>;
   showArrivalReminderOnHome(payload: Object, title: string): void;
@@ -186,6 +191,17 @@ class PlanListPlanServiceMockTest {
     return new PlanListPromptStateTest();
   }
 
+  notifyPromptedMarkCount: number = 0;
+  locationPromptedMarkCount: number = 0;
+
+  async markNotifyPrompted(_context: Object): Promise<void> {
+    this.notifyPromptedMarkCount += 1;
+  }
+
+  async markLocationPrompted(_context: Object): Promise<void> {
+    this.locationPromptedMarkCount += 1;
+  }
+
   async isNotificationEnabled(): Promise<boolean> {
     return this.notifyEnabled;
   }
@@ -213,6 +229,10 @@ class PlanListArrivalCoordinatorMockTest {
   lastConsumeOptions: Object | null = null;
   ackEventIds: number[] = [];
   ackActions: string[] = [];
+  subscribePlanCount: number = 0;
+  lastSubscribeKey: string = '';
+  lastSubscribeOptions: Object | null = null;
+  unsubscribeCount: number = 0;
 
   consumeOnHome(options: Object): void {
     this.consumeCount += 1;
@@ -222,6 +242,15 @@ class PlanListArrivalCoordinatorMockTest {
   acknowledge(eventId: number, action: string): void {
     this.ackEventIds.push(eventId);
     this.ackActions.push(action);
+  }
+
+  subscribePlan(planKey: string, options: Object): () => void {
+    this.subscribePlanCount += 1;
+    this.lastSubscribeKey = planKey;
+    this.lastSubscribeOptions = options;
+    return (): void => {
+      this.unsubscribeCount += 1;
+    };
   }
 }
 
@@ -916,6 +945,85 @@ export default function planListPageHelperTest() {
       expect(uiContext.alertCount).assertEqual(2);
       expect(service.notifyEnabled).assertFalse();
       expect(service.locationGranted).assertFalse();
+    });
+
+    it('boundary: plan_list_private_start_and_bind_should_swallow_engine_error_and_replace_subscription', 0, () => {
+      // Arrange
+      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
+      const uiContext = new PlanListUiContextMockTest();
+      const service = new PlanListPlanServiceMockTest();
+      const coordinator = new PlanListArrivalCoordinatorMockTest();
+      let previousUnsubscribed = 0;
+      const shownTitles: string[] = [];
+      page.planList = [buildPlanListPlanForTest(301, 'bound_title')];
+      Reflect.set(page as Object, 'getUIContext', (): PlanListUiContextMockTest => uiContext);
+      Reflect.set(page as Object, 'planService', service as Object);
+      Reflect.set(page as Object, 'arrivalCoordinator', coordinator as Object);
+      Reflect.set(page as Object, 'showArrivalReminderOnHome', (_payload: Object, title: string): void => {
+        shownTitles.push(title);
+      });
+      Reflect.set(page as Object, 'arrivalReminderUnsubscribe', (): void => {
+        previousUnsubscribed += 1;
+      });
+      Reflect.set(service as Object, 'startArrivalEngine', (): void => {
+        throw new Error('engine_failed');
+      });
+
+      // Act
+      page.startGlobalArrivalEngine();
+      page.bindArrivalReminderSubscription();
+      const options = coordinator.lastSubscribeOptions as Record<string, Object>;
+      const isDialogOpen = Reflect.get(options, 'isDialogOpen') as () => boolean;
+      const resolvePlanTitle = Reflect.get(options, 'resolvePlanTitle') as (planId: number) => string;
+      const onShowHome = Reflect.get(options, 'onShowHome') as (payload: Object, title: string) => void;
+      page.isArrivalDialogOpen = true;
+      onShowHome(new PlanListArrivalPayloadMockTest() as Object, resolvePlanTitle(301));
+
+      // Assert
+      expect(previousUnsubscribed).assertEqual(1);
+      expect(coordinator.subscribePlanCount).assertEqual(1);
+      expect(coordinator.lastSubscribeKey).assertEqual('*');
+      expect(isDialogOpen()).assertTrue();
+      expect(resolvePlanTitle(301)).assertEqual('bound_title');
+      expect(resolvePlanTitle(999)).assertEqual('行程详情');
+      expect(shownTitles.length).assertEqual(1);
+      expect(shownTitles[0]).assertEqual('bound_title');
+    });
+
+    it('regression: plan_list_first_entry_prompt_should_mark_and_dispatch_missing_permissions_once', 0, async () => {
+      // Arrange
+      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
+      const uiContext = new PlanListUiContextMockTest();
+      const service = new PlanListPlanServiceMockTest();
+      const promptState = new PlanListPromptStateTest();
+      let notifyPromptCount = 0;
+      let locationPromptCount = 0;
+      page.lastNotifyPermissionPromptAt = 0;
+      page.lastLocationPermissionPromptAt = 0;
+      Reflect.set(page as Object, 'getUIContext', (): PlanListUiContextMockTest => uiContext);
+      Reflect.set(page as Object, 'planService', service as Object);
+      Reflect.set(service as Object, 'getArrivalPromptState', async (_context: Object): Promise<PlanListPromptStateTest> => {
+        return promptState;
+      });
+      Reflect.set(page as Object, 'ensureNotificationPermissionPrompt', async (_context: Object): Promise<void> => {
+        notifyPromptCount += 1;
+      });
+      Reflect.set(page as Object, 'ensureLocationPermissionPrompt', async (_context: Object): Promise<void> => {
+        locationPromptCount += 1;
+      });
+      service.notifyEnabled = false;
+      service.locationGranted = false;
+
+      // Act
+      await page.ensureArrivalPermissionPromptOnFirstEntry();
+
+      // Assert
+      expect(service.notifyPromptedMarkCount).assertEqual(1);
+      expect(service.locationPromptedMarkCount).assertEqual(1);
+      expect(notifyPromptCount).assertEqual(1);
+      expect(locationPromptCount).assertEqual(1);
+      expect(page.lastNotifyPermissionPromptAt > 0).assertTrue();
+      expect(page.lastLocationPermissionPromptAt > 0).assertTrue();
     });
   });
 }

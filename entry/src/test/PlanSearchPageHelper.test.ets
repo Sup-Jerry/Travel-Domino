@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@ohos/hypium';
-import { PlanItem } from '../main/ets/infrastructure/persistence/PlanRepositoryImpl';
+import { PlanItem, PlanRepositoryImpl } from '../main/ets/infrastructure/persistence/PlanRepositoryImpl';
 import {
   createPlanSearchPageForTest,
   isPlanSearchCacheFresh,
@@ -22,12 +22,30 @@ interface PlanSearchPagePrivateTest {
   loaded: boolean;
   queryToken: number;
   effectiveTheme: string;
+  debounceTimer: number;
+  currentKeyword: string;
+  currentOffset: number;
+  searchCacheTtlMs: number;
+  searchCache: Map<string, Object>;
+  pageSize: number;
   aboutToDisappear(): void;
+  aboutToAppear(): void;
+  scheduleSearch(value: string): void;
+  runSearch(rawKeyword: string): Promise<void>;
+  loadMoreIfNeeded(): Promise<void>;
+  handleScrollIndexEnd(end: number): void;
   initialRender(): void;
   getPlanStateLabel(item: PlanItem): string;
   getPlanStateColor(item: PlanItem): string;
   SearchHeader(): void;
   openPlan(item: PlanItem): void;
+}
+
+interface PlanSearchCacheEntryTest {
+  ts: number;
+  list: PlanItem[];
+  hasMore: boolean;
+  offset: number;
 }
 
 class PlanSearchRouteParamsHelperTest {
@@ -363,6 +381,121 @@ export default function planSearchPageHelperTest() {
       expect(lastItem).assertTrue();
       expect(beyondLast).assertTrue();
       expect(timerAfterDisappear).assertEqual(-1);
+    });
+
+    it('boundary: plan_search_page_about_to_appear_should_delegate_empty_keyword_search', 0, () => {
+      // Arrange
+      const page = createPlanSearchPagePrivateForTest();
+      const originalRunSearch = Reflect.get(page as Object, 'runSearch') as (rawKeyword: string) => Promise<void>;
+      let capturedKeyword = 'unset';
+
+      Reflect.set(page as Object, 'runSearch', async (rawKeyword: string): Promise<void> => {
+        capturedKeyword = rawKeyword;
+      });
+
+      try {
+        // Act
+        page.aboutToAppear();
+
+        // Assert
+        expect(capturedKeyword).assertEqual('');
+      } finally {
+        Reflect.set(page as Object, 'runSearch', originalRunSearch);
+      }
+    });
+
+    it('combined: plan_search_page_schedule_and_cache_should_use_latest_keyword_and_fresh_cache', 0, async (done: Function) => {
+      // Arrange
+      const page = createPlanSearchPagePrivateForTest();
+      let staleTimerCalled = 0;
+      let scheduledKeyword = '';
+      const originalRunSearch = Reflect.get(page as Object, 'runSearch') as (rawKeyword: string) => Promise<void>;
+      const cached = [buildPlanSearchItemForTest(9, 'Cached Trip', 1)];
+      const cachedEntry: PlanSearchCacheEntryTest = {
+        ts: Date.now(),
+        list: cached,
+        hasMore: true,
+        offset: cached.length
+      };
+      page.searchCache.set('cached', cachedEntry as Object);
+      page.debounceTimer = setTimeout(() => {
+        staleTimerCalled += 1;
+      }, 320) as number;
+
+      Reflect.set(page as Object, 'runSearch', async (rawKeyword: string): Promise<void> => {
+        scheduledKeyword = rawKeyword;
+      });
+
+      try {
+        // Act
+        page.scheduleSearch('  Cached  ');
+        await new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => {
+          setTimeout(() => resolve(), 320);
+        });
+        Reflect.set(page as Object, 'runSearch', originalRunSearch);
+        await page.runSearch('  Cached  ');
+
+        // Assert
+        expect(staleTimerCalled).assertEqual(0);
+        expect(page.keyword).assertEqual('  Cached  ');
+        expect(scheduledKeyword).assertEqual('  Cached  ');
+        expect(page.resultList.length).assertEqual(1);
+        expect(page.resultList[0].title).assertEqual('Cached Trip');
+        expect(page.currentKeyword).assertEqual('Cached');
+        expect(page.currentOffset).assertEqual(1);
+        expect(page.hasMore).assertTrue();
+        expect(page.loaded).assertTrue();
+        expect(page.searching).assertFalse();
+        done();
+      } finally {
+        Reflect.set(page as Object, 'runSearch', originalRunSearch);
+      }
+    });
+
+    it('regression: plan_search_page_load_more_and_scroll_should_append_results_and_refresh_cache', 0, async (done: Function) => {
+      // Arrange
+      const page = createPlanSearchPagePrivateForTest();
+      const originalSearchAllPlansPaged = Reflect.get(PlanRepositoryImpl as Object, 'searchAllPlansPaged') as Object;
+      const existing = buildPlanSearchItemForTest(20, 'Existing', 1);
+      const appended = buildPlanSearchItemForTest(21, 'Appended', 2);
+      page.loaded = true;
+      page.searching = false;
+      page.loadingMore = false;
+      page.hasMore = true;
+      page.queryToken = 3;
+      page.currentKeyword = 'append';
+      page.currentOffset = 1;
+      page.resultList = [existing];
+
+      Reflect.set(PlanRepositoryImpl as Object, 'searchAllPlansPaged', async (
+        keyword: string,
+        offset: number,
+        limit: number
+      ): Promise<PlanItem[]> => {
+        expect(keyword).assertEqual('append');
+        expect(offset).assertEqual(1);
+        expect(limit).assertEqual(page.pageSize);
+        return [appended];
+      });
+
+      try {
+        // Act
+        page.handleScrollIndexEnd(0);
+        await new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => {
+          setTimeout(() => resolve(), 30);
+        });
+
+        // Assert
+        expect(page.loadingMore).assertFalse();
+        expect(page.resultList.length).assertEqual(2);
+        expect(page.resultList[1].title).assertEqual('Appended');
+        expect(page.currentOffset).assertEqual(2);
+        expect(page.hasMore).assertFalse();
+        expect(page.searchCache.has('append')).assertTrue();
+        done();
+      } finally {
+        Reflect.set(PlanRepositoryImpl as Object, 'searchAllPlansPaged', originalSearchAllPlansPaged);
+      }
     });
   });
 }
