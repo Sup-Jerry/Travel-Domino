@@ -94,5 +94,55 @@ export default function phase2BatchGVTest() {
       expect(items[0].name).assertEqual('Gallery');
       expect(items[0].type).assertEqual(2);
     });
+
+    it('normal: ai_response_parser_should_read_message_content_object_text', 0, () => {
+      // Arrange
+      const response =
+        '{"choices":[{"message":{"content":{"text":"[{\\"name\\":\\"Museum\\",\\"duration\\":40,\\"ai_reasoning\\":\\"obj\\",\\"type\\":0}]"}}}]}';
+
+      // Act
+      const items = AiResponseParser.parseModelResponseForTest(response, identityGV);
+
+      // Assert
+      expect(items.length).assertEqual(1);
+      expect(items[0].name).assertEqual('Museum');
+      expect(items[0].duration).assertEqual(40);
+    });
+
+    it('boundary: ai_response_parser_should_join_array_fragments_from_text_and_content_fields', 0, () => {
+      // Arrange
+      const response =
+        '{"choices":[{"message":{"content":[{"text":"[{\\"name\\":\\"Lunch\\",\\"duration\\":50,\\"ai_reasoning\\":\\"food\\""},{"content":",\\"type\\":1}]"}]}}]}';
+
+      // Act
+      const items = AiResponseParser.parseModelResponseForTest(response, identityGV);
+
+      // Assert
+      expect(items.length).assertEqual(1);
+      expect(items[0].name).assertEqual('Lunch');
+      expect(items[0].type).assertEqual(1);
+    });
+
+    it('regression: ai_response_parser_should_infer_type_from_line_text_and_reject_invalid_normalized_items', 0, () => {
+      // Arrange
+      const lineText = 'Hotel stay 90 min reason: overnight';
+      let message = '';
+
+      // Act
+      const inferredItems = AiResponseParser.parseItemsFromContent(lineText, identityGV);
+      try {
+        AiResponseParser.parseItemsFromContent(
+          '[{"name":" ","duration":0,"ai_reasoning":"bad","type":0}]',
+          identityGV
+        );
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
+      }
+
+      // Assert
+      expect(inferredItems.length).assertEqual(1);
+      expect(inferredItems[0].type).assertEqual(2);
+      expect(message.length > 0).assertTrue();
+    });
   });
 }

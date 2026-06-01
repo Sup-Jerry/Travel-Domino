@@ -5,6 +5,9 @@ import { WeatherSearch } from '@amap/amap_lbs_search';
 
 interface AmapWeatherServicePrivateGU {
   getWeatherBySdk(cityName: string, context: Object): Promise<WeatherInfo | null>;
+  mapForecastNodeToInfo(node?: Object): WeatherInfo | null;
+  readAsText(value?: string): string;
+  readAsNumber(value?: string): number;
 }
 
 interface WeatherSearchListenerGU {
@@ -54,6 +57,17 @@ class EmptyConditionLiveStubGU extends WeatherLiveStubGU {
   public getWeather(): string {
     return '   ';
   }
+}
+
+class SparseForecastNodeGU {
+  public adcode?: string = '330100';
+  public casts?: Object[] = [];
+}
+
+class SparseForecastCastGU {
+  public dayweather?: string = 'FOG';
+  public daytemp?: string = '  ';
+  public nighttemp?: string = 'bad';
 }
 
 class WeatherSearchHooksGU {
@@ -161,6 +175,47 @@ export default function phase2BatchGUTest() {
       } finally {
         hooks.restore();
       }
+    });
+
+    it('boundary: amap_weather_service_should_return_null_when_sdk_live_result_is_empty', 0, async () => {
+      // Arrange
+      const service = new AmapWeatherService();
+      const privateApi = service as Object as AmapWeatherServicePrivateGU;
+      const hooks = new WeatherSearchHooksGU();
+      hooks.install((listener: WeatherSearchListenerGU): void => {
+        listener.onWeatherLiveSearched(new WeatherLiveResultStubGU() as Object, 0);
+      });
+
+      try {
+        // Act
+        const info = await privateApi.getWeatherBySdk('310000', new Object());
+
+        // Assert
+        expect(info === null).assertTrue();
+      } finally {
+        hooks.restore();
+      }
+    });
+
+    it('combined: amap_weather_service_private_forecast_and_reader_helpers_should_cover_sparse_paths', 0, () => {
+      // Arrange
+      const service = new AmapWeatherService();
+      const privateApi = service as Object as AmapWeatherServicePrivateGU;
+      const cast = new SparseForecastCastGU();
+      const node = new SparseForecastNodeGU();
+      node.casts = [cast as Object];
+
+      // Act
+      const info = privateApi.mapForecastNodeToInfo(node as Object);
+      const blankText = privateApi.readAsText('   ');
+      const undefinedNumber = privateApi.readAsNumber(undefined);
+
+      // Assert
+      expect(info !== null).assertTrue();
+      expect(info?.condition || '').assertEqual('FOG');
+      expect(info?.temperature || 0).assertEqual(0);
+      expect(blankText).assertEqual('');
+      expect(Number.isNaN(undefinedNumber)).assertTrue();
     });
 
     it('invalid: validator_marker_should_cover_invalid_case', 0, () => {

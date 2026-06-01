@@ -1,6 +1,12 @@
 import { describe, expect, it } from '@ohos/hypium';
 import { EventRepositoryImpl } from '../main/ets/infrastructure/persistence/EventRepositoryImpl';
 
+interface EventRepositoryPrivateTest {
+  previewIds(ids: number[], limit?: number): string;
+  previewName(name: string, limit?: number): string;
+  resolvePlanIdByEventId(eventId: number): Promise<number>;
+}
+
 function resetDirtyPlanIds(): void {
   EventRepositoryImpl.consumeDirtyPlanIds();
 }
@@ -82,6 +88,45 @@ export default function eventRepositoryImplTest() {
       expect(ids.length).assertEqual(2);
       expect(ids[0]).assertEqual(4001);
       expect(ids[1]).assertEqual(4002);
+    });
+
+    it('boundary: private_preview_ids_should_cover_empty_and_suffix_paths', 0, () => {
+      // Arrange
+      const privateApi = EventRepositoryImpl as Object as EventRepositoryPrivateTest;
+
+      // Act
+      const emptyPreview = privateApi.previewIds([]);
+      const suffixPreview = privateApi.previewIds([11, 22, 33], 2);
+
+      // Assert
+      expect(emptyPreview).assertEqual('[]');
+      expect(suffixPreview).assertEqual('[11,22]...(+1)');
+    });
+
+    it('invalid: private_preview_name_should_cover_empty_and_truncate_paths', 0, () => {
+      // Arrange
+      const privateApi = EventRepositoryImpl as Object as EventRepositoryPrivateTest;
+
+      // Act
+      const emptyName = privateApi.previewName('');
+      const shortName = privateApi.previewName('park', 8);
+      const trimmedName = privateApi.previewName('long_event_name', 4);
+
+      // Assert
+      expect(emptyName).assertEqual('');
+      expect(shortName).assertEqual('park');
+      expect(trimmedName).assertEqual('long...');
+    });
+
+    it('regression: private_resolve_plan_id_by_event_id_should_return_minus_one_for_invalid_event_id', 0, async () => {
+      // Arrange
+      const privateApi = EventRepositoryImpl as Object as EventRepositoryPrivateTest;
+
+      // Act
+      const planId = await privateApi.resolvePlanIdByEventId(0);
+
+      // Assert
+      expect(planId).assertEqual(-1);
     });
   });
 }
