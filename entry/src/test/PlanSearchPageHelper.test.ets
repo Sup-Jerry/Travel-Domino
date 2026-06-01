@@ -25,6 +25,38 @@ interface PlanSearchPagePrivateTest {
   getPlanStateLabel(item: PlanItem): string;
   getPlanStateColor(item: PlanItem): string;
   SearchHeader(): void;
+  openPlan(item: PlanItem): void;
+}
+
+class PlanSearchRouteParamsHelperTest {
+  planId: number = 0;
+  title: string = '';
+  isNewPlan: boolean = false;
+}
+
+class PlanSearchRouteOptionsHelperTest {
+  url: string = '';
+  params: PlanSearchRouteParamsHelperTest = new PlanSearchRouteParamsHelperTest();
+}
+
+class PlanSearchRouterHelperMockTest {
+  pushedUrls: string[] = [];
+  shouldThrow: boolean = false;
+
+  pushUrl(options: PlanSearchRouteOptionsHelperTest): void {
+    if (this.shouldThrow) {
+      throw new Error('push_failed_helper');
+    }
+    this.pushedUrls.push(options.url);
+  }
+}
+
+class PlanSearchUiContextHelperMockTest {
+  router: PlanSearchRouterHelperMockTest = new PlanSearchRouterHelperMockTest();
+
+  getRouter(): PlanSearchRouterHelperMockTest {
+    return this.router;
+  }
 }
 
 function createPlanSearchPagePrivateForTest(): PlanSearchPagePrivateTest {
@@ -287,6 +319,30 @@ export default function planSearchPageHelperTest() {
       // Assert
       expect(page.searching).assertTrue();
       expect(page.resultList.length).assertEqual(1);
+    });
+
+    it('combined: plan_search_page_should_open_route_once_and_swallow_route_failure', 0, () => {
+      // Arrange
+      const page = createPlanSearchPagePrivateForTest();
+      const uiContext = new PlanSearchUiContextHelperMockTest();
+      const active = buildPlanSearchItemForTest(5, 'Route Trip', 1);
+      const trash = buildPlanSearchItemForTest(6, 'Trash Trip', 2, 99);
+      Reflect.set(page as Object, 'getUIContext', (): PlanSearchUiContextHelperMockTest => uiContext);
+
+      // Act
+      const activeLabel = page.getPlanStateLabel(active);
+      const activeColor = page.getPlanStateColor(active);
+      const trashLabel = page.getPlanStateLabel(trash);
+      page.openPlan(active);
+      uiContext.router.shouldThrow = true;
+      page.openPlan(active);
+
+      // Assert
+      expect(activeLabel).assertEqual('规划');
+      expect(activeColor).assertEqual('#1F8FFF');
+      expect(trashLabel).assertEqual('回收站');
+      expect(uiContext.router.pushedUrls.length).assertEqual(1);
+      expect(uiContext.router.pushedUrls[0]).assertEqual('pages/Index');
     });
   });
 }
