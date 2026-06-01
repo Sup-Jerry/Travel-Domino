@@ -601,5 +601,42 @@ export default function companionFocusActionHelperTest() {
       expect(capturedNowTs > 0).assertTrue();
       done();
     });
+
+    it('boundary: skip_should_leave_focus_empty_when_schedule_has_no_startable_event', 0, async (done: Function) => {
+      // Arrange
+      const focused = buildEvent(30, 'PENDING');
+      const blockedA = buildEvent(31, 'ACTIVE');
+      const blockedB = buildEvent(32, 'SKIPPED');
+      const mock = createSkipMock(focused, [blockedA, blockedB]);
+
+      // Act
+      await handleCompanionFocusedSkip({
+        focusedEvent: mock.focusedEvent,
+        skipEvent: async (_event: EventEntity): Promise<void> => {
+          mock.skipCalls += 1;
+        },
+        refreshContext: (): void => {
+          mock.refreshCalls += 1;
+        },
+        getScheduledEvents: () => mock.schedule,
+        getScheduleIndexById: (_id: number): number => -1,
+        applyFocusById: (id: number): void => {
+          mock.applyFocusIds.push(id);
+        },
+        showToast: (message: string): void => {
+          mock.toasts.push(message);
+        }
+      });
+      await new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => {
+        setTimeout(() => resolve(), 150);
+      });
+
+      // Assert
+      expect(mock.skipCalls).assertEqual(1);
+      expect(mock.refreshCalls).assertEqual(1);
+      expect(mock.applyFocusIds.length).assertEqual(0);
+      expect(mock.toasts.length).assertEqual(0);
+      done();
+    });
   });
 }
