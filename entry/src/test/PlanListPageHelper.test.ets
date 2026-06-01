@@ -718,6 +718,39 @@ export default function planListPageHelperTest() {
       expect(shownTitles[0]).assertEqual('refresh_title_plan');
     });
 
+    it('combined: plan_list_pull_refresh_should_pass_dialog_flag_and_fallback_title_to_arrival_coordinator', 0, async () => {
+      // Arrange
+      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
+      const service = new PlanListPlanServiceMockTest();
+      const coordinator = new PlanListArrivalCoordinatorMockTest();
+      const payload = new PlanListArrivalPayloadMockTest();
+      const shownTitles: string[] = [];
+      page.isArrivalDialogOpen = true;
+      payload.planId = 0;
+      payload.eventId = 21;
+      payload.placeName = 'Unknown Place';
+      Reflect.set(page as Object, 'planService', service as Object);
+      Reflect.set(page as Object, 'arrivalCoordinator', coordinator as Object);
+      Reflect.set(page as Object, 'showArrivalReminderOnHome', (_payload: Object, title: string): void => {
+        shownTitles.push(title);
+      });
+
+      // Act
+      await page.handlePullRefresh();
+      const options = coordinator.lastConsumeOptions as Record<string, Object>;
+      const isDialogOpen = Reflect.get(options, 'isDialogOpen') as boolean;
+      const resolvePlanTitle = Reflect.get(options, 'resolvePlanTitle') as (planId: number) => string;
+      const onShow = Reflect.get(options, 'onShow') as (payload: Object, title: string) => void;
+      const fallbackTitle = resolvePlanTitle(404);
+      onShow(payload as Object, fallbackTitle);
+
+      // Assert
+      expect(isDialogOpen).assertTrue();
+      expect(fallbackTitle).assertEqual('行程详情');
+      expect(shownTitles.length).assertEqual(1);
+      expect(shownTitles[0]).assertEqual('行程详情');
+    });
+
     it('combined: plan_list_instance_should_redirect_login_or_start_home_flow_based_on_session', 0, async () => {
       // Arrange
       const page = createPlanListPageForTest() as PlanListPagePrivateTest;
