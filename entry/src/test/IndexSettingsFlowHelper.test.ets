@@ -369,5 +369,36 @@ export default function indexSettingsFlowHelperTest() {
         Reflect.set(PlanImportExportService as Object, 'exportPlanToJson', originalExport);
       }
     });
+
+    it('invalid: default_flow_deps_should_surface_export_error_before_opening_share_dialog', 0, async (done: Function) => {
+      // Arrange
+      const originalExport = Reflect.get(PlanImportExportService as Object, 'exportPlanToJson') as Object;
+      let message = '';
+      Reflect.set(
+        PlanImportExportService as Object,
+        'exportPlanToJson',
+        async (_planId: number): Promise<string> => {
+          throw new Error('default_export_failed');
+        }
+      );
+
+      try {
+        // Act
+        await IndexSettingsFlowHelper.openShareDialog({
+          planId: 91,
+          planTitle: 'default_error_share',
+          planStartDate: new Date(2026, 3, 20).getTime(),
+          events: [buildShareEvent(1, 1, 0, 0)]
+        });
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
+      } finally {
+        Reflect.set(PlanImportExportService as Object, 'exportPlanToJson', originalExport);
+      }
+
+      // Assert
+      expect(message).assertEqual('default_export_failed');
+      done();
+    });
   });
 }
