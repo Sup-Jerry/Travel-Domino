@@ -33,6 +33,11 @@ interface PlanListPagePrivateTest {
   executeArchive(planId: number): Promise<void>;
   executeSoftDelete(planId: number): Promise<void>;
   handleHardDelete(item: PlanItem): void;
+  onPageShow(): void;
+  aboutToDisappear(): void;
+  ensureNotificationPermissionPrompt(context: Object): Promise<void>;
+  ensureLocationPermissionPrompt(context: Object): Promise<void>;
+  showArrivalReminderOnHome(payload: Object, title: string): void;
   initialRender(): void;
 }
 
@@ -109,6 +114,32 @@ class PlanListPromptStateTest {
   locationPrompted: boolean = false;
 }
 
+class PlanListSessionMockTest {
+  accountId: string = 'acc_plan_list';
+}
+
+class PlanListArrivalPayloadMockTest {
+  seq: number = 0;
+  planId: number = 0;
+  eventId: number = 0;
+  placeName: string = '';
+  distanceMeters: number = 0;
+  triggerAt: number = 0;
+}
+
+class PlanListAuthFacadeMockTest {
+  bindCount: number = 0;
+  session: Object | null = new PlanListSessionMockTest();
+
+  bindContext(_context: Object): void {
+    this.bindCount += 1;
+  }
+
+  getCurrentSession(): Object | null {
+    return this.session;
+  }
+}
+
 class PlanListPlanServiceMockTest {
   visiblePlans: PlanItem[] = [];
   archiveIds: number[] = [];
@@ -116,6 +147,12 @@ class PlanListPlanServiceMockTest {
   hardDeleteIds: number[] = [];
   arrivalCheckReasons: string[] = [];
   stopArrivalEngineCount: number = 0;
+  startArrivalEngineCount: number = 0;
+  notifyEnabled: boolean = true;
+  locationGranted: boolean = true;
+  notifyRequestReject: Object | null = null;
+  locationRequestThrow: Object | null = null;
+  locationRequestResult: boolean = true;
 
   async loadVisiblePlans(): Promise<PlanItem[]> {
     return this.visiblePlans;
@@ -137,6 +174,10 @@ class PlanListPlanServiceMockTest {
     this.arrivalCheckReasons.push(reason);
   }
 
+  startArrivalEngine(_planId: number, _vm: Object, _hostContext: Object): void {
+    this.startArrivalEngineCount += 1;
+  }
+
   stopArrivalEngine(): void {
     this.stopArrivalEngineCount += 1;
   }
@@ -146,19 +187,39 @@ class PlanListPlanServiceMockTest {
   }
 
   async isNotificationEnabled(): Promise<boolean> {
-    return true;
+    return this.notifyEnabled;
   }
 
   async isLocationPermissionGranted(): Promise<boolean> {
-    return true;
+    return this.locationGranted;
+  }
+
+  async requestEnableNotification(_context: Object): Promise<void> {
+    if (this.notifyRequestReject) {
+      throw (this.notifyRequestReject as Error);
+    }
+  }
+
+  async requestLocationPermissions(_context: Object): Promise<boolean> {
+    if (this.locationRequestThrow) {
+      throw (this.locationRequestThrow as Error);
+    }
+    return this.locationRequestResult;
   }
 }
 
 class PlanListArrivalCoordinatorMockTest {
   consumeCount: number = 0;
+  ackEventIds: number[] = [];
+  ackActions: string[] = [];
 
   consumeOnHome(_options: Object): void {
     this.consumeCount += 1;
+  }
+
+  acknowledge(eventId: number, action: string): void {
+    this.ackEventIds.push(eventId);
+    this.ackActions.push(action);
   }
 }
 
@@ -223,7 +284,7 @@ export default function planListPageHelperTest() {
       // Act
       const icon = resolvePlanListShareIcon(event);
       // Assert
-      expect(icon).assertEqual('⭐');
+      expect(icon).assertEqual('�?);
     });
 
     it('regression: td-20260412-plan_list_share_category_anchor_should_keep_fixed_label', 0, () => {
@@ -290,8 +351,8 @@ export default function planListPageHelperTest() {
       // Act
       const items = buildPlanListShareEventItems([event]);
       // Assert
-      expect(items[0].name).assertEqual('未命名地点');
-      expect(items[0].location).assertEqual('待补充地点');
+      expect(items[0].name).assertEqual('未命名地�?);
+      expect(items[0].location).assertEqual('待补充地�?);
       expect(items[0].duration).assertEqual(0.5);
     });
 
@@ -304,7 +365,7 @@ export default function planListPageHelperTest() {
       // Act
       const items = buildPlanListShareEventItems([event]);
       // Assert
-      expect(items[0].icon).assertEqual('⭐');
+      expect(items[0].icon).assertEqual('�?);
     });
 
     it('regression: td-20260418-plan_list_share_item_should_clamp_negative_day_offset_to_zero', 0, () => {
@@ -758,10 +819,10 @@ export default function planListPageHelperTest() {
       // Assert
       expect(uiContext.alertCount).assertEqual(5);
       expect(toastMessages.includes('已发起通知授权请求')).assertTrue();
-      expect(toastMessages.includes('拉起通知授权失败，请在系统设置中手动开启')).assertTrue();
-      expect(toastMessages.includes('定位权限已授权')).assertTrue();
+      expect(toastMessages.includes('拉起通知授权失败，请在系统设置中手动开�?)).assertTrue();
+      expect(toastMessages.includes('定位权限已授�?)).assertTrue();
       expect(toastMessages.includes('未获得定位权限，到达提醒可能无法触发')).assertTrue();
-      expect(toastMessages.includes('定位授权失败，请到系统设置手动开启')).assertTrue();
+      expect(toastMessages.includes('定位授权失败，请到系统设置手动开�?)).assertTrue();
     });
   });
 }
