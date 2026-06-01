@@ -352,6 +352,19 @@ export default function planListPageHelperTest() {
       expect(allowed).assertTrue();
     });
 
+    it('invalid: plan_list_reprompt_should_reject_future_last_prompt_when_already_prompted', 0, () => {
+      // Arrange
+      const now = 1000;
+      const lastPromptAt = 2000;
+      const cooldownMs = 10 * 60 * 1000;
+
+      // Act
+      const allowed = canPlanListRepromptPermission(now, lastPromptAt, true, cooldownMs);
+
+      // Assert
+      expect(allowed).assertFalse();
+    });
+
     it('boundary: plan_list_share_start_should_use_computed_time_when_fixed_time_missing', 0, () => {
       // Arrange
       const event = buildShareEvent();
