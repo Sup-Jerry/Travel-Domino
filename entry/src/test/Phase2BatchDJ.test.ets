@@ -5,6 +5,12 @@ import {
 } from '../main/ets/infrastructure/persistence/PlanRepositoryImpl';
 import {
   createPlanSearchPageForTest,
+  isPlanSearchCacheFresh,
+  normalizePlanSearchKeyword,
+  resolvePlanSearchCacheKey,
+  resolvePlanSearchResultText,
+  resolvePlanSearchStateColor,
+  resolvePlanSearchStateLabel,
   shouldPlanSearchTriggerLoadMoreOnScroll
 } from '../main/ets/pages/PlanSearchPage';
 
@@ -127,6 +133,43 @@ async function flushMicrotasksDJ(): Promise<void> {
 
 export default function phase2BatchDJTest() {
   describe('phase2BatchDJTest', () => {
+    it('combined: plan_search_helpers_should_cover_keyword_cache_state_and_result_text_edges', 0, () => {
+      // Arrange
+      // Act
+      const normalized = normalizePlanSearchKeyword('  Kyoto  ');
+      const cacheKey = resolvePlanSearchCacheKey('  Kyoto  ');
+      const emptyCacheKey = resolvePlanSearchCacheKey('   ');
+      const trashLabel = resolvePlanSearchStateLabel(0, 10);
+      const archivedLabel = resolvePlanSearchStateLabel(2, 0);
+      const planLabel = resolvePlanSearchStateLabel(0, 0);
+      const trashColor = resolvePlanSearchStateColor(0, 10);
+      const archivedColor = resolvePlanSearchStateColor(2, 0);
+      const planColor = resolvePlanSearchStateColor(0, 0);
+      const fresh = isPlanSearchCacheFresh(1000, 3500, 3000);
+      const futureInvalid = isPlanSearchCacheFresh(4000, 3500, 3000);
+      const nanInvalid = isPlanSearchCacheFresh(Number.NaN, 3500, 3000);
+      const searchingText = resolvePlanSearchResultText(true, false, 7);
+      const loadingMoreText = resolvePlanSearchResultText(false, true, 2.8);
+      const resultText = resolvePlanSearchResultText(false, false, -9);
+
+      // Assert
+      expect(normalized).assertEqual('Kyoto');
+      expect(cacheKey).assertEqual('kyoto');
+      expect(emptyCacheKey).assertEqual('__empty__');
+      expect(trashLabel).assertEqual('回收站');
+      expect(archivedLabel).assertEqual('归档');
+      expect(planLabel).assertEqual('规划');
+      expect(trashColor).assertEqual('#D03D3D');
+      expect(archivedColor).assertEqual('#7A8699');
+      expect(planColor).assertEqual('#1F8FFF');
+      expect(fresh).assertTrue();
+      expect(futureInvalid).assertFalse();
+      expect(nanInvalid).assertFalse();
+      expect(searchingText).assertEqual('搜索中...');
+      expect(loadingMoreText).assertEqual('结果 2 条（加载更多中）');
+      expect(resultText).assertEqual('结果 0 条');
+    });
+
     it('normal: plan_search_run_search_should_store_results_and_cache_first_page', 0, async () => {
       // Arrange
       const repo = new SearchRepositoryMockDJ();
