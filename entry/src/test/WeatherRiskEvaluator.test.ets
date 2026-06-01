@@ -363,5 +363,40 @@ export default function weatherRiskEvaluatorTest() {
       expect(highSummary === lowSummary).assertFalse();
       expect(lowSummary === mediumSummary).assertFalse();
     });
+
+    it('combined: public_node_suitability_should_clamp_invalid_rain_sensitivity_levels_into_supported_range', 0, () => {
+      // Arrange
+      const evaluator = new WeatherRiskEvaluator();
+      const event = buildEvent(0);
+      const weather: WeatherSnapshot = {
+        locationKey: 'rain-invalid-level',
+        sourceType: 'PLAN_LOCATION',
+        weatherTime: Date.now(),
+        fetchTime: Date.now(),
+        conditionCode: 'SNOW',
+        conditionText: 'snow',
+        temperatureCelsius: 20
+      };
+      const negativePref: WeatherUserPreference = {
+        heatSensitivity: 1,
+        rainSensitivity: 1,
+        weatherRiskTolerance: 1
+      };
+      const overflowPref: WeatherUserPreference = {
+        heatSensitivity: 1,
+        rainSensitivity: 1,
+        weatherRiskTolerance: 1
+      };
+      Reflect.set(negativePref as Object, 'rainSensitivity', -3);
+      Reflect.set(overflowPref as Object, 'rainSensitivity', 9);
+      // Act
+      const negativeLevel = evaluator.evaluateNodeSuitability(event, weather, negativePref);
+      const overflowLevel = evaluator.evaluateNodeSuitability(event, weather, overflowPref);
+      // Assert
+      expect(negativeLevel.score).assertEqual(79);
+      expect(overflowLevel.score).assertEqual(59);
+      expect(negativeLevel.riskTags.includes('RAIN')).assertTrue();
+      expect(overflowLevel.riskTags.includes('RAIN')).assertTrue();
+    });
   });
 }
