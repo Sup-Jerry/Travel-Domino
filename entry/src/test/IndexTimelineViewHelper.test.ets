@@ -50,6 +50,15 @@ interface IndexTimelineViewParamsTest {
   onOpenGapOptimize?: () => void;
 }
 
+interface IndexTimelineSwipeActionEntryTest {
+  builder: () => void;
+}
+
+interface IndexTimelineSwipeActionConfigTest {
+  start: IndexTimelineSwipeActionEntryTest;
+  end: IndexTimelineSwipeActionEntryTest;
+}
+
 interface IndexTimelineViewPrivateTest {
   groupedEvents: IndexTimelineGroupTest[];
   allEvents: EventEntity[];
@@ -407,6 +416,49 @@ export default function indexTimelineViewHelperTest() {
       expect(resolveIndexTimelineBottomSpacerHeight(true)).assertEqual(24);
       expect(shouldShowIndexTimelineGapHint(false, 0)).assertFalse();
       expect(shouldEnableIndexTimelineItem(page.isArchived)).assertTrue();
+    });
+
+    it('combined: timeline_view_should_cover_swipe_gap_and_visible_group_helpers_together', 0, () => {
+      // Arrange
+      const page = new IndexTimelineView(undefined, {} as LocalStorage) as Object as IndexTimelineViewPrivateTest;
+      const first = buildTimelineEvent(51);
+      const second = buildTimelineEvent(52);
+      const group: IndexTimelineGroupTest = {
+        dayOffset: 5,
+        actualDateMs: 50,
+        dateHeader: 'Day 5',
+        events: [first, second]
+      };
+      let deleteCount = 0;
+      let backlogCount = 0;
+      let gapOpenCount = 0;
+      page.groupedEvents = [group];
+      page.allEvents = [first, second];
+      page.isArchived = false;
+      page.isCompanionMode = false;
+      page.showWeather = true;
+      page.isPageRefreshing = false;
+      page.gapsCount = 3;
+      page.onIsDayCollapsed = (_dayOffset: number) => false;
+      page.onDeleteEvent = (_item: EventEntity) => { deleteCount += 1; };
+      page.onMoveToBacklog = (_item: EventEntity) => { backlogCount += 1; };
+      page.onOpenGapOptimize = () => { gapOpenCount += 1; };
+
+      // Act
+      const visibleEvents = page.resolveVisibleGroupEvents(group);
+      const swipeConfig = page.resolveSwipeAction(first) as IndexTimelineSwipeActionConfigTest;
+      const gapCounts = page.resolveGapHintCounts();
+      swipeConfig.start.builder();
+      swipeConfig.end.builder();
+      page.onOpenGapOptimize();
+
+      // Assert
+      expect(visibleEvents.length).assertEqual(2);
+      expect(gapCounts.length).assertEqual(1);
+      expect(gapCounts[0]).assertEqual(3);
+      expect(deleteCount).assertEqual(0);
+      expect(backlogCount).assertEqual(0);
+      expect(gapOpenCount).assertEqual(1);
     });
 
     it('combined: timeline_view_should_cover_hidden_group_and_header_matrix_with_negative_places', 0, () => {

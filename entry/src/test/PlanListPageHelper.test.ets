@@ -827,5 +827,30 @@ export default function planListPageHelperTest() {
       expect(toastMessages.includes('未获得定位权限，到达提醒可能无法触发')).assertTrue();
       expect(toastMessages.includes('定位授权失败，请到系统设置手动开启')).assertTrue();
     });
+    it('combined: plan_list_permission_prompts_should_cover_primary_noop_and_enabled_granted_early_return', 0, async () => {
+      // Arrange
+      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
+      const uiContext = new PlanListUiContextMockTest();
+      const service = new PlanListPlanServiceMockTest();
+      Reflect.set(page as Object, 'getUIContext', (): PlanListUiContextMockTest => uiContext);
+      Reflect.set(page as Object, 'planService', service as Object);
+
+      // Act
+      service.notifyEnabled = true;
+      await page.ensureNotificationPermissionPrompt(new Object());
+      service.notifyEnabled = false;
+      await page.ensureNotificationPermissionPrompt(new Object());
+      (uiContext.lastAlert as PlanListAlertOptionsTest).primaryButton.action();
+      service.locationGranted = true;
+      await page.ensureLocationPermissionPrompt(new Object());
+      service.locationGranted = false;
+      await page.ensureLocationPermissionPrompt(new Object());
+      (uiContext.lastAlert as PlanListAlertOptionsTest).primaryButton.action();
+
+      // Assert
+      expect(uiContext.alertCount).assertEqual(2);
+      expect(service.notifyEnabled).assertFalse();
+      expect(service.locationGranted).assertFalse();
+    });
   });
 }

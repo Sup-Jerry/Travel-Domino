@@ -9,7 +9,8 @@ import {
   resolvePlanSearchResultText,
   resolvePlanSearchStateColor,
   resolvePlanSearchStateLabel,
-  shouldPlanSearchLoadMore
+  shouldPlanSearchLoadMore,
+  shouldPlanSearchTriggerLoadMoreOnScroll
 } from '../main/ets/pages/PlanSearchPage';
 
 interface PlanSearchPagePrivateTest {
@@ -21,6 +22,7 @@ interface PlanSearchPagePrivateTest {
   loaded: boolean;
   queryToken: number;
   effectiveTheme: string;
+  aboutToDisappear(): void;
   initialRender(): void;
   getPlanStateLabel(item: PlanItem): string;
   getPlanStateColor(item: PlanItem): string;
@@ -343,6 +345,24 @@ export default function planSearchPageHelperTest() {
       expect(trashLabel).assertEqual('回收站');
       expect(uiContext.router.pushedUrls.length).assertEqual(1);
       expect(uiContext.router.pushedUrls[0]).assertEqual('pages/Index');
+    });
+    it('combined: plan_search_page_should_cover_scroll_threshold_and_disappear_timer_cleanup', 0, () => {
+      // Arrange
+      const page = createPlanSearchPagePrivateForTest();
+      Reflect.set(page as Object, 'debounceTimer', 12);
+
+      // Act
+      const beforeLast = shouldPlanSearchTriggerLoadMoreOnScroll(7, 10);
+      const lastItem = shouldPlanSearchTriggerLoadMoreOnScroll(9, 10);
+      const beyondLast = shouldPlanSearchTriggerLoadMoreOnScroll(10, 10);
+      page.aboutToDisappear();
+      const timerAfterDisappear = Reflect.get(page as Object, 'debounceTimer') as number;
+
+      // Assert
+      expect(beforeLast).assertFalse();
+      expect(lastItem).assertTrue();
+      expect(beyondLast).assertTrue();
+      expect(timerAfterDisappear).assertEqual(-1);
     });
   });
 }
