@@ -1,4 +1,5 @@
 import { describe, expect, it } from '@ohos/hypium';
+import agconnect from '@hw-agconnect/api-ohos';
 import { UserProfileRepositoryImpl } from '../main/ets/infrastructure/persistence/UserProfileRepositoryImpl';
 import { UserProfileEntity } from '../main/ets/domain/entity/UserProfileEntity';
 
@@ -84,9 +85,22 @@ class FakeCloudDbForUserProfileTest {
   }
 }
 
+class ThrowingCloudDbForUserProfileTest {
+  openCount: number = 0;
+  async openCloudDBZone(_config: Object): Promise<Object> {
+    this.openCount++;
+    throw new Error('zone_open_fail_private');
+  }
+}
+
 class FakeContextForUserProfileTest {
   getApplicationContext(): Object {
     return new Object();
+  }
+}
+
+class FakeAgconnectInstanceForUserProfileTest {
+  init(_context: Object): void {
   }
 }
 
@@ -269,6 +283,50 @@ export default function userProfileRepositoryImplTest() {
       const result = await (repo as Object as UserProfileRepositoryImpl).createDefaultProfile('existing_acc');
       // Assert
       expect(result === existing).assertTrue();
+    });
+
+    it('combined: private_cloud_zone_and_timestamp_helpers_should_cover_cached_cloud_db_and_numeric_raw_timestamp', 0, async () => {
+      // Arrange
+      const repo = new UserProfileRepositoryImpl() as Object as UserProfileRepositoryPrivateForTest;
+      const originInstance = Reflect.get(agconnect as Object, 'instance') as Object;
+      const fakeZone = new Object();
+      const fakeCloudDb = new FakeCloudDbForUserProfileTest(fakeZone);
+      Reflect.set(agconnect as Object, 'instance', (): Object => {
+        return new FakeAgconnectInstanceForUserProfileTest() as Object;
+      });
+      repo.bindContext(new FakeContextForUserProfileTest() as Object);
+      Reflect.set(repo as Object, 'cloudDb', fakeCloudDb as Object);
+      // Act
+      const zone = await repo.openCloudDbZoneInternal();
+      const timestamp = repo.toTimestamp(123456);
+      Reflect.set(agconnect as Object, 'instance', originInstance);
+      // Assert
+      expect(zone === fakeZone).assertTrue();
+      expect(fakeCloudDb.openCount).assertEqual(1);
+      expect(timestamp).assertEqual(123456);
+    });
+
+    it('invalid: private_open_cloud_db_zone_internal_should_throw_wrapped_error_when_all_zone_names_fail', 0, async () => {
+      // Arrange
+      const repo = new UserProfileRepositoryImpl() as Object as UserProfileRepositoryPrivateForTest;
+      const originInstance = Reflect.get(agconnect as Object, 'instance') as Object;
+      const fakeCloudDb = new ThrowingCloudDbForUserProfileTest();
+      let message = '';
+      Reflect.set(agconnect as Object, 'instance', (): Object => {
+        return new FakeAgconnectInstanceForUserProfileTest() as Object;
+      });
+      repo.bindContext(new FakeContextForUserProfileTest() as Object);
+      Reflect.set(repo as Object, 'cloudDb', fakeCloudDb as Object);
+      // Act
+      try {
+        await repo.openCloudDbZoneInternal();
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
+      }
+      Reflect.set(agconnect as Object, 'instance', originInstance);
+      // Assert
+      expect(fakeCloudDb.openCount >= 2).assertTrue();
+      expect(message.includes('cloud_db_zone_open_failed')).assertTrue();
     });
   });
 }
