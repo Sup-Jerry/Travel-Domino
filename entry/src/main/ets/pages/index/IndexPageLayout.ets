@@ -1,11 +1,83 @@
 import { ThemePalette } from '../../common/utils/ThemeCenter';
 import { EventEntity } from '../../model/entity/EventEntity';
 import { TravelPlanItem } from '../../model/interface/IStandardEvent';
-import { TimelineViewModel } from '../../viewmodel/TimelineViewModel';
+import { DateGroup, TimelineViewModel } from '../../viewmodel/TimelineViewModel';
 import { IndexHelpers } from './IndexHelpers';
 import { IndexCompanionOverlay } from './IndexCompanionOverlay';
 import { IndexScheduleArea } from './IndexScheduleArea';
 import { IndexTopArea } from './IndexTopArea';
+import { IndexTimelineTheme } from './IndexTimelineView';
+import { IndexUnsavedActionTheme } from './IndexUnsavedActionBar';
+import { IndexToolbarTheme } from './IndexToolbar';
+import { IndexWeatherHintTheme } from './IndexWeatherHintBar';
+
+export interface IndexPageTopAreaProps {
+  planTitle: string;
+  strategyMode: number;
+  currentStrategyExplanation: string;
+  isCompanionMode: boolean;
+  isArchived: boolean;
+  weatherFeatureEnabled: boolean;
+  weatherLoading: boolean;
+  weatherHintVisible: boolean;
+  weatherSuggestionText: string;
+  weatherRouteScore: number;
+  hintPopupVisible: boolean;
+  scorePopupVisible: boolean;
+  hintLines: string[];
+  scoreLines: string[];
+  events: EventEntity[];
+  backlogExpanded: boolean;
+  dividerColor: string;
+  toolbarTheme: IndexToolbarTheme;
+  weatherTheme: IndexWeatherHintTheme;
+  onBack: () => void;
+  onOpenSettings: () => void;
+  onEnterCompanion: () => void;
+  onRefreshWeather: () => void;
+  onToggleHint: () => void;
+  onToggleScore: () => void;
+  onHintPopupVisibleChange: (visible: boolean) => void;
+  onScorePopupVisibleChange: (visible: boolean) => void;
+  onToggleBacklogExpand: () => void;
+  onMoveToSchedule: (item: TravelPlanItem) => void;
+  onMoveAllToSchedule: () => void;
+}
+
+export interface IndexPageScheduleAreaProps {
+  vm: TimelineViewModel;
+  groupedEvents: DateGroup[];
+  allEvents: EventEntity[];
+  isArchived: boolean;
+  isCompanionMode: boolean;
+  showWeather: boolean;
+  isPageRefreshing: boolean;
+  gapsCount: number;
+  hasUnsavedChanges: boolean;
+  timelineTheme: IndexTimelineTheme;
+  unsavedTheme: IndexUnsavedActionTheme;
+  onIsDayCollapsed: (dayOffset: number) => boolean;
+  onToggleDay: (dayOffset: number) => void;
+  onRefresh: () => void;
+  onOpenEditDialog: (item: EventEntity) => void;
+  onOpenTimeEditDialog: (item: EventEntity) => void;
+  onGapFound: (item: EventEntity) => void;
+  onResolveConflictAction: (item: EventEntity, strategy: 'delay' | 'compress' | 'advance' | 'smart', gapMinutes: number) => void;
+  onConfirmMoveToBacklog: (item: EventEntity) => void;
+  onConfirmDeleteEvent: (item: EventEntity) => void;
+  onOpenGapOptimize: () => void;
+  onFilter: () => void;
+  onAi: () => void;
+  onAdd: () => void;
+  onUndo: () => void;
+  onSave: () => void;
+}
+
+export interface IndexPageCompanionOverlayProps {
+  vm: TimelineViewModel;
+  isVisible: boolean;
+  overlayZIndex: number;
+}
 
 export function shouldShowIndexPageWeatherHint(
   weatherFeatureEnabled: boolean,
@@ -106,112 +178,124 @@ export struct IndexPageLayout {
   onUndo: () => void = () => {};
   onSave: () => void = () => {};
 
+  buildTopAreaProps(): IndexPageTopAreaProps {
+    return {
+      planTitle: this.planTitle,
+      strategyMode: this.strategyMode,
+      currentStrategyExplanation: this.currentStrategyExplanation,
+      isCompanionMode: this.isCompanionMode,
+      isArchived: this.vm.isArchived,
+      weatherFeatureEnabled: this.vm.isWeatherFeatureEnabled(),
+      weatherLoading: this.vm.weatherLoading,
+      weatherHintVisible: shouldShowIndexPageWeatherHint(
+        this.vm.isWeatherFeatureEnabled(),
+        this.hasManualPlanningWeatherRefresh,
+        this.vm.weatherPlanningHint
+      ),
+      weatherSuggestionText: buildIndexPageWeatherSuggestionText(
+        this.vm.weatherCollabLabel,
+        this.vm.weatherPlanningHint,
+        this.vm.weatherCollabSummary,
+        this.vm.weatherStrategyHint
+      ),
+      weatherRouteScore: this.vm.weatherRouteScore,
+      hintPopupVisible: this.showPlanningWeatherHintPopup,
+      scorePopupVisible: this.showPlanningWeatherScorePopup,
+      hintLines: buildIndexPageHintLines(this.vm.buildPlanningWeatherHintExplanation()),
+      scoreLines: buildIndexPageScoreLines(this.vm.buildWeatherScoreExplanation(this.vm.weatherRouteScore)),
+      events: this.vm.events,
+      backlogExpanded: this.backlogExpanded,
+      dividerColor: this.themePalette.divider,
+      toolbarTheme: {
+        primary: this.themePalette.primary,
+        textTertiary: this.themePalette.textTertiary,
+        cardBgSoft: this.themePalette.cardBgSoft,
+        textPrimary: this.themePalette.textPrimary
+      },
+      weatherTheme: {
+        primary: this.themePalette.primary,
+        textPrimary: this.themePalette.textPrimary,
+        cardBgSoft: this.themePalette.cardBgSoft
+      },
+      onBack: () => this.onBack(),
+      onOpenSettings: () => this.onOpenSettings(),
+      onEnterCompanion: () => this.onEnterCompanion(),
+      onRefreshWeather: () => this.onRefreshWeather(),
+      onToggleHint: () => this.onToggleHint(),
+      onToggleScore: () => this.onToggleScore(),
+      onHintPopupVisibleChange: (visible: boolean) => this.onHintPopupVisibleChange(visible),
+      onScorePopupVisibleChange: (visible: boolean) => this.onScorePopupVisibleChange(visible),
+      onToggleBacklogExpand: () => this.onToggleBacklogExpand(),
+      onMoveToSchedule: (item: TravelPlanItem) => this.onMoveToSchedule(item),
+      onMoveAllToSchedule: () => this.onMoveAllToSchedule()
+    };
+  }
+
+  buildScheduleAreaProps(): IndexPageScheduleAreaProps {
+    return {
+      vm: this.vm,
+      groupedEvents: this.vm.groupedEvents,
+      allEvents: this.vm.events,
+      isArchived: this.vm.isArchived,
+      isCompanionMode: this.isCompanionMode,
+      showWeather: this.vm.isWeatherFeatureEnabled(),
+      isPageRefreshing: this.isPageRefreshing,
+      gapsCount: resolveIndexPageGapsCount(this.vm.getSortedGaps().length),
+      hasUnsavedChanges: this.hasUnsavedChanges,
+      timelineTheme: {
+        pageBg: this.themePalette.pageBg,
+        textPrimary: this.themePalette.textPrimary,
+        textSecondary: this.themePalette.textSecondary,
+        textTertiary: this.themePalette.textTertiary,
+        warning: this.themePalette.warning
+      },
+      unsavedTheme: {
+        textPrimary: this.themePalette.textPrimary,
+        textSecondary: this.themePalette.textSecondary,
+        divider: this.themePalette.divider,
+        primary: this.themePalette.primary,
+        cardBg: this.themePalette.cardBg
+      },
+      onIsDayCollapsed: (dayOffset: number) => this.onIsDayCollapsed(dayOffset),
+      onToggleDay: (dayOffset: number) => this.onToggleDay(dayOffset),
+      onRefresh: () => this.onScheduleRefresh(),
+      onOpenEditDialog: (item: EventEntity) => this.onOpenEditDialog(item),
+      onOpenTimeEditDialog: (item: EventEntity) => this.onOpenTimeEditDialog(item),
+      onGapFound: (item: EventEntity) => this.onGapFound(item),
+      onResolveConflictAction: (item: EventEntity, strategy: 'delay' | 'compress' | 'advance' | 'smart', gapMinutes: number) => {
+        this.onResolveConflictAction(item, strategy, gapMinutes);
+      },
+      onConfirmMoveToBacklog: (item: EventEntity) => this.onConfirmMoveToBacklog(item),
+      onConfirmDeleteEvent: (item: EventEntity) => this.onConfirmDeleteEvent(item),
+      onOpenGapOptimize: () => this.onOpenGapOptimize(),
+      onFilter: () => this.onFilter(),
+      onAi: () => this.onAi(),
+      onAdd: () => this.onAdd(),
+      onUndo: () => this.onUndo(),
+      onSave: () => this.onSave()
+    };
+  }
+
+  buildCompanionOverlayProps(): IndexPageCompanionOverlayProps {
+    return {
+      vm: this.vm,
+      isVisible: this.isCompanionMode,
+      overlayZIndex: this.companionOverlayZIndex
+    };
+  }
+
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
       Column() {
-        IndexTopArea({
-          planTitle: this.planTitle,
-          strategyMode: this.strategyMode,
-          currentStrategyExplanation: this.currentStrategyExplanation,
-          isCompanionMode: this.isCompanionMode,
-          isArchived: this.vm.isArchived,
-          weatherFeatureEnabled: this.vm.isWeatherFeatureEnabled(),
-          weatherLoading: this.vm.weatherLoading,
-          weatherHintVisible: shouldShowIndexPageWeatherHint(
-            this.vm.isWeatherFeatureEnabled(),
-            this.hasManualPlanningWeatherRefresh,
-            this.vm.weatherPlanningHint
-          ),
-          weatherSuggestionText: buildIndexPageWeatherSuggestionText(
-            this.vm.weatherCollabLabel,
-            this.vm.weatherPlanningHint,
-            this.vm.weatherCollabSummary,
-            this.vm.weatherStrategyHint
-          ),
-          weatherRouteScore: this.vm.weatherRouteScore,
-          hintPopupVisible: this.showPlanningWeatherHintPopup,
-          scorePopupVisible: this.showPlanningWeatherScorePopup,
-          hintLines: buildIndexPageHintLines(this.vm.buildPlanningWeatherHintExplanation()),
-          scoreLines: buildIndexPageScoreLines(this.vm.buildWeatherScoreExplanation(this.vm.weatherRouteScore)),
-          events: this.vm.events,
-          backlogExpanded: this.backlogExpanded,
-          dividerColor: this.themePalette.divider,
-          toolbarTheme: {
-            primary: this.themePalette.primary,
-            textTertiary: this.themePalette.textTertiary,
-            cardBgSoft: this.themePalette.cardBgSoft,
-            textPrimary: this.themePalette.textPrimary
-          },
-          weatherTheme: {
-            primary: this.themePalette.primary,
-            textPrimary: this.themePalette.textPrimary,
-            cardBgSoft: this.themePalette.cardBgSoft
-          },
-          onBack: () => this.onBack(),
-          onOpenSettings: () => this.onOpenSettings(),
-          onEnterCompanion: () => this.onEnterCompanion(),
-          onRefreshWeather: () => this.onRefreshWeather(),
-          onToggleHint: () => this.onToggleHint(),
-          onToggleScore: () => this.onToggleScore(),
-          onHintPopupVisibleChange: (visible: boolean) => this.onHintPopupVisibleChange(visible),
-          onScorePopupVisibleChange: (visible: boolean) => this.onScorePopupVisibleChange(visible),
-          onToggleBacklogExpand: () => this.onToggleBacklogExpand(),
-          onMoveToSchedule: (item: TravelPlanItem) => this.onMoveToSchedule(item),
-          onMoveAllToSchedule: () => this.onMoveAllToSchedule()
-        })
+        IndexTopArea(this.buildTopAreaProps())
 
-        IndexScheduleArea({
-          vm: this.vm,
-          groupedEvents: this.vm.groupedEvents,
-          allEvents: this.vm.events,
-          isArchived: this.vm.isArchived,
-          isCompanionMode: this.isCompanionMode,
-          showWeather: this.vm.isWeatherFeatureEnabled(),
-          isPageRefreshing: this.isPageRefreshing,
-          gapsCount: resolveIndexPageGapsCount(this.vm.getSortedGaps().length),
-          hasUnsavedChanges: this.hasUnsavedChanges,
-          timelineTheme: {
-            pageBg: this.themePalette.pageBg,
-            textPrimary: this.themePalette.textPrimary,
-            textSecondary: this.themePalette.textSecondary,
-            textTertiary: this.themePalette.textTertiary,
-            warning: this.themePalette.warning
-          },
-          unsavedTheme: {
-            textPrimary: this.themePalette.textPrimary,
-            textSecondary: this.themePalette.textSecondary,
-            divider: this.themePalette.divider,
-            primary: this.themePalette.primary,
-            cardBg: this.themePalette.cardBg
-          },
-          onIsDayCollapsed: (dayOffset: number) => this.onIsDayCollapsed(dayOffset),
-          onToggleDay: (dayOffset: number) => this.onToggleDay(dayOffset),
-          onRefresh: () => this.onScheduleRefresh(),
-          onOpenEditDialog: (item: EventEntity) => this.onOpenEditDialog(item),
-          onOpenTimeEditDialog: (item: EventEntity) => this.onOpenTimeEditDialog(item),
-          onGapFound: (item: EventEntity) => this.onGapFound(item),
-          onResolveConflictAction: (item: EventEntity, strategy: 'delay' | 'compress' | 'advance' | 'smart', gapMinutes: number) => {
-            this.onResolveConflictAction(item, strategy, gapMinutes);
-          },
-          onConfirmMoveToBacklog: (item: EventEntity) => this.onConfirmMoveToBacklog(item),
-          onConfirmDeleteEvent: (item: EventEntity) => this.onConfirmDeleteEvent(item),
-          onOpenGapOptimize: () => this.onOpenGapOptimize(),
-          onFilter: () => this.onFilter(),
-          onAi: () => this.onAi(),
-          onAdd: () => this.onAdd(),
-          onUndo: () => this.onUndo(),
-          onSave: () => this.onSave()
-        })
+        IndexScheduleArea(this.buildScheduleAreaProps())
       }
       .width('100%')
       .height('100%')
       .backgroundColor(this.themePalette.pageBg)
 
-      IndexCompanionOverlay({
-        vm: this.vm,
-        isVisible: this.isCompanionMode,
-        overlayZIndex: this.companionOverlayZIndex
-      })
+      IndexCompanionOverlay(this.buildCompanionOverlayProps())
     }
     .width('100%')
     .height('100%')

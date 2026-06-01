@@ -78,9 +78,51 @@ interface IndexScheduleAreaPrivateTest {
   onAdd: () => void;
   onUndo: () => void;
   onSave: () => void;
+  buildTimelineViewProps(): Object;
+  buildBottomBarProps(): Object;
+  buildUnsavedActionBarProps(): Object;
   setInitiallyProvidedValue(params: IndexScheduleAreaParamsTest): void;
   updateStateVars(params: IndexScheduleAreaParamsTest): void;
   initialRender(): void;
+}
+
+interface IndexScheduleTimelineViewPropsTest {
+  groupedEvents: IndexScheduleGroupTest[];
+  allEvents: EventEntity[];
+  isArchived: boolean;
+  isCompanionMode: boolean;
+  showWeather: boolean;
+  isPageRefreshing: boolean;
+  gapsCount: number;
+  onIsDayCollapsed: (dayOffset: number) => boolean;
+  onToggleDay: (dayOffset: number) => void;
+  onRefresh: () => void;
+  onMoveUp: (item: EventEntity) => void;
+  onMoveDown: (item: EventEntity) => void;
+  onMainContentClick: (item: EventEntity) => void;
+  onTimeClick: (item: EventEntity) => void;
+  onTravelModeChange: (item: EventEntity, mode: number) => void;
+  onManualTravelInput: (item: EventEntity, minutes: number) => void;
+  onCommuteChange: (item: EventEntity, minutes: number) => void;
+  onConflictAction: (item: EventEntity, strategy: string, gapMinutes: number) => void;
+  onMoveToBacklog: (item: EventEntity) => void;
+  onDeleteEvent: (item: EventEntity) => void;
+  onOpenGapOptimize: () => void;
+}
+
+interface IndexScheduleBottomBarPropsTest {
+  aiEnabled: boolean;
+  addEnabled: boolean;
+  onFilter: () => void;
+  onAi: () => void;
+  onAdd: () => void;
+}
+
+interface IndexScheduleUnsavedPropsTest {
+  isVisible: boolean;
+  marginBottom: number;
+  onUndo: () => void;
+  onSave: () => void;
 }
 
 function buildScheduleEvent(id: number): EventEntity {
@@ -92,6 +134,14 @@ function buildScheduleEvent(id: number): EventEntity {
 
 class IndexScheduleVmPlaceholderTest {
   label: string = '';
+  events: EventEntity[] = [];
+  moveEvent(_index: number, _direction: string): void {}
+  updateTravelMode(_item: EventEntity, _mode: number): void {}
+  updateManualCommute(_item: EventEntity, _minutes: number): void {}
+  updateCommute(_index: number, _minutes: number): void {}
+  getSortedGaps(): EventEntity[] {
+    return [];
+  }
 }
 
 export default function indexScheduleAreaHelperTest() {
@@ -397,6 +447,83 @@ export default function indexScheduleAreaHelperTest() {
       expect(aiEnabled).assertTrue();
       expect(addEnabled).assertTrue();
       expect(margin).assertEqual(30);
+    });
+
+    it('combined: schedule_area_prop_builders_should_cover_timeline_bottom_bar_and_unsaved_callbacks', 0, () => {
+      // Arrange
+      const page = new IndexScheduleArea(undefined, {} as LocalStorage) as Object as IndexScheduleAreaPrivateTest;
+      const event = buildScheduleEvent(20);
+      let callCount = 0;
+      const vm = new IndexScheduleVmPlaceholderTest();
+      vm.events = [event];
+      page.vm = vm as Object;
+      page.groupedEvents = [{
+        dayOffset: 3,
+        actualDateMs: 33,
+        dateHeader: 'Day 4',
+        events: [event]
+      }];
+      page.allEvents = [event];
+      page.isArchived = false;
+      page.isCompanionMode = true;
+      page.showWeather = true;
+      page.isPageRefreshing = true;
+      page.gapsCount = 4;
+      page.hasUnsavedChanges = true;
+      page.onIsDayCollapsed = (dayOffset: number) => dayOffset === 3;
+      page.onToggleDay = (_dayOffset: number) => { callCount += 1; };
+      page.onRefresh = () => { callCount += 1; };
+      page.onOpenEditDialog = (_item: EventEntity) => { callCount += 1; };
+      page.onOpenTimeEditDialog = (_item: EventEntity) => { callCount += 1; };
+      page.onGapFound = (_item: EventEntity) => { callCount += 1; };
+      page.onResolveConflictAction = (_item: EventEntity, _strategy: string, _gapMinutes: number) => { callCount += 1; };
+      page.onConfirmMoveToBacklog = (_item: EventEntity) => { callCount += 1; };
+      page.onConfirmDeleteEvent = (_item: EventEntity) => { callCount += 1; };
+      page.onOpenGapOptimize = () => { callCount += 1; };
+      page.onFilter = () => { callCount += 1; };
+      page.onAi = () => { callCount += 1; };
+      page.onAdd = () => { callCount += 1; };
+      page.onUndo = () => { callCount += 1; };
+      page.onSave = () => { callCount += 1; };
+
+      // Act
+      const timelineProps = page.buildTimelineViewProps() as IndexScheduleTimelineViewPropsTest;
+      const bottomBarProps = page.buildBottomBarProps() as IndexScheduleBottomBarPropsTest;
+      const unsavedProps = page.buildUnsavedActionBarProps() as IndexScheduleUnsavedPropsTest;
+      const collapsed = timelineProps.onIsDayCollapsed(3);
+      timelineProps.onToggleDay(3);
+      timelineProps.onRefresh();
+      timelineProps.onMoveUp(event);
+      timelineProps.onMoveDown(event);
+      timelineProps.onMainContentClick(event);
+      timelineProps.onTimeClick(event);
+      timelineProps.onTravelModeChange(event, 2);
+      timelineProps.onManualTravelInput(event, 15);
+      timelineProps.onCommuteChange(event, 25);
+      timelineProps.onConflictAction(event, 'delay', 18);
+      timelineProps.onMoveToBacklog(event);
+      timelineProps.onDeleteEvent(event);
+      timelineProps.onOpenGapOptimize();
+      bottomBarProps.onFilter();
+      bottomBarProps.onAi();
+      bottomBarProps.onAdd();
+      unsavedProps.onUndo();
+      unsavedProps.onSave();
+
+      // Assert
+      expect(timelineProps.groupedEvents.length).assertEqual(1);
+      expect(timelineProps.allEvents.length).assertEqual(1);
+      expect(timelineProps.isArchived).assertFalse();
+      expect(timelineProps.isCompanionMode).assertTrue();
+      expect(timelineProps.showWeather).assertTrue();
+      expect(timelineProps.isPageRefreshing).assertTrue();
+      expect(timelineProps.gapsCount).assertEqual(4);
+      expect(collapsed).assertTrue();
+      expect(bottomBarProps.aiEnabled).assertTrue();
+      expect(bottomBarProps.addEnabled).assertTrue();
+      expect(unsavedProps.isVisible).assertTrue();
+      expect(unsavedProps.marginBottom).assertEqual(30);
+      expect(callCount).assertEqual(13);
     });
   });
 }
