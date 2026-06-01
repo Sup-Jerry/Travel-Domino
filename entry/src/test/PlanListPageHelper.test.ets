@@ -21,6 +21,7 @@ interface PlanListPaletteTest {
 interface PlanListPagePrivateTest {
   planList: PlanItem[];
   isRefreshing: boolean;
+  isArrivalDialogOpen: boolean;
   effectiveTheme: string;
   getThemePalette(): PlanListPaletteTest;
   canRepromptPermission(now: number, lastPromptAt: number, hasPromptedBefore: boolean): boolean;
@@ -541,6 +542,213 @@ export default function planListPageHelperTest() {
       expect(page.planList.length).assertEqual(1);
       expect(service.arrivalCheckReasons.length).assertEqual(1);
       expect(coordinator.consumeCount).assertEqual(1);
+    });
+    it('combined: plan_list_pull_refresh_callbacks_should_resolve_title_and_forward_show_home', 0, async () => {
+      // Arrange
+      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
+      const service = new PlanListPlanServiceMockTest();
+      const coordinator = new PlanListArrivalCoordinatorMockTest();
+      const payload = new PlanListArrivalPayloadMockTest();
+      const shownTitles: string[] = [];
+      payload.planId = 222;
+      payload.eventId = 12;
+      payload.placeName = 'West Lake';
+      service.visiblePlans = [buildPlanListPlanForTest(222, 'refresh_title_plan')];
+      Reflect.set(page as Object, 'planService', service as Object);
+      Reflect.set(page as Object, 'arrivalCoordinator', coordinator as Object);
+      Reflect.set(page as Object, 'showArrivalReminderOnHome', (_payload: Object, title: string): void => {
+        shownTitles.push(title);
+      });
+
+      // Act
+      await page.handlePullRefresh();
+      const options = coordinator.lastConsumeOptions as Record<string, Object>;
+      const resolvePlanTitle = Reflect.get(options, 'resolvePlanTitle') as (planId: number) => string;
+      const onShow = Reflect.get(options, 'onShow') as (payload: Object, title: string) => void;
+      const knownTitle = resolvePlanTitle(222);
+      const unknownTitle = resolvePlanTitle(999);
+      onShow(payload as Object, knownTitle);
+
+      // Assert
+      expect(knownTitle).assertEqual('refresh_title_plan');
+      expect(unknownTitle).assertEqual('行程详情');
+      expect(shownTitles.length).assertEqual(1);
+      expect(shownTitles[0]).assertEqual('refresh_title_plan');
+    });
+
+    it('combined: plan_list_pull_refresh_should_pass_dialog_flag_and_fallback_title_to_arrival_coordinator', 0, async () => {
+      // Arrange
+      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
+      const service = new PlanListPlanServiceMockTest();
+      const coordinator = new PlanListArrivalCoordinatorMockTest();
+      const payload = new PlanListArrivalPayloadMockTest();
+      const shownTitles: string[] = [];
+      page.isArrivalDialogOpen = true;
+      payload.planId = 0;
+      payload.eventId = 21;
+      payload.placeName = 'Unknown Place';
+      Reflect.set(page as Object, 'planService', service as Object);
+      Reflect.set(page as Object, 'arrivalCoordinator', coordinator as Object);
+      Reflect.set(page as Object, 'showArrivalReminderOnHome', (_payload: Object, title: string): void => {
+        shownTitles.push(title);
+      });
+
+      // Act
+      await page.handlePullRefresh();
+      const options = coordinator.lastConsumeOptions as Record<string, Object>;
+      const isDialogOpen = Reflect.get(options, 'isDialogOpen') as boolean;
+      const resolvePlanTitle = Reflect.get(options, 'resolvePlanTitle') as (planId: number) => string;
+      const onShow = Reflect.get(options, 'onShow') as (payload: Object, title: string) => void;
+      const fallbackTitle = resolvePlanTitle(404);
+      onShow(payload as Object, fallbackTitle);
+
+      // Assert
+      expect(isDialogOpen).assertTrue();
+      expect(fallbackTitle).assertEqual('行程详情');
+      expect(shownTitles.length).assertEqual(1);
+      expect(shownTitles[0]).assertEqual('行程详情');
+    });
+
+    it('combined: plan_list_instance_should_redirect_login_or_start_home_flow_based_on_session', 0, async () => {
+      // Arrange
+      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
+      const uiContext = new PlanListUiContextMockTest();
+      const authFacade = new PlanListAuthFacadeMockTest();
+      const service = new PlanListPlanServiceMockTest();
+      let bindCount = 0;
+      let consumeCount = 0;
+      let promptCount = 0;
+      Reflect.set(page as Object, 'getUIContext', (): PlanListUiContextMockTest => uiContext);
+      Reflect.set(page as Object, 'authFacade', authFacade as Object);
+      Reflect.set(page as Object, 'planService', service as Object);
+      Reflect.set(page as Object, 'loadPlans', async (): Promise<void> => {
+        bindCount += 1;
+      });
+      Reflect.set(page as Object, 'bindArrivalReminderSubscription', (): void => {
+        bindCount += 1;
+      });
+      Reflect.set(page as Object, 'consumeNotificationNavRoute', (): void => {
+        consumeCount += 1;
+      });
+      Reflect.set(page as Object, 'ensureArrivalPermissionPromptOnFirstEntry', async (): Promise<void> => {
+        promptCount += 1;
+      });
+
+      // Act
+      authFacade.session = null;
+      page.onPageShow();
+      await Promise.resolve();
+      const readySession = new PlanListSessionMockTest();
+      readySession.accountId = 'acc_ready';
+      authFacade.session = readySession;
+      page.onPageShow();
+      await Promise.resolve();
+
+      // Assert
+      expect(uiContext.router.replacedUrls.length).assertEqual(1);
+      expect(uiContext.router.replacedUrls[0]).assertEqual('pages/LoginPage');
+      expect(service.startArrivalEngineCount).assertEqual(1);
+      expect(bindCount).assertEqual(2);
+      expect(consumeCount).assertEqual(1);
+      expect(promptCount).assertEqual(1);
+      expect(authFacade.bindCount).assertEqual(2);
+    });
+
+    it('combined: plan_list_instance_should_cleanup_on_disappear_and_run_hard_delete_confirm_action', 0, async () => {
+      // Arrange
+      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
+      const uiContext = new PlanListUiContextMockTest();
+      const service = new PlanListPlanServiceMockTest();
+      const plan = buildPlanListPlanForTest(108, 'hard_delete_plan');
+      let unsubscribed = 0;
+      Reflect.set(page as Object, 'getUIContext', (): PlanListUiContextMockTest => uiContext);
+      Reflect.set(page as Object, 'planService', service as Object);
+      Reflect.set(page as Object, 'loadPlans', async (): Promise<void> => {});
+      Reflect.set(page as Object, 'arrivalReminderUnsubscribe', (): void => {
+        unsubscribed += 1;
+      });
+
+      // Act
+      page.aboutToDisappear();
+      page.handleHardDelete(plan);
+      await (uiContext.lastAlert as PlanListAlertOptionsTest).secondaryButton.action();
+
+      // Assert
+      expect(unsubscribed).assertEqual(1);
+      expect(service.stopArrivalEngineCount).assertEqual(1);
+      expect(service.hardDeleteIds.length).assertEqual(1);
+      expect(service.hardDeleteIds[0]).assertEqual(108);
+    });
+
+    it('combined: plan_list_arrival_dialog_actions_should_acknowledge_and_route', 0, async () => {
+      // Arrange
+      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
+      const uiContext = new PlanListUiContextMockTest();
+      const coordinator = new PlanListArrivalCoordinatorMockTest();
+      Reflect.set(page as Object, 'getUIContext', (): PlanListUiContextMockTest => uiContext);
+      Reflect.set(page as Object, 'arrivalCoordinator', coordinator as Object);
+      const payload = new PlanListArrivalPayloadMockTest();
+      payload.seq = 1;
+      payload.planId = 66;
+      payload.eventId = 9;
+      payload.placeName = 'West Lake';
+      payload.distanceMeters = 0;
+      payload.triggerAt = 100;
+
+      // Act
+      page.showArrivalReminderOnHome(payload as Object, 'Arrival Plan');
+      (uiContext.lastAlert as PlanListAlertOptionsTest).primaryButton.action();
+      page.showArrivalReminderOnHome(payload as Object, 'Arrival Plan');
+      (uiContext.lastAlert as PlanListAlertOptionsTest).secondaryButton.action();
+      await Promise.resolve();
+
+      // Assert
+      expect(uiContext.alertCount).assertEqual(2);
+      expect(coordinator.ackEventIds.length).assertEqual(2);
+      expect(coordinator.ackActions[0]).assertEqual('dismiss');
+      expect(coordinator.ackActions[1]).assertEqual('open_page');
+      expect(uiContext.router.pushedUrls.length).assertEqual(1);
+      expect(uiContext.router.pushedUrls[0]).assertEqual('pages/Index');
+    });
+
+    it('combined: plan_list_permission_prompts_should_cover_notification_and_location_secondary_actions', 0, async () => {
+      // Arrange
+      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
+      const uiContext = new PlanListUiContextMockTest();
+      const service = new PlanListPlanServiceMockTest();
+      const toastMessages: string[] = [];
+      Reflect.set(page as Object, 'getUIContext', (): PlanListUiContextMockTest => uiContext);
+      Reflect.set(page as Object, 'planService', service as Object);
+      Reflect.set(page as Object, 'safeShowToast', (message: string): void => {
+        toastMessages.push(message);
+      });
+
+      // Act
+      service.notifyEnabled = false;
+      await page.ensureNotificationPermissionPrompt(new Object());
+      await (uiContext.lastAlert as PlanListAlertOptionsTest).secondaryButton.action();
+      service.notifyRequestReject = new Error('notify_failed');
+      await page.ensureNotificationPermissionPrompt(new Object());
+      await (uiContext.lastAlert as PlanListAlertOptionsTest).secondaryButton.action();
+
+      service.locationGranted = false;
+      service.locationRequestResult = true;
+      await page.ensureLocationPermissionPrompt(new Object());
+      await (uiContext.lastAlert as PlanListAlertOptionsTest).secondaryButton.action();
+      service.locationRequestResult = false;
+      await page.ensureLocationPermissionPrompt(new Object());
+      await (uiContext.lastAlert as PlanListAlertOptionsTest).secondaryButton.action();
+      service.locationRequestThrow = new Error('location_failed');
+      await page.ensureLocationPermissionPrompt(new Object());
+      await (uiContext.lastAlert as PlanListAlertOptionsTest).secondaryButton.action();
+
+      // Assert
+      expect(uiContext.alertCount).assertEqual(5);
+      expect(toastMessages.includes('已发起通知授权请求')).assertTrue();
+      expect(toastMessages.includes('拉起通知授权失败，请在系统设置中手动开启')).assertTrue();
+      expect(toastMessages.includes('定位权限已授权')).assertTrue();
+      expect(toastMessages.includes('未获得定位权限，到达提醒可能无法触发')).assertTrue();
+      expect(toastMessages.includes('定位授权失败，请到系统设置手动开启')).assertTrue();
     });
   });
 }
