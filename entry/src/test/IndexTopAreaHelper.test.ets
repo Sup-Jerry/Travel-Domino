@@ -69,9 +69,49 @@ interface IndexTopAreaPrivateTest {
   onToggleBacklogExpand: () => void;
   onMoveToSchedule: (item: TravelPlanItem) => void;
   onMoveAllToSchedule: () => void;
+  buildToolbarProps(): Object;
+  buildWeatherHintBarProps(): Object;
+  buildBacklogViewProps(): Object;
   setInitiallyProvidedValue(params: IndexTopAreaParamsTest): void;
   updateStateVars(params: IndexTopAreaParamsTest): void;
   initialRender(): void;
+}
+
+interface IndexTopAreaToolbarPropsTest {
+  planTitle: string;
+  strategyMode: number;
+  currentStrategyExplanation: string;
+  isCompanionMode: boolean;
+  isArchived: boolean;
+  weatherFeatureEnabled: boolean;
+  weatherLoading: boolean;
+  onBack: () => void;
+  onOpenSettings: () => void;
+  onEnterCompanion: () => void;
+  onRefreshWeather: () => void;
+}
+
+interface IndexTopAreaWeatherHintBarPropsTest {
+  visible: boolean;
+  suggestionText: string;
+  routeScore: number;
+  hintPopupVisible: boolean;
+  scorePopupVisible: boolean;
+  hintLines: string[];
+  scoreLines: string[];
+  onToggleHint: () => void;
+  onToggleScore: () => void;
+  onHintPopupVisibleChange: (visible: boolean) => void;
+  onScorePopupVisibleChange: (visible: boolean) => void;
+}
+
+interface IndexTopAreaBacklogViewPropsTest {
+  events: EventEntity[];
+  isExpanded: boolean;
+  dividerColor: string;
+  onToggleExpand: () => void;
+  onMoveToSchedule: (item: TravelPlanItem) => void;
+  onMoveAllToSchedule: () => void;
 }
 
 function buildTopAreaEvent(id: number): EventEntity {
@@ -360,6 +400,87 @@ export default function indexTopAreaHelperTest() {
 
       // Assert
       expect(visibleCount).assertEqual(3);
+    });
+
+    it('combined: top_area_prop_builders_should_cover_toolbar_weather_and_backlog_callbacks', 0, () => {
+      // Arrange
+      const page = new IndexTopArea(undefined, {} as LocalStorage) as Object as IndexTopAreaPrivateTest;
+      const event = buildTopAreaEvent(10);
+      let callCount = 0;
+      let lastHintVisible = false;
+      let lastScoreVisible = false;
+      page.planTitle = 'builder_trip';
+      page.strategyMode = 7;
+      page.currentStrategyExplanation = 'builder_desc';
+      page.isCompanionMode = true;
+      page.isArchived = false;
+      page.weatherFeatureEnabled = true;
+      page.weatherLoading = true;
+      page.weatherHintVisible = true;
+      page.weatherSuggestionText = 'builder_hint';
+      page.weatherRouteScore = 66;
+      page.hintPopupVisible = true;
+      page.scorePopupVisible = false;
+      page.hintLines = ['hint_a', 'hint_b'];
+      page.scoreLines = ['score_a'];
+      page.events = [event];
+      page.backlogExpanded = true;
+      page.dividerColor = '#ABABAB';
+      page.onBack = () => { callCount += 1; };
+      page.onOpenSettings = () => { callCount += 1; };
+      page.onEnterCompanion = () => { callCount += 1; };
+      page.onRefreshWeather = () => { callCount += 1; };
+      page.onToggleHint = () => { callCount += 1; };
+      page.onToggleScore = () => { callCount += 1; };
+      page.onHintPopupVisibleChange = (visible: boolean) => {
+        lastHintVisible = visible;
+        callCount += 1;
+      };
+      page.onScorePopupVisibleChange = (visible: boolean) => {
+        lastScoreVisible = visible;
+        callCount += 1;
+      };
+      page.onToggleBacklogExpand = () => { callCount += 1; };
+      page.onMoveToSchedule = (_item: TravelPlanItem) => { callCount += 1; };
+      page.onMoveAllToSchedule = () => { callCount += 1; };
+
+      // Act
+      const toolbarProps = page.buildToolbarProps() as IndexTopAreaToolbarPropsTest;
+      const weatherProps = page.buildWeatherHintBarProps() as IndexTopAreaWeatherHintBarPropsTest;
+      const backlogProps = page.buildBacklogViewProps() as IndexTopAreaBacklogViewPropsTest;
+      toolbarProps.onBack();
+      toolbarProps.onOpenSettings();
+      toolbarProps.onEnterCompanion();
+      toolbarProps.onRefreshWeather();
+      weatherProps.onToggleHint();
+      weatherProps.onToggleScore();
+      weatherProps.onHintPopupVisibleChange(false);
+      weatherProps.onScorePopupVisibleChange(true);
+      backlogProps.onToggleExpand();
+      backlogProps.onMoveToSchedule(event as Object as TravelPlanItem);
+      backlogProps.onMoveAllToSchedule();
+
+      // Assert
+      expect(toolbarProps.planTitle).assertEqual('builder_trip');
+      expect(toolbarProps.strategyMode).assertEqual(7);
+      expect(toolbarProps.currentStrategyExplanation).assertEqual('builder_desc');
+      expect(toolbarProps.isCompanionMode).assertTrue();
+      expect(toolbarProps.isArchived).assertFalse();
+      expect(toolbarProps.weatherFeatureEnabled).assertTrue();
+      expect(toolbarProps.weatherLoading).assertTrue();
+      expect(weatherProps.visible).assertTrue();
+      expect(weatherProps.suggestionText).assertEqual('builder_hint');
+      expect(weatherProps.routeScore).assertEqual(66);
+      expect(weatherProps.hintPopupVisible).assertTrue();
+      expect(weatherProps.scorePopupVisible).assertFalse();
+      expect(weatherProps.hintLines.length).assertEqual(2);
+      expect(weatherProps.scoreLines.length).assertEqual(1);
+      expect(backlogProps.events.length).assertEqual(1);
+      expect(backlogProps.isExpanded).assertTrue();
+      expect(backlogProps.dividerColor).assertEqual('#ABABAB');
+      expect(lastHintVisible).assertFalse();
+      expect(lastScoreVisible).assertTrue();
+      expect(callCount).assertEqual(11);
     });
   });
 }

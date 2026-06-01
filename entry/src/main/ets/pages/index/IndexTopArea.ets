@@ -4,6 +4,45 @@ import { IndexBacklogView } from './IndexBacklogView';
 import { IndexToolbar, IndexToolbarTheme } from './IndexToolbar';
 import { IndexWeatherHintBar, IndexWeatherHintTheme } from './IndexWeatherHintBar';
 
+export interface IndexTopAreaToolbarProps {
+  planTitle: string;
+  strategyMode: number;
+  currentStrategyExplanation: string;
+  isCompanionMode: boolean;
+  isArchived: boolean;
+  weatherFeatureEnabled: boolean;
+  weatherLoading: boolean;
+  theme: IndexToolbarTheme;
+  onBack: () => void;
+  onOpenSettings: () => void;
+  onEnterCompanion: () => void;
+  onRefreshWeather: () => void;
+}
+
+export interface IndexTopAreaWeatherHintBarProps {
+  visible: boolean;
+  suggestionText: string;
+  routeScore: number;
+  hintPopupVisible: boolean;
+  scorePopupVisible: boolean;
+  hintLines: string[];
+  scoreLines: string[];
+  theme: IndexWeatherHintTheme;
+  onToggleHint: () => void;
+  onToggleScore: () => void;
+  onHintPopupVisibleChange: (visible: boolean) => void;
+  onScorePopupVisibleChange: (visible: boolean) => void;
+}
+
+export interface IndexTopAreaBacklogViewProps {
+  events: EventEntity[];
+  isExpanded: boolean;
+  dividerColor: string;
+  onToggleExpand: () => void;
+  onMoveToSchedule: (item: TravelPlanItem) => void;
+  onMoveAllToSchedule: () => void;
+}
+
 export function shouldShowIndexTopAreaWeatherHintBar(weatherHintVisible: boolean): boolean {
   return weatherHintVisible;
 }
@@ -51,46 +90,58 @@ export struct IndexTopArea {
   onMoveToSchedule: (item: TravelPlanItem) => void = (_item: TravelPlanItem) => {};
   onMoveAllToSchedule: () => void = () => {};
 
+  buildToolbarProps(): IndexTopAreaToolbarProps {
+    return {
+      planTitle: this.planTitle,
+      strategyMode: this.strategyMode,
+      currentStrategyExplanation: this.currentStrategyExplanation,
+      isCompanionMode: this.isCompanionMode,
+      isArchived: this.isArchived,
+      weatherFeatureEnabled: this.weatherFeatureEnabled,
+      weatherLoading: this.weatherLoading,
+      theme: this.toolbarTheme,
+      onBack: () => this.onBack(),
+      onOpenSettings: () => this.onOpenSettings(),
+      onEnterCompanion: () => this.onEnterCompanion(),
+      onRefreshWeather: () => this.onRefreshWeather()
+    };
+  }
+
+  buildWeatherHintBarProps(): IndexTopAreaWeatherHintBarProps {
+    return {
+      visible: shouldShowIndexTopAreaWeatherHintBar(this.weatherHintVisible),
+      suggestionText: this.weatherSuggestionText,
+      routeScore: this.weatherRouteScore,
+      hintPopupVisible: this.hintPopupVisible,
+      scorePopupVisible: this.scorePopupVisible,
+      hintLines: this.hintLines,
+      scoreLines: this.scoreLines,
+      theme: this.weatherTheme,
+      onToggleHint: () => this.onToggleHint(),
+      onToggleScore: () => this.onToggleScore(),
+      onHintPopupVisibleChange: (visible: boolean) => this.onHintPopupVisibleChange(visible),
+      onScorePopupVisibleChange: (visible: boolean) => this.onScorePopupVisibleChange(visible)
+    };
+  }
+
+  buildBacklogViewProps(): IndexTopAreaBacklogViewProps {
+    return {
+      events: this.events,
+      isExpanded: this.backlogExpanded,
+      dividerColor: this.dividerColor,
+      onToggleExpand: () => this.onToggleBacklogExpand(),
+      onMoveToSchedule: (item: TravelPlanItem) => this.onMoveToSchedule(item),
+      onMoveAllToSchedule: () => this.onMoveAllToSchedule()
+    };
+  }
+
   build() {
     Column() {
-      IndexToolbar({
-        planTitle: this.planTitle,
-        strategyMode: this.strategyMode,
-        currentStrategyExplanation: this.currentStrategyExplanation,
-        isCompanionMode: this.isCompanionMode,
-        isArchived: this.isArchived,
-        weatherFeatureEnabled: this.weatherFeatureEnabled,
-        weatherLoading: this.weatherLoading,
-        theme: this.toolbarTheme,
-        onBack: () => this.onBack(),
-        onOpenSettings: () => this.onOpenSettings(),
-        onEnterCompanion: () => this.onEnterCompanion(),
-        onRefreshWeather: () => this.onRefreshWeather()
-      })
+      IndexToolbar(this.buildToolbarProps())
 
-      IndexWeatherHintBar({
-        visible: shouldShowIndexTopAreaWeatherHintBar(this.weatherHintVisible),
-        suggestionText: this.weatherSuggestionText,
-        routeScore: this.weatherRouteScore,
-        hintPopupVisible: this.hintPopupVisible,
-        scorePopupVisible: this.scorePopupVisible,
-        hintLines: this.hintLines,
-        scoreLines: this.scoreLines,
-        theme: this.weatherTheme,
-        onToggleHint: () => this.onToggleHint(),
-        onToggleScore: () => this.onToggleScore(),
-        onHintPopupVisibleChange: (visible: boolean) => this.onHintPopupVisibleChange(visible),
-        onScorePopupVisibleChange: (visible: boolean) => this.onScorePopupVisibleChange(visible)
-      })
+      IndexWeatherHintBar(this.buildWeatherHintBarProps())
 
-      IndexBacklogView({
-        events: this.events,
-        isExpanded: this.backlogExpanded,
-        dividerColor: this.dividerColor,
-        onToggleExpand: () => this.onToggleBacklogExpand(),
-        onMoveToSchedule: (item: TravelPlanItem) => this.onMoveToSchedule(item),
-        onMoveAllToSchedule: () => this.onMoveAllToSchedule()
-      })
+      IndexBacklogView(this.buildBacklogViewProps())
     }
   }
 }
