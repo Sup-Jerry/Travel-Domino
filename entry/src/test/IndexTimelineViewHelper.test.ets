@@ -867,6 +867,32 @@ export default function indexTimelineViewHelperTest() {
       expect(enabled !== undefined).assertTrue();
     });
 
+    it('combined: timeline_view_helper_should_resolve_swipe_action_builder_config_without_throwing', 0, () => {
+      // Arrange
+      const page = new IndexTimelineView(undefined, {} as LocalStorage) as Object as IndexTimelineViewPrivateTest;
+      const event = buildTimelineEvent(104);
+      let threw = false;
+      page.isArchived = false;
+
+      // Act
+      const config = page.resolveSwipeAction(event) as Record<string, Object>;
+      const start = Reflect.get(config, 'start') as Record<string, Object>;
+      const end = Reflect.get(config, 'end') as Record<string, Object>;
+      const startBuilder = Reflect.get(start, 'builder') as () => void;
+      const endBuilder = Reflect.get(end, 'builder') as () => void;
+      try {
+        startBuilder();
+        endBuilder();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(Number(Reflect.get(start, 'actionAreaDistance'))).assertEqual(60);
+      expect(Number(Reflect.get(end, 'actionAreaDistance'))).assertEqual(60);
+    });
+
     it('combined: timeline_view_helper_should_resolve_gap_hint_count_list_for_active_positive_gaps', 0, () => {
       // Arrange
       const page = new IndexTimelineView(undefined, {} as LocalStorage) as Object as IndexTimelineViewPrivateTest;

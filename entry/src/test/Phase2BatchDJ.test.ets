@@ -34,12 +34,15 @@ interface PlanSearchPagePrivateDJ {
   currentKeyword: string;
   currentOffset: number;
   searchCache: Map<string, PlanSearchCacheEntryDJ>;
+  getPlanStateLabel(item: PlanItem): string;
+  getPlanStateColor(item: PlanItem): string;
   aboutToAppear(): void;
   aboutToDisappear(): void;
   scheduleSearch(value: string): void;
   runSearch(rawKeyword: string): Promise<void>;
   loadMoreIfNeeded(): Promise<void>;
   handleScrollIndexEnd(end: number): void;
+  openPlan(item: PlanItem): void;
 }
 
 class SearchRepositoryMockDJ {
@@ -89,6 +92,37 @@ class StaticPatchDJ {
 
   restore(): void {
     Reflect.set(this.target, this.key, this.original);
+  }
+}
+
+class PlanSearchRouteParamsDJ {
+  planId: number = 0;
+  title: string = '';
+  isNewPlan: boolean = false;
+}
+
+class PlanSearchRouteOptionsDJ {
+  url: string = '';
+  params: PlanSearchRouteParamsDJ = new PlanSearchRouteParamsDJ();
+}
+
+class PlanSearchRouterMockDJ {
+  pushedUrls: string[] = [];
+  shouldThrow: boolean = false;
+
+  pushUrl(options: PlanSearchRouteOptionsDJ): void {
+    if (this.shouldThrow) {
+      throw new Error('push_failed_dj');
+    }
+    this.pushedUrls.push(options.url);
+  }
+}
+
+class PlanSearchUiContextMockDJ {
+  router: PlanSearchRouterMockDJ = new PlanSearchRouterMockDJ();
+
+  getRouter(): PlanSearchRouterMockDJ {
+    return this.router;
   }
 }
 
@@ -408,6 +442,40 @@ export default function phase2BatchDJTest() {
       expect(repo.calls.length).assertEqual(2);
       expect(page.resultList.length).assertEqual(41);
       expect(page.currentOffset).assertEqual(41);
+    });
+
+    it('combined: plan_search_private_helpers_should_resolve_state_and_swallow_route_failure', 0, () => {
+      // Arrange
+      const page = createPageDJ();
+      const uiContext = new PlanSearchUiContextMockDJ();
+      const trashPlan = buildPlanDJ(501, 'trash');
+      trashPlan.deleteTime = 1;
+      trashPlan.status = 2;
+      const archivedPlan = buildPlanDJ(502, 'archived');
+      archivedPlan.status = 2;
+      const activePlan = buildPlanDJ(503, 'active');
+      Reflect.set(page as Object, 'getUIContext', (): PlanSearchUiContextMockDJ => uiContext);
+
+      // Act
+      const trashLabel = page.getPlanStateLabel(trashPlan);
+      const trashColor = page.getPlanStateColor(trashPlan);
+      const archivedLabel = page.getPlanStateLabel(archivedPlan);
+      const archivedColor = page.getPlanStateColor(archivedPlan);
+      const activeLabel = page.getPlanStateLabel(activePlan);
+      const activeColor = page.getPlanStateColor(activePlan);
+      page.openPlan(activePlan);
+      uiContext.router.shouldThrow = true;
+      page.openPlan(activePlan);
+
+      // Assert
+      expect(trashLabel).assertEqual('回收站');
+      expect(trashColor).assertEqual('#D03D3D');
+      expect(archivedLabel).assertEqual('归档');
+      expect(archivedColor).assertEqual('#7A8699');
+      expect(activeLabel).assertEqual('规划');
+      expect(activeColor).assertEqual('#1F8FFF');
+      expect(uiContext.router.pushedUrls.length).assertEqual(1);
+      expect(uiContext.router.pushedUrls[0]).assertEqual('pages/Index');
     });
   });
 }

@@ -209,11 +209,13 @@ class PlanListPlanServiceMockTest {
 
 class PlanListArrivalCoordinatorMockTest {
   consumeCount: number = 0;
+  lastConsumeOptions: Object | null = null;
   ackEventIds: number[] = [];
   ackActions: string[] = [];
 
-  consumeOnHome(_options: Object): void {
+  consumeOnHome(options: Object): void {
     this.consumeCount += 1;
+    this.lastConsumeOptions = options;
   }
 
   acknowledge(eventId: number, action: string): void {
@@ -615,6 +617,39 @@ export default function planListPageHelperTest() {
       expect(page.planList.length).assertEqual(1);
       expect(service.arrivalCheckReasons.length).assertEqual(1);
       expect(coordinator.consumeCount).assertEqual(1);
+    });
+
+    it('combined: plan_list_pull_refresh_callbacks_should_resolve_title_and_forward_show_home', 0, async () => {
+      // Arrange
+      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
+      const service = new PlanListPlanServiceMockTest();
+      const coordinator = new PlanListArrivalCoordinatorMockTest();
+      const payload = new PlanListArrivalPayloadMockTest();
+      const shownTitles: string[] = [];
+      payload.planId = 222;
+      payload.eventId = 12;
+      payload.placeName = 'West Lake';
+      service.visiblePlans = [buildPlanListPlanForTest(222, 'refresh_title_plan')];
+      Reflect.set(page as Object, 'planService', service as Object);
+      Reflect.set(page as Object, 'arrivalCoordinator', coordinator as Object);
+      Reflect.set(page as Object, 'showArrivalReminderOnHome', (_payload: Object, title: string): void => {
+        shownTitles.push(title);
+      });
+
+      // Act
+      await page.handlePullRefresh();
+      const options = coordinator.lastConsumeOptions as Record<string, Object>;
+      const resolvePlanTitle = Reflect.get(options, 'resolvePlanTitle') as (planId: number) => string;
+      const onShow = Reflect.get(options, 'onShow') as (payload: Object, title: string) => void;
+      const knownTitle = resolvePlanTitle(222);
+      const unknownTitle = resolvePlanTitle(999);
+      onShow(payload as Object, knownTitle);
+
+      // Assert
+      expect(knownTitle).assertEqual('refresh_title_plan');
+      expect(unknownTitle).assertEqual('行程详情');
+      expect(shownTitles.length).assertEqual(1);
+      expect(shownTitles[0]).assertEqual('refresh_title_plan');
     });
 
     it('combined: plan_list_instance_should_redirect_login_or_start_home_flow_based_on_session', 0, async () => {
