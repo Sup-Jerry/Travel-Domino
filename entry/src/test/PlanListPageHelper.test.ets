@@ -315,7 +315,7 @@ export default function planListPageHelperTest() {
       // Act
       const icon = resolvePlanListShareIcon(event);
       // Assert
-      expect(icon).assertEqual('�?);
+      expect(icon).assertEqual('⭐');
     });
 
     it('regression: td-20260412-plan_list_share_category_anchor_should_keep_fixed_label', 0, () => {
@@ -382,8 +382,8 @@ export default function planListPageHelperTest() {
       // Act
       const items = buildPlanListShareEventItems([event]);
       // Assert
-      expect(items[0].name).assertEqual('未命名地�?);
-      expect(items[0].location).assertEqual('待补充地�?);
+      expect(items[0].name).assertEqual('未命名地点');
+      expect(items[0].location).assertEqual('待补充地点');
       expect(items[0].duration).assertEqual(0.5);
     });
 
@@ -396,7 +396,7 @@ export default function planListPageHelperTest() {
       // Act
       const items = buildPlanListShareEventItems([event]);
       // Assert
-      expect(items[0].icon).assertEqual('�?);
+      expect(items[0].icon).assertEqual('⭐');
     });
 
     it('regression: td-20260418-plan_list_share_item_should_clamp_negative_day_offset_to_zero', 0, () => {
@@ -648,71 +648,6 @@ export default function planListPageHelperTest() {
       expect(service.arrivalCheckReasons.length).assertEqual(1);
       expect(coordinator.consumeCount).assertEqual(1);
     });
-    it('combined: plan_list_pull_refresh_callbacks_should_resolve_title_and_forward_show_home', 0, async () => {
-      // Arrange
-      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
-      const service = new PlanListPlanServiceMockTest();
-      const coordinator = new PlanListArrivalCoordinatorMockTest();
-      const payload = new PlanListArrivalPayloadMockTest();
-      const shownTitles: string[] = [];
-      payload.planId = 222;
-      payload.eventId = 12;
-      payload.placeName = 'West Lake';
-      service.visiblePlans = [buildPlanListPlanForTest(222, 'refresh_title_plan')];
-      Reflect.set(page as Object, 'planService', service as Object);
-      Reflect.set(page as Object, 'arrivalCoordinator', coordinator as Object);
-      Reflect.set(page as Object, 'showArrivalReminderOnHome', (_payload: Object, title: string): void => {
-        shownTitles.push(title);
-      });
-
-      // Act
-      await page.handlePullRefresh();
-      const options = coordinator.lastConsumeOptions as Record<string, Object>;
-      const resolvePlanTitle = Reflect.get(options, 'resolvePlanTitle') as (planId: number) => string;
-      const onShow = Reflect.get(options, 'onShow') as (payload: Object, title: string) => void;
-      const knownTitle = resolvePlanTitle(222);
-      const unknownTitle = resolvePlanTitle(999);
-      onShow(payload as Object, knownTitle);
-
-      // Assert
-      expect(knownTitle).assertEqual('refresh_title_plan');
-      expect(unknownTitle).assertEqual('行程详情');
-      expect(shownTitles.length).assertEqual(1);
-      expect(shownTitles[0]).assertEqual('refresh_title_plan');
-    });
-
-    it('combined: plan_list_pull_refresh_should_pass_dialog_flag_and_fallback_title_to_arrival_coordinator', 0, async () => {
-      // Arrange
-      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
-      const service = new PlanListPlanServiceMockTest();
-      const coordinator = new PlanListArrivalCoordinatorMockTest();
-      const payload = new PlanListArrivalPayloadMockTest();
-      const shownTitles: string[] = [];
-      page.isArrivalDialogOpen = true;
-      payload.planId = 0;
-      payload.eventId = 21;
-      payload.placeName = 'Unknown Place';
-      Reflect.set(page as Object, 'planService', service as Object);
-      Reflect.set(page as Object, 'arrivalCoordinator', coordinator as Object);
-      Reflect.set(page as Object, 'showArrivalReminderOnHome', (_payload: Object, title: string): void => {
-        shownTitles.push(title);
-      });
-
-      // Act
-      await page.handlePullRefresh();
-      const options = coordinator.lastConsumeOptions as Record<string, Object>;
-      const isDialogOpen = Reflect.get(options, 'isDialogOpen') as boolean;
-      const resolvePlanTitle = Reflect.get(options, 'resolvePlanTitle') as (planId: number) => string;
-      const onShow = Reflect.get(options, 'onShow') as (payload: Object, title: string) => void;
-      const fallbackTitle = resolvePlanTitle(404);
-      onShow(payload as Object, fallbackTitle);
-
-      // Assert
-      expect(isDialogOpen).assertTrue();
-      expect(fallbackTitle).assertEqual('行程详情');
-      expect(shownTitles.length).assertEqual(1);
-      expect(shownTitles[0]).assertEqual('行程详情');
-    });
 
     it('combined: plan_list_pull_refresh_callbacks_should_resolve_title_and_forward_show_home', 0, async () => {
       // Arrange
@@ -916,10 +851,10 @@ export default function planListPageHelperTest() {
       // Assert
       expect(uiContext.alertCount).assertEqual(5);
       expect(toastMessages.includes('已发起通知授权请求')).assertTrue();
-      expect(toastMessages.includes('拉起通知授权失败，请在系统设置中手动开�?)).assertTrue();
-      expect(toastMessages.includes('定位权限已授�?)).assertTrue();
+      expect(toastMessages.includes('拉起通知授权失败，请在系统设置中手动开启')).assertTrue();
+      expect(toastMessages.includes('定位权限已授权')).assertTrue();
       expect(toastMessages.includes('未获得定位权限，到达提醒可能无法触发')).assertTrue();
-      expect(toastMessages.includes('定位授权失败，请到系统设置手动开�?)).assertTrue();
+      expect(toastMessages.includes('定位授权失败，请到系统设置手动开启')).assertTrue();
     });
     it('combined: plan_list_permission_prompts_should_cover_primary_noop_and_enabled_granted_early_return', 0, async () => {
       // Arrange
