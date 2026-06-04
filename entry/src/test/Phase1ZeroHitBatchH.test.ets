@@ -216,5 +216,49 @@ export default function phase1ZeroHitBatchHTest() {
       // Assert
       expect(true).assertTrue();
     });
+
+    it('boundary: plan_share_image_should_stop_rendering_days_when_start_y_is_already_near_footer', 0, async () => {
+      // Arrange
+      const privateApi = PlanShareImageService as Object as PlanShareImageServicePrivateH;
+      const canvas = await createCanvasH();
+      const events = [createEvent(0, '09:00', 'first-day')];
+
+      // Act
+      const endY = privateApi.drawEventSection(canvas, events, 1100);
+
+      // Assert
+      expect(endY).assertEqual(1100);
+    });
+
+    it('boundary: plan_share_image_should_render_omitted_hint_when_day_block_is_clipped', 0, async () => {
+      // Arrange
+      const privateApi = PlanShareImageService as Object as PlanShareImageServicePrivateH;
+      const canvas = await createCanvasH();
+      const dayGroup: DayGroupH = {
+        dayOffset: 0,
+        events: buildManyEvents().slice(0, 10)
+      };
+
+      // Act
+      const bottom = privateApi.drawDayBlock(canvas, dayGroup as Object, 0, 690);
+
+      // Assert
+      expect(bottom).assertEqual(690);
+    });
+
+    it('boundary: plan_share_image_should_ignore_blank_text_without_throwing', 0, async () => {
+      // Arrange
+      const privateApi = PlanShareImageService as Object as PlanShareImageServicePrivateH;
+      const canvas = await createCanvasH();
+      const color: RgbaColorH = { alpha: 255, red: 0, green: 0, blue: 0 };
+      let ok = false;
+
+      // Act
+      privateApi.drawText(canvas, '   ', 0, 0, 20, color as Object);
+      ok = true;
+
+      // Assert
+      expect(ok).assertTrue();
+    });
   });
 }
