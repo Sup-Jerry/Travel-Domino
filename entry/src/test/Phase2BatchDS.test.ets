@@ -10,6 +10,14 @@ import { AppConfig } from '../main/ets/common/utils/AppConfig';
 import { HttpRequestHelper } from '../main/ets/infrastructure/adapters/HttpRequestHelper';
 
 interface AmapPrivateDS {
+  extractPoiItems(result: Object | undefined): PoiSearchItem[];
+
+  readPoiCache(cacheKey: string): PoiSearchItem[] | null;
+
+  writePoiCache(cacheKey: string, items: PoiSearchItem[]): void;
+
+  buildPoiCacheKey(keyword: string, centerLat: number, centerLng: number, limit: number): string;
+
   searchPoiBySdk(
     context: common.Context,
     keyword: string,
@@ -135,6 +143,30 @@ class PoiResultMockDS {
 
   getPois(): PoiListMockDS {
     return new PoiListMockDS(this.pois);
+  }
+}
+
+class ForEachOnlyPoiListMockDS {
+  private readonly items: Object[];
+
+  constructor(items: Object[]) {
+    this.items = items;
+  }
+
+  forEach(callback: (item: Object) => void): void {
+    this.items.forEach(callback);
+  }
+}
+
+class ForEachOnlyPoiResultMockDS {
+  private readonly pois: Object[];
+
+  constructor(pois: Object[]) {
+    this.pois = pois;
+  }
+
+  getPois(): ForEachOnlyPoiListMockDS {
+    return new ForEachOnlyPoiListMockDS(this.pois);
   }
 }
 
@@ -273,6 +305,51 @@ class AmapSdkHooksDS {
     Reflect.set(this.geocodePrototype, 'getFromLocationName', this.originGetFromLocationName);
     Reflect.set(this.geocodePrototype, 'getFromLocation', this.originGetFromLocation);
     Reflect.set(PoiSearchBound as Object, 'createCircleSearchBound', this.originCreateCircleSearchBound);
+  }
+}
+
+class AmapStaticHooksDS {
+  private readonly originSearchPoiBySdk: Object;
+  private readonly originSearchPoiWithWebFallback: Object;
+
+  constructor() {
+    this.originSearchPoiBySdk = Reflect.get(AmapService as Object, 'searchPoiBySdk') as Object;
+    this.originSearchPoiWithWebFallback = Reflect.get(AmapService as Object, 'searchPoiWithWebFallback') as Object;
+  }
+
+  setSearchPoiBySdk(fn: (
+    context: common.Context,
+    keyword: string,
+    centerLat: number,
+    centerLng: number,
+    limit: number,
+    nearbyOnly: boolean
+  ) => Promise<PoiSearchItem[]>): void {
+    Reflect.set(AmapService as Object, 'searchPoiBySdk', fn);
+  }
+
+  setSearchPoiWithWebFallback(fn: (
+    keyword: string,
+    centerLat: number,
+    centerLng: number,
+    limit: number
+  ) => Promise<PoiSearchItem[]>): void {
+    Reflect.set(AmapService as Object, 'searchPoiWithWebFallback', fn);
+  }
+
+  restore(): void {
+    Reflect.set(AmapService as Object, 'searchPoiBySdk', this.originSearchPoiBySdk);
+    Reflect.set(AmapService as Object, 'searchPoiWithWebFallback', this.originSearchPoiWithWebFallback);
+  }
+}
+
+class PoiCacheEntryMockDS {
+  ts: number;
+  items: PoiSearchItem[];
+
+  constructor(ts: number, items: PoiSearchItem[]) {
+    this.ts = ts;
+    this.items = items;
   }
 }
 
@@ -520,6 +597,146 @@ export default function phase2BatchDSTest() {
 
       // Assert
       expect(place ?? '').assertEqual('Nanjing Road');
+    });
+
+    it('boundary: amap_extract_poi_items_should_use_for_each_when_index_getter_missing', 0, () => {
+      // Arrange
+      const api = AmapService as Object as AmapPrivateDS;
+      const result = new ForEachOnlyPoiResultMockDS([
+        new PoiItemMockDS('ForEach Museum', 'Side Road', 31.26, 121.49, 66)
+      ]);
+
+      // Act
+      const items = api.extractPoiItems(result as Object);
+
+      // Assert
+      expect(items.length).assertEqual(1);
+      expect(items[0].name).assertEqual('ForEach Museum');
+      expect(items[0].distance ?? 0).assertEqual(66);
+    });
+
+    it('boundary: amap_poi_cache_should_return_copy_until_entry_expires', 0, () => {
+      // Arrange
+      const api = AmapService as Object as AmapPrivateDS;
+      const cache = Reflect.get(AmapService as Object, 'poiSearchCache') as Map<string, Object>;
+      const cacheKey = api.buildPoiCacheKey('Museum', 31.23456, 121.45678, 3);
+      cache.delete(cacheKey);
+
+      // Act
+      api.writePoiCache(cacheKey, [new PoiSearchItem('Cached', 'A', 31.2, 121.4, 1)]);
+      const hit = api.readPoiCache(cacheKey);
+      cache.set(cacheKey, new PoiCacheEntryMockDS(
+        Date.now() - 30_000,
+        [new PoiSearchItem('Expired', 'B', 31.3, 121.5, 2)]
+      ) as Object);
+      const expired = api.readPoiCache(cacheKey);
+
+      // Assert
+      expect(hit?.length ?? 0).assertEqual(1);
+      expect(hit?.[0].name ?? '').assertEqual('Cached');
+      expect(expired === null).assertTrue();
+    });
+
+    it('regression: amap_search_poi_should_use_web_fallback_when_sdk_md5_auth_failed', 0, async () => {
+      // Arrange
+      const hooks = new AmapStaticHooksDS();
+      let fallbackCalls = 0;
+      hooks.setSearchPoiBySdk(async (): Promise<PoiSearchItem[]> => {
+        throw new Error('MD5 安全码未通过');
+      });
+      hooks.setSearchPoiWithWebFallback(async (): Promise<PoiSearchItem[]> => {
+        fallbackCalls += 1;
+        return [new PoiSearchItem('Web Fallback', 'Road', 31.2, 121.4, 9)];
+      });
+
+      // Act
+      let items: PoiSearchItem[] = [];
+      try {
+        items = await AmapService.searchPoi({} as common.Context, ' fallback md5 ', 31.2, 121.4, 1);
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(fallbackCalls).assertEqual(1);
+      expect(items.length).assertEqual(1);
+      expect(items[0].name).assertEqual('Web Fallback');
+    });
+
+    it('invalid: amap_search_poi_should_return_empty_when_sdk_and_web_fallback_both_fail', 0, async () => {
+      // Arrange
+      const hooks = new AmapStaticHooksDS();
+      hooks.setSearchPoiBySdk(async (): Promise<PoiSearchItem[]> => {
+        throw new Error('sdk_failed_ds');
+      });
+      hooks.setSearchPoiWithWebFallback(async (): Promise<PoiSearchItem[]> => {
+        throw new Error('web_failed_ds');
+      });
+
+      // Act
+      let items: PoiSearchItem[] = [new PoiSearchItem('stale', '', 1, 1)];
+      try {
+        items = await AmapService.searchPoi({} as common.Context, ' fallback fail ', 31.3, 121.5, 2);
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(items.length).assertEqual(0);
+    });
+
+    it('normal: amap_driving_duration_by_web_api_should_round_seconds_to_minutes', 0, async () => {
+      // Arrange
+      const hooks = new AmapWebHooksDS();
+      let capturedUrl = '';
+      hooks.setValidateNoop();
+      hooks.setRequest(async (_ownerTag: string, _requestName: string, url: string, _options: Object): Promise<Object> => {
+        capturedUrl = url;
+        const response: HttpResponseDS = {
+          responseCode: 200,
+          result: '{"status":"1","route":{"paths":[{"duration":"121"}]}}'
+        };
+        return response as Object;
+      });
+
+      // Act
+      let minutes: number | null = null;
+      try {
+        minutes = await AmapService.getDrivingDurationByWebApi(31.2, 121.4, 31.3, 121.5, 2.9);
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(minutes ?? 0).assertEqual(3);
+      expect(capturedUrl.includes('strategy=2')).assertTrue();
+    });
+
+    it('invalid: amap_driving_duration_by_web_api_should_reject_invalid_coordinates_and_duration', 0, async () => {
+      // Arrange
+      const hooks = new AmapWebHooksDS();
+      hooks.setValidateNoop();
+      hooks.setRequest(async (): Promise<Object> => {
+        const response: HttpResponseDS = {
+          responseCode: 200,
+          result: '{"status":"1","route":{"paths":[{"duration":"0"}]}}'
+        };
+        return response as Object;
+      });
+
+      // Act
+      let invalidCoordinate: number | null = 1;
+      let invalidDuration: number | null = 1;
+      try {
+        invalidCoordinate = await AmapService.getDrivingDurationByWebApi(0, 121.4, 31.3, 121.5);
+        invalidDuration = await AmapService.getDrivingDurationByWebApi(31.2, 121.4, 31.3, 121.5);
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(invalidCoordinate === null).assertTrue();
+      expect(invalidDuration === null).assertTrue();
     });
   });
 }
