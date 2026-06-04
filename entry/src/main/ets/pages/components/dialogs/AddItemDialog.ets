@@ -44,8 +44,6 @@ export class MapPickerRouteParams {
   }
 }
 
-type AddItemDateRecommendResolver = (dayOffset: number, currentTime: string) => string;
-
 export function resolveAddItemMode(initName: string, initIsSchedule: boolean): 0 | 1 {
   if (initName && initName.trim().length > 0) {
     return initIsSchedule ? 1 : 0;
@@ -89,7 +87,7 @@ export struct AddItemDialog {
     preTravel?: number, isHardLock?: boolean, note?: string, isMustVisit?: boolean, lat?: number,
     lng?: number) => Promise<void> = async () => {
   };
-  onDateChangedRecommendTime: AddItemDateRecommendResolver = (_dayOffset: number, currentTime: string): string => currentTime;
+  onDateChangedRecommendTime = (_dayOffset: number, currentTime: string): string => currentTime;
   @StorageProp('defaultDuration') globalDefaultDuration: number = 60;
   @State showTip: boolean = false;
   // =================== 地图选点回传监听 ===================
