@@ -1,5 +1,7 @@
 ﻿import { ThemeCenter } from '../../../../common/utils/ThemeCenter';
 
+type CompanionControlTopBarVoidAction = () => void;
+
 export function getCompanionControlTopBarPaddingTop(safeTopInset: number): number {
   return safeTopInset + 10;
 }
@@ -10,7 +12,7 @@ export struct CompanionControlTopBar {
   @Prop runtimeDescription: string = '';
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
 
-  onExit: () => void = () => {};
+  onExit: CompanionControlTopBarVoidAction = () => {};
 
   private getThemePalette() {
     return ThemeCenter.getPalette(this.effectiveTheme);

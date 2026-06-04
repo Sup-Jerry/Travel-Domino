@@ -1,6 +1,22 @@
 ﻿import { ThemeCenter } from '../../../../common/utils/ThemeCenter';
 
 export type CompanionFilterState = 'ALL' | 'PENDING' | 'ACTIVE' | 'COMPLETED' | 'SKIPPED';
+type CompanionFilterVoidAction = () => void;
+type CompanionFilterSelectAction = (item: CompanionFilterState) => void;
+type CompanionFilterOptionsResolver = () => CompanionFilterState[];
+type CompanionFilterLabelResolver = (state: CompanionFilterState) => string;
+
+function noopCompanionFilterVoid(): void {}
+
+function noopCompanionFilterSelect(_item: CompanionFilterState): void {}
+
+function defaultCompanionFilterOptions(): CompanionFilterState[] {
+  return ['ALL', 'PENDING', 'ACTIVE', 'COMPLETED', 'SKIPPED'];
+}
+
+function defaultCompanionFilterLabel(_state: CompanionFilterState): string {
+  return '--';
+}
 
 export function shouldShowCompanionFilterPage(showFilterPage: boolean): boolean {
   return showFilterPage;
@@ -35,10 +51,10 @@ export struct CompanionFilterPage {
   @Prop safeBottomInset: number = 0;
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
 
-  onClose: () => void = () => {};
-  onFilterSelect: (item: CompanionFilterState) => void = (_item: CompanionFilterState) => {};
-  getFilterOptions: () => CompanionFilterState[] = () => ['ALL', 'PENDING', 'ACTIVE', 'COMPLETED', 'SKIPPED'];
-  getFilterLabel: (state: CompanionFilterState) => string = (_state: CompanionFilterState) => '--';
+  onClose: CompanionFilterVoidAction = noopCompanionFilterVoid;
+  onFilterSelect: CompanionFilterSelectAction = noopCompanionFilterSelect;
+  getFilterOptions: CompanionFilterOptionsResolver = defaultCompanionFilterOptions;
+  getFilterLabel: CompanionFilterLabelResolver = defaultCompanionFilterLabel;
 
   private getThemePalette() {
     return ThemeCenter.getPalette(this.effectiveTheme);

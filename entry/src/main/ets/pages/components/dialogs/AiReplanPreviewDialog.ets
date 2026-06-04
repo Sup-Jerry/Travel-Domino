@@ -2,6 +2,9 @@
 import { ComposableStrategy } from '../../../domain/strategy/TravelStrategyDimensions';
 import { AiReplanPreviewItem, AiReplanPreviewResult } from '../../../domain/timeline/services/TimelineAiService';
 
+type AiReplanRegenerateAction = (prompt: string, strategyMode: number, customStrategy?: ComposableStrategy) => void;
+type AiReplanVoidAction = () => void;
+
 export function getAiReplanItemTypeLabel(itemType: number): string {
   if (itemType === 1) return '美食';
   if (itemType === 2) return '住宿';
@@ -32,11 +35,11 @@ export struct AiReplanPreviewDialog {
   };
   effectiveTheme: string = 'light';
 
-  onRegenerateAgain: (prompt: string, strategyMode: number, customStrategy?: ComposableStrategy) => void =
+  onRegenerateAgain: AiReplanRegenerateAction =
     (_prompt: string, _strategyMode: number, _customStrategy?: ComposableStrategy) => {};
-  onApplyOverwrite: () => void = () => {};
-  onApplyKeep: () => void = () => {};
-  onCancel: () => void = () => {};
+  onApplyOverwrite: AiReplanVoidAction = () => {};
+  onApplyKeep: AiReplanVoidAction = () => {};
+  onCancel: AiReplanVoidAction = () => {};
 
   private getPalette() {
     return ThemeCenter.getPalette(this.effectiveTheme);

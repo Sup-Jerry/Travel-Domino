@@ -15,31 +15,58 @@ import { PlanShareDialog } from '../components/dialogs/PlanShareDialog';
 import { EventEntity } from '../../model/entity/EventEntity';
 import { CompressionMode, TimelineViewModel } from '../../viewmodel/TimelineViewModel';
 
+export type DialogVoidCallback = () => void;
+export type DateSelectCallback = (dateMs: number) => void;
+export type DateRangeSelectCallback = (startMs: number, endMs: number) => void;
+export type WeatherPreferenceChangeCallback = (preference: WeatherUserPreference) => Promise<void>;
+export type AiConfirmCallback = (text: string, strategy: number, customStrategy?: ComposableStrategy) => Promise<void>;
+export type AiRegenerateCallback = (
+  strategy: number,
+  customStrategy?: ComposableStrategy,
+  keepCurrentMode?: boolean
+) => Promise<void>;
+export type ConflictCompressConfirmCallback = (selectedIds: number[], mode: CompressionMode) => void;
+export type AdvanceAdjustConfirmCallback = (selectedIds: number[], nextStartTime: string) => void;
+export type AddItemDateRecommendCallback = (dayOffset: number, currentTime: string) => string;
+export type AddItemConfirmCallback = (
+  name: string,
+  duration: number,
+  isSchedule: boolean,
+  fixedTime?: string,
+  dayOffset?: number,
+  preTravel?: number,
+  isHardLock?: boolean,
+  note?: string,
+  isMustVisit?: boolean,
+  lat?: number,
+  lng?: number
+) => Promise<void>;
+
 export interface DateFilterCallbacks {
-  onShowAll: () => void;
-  onSelectDate: () => void;
-  onSelectRange: () => void;
+  onShowAll: DialogVoidCallback;
+  onSelectDate: DialogVoidCallback;
+  onSelectRange: DialogVoidCallback;
 }
 
 export interface DateFilterOpenCallbacks {
-  onShowAll: () => void;
-  onSelectDate: (dateMs: number) => void;
-  onSelectRange: (startMs: number, endMs: number) => void;
+  onShowAll: DialogVoidCallback;
+  onSelectDate: DateSelectCallback;
+  onSelectRange: DateRangeSelectCallback;
 }
 
 export interface SettingsCallbacks {
-  onRename: () => void;
-  onReschedule: () => void;
-  onShare: () => void;
+  onRename: DialogVoidCallback;
+  onReschedule: DialogVoidCallback;
+  onShare: DialogVoidCallback;
   weatherUserPreference: WeatherUserPreference;
-  onWeatherPreferenceChange: (preference: WeatherUserPreference) => Promise<void>;
+  onWeatherPreferenceChange: WeatherPreferenceChangeCallback;
 }
 
 export interface AiDialogCallbacks {
   hasAiHistory: boolean;
   currentStrategyMode?: number;
-  onConfirm: (text: string, strategy: number, customStrategy?: ComposableStrategy) => Promise<void>;
-  onRegenerate: (strategy: number, customStrategy?: ComposableStrategy, keepCurrentMode?: boolean) => Promise<void>;
+  onConfirm: AiConfirmCallback;
+  onRegenerate: AiRegenerateCallback;
 }
 
 export interface SuggestionDialogCallbacks {
@@ -48,17 +75,17 @@ export interface SuggestionDialogCallbacks {
   targetTime: string;
   suggestedTime: string;
   detailMsg: string;
-  onConfirm: () => void;
-  onBack: () => void;
+  onConfirm: DialogVoidCallback;
+  onBack: DialogVoidCallback;
 }
 
 export interface ConflictSelectionCallbacks {
   gapMinutes: number;
-  onDelayY: () => void;
-  onCompressX: () => void;
-  onShiftSameDay: () => void;
-  onAdvanceAdjust: () => void;
-  onSmartAdjust: () => void;
+  onDelayY: DialogVoidCallback;
+  onCompressX: DialogVoidCallback;
+  onShiftSameDay: DialogVoidCallback;
+  onAdvanceAdjust: DialogVoidCallback;
+  onSmartAdjust: DialogVoidCallback;
 }
 
 export interface ConflictCompressCallbacks {
@@ -68,8 +95,8 @@ export interface ConflictCompressCallbacks {
   targetName: string;
   initialMode: CompressionMode;
   initialSelectedIds: number[];
-  onCancel: () => void;
-  onConfirm: (selectedIds: number[], mode: CompressionMode) => void;
+  onCancel: DialogVoidCallback;
+  onConfirm: ConflictCompressConfirmCallback;
 }
 
 export interface AdvanceAdjustCallbacks {
@@ -77,8 +104,8 @@ export interface AdvanceAdjustCallbacks {
   targetIndex: number;
   targetName: string;
   forcedGapMinutes?: number;
-  onCancel: () => void;
-  onConfirm: (selectedIds: number[], nextStartTime: string) => void;
+  onCancel: DialogVoidCallback;
+  onConfirm: AdvanceAdjustConfirmCallback;
 }
 
 export interface GapResolutionCallbacks {
@@ -90,10 +117,10 @@ export interface DateConflictCallbacks {
   conflictDateStr: string;
   planStartDateStr: string;
   planStartDate: number;
-  onChangeItemDate: () => void;
-  onMoveToBacklog: () => void;
-  onChangePlanStartDate: () => void;
-  onCancel: () => void;
+  onChangeItemDate: DialogVoidCallback;
+  onMoveToBacklog: DialogVoidCallback;
+  onChangePlanStartDate: DialogVoidCallback;
+  onCancel: DialogVoidCallback;
 }
 
 export interface AddItemDialogCallbacks {
@@ -111,20 +138,8 @@ export interface AddItemDialogCallbacks {
   planStartDate: number;
   initLat: number;
   initLng: number;
-  onDateChangedRecommendTime: (dayOffset: number, currentTime: string) => string;
-  onConfirm: (
-    name: string,
-    duration: number,
-    isSchedule: boolean,
-    fixedTime?: string,
-    dayOffset?: number,
-    preTravel?: number,
-    isHardLock?: boolean,
-    note?: string,
-    isMustVisit?: boolean,
-    lat?: number,
-    lng?: number
-  ) => Promise<void>;
+  onDateChangedRecommendTime: AddItemDateRecommendCallback;
+  onConfirm: AddItemConfirmCallback;
 }
 
 export interface ShareDialogCallbacks {

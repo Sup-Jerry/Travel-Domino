@@ -3,32 +3,42 @@ import { AppStorageKeys } from '../../common/constants/AppStorageKeys';
 import { IndexStateManager } from './IndexStateManager';
 import { TimelineViewModel } from '../../viewmodel/TimelineViewModel';
 
+export type IndexPlanIdSetter = (planId: number) => void;
+export type IndexBooleanSetter = (value: boolean) => void;
+export type IndexVoidCallback = () => void;
+export type IndexTitleSetter = (title: string) => void;
+export type IndexStrategyModeSetter = (mode: number) => void;
+export type IndexTryStartEventCallback = (eventId: number) => Promise<boolean>;
+export type IndexBacklogInitCallback = (planId: number, isNewPlan: boolean) => Promise<void>;
+export type IndexLoadDataErrorCallback = (reason: string) => void;
+export type IndexTimerSetter = (timer: number) => void;
+
 export interface AboutToAppearParams {
   uiContext: UIContext;
   vm: TimelineViewModel;
-  onSetCurrentPlanId: (planId: number) => void;
-  onSetManualWeatherRefresh: (value: boolean) => void;
-  onRefreshUnsavedFlag: () => void;
-  onSetPlanTitle: (title: string) => void;
-  onBindReminderSubscriptions: () => void;
-  onSetStrategyMode: (mode: number) => void;
-  onLoadStrategyExplanation: () => void;
-  onSetCompanionMode: (value: boolean) => void;
-  onTryStartEvent: (eventId: number) => Promise<boolean>;
-  onStartArrivalReminderEngine: () => void;
-  onStartStrategyAdaptationCheck: () => void;
-  onInitBacklogExpandedState: (planId: number, isNewPlan: boolean) => Promise<void>;
-  onLoadDataError: (reason: string) => void;
+  onSetCurrentPlanId: IndexPlanIdSetter;
+  onSetManualWeatherRefresh: IndexBooleanSetter;
+  onRefreshUnsavedFlag: IndexVoidCallback;
+  onSetPlanTitle: IndexTitleSetter;
+  onBindReminderSubscriptions: IndexVoidCallback;
+  onSetStrategyMode: IndexStrategyModeSetter;
+  onLoadStrategyExplanation: IndexVoidCallback;
+  onSetCompanionMode: IndexBooleanSetter;
+  onTryStartEvent: IndexTryStartEventCallback;
+  onStartArrivalReminderEngine: IndexVoidCallback;
+  onStartStrategyAdaptationCheck: IndexVoidCallback;
+  onInitBacklogExpandedState: IndexBacklogInitCallback;
+  onLoadDataError: IndexLoadDataErrorCallback;
 }
 
 export interface AboutToDisappearParams {
   strategyAdaptationCheckTimer: number;
-  onUnbindReminderSubscriptions: () => void;
-  onStopArrivalEngine: () => void;
-  onStopExecutionWeatherScheduler: () => void;
-  onUnbindPlanState: () => void;
-  onClearDialogDraftStorage: () => void;
-  onSetStrategyAdaptationCheckTimer: (timer: number) => void;
+  onUnbindReminderSubscriptions: IndexVoidCallback;
+  onStopArrivalEngine: IndexVoidCallback;
+  onStopExecutionWeatherScheduler: IndexVoidCallback;
+  onUnbindPlanState: IndexVoidCallback;
+  onClearDialogDraftStorage: IndexVoidCallback;
+  onSetStrategyAdaptationCheckTimer: IndexTimerSetter;
 }
 
 export class IndexLifecycleHelper {

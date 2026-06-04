@@ -5,6 +5,59 @@ import { EventEntity } from '../../model/entity/EventEntity';
 import { CompressionMode, CompressionPlan, TimelineViewModel } from '../../viewmodel/TimelineViewModel';
 import { IndexDialogManager } from './IndexDialogManager';
 
+export type ConflictSaveCallback = (t?: string) => void;
+export type ConflictDoneCallback = () => Promise<void> | void;
+export type ConflictToastCallback = (message: string) => void;
+export type ConflictBackCallback = () => void;
+export type ConflictGapCallback = (gap: number) => void;
+export type ConflictPreviewOpener = (
+  index: number,
+  target: EventEntity,
+  targetTime: string,
+  plan: CompressionPlan,
+  saveCallback: ConflictSaveCallback,
+  onBack: ConflictBackCallback
+) => void;
+export type ConflictAdvanceDialogOpener = (
+  index: number,
+  target: EventEntity,
+  targetTime: string,
+  saveCallback: ConflictSaveCallback
+) => void;
+export type ConflictCompressDialogOpener = (
+  index: number,
+  target: EventEntity,
+  targetTime: string,
+  saveCallback: ConflictSaveCallback,
+  onBack: ConflictBackCallback
+) => void;
+export type ConflictMenuOpener = (
+  index: number,
+  target: EventEntity,
+  targetTime: string,
+  gap: number,
+  saveCallback: ConflictSaveCallback
+) => void;
+export type ConflictCompressPresetOpener = (
+  indexVal: number,
+  itemVal: EventEntity,
+  targetTimeVal: string,
+  saveFn: ConflictSaveCallback,
+  backFn: ConflictBackCallback,
+  presetSelectedIds: number[],
+  presetMode: CompressionMode
+) => void;
+export type ConflictBlockedDialogOpener = (
+  indexVal: number,
+  itemVal: EventEntity,
+  targetTimeVal: string,
+  plan: CompressionPlan,
+  selectedIds: number[],
+  mode: CompressionMode,
+  saveFn: ConflictSaveCallback,
+  backFn: ConflictBackCallback
+) => void;
+
 export class IndexConflictHelper {
   static resolveConflictGapMinutes(item: EventEntity, fallbackGap: number = 0): number {
     if (item.gap_minutes > 0) {
@@ -32,7 +85,7 @@ export class IndexConflictHelper {
     vm: TimelineViewModel,
     item: EventEntity,
     newTime?: string,
-    onDone?: () => Promise<void> | void
+    onDone?: ConflictDoneCallback
   ): Promise<void> {
     if (newTime && item.id > 0) {
       const effectiveDayOffset = TimelineDatePolicy.resolveEventDayOffset(item);
@@ -60,13 +113,11 @@ export class IndexConflictHelper {
     item: EventEntity,
     strategy: 'delay' | 'compress' | 'advance' | 'smart',
     gapMinutes: number,
-    onDone: (() => void) | undefined,
-    openPreview: (index: number, target: EventEntity, targetTime: string, plan: CompressionPlan, saveCallback: (t?: string) => void,
-      onBack: () => void) => void,
-    openAdvanceAdjustDialog: (index: number, target: EventEntity, targetTime: string, saveCallback: (t?: string) => void) => void,
-    openCompressSelectionDialog: (index: number, target: EventEntity, targetTime: string, saveCallback: (t?: string) => void,
-      onBack: () => void) => void,
-    openConflictMenu: (index: number, target: EventEntity, targetTime: string, gap: number, saveCallback: (t?: string) => void) => void
+    onDone: ConflictDoneCallback | undefined,
+    openPreview: ConflictPreviewOpener,
+    openAdvanceAdjustDialog: ConflictAdvanceDialogOpener,
+    openCompressSelectionDialog: ConflictCompressDialogOpener,
+    openConflictMenu: ConflictMenuOpener
   ): void {
     const index = vm.events.indexOf(item);
     if (index < 0) {
@@ -108,10 +159,10 @@ export class IndexConflictHelper {
     index: number,
     item: EventEntity,
     targetTime: string,
-    saveCallback: (t?: string) => void,
-    showToast: (message: string) => void,
-    onReopenAdvanceDialog: () => void,
-    onOpenConflictMenu: (gap: number) => void
+    saveCallback: ConflictSaveCallback,
+    showToast: ConflictToastCallback,
+    onReopenAdvanceDialog: ConflictBackCallback,
+    onOpenConflictMenu: ConflictGapCallback
   ): CustomDialogController | null {
     const context = vm.buildAdvanceAdjustContext(index);
     if (!context || context.candidates.length === 0) {
@@ -155,12 +206,10 @@ export class IndexConflictHelper {
     plan: CompressionPlan,
     selectedIds: number[],
     mode: CompressionMode,
-    saveCallback: (t?: string) => void,
-    onBack: () => void,
-    openCompressSelectionDialog: (indexVal: number, itemVal: EventEntity, targetTimeVal: string, saveFn: (t?: string) => void,
-      backFn: () => void, presetSelectedIds: number[], presetMode: CompressionMode) => void,
-    openPreview: (indexVal: number, itemVal: EventEntity, targetTimeVal: string, nextPlan: CompressionPlan, saveFn: (t?: string) => void,
-      backFn: () => void) => void,
+    saveCallback: ConflictSaveCallback,
+    onBack: ConflictBackCallback,
+    openCompressSelectionDialog: ConflictCompressPresetOpener,
+    openPreview: ConflictPreviewOpener,
     vm: TimelineViewModel
   ): void {
     const remain = plan.remainingGapMinutes ?? 0;
@@ -191,13 +240,11 @@ export class IndexConflictHelper {
     index: number,
     item: EventEntity,
     targetTime: string,
-    saveCallback: (t?: string) => void,
-    onBack: () => void,
-    showToast: (message: string) => void,
-    openPreview: (indexVal: number, itemVal: EventEntity, targetTimeVal: string, plan: CompressionPlan, saveFn: (t?: string) => void,
-      backFn: () => void) => void,
-    showCompressionBlockedDialog: (indexVal: number, itemVal: EventEntity, targetTimeVal: string, plan: CompressionPlan,
-      selectedIds: number[], mode: CompressionMode, saveFn: (t?: string) => void, backFn: () => void) => void,
+    saveCallback: ConflictSaveCallback,
+    onBack: ConflictBackCallback,
+    showToast: ConflictToastCallback,
+    openPreview: ConflictPreviewOpener,
+    showCompressionBlockedDialog: ConflictBlockedDialogOpener,
     presetSelectedIds: number[] = [],
     presetMode: CompressionMode = 'RATIO'
   ): CustomDialogController | null {
@@ -258,12 +305,10 @@ export class IndexConflictHelper {
     item: EventEntity,
     targetTime: string,
     gap: number,
-    saveCallback: (t?: string) => void,
-    openPreview: (indexVal: number, itemVal: EventEntity, targetTimeVal: string, plan: CompressionPlan, saveFn: (t?: string) => void,
-      backFn: () => void) => void,
-    openCompressSelectionDialog: (indexVal: number, itemVal: EventEntity, targetTimeVal: string, saveFn: (t?: string) => void,
-      backFn: () => void) => void,
-    openAdvanceAdjustDialog: (indexVal: number, itemVal: EventEntity, targetTimeVal: string, saveFn: (t?: string) => void) => void
+    saveCallback: ConflictSaveCallback,
+    openPreview: ConflictPreviewOpener,
+    openCompressSelectionDialog: ConflictCompressDialogOpener,
+    openAdvanceAdjustDialog: ConflictAdvanceDialogOpener
   ): CustomDialogController {
     hilog.info(0x0000, 'Index', `[CONFLICT_UI][menu_open] index=${index}, itemId=${item.id}, targetTime=${targetTime}, gap=${gap}`);
     const controller = IndexDialogManager.createConflictSelectionController({
@@ -333,7 +378,7 @@ export class IndexConflictHelper {
   static requestPlanDateUpdate(
     vm: TimelineViewModel,
     newDateTimestamp: number,
-    openConflictMenu: (index: number, item: EventEntity, targetTime: string, gap: number, saveCallback: (t?: string) => void) => void
+    openConflictMenu: ConflictMenuOpener
   ): void {
     const nextDate = new Date(newDateTimestamp);
     nextDate.setHours(0, 0, 0, 0);

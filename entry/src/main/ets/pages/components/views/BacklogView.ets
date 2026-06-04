@@ -2,6 +2,9 @@
 import { ThemeCenter } from '../../../common/utils/ThemeCenter';
 
 
+type BacklogViewVoidAction = () => void;
+type BacklogViewMoveAction = (item: TravelPlanItem) => void;
+
 export function getBacklogExpandSymbol(isExpanded: boolean): string {
   return isExpanded ? '\u25BC' : '\u25B6';
 }
@@ -43,10 +46,10 @@ export struct BacklogView {
   @Prop isExpanded: boolean;
 
   // 由父级处理展开/收起切换
-  onToggleExpand: () => void = () => {};
+  onToggleExpand: BacklogViewVoidAction = () => {};
 
-  onMoveToSchedule: (item: TravelPlanItem) => void = () => {};
-  onMoveAllToSchedule: () => void = () => {};
+  onMoveToSchedule: BacklogViewMoveAction = () => {};
+  onMoveAllToSchedule: BacklogViewVoidAction = () => {};
 
   private getPalette() {
     return ThemeCenter.getPalette(this.effectiveTheme);

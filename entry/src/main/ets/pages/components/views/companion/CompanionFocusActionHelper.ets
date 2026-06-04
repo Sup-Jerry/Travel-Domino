@@ -2,14 +2,24 @@ import { EventEntity } from '../../../../model/entity/EventEntity';
 import { TimelineExecutionState } from '../../../../domain/policy/TimelineExecutionState';
 import { getCompanionEventState, hasCompanionOtherActiveEvent } from './CompanionDisplayHelper';
 
+type CompanionEventAction = (event: EventEntity) => Promise<void>;
+type CompanionVoidCallback = () => void;
+type CompanionEventListGetter = () => EventEntity[];
+type CompanionIndexGetter = (id: number) => number;
+type CompanionIdAction = (id: number) => void;
+type CompanionToastCallback = (message: string) => void;
+type CompanionReopenAction = (eventId: number) => Promise<boolean>;
+type CompanionActualStartAction = (eventId: number, nowTs: number) => Promise<boolean>;
+type CompanionActiveConflictDialog = (excludeEventId: number) => Promise<boolean>;
+
 interface CompanionHandleFocusedSkipParams {
   focusedEvent: EventEntity | null;
-  skipEvent: (event: EventEntity) => Promise<void>;
-  refreshContext: () => void;
-  getScheduledEvents: () => EventEntity[];
-  getScheduleIndexById: (id: number) => number;
-  applyFocusById: (id: number) => void;
-  showToast: (message: string) => void;
+  skipEvent: CompanionEventAction;
+  refreshContext: CompanionVoidCallback;
+  getScheduledEvents: CompanionEventListGetter;
+  getScheduleIndexById: CompanionIndexGetter;
+  applyFocusById: CompanionIdAction;
+  showToast: CompanionToastCallback;
 }
 
 export async function handleCompanionFocusedSkip(params: CompanionHandleFocusedSkipParams): Promise<void> {
@@ -56,14 +66,14 @@ export async function handleCompanionFocusedSkip(params: CompanionHandleFocusedS
 
 interface CompanionHandleFocusedReopenParams {
   focusedEvent: EventEntity | null;
-  getScheduledEvents: () => EventEntity[];
-  reopenSkippedEvent: (eventId: number) => Promise<boolean>;
-  updateActualStart: (eventId: number, nowTs: number) => Promise<boolean>;
-  showGlobalActiveConflictDialog: (excludeEventId: number) => Promise<boolean>;
-  refreshContext: () => void;
-  applyFocusById: (id: number) => void;
-  enterImmersiveMode: () => void;
-  showToast: (message: string) => void;
+  getScheduledEvents: CompanionEventListGetter;
+  reopenSkippedEvent: CompanionReopenAction;
+  updateActualStart: CompanionActualStartAction;
+  showGlobalActiveConflictDialog: CompanionActiveConflictDialog;
+  refreshContext: CompanionVoidCallback;
+  applyFocusById: CompanionIdAction;
+  enterImmersiveMode: CompanionVoidCallback;
+  showToast: CompanionToastCallback;
 }
 
 export async function handleCompanionFocusedReopen(params: CompanionHandleFocusedReopenParams): Promise<void> {

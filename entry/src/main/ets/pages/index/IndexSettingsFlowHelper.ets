@@ -5,13 +5,30 @@ import { EventEntity } from '../../model/entity/EventEntity';
 import { TimelineViewModel } from '../../viewmodel/TimelineViewModel';
 import { IndexDialogManager, SettingsCallbacks, ShareDialogCallbacks } from './IndexDialogManager';
 
+export type SettingsFlowVoidCallback = () => void;
+export type SettingsFlowDateCallback = (dateMs: number) => void;
+export type SettingsFlowShareCallback = () => Promise<void>;
+export type SettingsFlowRenameCallback = (newName: string) => void;
+export type SettingsControllerFactory = (callbacks: SettingsCallbacks) => CustomDialogController;
+export type PlanDatePickerOpener = (
+  uiContext: UIContext,
+  planStartDate: number,
+  onAccept: SettingsFlowDateCallback
+) => void;
+export type RenameControllerFactory = (
+  initName: string,
+  onConfirm: SettingsFlowRenameCallback
+) => CustomDialogController;
+export type ShareControllerFactory = (callbacks: ShareDialogCallbacks) => CustomDialogController;
+export type PlanJsonExporter = (planId: number) => Promise<string>;
+
 export interface OpenSettingsFlowParams {
   uiContext: UIContext;
   vm: TimelineViewModel;
-  onRename: () => void;
-  onReschedule: (dateMs: number) => void;
-  onShare: () => Promise<void>;
-  onWeatherPreferenceError: () => void;
+  onRename: SettingsFlowVoidCallback;
+  onReschedule: SettingsFlowDateCallback;
+  onShare: SettingsFlowShareCallback;
+  onWeatherPreferenceError: SettingsFlowVoidCallback;
 }
 
 export interface OpenShareFlowParams {
@@ -22,11 +39,11 @@ export interface OpenShareFlowParams {
 }
 
 export interface IndexSettingsFlowDeps {
-  createSettingsController(callbacks: SettingsCallbacks): CustomDialogController;
-  openPlanDatePicker(uiContext: UIContext, planStartDate: number, onAccept: (dateMs: number) => void): void;
-  createRenameController(initName: string, onConfirm: (newName: string) => void): CustomDialogController;
-  createShareController(callbacks: ShareDialogCallbacks): CustomDialogController;
-  exportPlanToJson(planId: number): Promise<string>;
+  createSettingsController: SettingsControllerFactory;
+  openPlanDatePicker: PlanDatePickerOpener;
+  createRenameController: RenameControllerFactory;
+  createShareController: ShareControllerFactory;
+  exportPlanToJson: PlanJsonExporter;
 }
 
 class DefaultIndexSettingsFlowDeps implements IndexSettingsFlowDeps {
@@ -94,7 +111,7 @@ export class IndexSettingsFlowHelper {
 
   static openRenameDialog(
     planTitle: string,
-    onConfirm: (newName: string) => void,
+    onConfirm: SettingsFlowRenameCallback,
     deps: IndexSettingsFlowDeps = DEFAULT_FLOW_DEPS
   ): CustomDialogController {
     const controller = deps.createRenameController(planTitle, (newName: string) => {

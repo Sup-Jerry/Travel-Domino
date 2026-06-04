@@ -1,6 +1,8 @@
 ﻿// 文件路径: ets/pages/components/ConflictSelectionDialog.ets
 
 
+type ConflictSelectionVoidAction = () => void;
+
 export function getConflictSelectionGapPrompt(gapMinutes: number): string {
   return `?????????? ${gapMinutes} ???????????`;
 }
@@ -16,12 +18,12 @@ export struct ConflictSelectionDialog {
   gapMinutes: number = 0; // 缺口时间 (冲突了多少分钟)
 
   // 回调
-  onDelayY: () => void = () => {};        // 方案1: 延迟自己
-  onCompressX: () => void = () => {};     // 方案2: 选择前序地点压缩
-  onShiftSameDay: () => void = () => {};  // 兼容回调
-  onAdvanceAdjust: () => void = () => {}; // 方案3: 前移调整
-  onSmartAdjust: () => void = () => {};   // 兼容保留，不再展示入口
-  onCancel: () => void = () => {};        // 关闭
+  onDelayY: ConflictSelectionVoidAction = () => {};        // 方案1: 延迟自己
+  onCompressX: ConflictSelectionVoidAction = () => {};     // 方案2: 选择前序地点压缩
+  onShiftSameDay: ConflictSelectionVoidAction = () => {};  // 兼容回调
+  onAdvanceAdjust: ConflictSelectionVoidAction = () => {}; // 方案3: 前移调整
+  onSmartAdjust: ConflictSelectionVoidAction = () => {};   // 兼容保留，不再展示入口
+  onCancel: ConflictSelectionVoidAction = () => {};        // 关闭
 
   build() {
     Column() {

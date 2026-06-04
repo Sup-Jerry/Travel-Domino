@@ -2,6 +2,53 @@
 import { ThemeCenter } from '../../../../common/utils/ThemeCenter';
 
 type CardPhase = 'stable' | 'outgoing' | 'incoming';
+type FocusedEventStringResolver = (event: EventEntity) => string;
+type FocusedEventColorResolver = (event: EventEntity) => ResourceColor;
+type FocusedEventBooleanResolver = (event: EventEntity) => boolean;
+type FocusedCardPhaseNumberResolver = (phase: CardPhase) => number;
+type FocusedEventAction = (event: EventEntity) => void;
+type FocusedAsyncEventAction = (event: EventEntity) => Promise<void> | void;
+type FocusedVoidAction = () => void;
+
+function defaultFocusedString(_event: EventEntity): string {
+  return '--';
+}
+
+function defaultFocusedTimeString(_event: EventEntity): string {
+  return '--:--';
+}
+
+function defaultFocusedState(_event: EventEntity): string {
+  return 'PENDING';
+}
+
+function defaultFocusedTextColor(_event: EventEntity): ResourceColor {
+  return '#666';
+}
+
+function defaultFocusedBackgroundColor(_event: EventEntity): ResourceColor {
+  return '#F5F5F5';
+}
+
+function defaultFocusedBorderColor(_event: EventEntity): ResourceColor {
+  return '#DDD';
+}
+
+function defaultFocusedBoolean(_event: EventEntity): boolean {
+  return false;
+}
+
+function defaultFocusedTranslate(_phase: CardPhase): number {
+  return 0;
+}
+
+function defaultFocusedUnitScale(_phase: CardPhase): number {
+  return 1;
+}
+
+function noopFocusedEvent(_event: EventEntity): void {}
+
+function noopFocusedVoid(): void {}
 
 export function shouldShowFocusedPlannedRange(state: string): boolean {
   return state !== 'PENDING';
@@ -46,27 +93,27 @@ export struct CompanionFocusedCardHost {
   @Prop currentEventId: number = -1;
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
 
-  getEventStateLabel: (event: EventEntity) => string = (_event: EventEntity) => '--';
-  getStateTagTextColor: (event: EventEntity) => ResourceColor = (_event: EventEntity) => '#666';
-  getStateTagBackgroundColor: (event: EventEntity) => ResourceColor = (_event: EventEntity) => '#F5F5F5';
-  getStateBorderColor: (event: EventEntity) => ResourceColor = (_event: EventEntity) => '#DDD';
-  getMainCardTimeText: (event: EventEntity) => string = (_event: EventEntity) => '--:--';
-  getPlannedRange: (event: EventEntity) => string = (_event: EventEntity) => '--';
-  getEventState: (event: EventEntity) => string = (_event: EventEntity) => 'PENDING';
-  canStartFocused: (event: EventEntity) => boolean = (_event: EventEntity) => false;
-  canEndFocused: (event: EventEntity) => boolean = (_event: EventEntity) => false;
-  getCardTranslateX: (phase: CardPhase) => number = (_phase: CardPhase) => 0;
-  getCardOpacity: (phase: CardPhase) => number = (_phase: CardPhase) => 1;
-  getCardScale: (phase: CardPhase) => number = (_phase: CardPhase) => 1;
+  getEventStateLabel: FocusedEventStringResolver = defaultFocusedString;
+  getStateTagTextColor: FocusedEventColorResolver = defaultFocusedTextColor;
+  getStateTagBackgroundColor: FocusedEventColorResolver = defaultFocusedBackgroundColor;
+  getStateBorderColor: FocusedEventColorResolver = defaultFocusedBorderColor;
+  getMainCardTimeText: FocusedEventStringResolver = defaultFocusedTimeString;
+  getPlannedRange: FocusedEventStringResolver = defaultFocusedString;
+  getEventState: FocusedEventStringResolver = defaultFocusedState;
+  canStartFocused: FocusedEventBooleanResolver = defaultFocusedBoolean;
+  canEndFocused: FocusedEventBooleanResolver = defaultFocusedBoolean;
+  getCardTranslateX: FocusedCardPhaseNumberResolver = defaultFocusedTranslate;
+  getCardOpacity: FocusedCardPhaseNumberResolver = defaultFocusedUnitScale;
+  getCardScale: FocusedCardPhaseNumberResolver = defaultFocusedUnitScale;
 
-  onNavigate: (event: EventEntity) => void = (_event: EventEntity) => {};
-  onStart: (event: EventEntity) => Promise<void> | void = (_event: EventEntity) => {};
-  onSkip: (event: EventEntity) => Promise<void> | void = (_event: EventEntity) => {};
-  onEnd: (event: EventEntity) => Promise<void> | void = (_event: EventEntity) => {};
-  onReopen: (event: EventEntity) => Promise<void> | void = (_event: EventEntity) => {};
-  onAdjust: (event: EventEntity) => Promise<void> | void = (_event: EventEntity) => {};
-  onSkipDisabledTap: () => void = () => {};
-  onEnterImmersive: () => void = () => {};
+  onNavigate: FocusedEventAction = noopFocusedEvent;
+  onStart: FocusedAsyncEventAction = noopFocusedEvent;
+  onSkip: FocusedAsyncEventAction = noopFocusedEvent;
+  onEnd: FocusedAsyncEventAction = noopFocusedEvent;
+  onReopen: FocusedAsyncEventAction = noopFocusedEvent;
+  onAdjust: FocusedAsyncEventAction = noopFocusedEvent;
+  onSkipDisabledTap: FocusedVoidAction = noopFocusedVoid;
+  onEnterImmersive: FocusedVoidAction = noopFocusedVoid;
 
   private getThemePalette() {
     return ThemeCenter.getPalette(this.effectiveTheme);

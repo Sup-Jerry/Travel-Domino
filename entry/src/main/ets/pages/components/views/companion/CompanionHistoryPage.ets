@@ -10,6 +10,15 @@ import { CompanionPresentationHelper } from '../CompanionPresentationHelper';
 import { ThemeCenter } from '../../../../common/utils/ThemeCenter';
 
 export type HistoryViewMode = 'timeline' | 'detail';
+type CompanionHistoryVoidAction = () => void;
+type CompanionHistoryFilterAction = (filter: HistoryTimelineFilter) => void;
+type CompanionHistoryItemAction = (item: HistoryTimelineItem) => void;
+
+function noopCompanionHistoryVoid(): void {}
+
+function noopCompanionHistoryFilter(_filter: HistoryTimelineFilter): void {}
+
+function noopCompanionHistoryItem(_item: HistoryTimelineItem): void {}
 
 interface HistoryTimelineGroup {
   key: string;
@@ -82,10 +91,10 @@ export struct CompanionHistoryPage {
   @Prop safeBottomInset: number = 0;
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
 
-  onClose: () => void = () => {};
-  onBack: () => void = () => {};
-  onFilterChange: (filter: HistoryTimelineFilter) => void = (_filter: HistoryTimelineFilter) => {};
-  onItemClick: (item: HistoryTimelineItem) => void = (_item: HistoryTimelineItem) => {};
+  onClose: CompanionHistoryVoidAction = noopCompanionHistoryVoid;
+  onBack: CompanionHistoryVoidAction = noopCompanionHistoryVoid;
+  onFilterChange: CompanionHistoryFilterAction = noopCompanionHistoryFilter;
+  onItemClick: CompanionHistoryItemAction = noopCompanionHistoryItem;
 
   private getThemePalette() {
     return ThemeCenter.getPalette(this.effectiveTheme);

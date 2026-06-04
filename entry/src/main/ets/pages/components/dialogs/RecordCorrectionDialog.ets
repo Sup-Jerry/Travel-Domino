@@ -2,6 +2,9 @@
 import { EventEntity } from '../../../model/entity/EventEntity';
 import { DateUtil } from '../../../common/utils/DateUtil';
 
+type RecordCorrectionConfirmAction = (startTs: number, endTs: number) => void;
+type RecordCorrectionVoidAction = () => void;
+
 export function resolveRecordCorrectionBaseTime(actualStart: number, dynamicStart: number, nowTs: number): number {
   if (actualStart > 0) {
     return actualStart;
@@ -31,8 +34,8 @@ export struct RecordCorrectionDialog {
   @State hasEndTime: boolean = false;
 
   // 回调函数
-  onConfirm: (startTs: number, endTs: number) => void = () => {};
-  onClear: () => void = () => {};
+  onConfirm: RecordCorrectionConfirmAction = () => {};
+  onClear: RecordCorrectionVoidAction = () => {};
 
   aboutToAppear() {
     if (!this.event) return;

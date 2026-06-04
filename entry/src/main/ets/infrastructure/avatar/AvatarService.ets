@@ -12,6 +12,9 @@ import { AvatarUploadApi } from './AvatarUploadApi';
 
 const TAG = 'AvatarService';
 
+export type AvatarCompressor = (context: common.Context, srcUri: string, userId: string) => Promise<string>;
+export type AvatarServiceNowGetter = () => number;
+
 export interface AvatarStorePort {
   loadAvatarProfile(userId: string): Promise<AvatarProfile>;
   saveAvatarProfile(profile: AvatarProfile): Promise<void>;
@@ -25,8 +28,8 @@ export interface AvatarServiceOptions {
   picker?: AvatarPickerPort;
   store?: AvatarStorePort;
   uploader?: AvatarUploadPort;
-  compressor?: (context: common.Context, srcUri: string, userId: string) => Promise<string>;
-  now?: () => number;
+  compressor?: AvatarCompressor;
+  now?: AvatarServiceNowGetter;
 }
 
 class PreferenceAvatarStore implements AvatarStorePort {
@@ -72,8 +75,8 @@ export class AvatarService {
   private readonly picker: AvatarPickerPort;
   private readonly store: AvatarStorePort;
   private readonly uploader: AvatarUploadPort;
-  private readonly compressor: (context: common.Context, srcUri: string, userId: string) => Promise<string>;
-  private readonly now: () => number;
+  private readonly compressor: AvatarCompressor;
+  private readonly now: AvatarServiceNowGetter;
 
   constructor(options: AvatarServiceOptions) {
     this.picker = options.picker || new photoAccessHelper.PhotoViewPicker();
