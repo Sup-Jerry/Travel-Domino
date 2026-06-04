@@ -34,9 +34,9 @@ export struct IndexBacklogView {
       items: this.resolveBacklogItems(),
       isExpanded: this.isExpanded,
       dividerColor: this.dividerColor,
-      onToggleExpand: () => this.onToggleExpand(),
-      onMoveToSchedule: (item: TravelPlanItem) => this.onMoveToSchedule(item),
-      onMoveAllToSchedule: () => this.onMoveAllToSchedule()
+      onToggleExpand: this.onToggleExpand,
+      onMoveToSchedule: this.onMoveToSchedule,
+      onMoveAllToSchedule: this.onMoveAllToSchedule
     });
   }
 }

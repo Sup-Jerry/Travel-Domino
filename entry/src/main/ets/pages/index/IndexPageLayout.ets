@@ -229,17 +229,17 @@ export struct IndexPageLayout {
         textPrimary: this.themePalette.textPrimary,
         cardBgSoft: this.themePalette.cardBgSoft
       },
-      onBack: () => this.onBack(),
-      onOpenSettings: () => this.onOpenSettings(),
-      onEnterCompanion: () => this.onEnterCompanion(),
-      onRefreshWeather: () => this.onRefreshWeather(),
-      onToggleHint: () => this.onToggleHint(),
-      onToggleScore: () => this.onToggleScore(),
-      onHintPopupVisibleChange: (visible: boolean) => this.onHintPopupVisibleChange(visible),
-      onScorePopupVisibleChange: (visible: boolean) => this.onScorePopupVisibleChange(visible),
-      onToggleBacklogExpand: () => this.onToggleBacklogExpand(),
-      onMoveToSchedule: (item: TravelPlanItem) => this.onMoveToSchedule(item),
-      onMoveAllToSchedule: () => this.onMoveAllToSchedule()
+      onBack: this.onBack,
+      onOpenSettings: this.onOpenSettings,
+      onEnterCompanion: this.onEnterCompanion,
+      onRefreshWeather: this.onRefreshWeather,
+      onToggleHint: this.onToggleHint,
+      onToggleScore: this.onToggleScore,
+      onHintPopupVisibleChange: this.onHintPopupVisibleChange,
+      onScorePopupVisibleChange: this.onScorePopupVisibleChange,
+      onToggleBacklogExpand: this.onToggleBacklogExpand,
+      onMoveToSchedule: this.onMoveToSchedule,
+      onMoveAllToSchedule: this.onMoveAllToSchedule
     };
   }
 
@@ -268,23 +268,23 @@ export struct IndexPageLayout {
         primary: this.themePalette.primary,
         cardBg: this.themePalette.cardBg
       },
-      onIsDayCollapsed: (dayOffset: number) => this.onIsDayCollapsed(dayOffset),
-      onToggleDay: (dayOffset: number) => this.onToggleDay(dayOffset),
-      onRefresh: () => this.onScheduleRefresh(),
-      onOpenEditDialog: (item: EventEntity) => this.onOpenEditDialog(item),
-      onOpenTimeEditDialog: (item: EventEntity) => this.onOpenTimeEditDialog(item),
-      onGapFound: (item: EventEntity) => this.onGapFound(item),
+      onIsDayCollapsed: this.onIsDayCollapsed,
+      onToggleDay: this.onToggleDay,
+      onRefresh: this.onScheduleRefresh,
+      onOpenEditDialog: this.onOpenEditDialog,
+      onOpenTimeEditDialog: this.onOpenTimeEditDialog,
+      onGapFound: this.onGapFound,
       onResolveConflictAction: (item: EventEntity, strategy: 'delay' | 'compress' | 'advance' | 'smart', gapMinutes: number) => {
         this.onResolveConflictAction(item, strategy, gapMinutes);
       },
-      onConfirmMoveToBacklog: (item: EventEntity) => this.onConfirmMoveToBacklog(item),
-      onConfirmDeleteEvent: (item: EventEntity) => this.onConfirmDeleteEvent(item),
-      onOpenGapOptimize: () => this.onOpenGapOptimize(),
-      onFilter: () => this.onFilter(),
-      onAi: () => this.onAi(),
-      onAdd: () => this.onAdd(),
-      onUndo: () => this.onUndo(),
-      onSave: () => this.onSave()
+      onConfirmMoveToBacklog: this.onConfirmMoveToBacklog,
+      onConfirmDeleteEvent: this.onConfirmDeleteEvent,
+      onOpenGapOptimize: this.onOpenGapOptimize,
+      onFilter: this.onFilter,
+      onAi: this.onAi,
+      onAdd: this.onAdd,
+      onUndo: this.onUndo,
+      onSave: this.onSave
     };
   }
 

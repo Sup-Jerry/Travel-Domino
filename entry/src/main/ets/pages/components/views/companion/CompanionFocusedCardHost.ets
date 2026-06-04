@@ -2,13 +2,7 @@
 import { ThemeCenter } from '../../../../common/utils/ThemeCenter';
 
 type CardPhase = 'stable' | 'outgoing' | 'incoming';
-type FocusedEventStringResolver = (event: EventEntity) => string;
-type FocusedEventColorResolver = (event: EventEntity) => ResourceColor;
-type FocusedEventBooleanResolver = (event: EventEntity) => boolean;
-type FocusedCardPhaseNumberResolver = (phase: CardPhase) => number;
-type FocusedEventAction = (event: EventEntity) => void;
 type FocusedAsyncEventAction = (event: EventEntity) => Promise<void> | void;
-type FocusedVoidAction = () => void;
 
 function defaultFocusedString(_event: EventEntity): string {
   return '--';
@@ -93,27 +87,27 @@ export struct CompanionFocusedCardHost {
   @Prop currentEventId: number = -1;
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
 
-  getEventStateLabel: FocusedEventStringResolver = defaultFocusedString;
-  getStateTagTextColor: FocusedEventColorResolver = defaultFocusedTextColor;
-  getStateTagBackgroundColor: FocusedEventColorResolver = defaultFocusedBackgroundColor;
-  getStateBorderColor: FocusedEventColorResolver = defaultFocusedBorderColor;
-  getMainCardTimeText: FocusedEventStringResolver = defaultFocusedTimeString;
-  getPlannedRange: FocusedEventStringResolver = defaultFocusedString;
-  getEventState: FocusedEventStringResolver = defaultFocusedState;
-  canStartFocused: FocusedEventBooleanResolver = defaultFocusedBoolean;
-  canEndFocused: FocusedEventBooleanResolver = defaultFocusedBoolean;
-  getCardTranslateX: FocusedCardPhaseNumberResolver = defaultFocusedTranslate;
-  getCardOpacity: FocusedCardPhaseNumberResolver = defaultFocusedUnitScale;
-  getCardScale: FocusedCardPhaseNumberResolver = defaultFocusedUnitScale;
+  getEventStateLabel = defaultFocusedString;
+  getStateTagTextColor = defaultFocusedTextColor;
+  getStateTagBackgroundColor = defaultFocusedBackgroundColor;
+  getStateBorderColor = defaultFocusedBorderColor;
+  getMainCardTimeText = defaultFocusedTimeString;
+  getPlannedRange = defaultFocusedString;
+  getEventState = defaultFocusedState;
+  canStartFocused = defaultFocusedBoolean;
+  canEndFocused = defaultFocusedBoolean;
+  getCardTranslateX = defaultFocusedTranslate;
+  getCardOpacity = defaultFocusedUnitScale;
+  getCardScale = defaultFocusedUnitScale;
 
-  onNavigate: FocusedEventAction = noopFocusedEvent;
+  onNavigate = noopFocusedEvent;
   onStart: FocusedAsyncEventAction = noopFocusedEvent;
   onSkip: FocusedAsyncEventAction = noopFocusedEvent;
   onEnd: FocusedAsyncEventAction = noopFocusedEvent;
   onReopen: FocusedAsyncEventAction = noopFocusedEvent;
   onAdjust: FocusedAsyncEventAction = noopFocusedEvent;
-  onSkipDisabledTap: FocusedVoidAction = noopFocusedVoid;
-  onEnterImmersive: FocusedVoidAction = noopFocusedVoid;
+  onSkipDisabledTap = noopFocusedVoid;
+  onEnterImmersive = noopFocusedVoid;
 
   private getThemePalette() {
     return ThemeCenter.getPalette(this.effectiveTheme);

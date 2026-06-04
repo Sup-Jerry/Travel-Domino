@@ -127,9 +127,9 @@ export struct IndexScheduleArea {
       isPageRefreshing: this.isPageRefreshing,
       gapsCount: this.gapsCount,
       theme: this.timelineTheme,
-      onIsDayCollapsed: (dayOffset: number) => this.onIsDayCollapsed(dayOffset),
-      onToggleDay: (dayOffset: number) => this.onToggleDay(dayOffset),
-      onRefresh: () => this.onRefresh(),
+      onIsDayCollapsed: this.onIsDayCollapsed,
+      onToggleDay: this.onToggleDay,
+      onRefresh: this.onRefresh,
       onMoveUp: (item: EventEntity) => IndexEventHandlers.handleMoveUp(this.vm, item),
       onMoveDown: (item: EventEntity) => IndexEventHandlers.handleMoveDown(this.vm, item),
       onMainContentClick: (item: EventEntity) => {
@@ -168,15 +168,15 @@ export struct IndexScheduleArea {
           this.onConfirmDeleteEvent(event);
         });
       },
-      onOpenGapOptimize: () => this.onOpenGapOptimize()
+      onOpenGapOptimize: this.onOpenGapOptimize
     };
   }
 
   buildBottomBarProps(): IndexScheduleBottomBarProps {
     return {
-      onFilter: () => this.onFilter(),
-      onAi: () => this.onAi(),
-      onAdd: () => this.onAdd(),
+      onFilter: this.onFilter,
+      onAi: this.onAi,
+      onAdd: this.onAdd,
       aiEnabled: resolveIndexScheduleBottomBarAiEnabled(this.isArchived),
       addEnabled: resolveIndexScheduleBottomBarAddEnabled(this.isArchived)
     };
@@ -187,8 +187,8 @@ export struct IndexScheduleArea {
       isVisible: this.hasUnsavedChanges,
       marginBottom: resolveIndexScheduleUnsavedMarginBottom(this.isCompanionMode),
       theme: this.unsavedTheme,
-      onUndo: () => this.onUndo(),
-      onSave: () => this.onSave()
+      onUndo: this.onUndo,
+      onSave: this.onSave
     };
   }
 

@@ -13,15 +13,7 @@ export interface EventItemTimeRangeMeta {
   isEstimated: boolean;
 }
 
-type EventItemVoidCallback = () => void;
-type EventItemMinutesCallback = (minutes: number) => void;
-type EventItemTravelModeCallback = (mode: number) => void;
 type EventItemConflictStrategy = 'delay' | 'compress' | 'advance' | 'smart';
-type EventItemConflictAction = (
-  item: EventEntity,
-  strategy: EventItemConflictStrategy,
-  gapMinutes: number
-) => void;
 
 function noopEventItemVoid(): void {}
 
@@ -226,15 +218,15 @@ export struct EventItemView {
   @Prop companionCurrentEventId: number = -1;
   @Prop showWeather: boolean = true;
 
-  onMoveUp: EventItemVoidCallback = noopEventItemVoid;
-  onMoveDown: EventItemVoidCallback = noopEventItemVoid;
-  onMainContentClick: EventItemVoidCallback = noopEventItemVoid; // 点击中间：完整编辑
-  onTimeClick: EventItemVoidCallback = noopEventItemVoid;        // 点击左侧：时间编辑
-  onCommuteChange: EventItemMinutesCallback = noopEventItemMinutes;
-  onEditClick: EventItemVoidCallback = noopEventItemVoid;
-  onTravelModeChange: EventItemTravelModeCallback = noopEventItemTravelMode;
-  onManualTravelInput: EventItemMinutesCallback = noopEventItemMinutes;
-  onConflictAction: EventItemConflictAction = noopEventItemConflictAction;
+  onMoveUp = noopEventItemVoid;
+  onMoveDown = noopEventItemVoid;
+  onMainContentClick = noopEventItemVoid; // 点击中间：完整编辑
+  onTimeClick = noopEventItemVoid;        // 点击左侧：时间编辑
+  onCommuteChange = noopEventItemMinutes;
+  onEditClick = noopEventItemVoid;
+  onTravelModeChange = noopEventItemTravelMode;
+  onManualTravelInput = noopEventItemMinutes;
+  onConflictAction = noopEventItemConflictAction;
   private conflictSelectionController: CustomDialogController | null = null;
   @State isReasonPopupShow: boolean = false;
   @State tempCommuteVal: string = '';

@@ -29,13 +29,6 @@ export function shouldShowCompanionFilterOverlay(showFilterPage: boolean): boole
   return showFilterPage;
 }
 
-type OverlayVoidCallback = () => void;
-type OverlayHistoryFilterCallback = (filter: HistoryTimelineFilter) => void;
-type OverlayHistoryItemCallback = (item: HistoryTimelineItem) => void;
-type OverlaySearchCallback = (keyword: string) => void;
-type OverlaySearchResultCallback = (item: EventEntity) => void;
-type OverlayFilterSelectCallback = (state: CompanionDisplayFilterState) => void;
-
 function noopOverlayVoid(): void {}
 
 function noopOverlayHistoryFilter(_filter: HistoryTimelineFilter): void {}
@@ -69,17 +62,17 @@ export struct CompanionOverlayPages {
   @Prop safeTopInset: number = 0;
   @Prop safeBottomInset: number = 0;
 
-  onHistoryClose: OverlayVoidCallback = noopOverlayVoid;
-  onHistoryBack: OverlayVoidCallback = noopOverlayVoid;
-  onHistoryFilterChange: OverlayHistoryFilterCallback = noopOverlayHistoryFilter;
-  onHistoryItemClick: OverlayHistoryItemCallback = noopOverlayHistoryItem;
+  onHistoryClose = noopOverlayVoid;
+  onHistoryBack = noopOverlayVoid;
+  onHistoryFilterChange = noopOverlayHistoryFilter;
+  onHistoryItemClick = noopOverlayHistoryItem;
 
-  onSearchClose: OverlayVoidCallback = noopOverlayVoid;
-  onSearch: OverlaySearchCallback = noopOverlaySearch;
-  onSearchResultClick: OverlaySearchResultCallback = noopOverlaySearchResult;
+  onSearchClose = noopOverlayVoid;
+  onSearch = noopOverlaySearch;
+  onSearchResultClick = noopOverlaySearchResult;
 
-  onFilterClose: OverlayVoidCallback = noopOverlayVoid;
-  onFilterSelect: OverlayFilterSelectCallback = noopOverlayFilterSelect;
+  onFilterClose = noopOverlayVoid;
+  onFilterSelect = noopOverlayFilterSelect;
 
   build() {
     Column() {
