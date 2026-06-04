@@ -4,6 +4,9 @@ export interface IndexWeatherHintTheme {
   cardBgSoft: string;
 }
 
+type IndexWeatherHintVoidAction = () => void;
+type IndexWeatherHintVisibleAction = (visible: boolean) => void;
+
 export function resolveIndexWeatherHintLine(lines: string[], index: number): string {
   return lines[index] ?? '';
 }
@@ -35,10 +38,10 @@ export struct IndexWeatherHintBar {
     cardBgSoft: '#F5F7FA'
   };
 
-  onToggleHint: () => void = () => {};
-  onToggleScore: () => void = () => {};
-  onHintPopupVisibleChange: (visible: boolean) => void = (_visible: boolean) => {};
-  onScorePopupVisibleChange: (visible: boolean) => void = (_visible: boolean) => {};
+  onToggleHint: IndexWeatherHintVoidAction = () => {};
+  onToggleScore: IndexWeatherHintVoidAction = () => {};
+  onHintPopupVisibleChange: IndexWeatherHintVisibleAction = (_visible: boolean) => {};
+  onScorePopupVisibleChange: IndexWeatherHintVisibleAction = (_visible: boolean) => {};
 
   private resolveHintLine(index: number): string {
     return resolveIndexWeatherHintLine(this.hintLines, index);

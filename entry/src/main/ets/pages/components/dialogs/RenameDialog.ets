@@ -1,5 +1,7 @@
 ﻿// 文件路径: ets/pages/components/RenameDialog.ets
 
+type RenameDialogConfirmAction = (newName: string) => void;
+
 export function normalizeRenameDialogName(input: string): string {
   return (input || '').trim();
 }
@@ -25,7 +27,7 @@ export function confirmRenameDialog(
 export struct RenameDialog {
   controller: CustomDialogController;
   initName: string = '';
-  onConfirm: (newName: string) => void = () => {};
+  onConfirm: RenameDialogConfirmAction = () => {};
 
   @State name: string = '';
 

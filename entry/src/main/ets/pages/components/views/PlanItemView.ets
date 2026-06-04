@@ -1,6 +1,8 @@
 ﻿import { TravelPlanItem } from '../../../model/interface/IStandardEvent';
 
 
+type PlanItemNumberAction = (value: number) => void;
+
 export function shouldPlanItemShowCrossDayLabel(computedStartTime: string): boolean {
   return (computedStartTime || '').indexOf('-') >= 0;
 }
@@ -45,11 +47,11 @@ export struct PlanItemView {
   @Prop index: number;
 
   // 回调函数
-  onDurationChange: (value: number) => void = () => {};
-  onCommuteChange: (value: number) => void = () => {};
+  onDurationChange: PlanItemNumberAction = () => {};
+  onCommuteChange: PlanItemNumberAction = () => {};
 
   // [新增] 修复冲突回调
-  onFixConflict: (shiftMinutes: number) => void = () => {};
+  onFixConflict: PlanItemNumberAction = () => {};
 
   private getDisplayState(): PlanItemDisplayState {
     return resolvePlanItemDisplayState(this.item);

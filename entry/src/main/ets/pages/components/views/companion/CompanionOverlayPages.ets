@@ -29,6 +29,25 @@ export function shouldShowCompanionFilterOverlay(showFilterPage: boolean): boole
   return showFilterPage;
 }
 
+type OverlayVoidCallback = () => void;
+type OverlayHistoryFilterCallback = (filter: HistoryTimelineFilter) => void;
+type OverlayHistoryItemCallback = (item: HistoryTimelineItem) => void;
+type OverlaySearchCallback = (keyword: string) => void;
+type OverlaySearchResultCallback = (item: EventEntity) => void;
+type OverlayFilterSelectCallback = (state: CompanionDisplayFilterState) => void;
+
+function noopOverlayVoid(): void {}
+
+function noopOverlayHistoryFilter(_filter: HistoryTimelineFilter): void {}
+
+function noopOverlayHistoryItem(_item: HistoryTimelineItem): void {}
+
+function noopOverlaySearch(_keyword: string): void {}
+
+function noopOverlaySearchResult(_item: EventEntity): void {}
+
+function noopOverlayFilterSelect(_state: CompanionDisplayFilterState): void {}
+
 @Component
 export struct CompanionOverlayPages {
   @Prop showHistoryPage: boolean = false;
@@ -50,17 +69,17 @@ export struct CompanionOverlayPages {
   @Prop safeTopInset: number = 0;
   @Prop safeBottomInset: number = 0;
 
-  onHistoryClose: () => void = () => {};
-  onHistoryBack: () => void = () => {};
-  onHistoryFilterChange: (filter: HistoryTimelineFilter) => void = (_filter: HistoryTimelineFilter) => {};
-  onHistoryItemClick: (item: HistoryTimelineItem) => void = (_item: HistoryTimelineItem) => {};
+  onHistoryClose: OverlayVoidCallback = noopOverlayVoid;
+  onHistoryBack: OverlayVoidCallback = noopOverlayVoid;
+  onHistoryFilterChange: OverlayHistoryFilterCallback = noopOverlayHistoryFilter;
+  onHistoryItemClick: OverlayHistoryItemCallback = noopOverlayHistoryItem;
 
-  onSearchClose: () => void = () => {};
-  onSearch: (keyword: string) => void = (_keyword: string) => {};
-  onSearchResultClick: (item: EventEntity) => void = (_item: EventEntity) => {};
+  onSearchClose: OverlayVoidCallback = noopOverlayVoid;
+  onSearch: OverlaySearchCallback = noopOverlaySearch;
+  onSearchResultClick: OverlaySearchResultCallback = noopOverlaySearchResult;
 
-  onFilterClose: () => void = () => {};
-  onFilterSelect: (state: CompanionDisplayFilterState) => void = (_state: CompanionDisplayFilterState) => {};
+  onFilterClose: OverlayVoidCallback = noopOverlayVoid;
+  onFilterSelect: OverlayFilterSelectCallback = noopOverlayFilterSelect;
 
   build() {
     Column() {
@@ -75,18 +94,10 @@ export struct CompanionOverlayPages {
         selectedHistoryTimelineItem: this.selectedHistoryTimelineItem,
         safeTopInset: this.safeTopInset,
         safeBottomInset: this.safeBottomInset,
-        onClose: () => {
-          this.onHistoryClose();
-        },
-        onBack: () => {
-          this.onHistoryBack();
-        },
-        onFilterChange: (filter: HistoryTimelineFilter) => {
-          this.onHistoryFilterChange(filter);
-        },
-        onItemClick: (item: HistoryTimelineItem) => {
-          this.onHistoryItemClick(item);
-        }
+        onClose: this.onHistoryClose,
+        onBack: this.onHistoryBack,
+        onFilterChange: this.onHistoryFilterChange,
+        onItemClick: this.onHistoryItemClick
       });
 
       CompanionSearchPage({
@@ -95,17 +106,11 @@ export struct CompanionOverlayPages {
         searchResults: this.searchResults,
         safeTopInset: this.safeTopInset,
         safeBottomInset: this.safeBottomInset,
-        onClose: () => {
-          this.onSearchClose();
-        },
-        onSearch: (keyword: string) => {
-          this.onSearch(keyword);
-        },
-        onResultClick: (item: EventEntity) => {
-          this.onSearchResultClick(item);
-        },
-        getEventStateLabel: (item: EventEntity) => getCompanionEventStateLabel(item),
-        getPlannedRange: (item: EventEntity) => getCompanionPlannedRange(item)
+        onClose: this.onSearchClose,
+        onSearch: this.onSearch,
+        onResultClick: this.onSearchResultClick,
+        getEventStateLabel: getCompanionEventStateLabel,
+        getPlannedRange: getCompanionPlannedRange
       });
 
       CompanionFilterPage({
@@ -113,14 +118,10 @@ export struct CompanionOverlayPages {
         companionFilterState: this.companionFilterState,
         safeTopInset: this.safeTopInset,
         safeBottomInset: this.safeBottomInset,
-        onClose: () => {
-          this.onFilterClose();
-        },
-        onFilterSelect: (state: CompanionDisplayFilterState) => {
-          this.onFilterSelect(state);
-        },
-        getFilterOptions: () => getCompanionFilterOptions(),
-        getFilterLabel: (state: CompanionDisplayFilterState) => getCompanionFilterLabel(state)
+        onClose: this.onFilterClose,
+        onFilterSelect: this.onFilterSelect,
+        getFilterOptions: getCompanionFilterOptions,
+        getFilterLabel: getCompanionFilterLabel
       });
     }
     .width('100%')

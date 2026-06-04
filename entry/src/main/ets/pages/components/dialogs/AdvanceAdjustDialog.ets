@@ -5,6 +5,9 @@
   TimelineViewModel
 } from '../../../viewmodel/TimelineViewModel';
 
+type AdvanceAdjustConfirmAction = (selectedIds: number[], targetStartTime: string) => void;
+type AdvanceAdjustVoidAction = () => void;
+
 export function advanceAdjustTimeToMinutes(time: string): number {
   const parts = time.split(':');
   if (parts.length < 2) {
@@ -82,8 +85,8 @@ export struct AdvanceAdjustDialog {
   targetIndex: number = -1;
   targetName: string = '';
   forcedGapMinutes: number = 0;
-  onConfirm: (selectedIds: number[], targetStartTime: string) => void = () => {};
-  onCancel: () => void = () => {};
+  onConfirm: AdvanceAdjustConfirmAction = () => {};
+  onCancel: AdvanceAdjustVoidAction = () => {};
 
   @State context: AdvanceAdjustContext | null = null;
   @State selectedIds: Set<number> = new Set();

@@ -2,6 +2,8 @@ import { ThemeCenter } from '../../../common/utils/ThemeCenter';
 import { DEFAULT_WEATHER_USER_PREFERENCE, WeatherUserPreference } from '../../../domain/services/WeatherModels';
 
 export type PlanSettingsAction = 'rename' | 'reschedule' | 'share' | 'weather_preference';
+type PlanSettingsVoidAction = () => void;
+type PlanSettingsWeatherPreferenceAction = (preference: WeatherUserPreference) => void;
 
 export function getPlanSettingsActions(): PlanSettingsAction[] {
   return ['rename', 'reschedule', 'share', 'weather_preference'];
@@ -20,10 +22,10 @@ export struct PlanSettingsDialog {
   controller: CustomDialogController;
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
 
-  onRename: () => void = () => {};
-  onReschedule: () => void = () => {};
-  onShare: () => void = () => {};
-  onWeatherPreferenceChange: (preference: WeatherUserPreference) => void = (_preference: WeatherUserPreference) => {};
+  onRename: PlanSettingsVoidAction = () => {};
+  onReschedule: PlanSettingsVoidAction = () => {};
+  onShare: PlanSettingsVoidAction = () => {};
+  onWeatherPreferenceChange: PlanSettingsWeatherPreferenceAction = (_preference: WeatherUserPreference) => {};
   weatherUserPreference: WeatherUserPreference = {
     heatSensitivity: DEFAULT_WEATHER_USER_PREFERENCE.heatSensitivity,
     rainSensitivity: DEFAULT_WEATHER_USER_PREFERENCE.rainSensitivity,

@@ -7,6 +7,13 @@ import {
   TimelineViewModel
 } from '../../../viewmodel/TimelineViewModel';
 
+type ConflictCompressConfirmAction = (selectedIds: number[], mode: CompressionMode) => void;
+type ConflictCompressVoidAction = () => void;
+
+function noopConflictCompressConfirm(_selectedIds: number[], _mode: CompressionMode): void {}
+
+function noopConflictCompressVoid(): void {}
+
 export function canConflictCompressConfirm(selectedCount: number): boolean {
   return selectedCount > 0;
 }
@@ -49,8 +56,8 @@ export struct ConflictCompressDialog {
   initialSelectedIds: number[] = [];
   forcedGapMinutes: number = 0;
 
-  onConfirm: (selectedIds: number[], mode: CompressionMode) => void = () => {};
-  onCancel: () => void = () => {};
+  onConfirm: ConflictCompressConfirmAction = noopConflictCompressConfirm;
+  onCancel: ConflictCompressVoidAction = noopConflictCompressVoid;
 
   @State mode: CompressionMode = 'RATIO';
   @State context: CompressionSelectionContext | null = null;

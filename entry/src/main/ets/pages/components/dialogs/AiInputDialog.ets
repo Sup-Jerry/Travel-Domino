@@ -35,12 +35,26 @@ export function shouldKeepCurrentModeOnRegenerate(
   return currentStrategyMode === -1 && !strategyTouched && !useCustomStrategy;
 }
 
+type AiInputConfirmAction = (text: string, strategy: number, customStrategy?: ComposableStrategy) => void;
+type AiInputRegenerateAction = (
+  strategy: number,
+  customStrategy?: ComposableStrategy,
+  keepCurrentMode?: boolean
+) => void;
+
+function noopAiInputConfirm(_text: string, _strategy: number, _customStrategy?: ComposableStrategy): void {}
+
+function noopAiInputRegenerate(
+  _strategy: number,
+  _customStrategy?: ComposableStrategy,
+  _keepCurrentMode?: boolean
+): void {}
+
 @CustomDialog
 export struct AiInputDialog {
   controller: CustomDialogController
-  onConfirm: (text: string, strategy: number, customStrategy?: ComposableStrategy) => void = (text: string, strategy: number, customStrategy?: ComposableStrategy) => {}
-  onRegenerate: (strategy: number, customStrategy?: ComposableStrategy, keepCurrentMode?: boolean) => void =
-    (_strategy: number, _customStrategy?: ComposableStrategy, _keepCurrentMode?: boolean) => {}
+  onConfirm: AiInputConfirmAction = noopAiInputConfirm
+  onRegenerate: AiInputRegenerateAction = noopAiInputRegenerate
   hasAiHistory: boolean = false
   currentStrategyMode: number = 0
   initialPrompt: string = ''

@@ -11,18 +11,27 @@ import { AvatarUploadPort } from './AvatarUploadPort';
 const TAG = 'AvatarUploadApi';
 const LOG_DOMAIN = 0x0000;
 
+export type AvatarAccessTokenGetter = () => string;
+export type AvatarDataUrlEncoder = (fileUriText: string, mimeType: string) => string;
+export type AvatarUpdateGateway = (
+  accessToken: string,
+  imageDataUrl: string,
+  mimeType: string
+) => Promise<AuthApiResponse<UpdateAvatarResult>>;
+export type AvatarNowGetter = () => number;
+
 export interface AvatarUploadApiOptions {
-  getAccessToken?: () => string;
-  encodeFileToDataUrl?: (fileUriText: string, mimeType: string) => string;
-  updateAvatar?: (accessToken: string, imageDataUrl: string, mimeType: string) => Promise<AuthApiResponse<UpdateAvatarResult>>;
-  now?: () => number;
+  getAccessToken?: AvatarAccessTokenGetter;
+  encodeFileToDataUrl?: AvatarDataUrlEncoder;
+  updateAvatar?: AvatarUpdateGateway;
+  now?: AvatarNowGetter;
 }
 
 export class AvatarUploadApi implements AvatarUploadPort {
-  private readonly getAccessToken: () => string;
-  private readonly encodeFileToDataUrl: (fileUriText: string, mimeType: string) => string;
-  private readonly updateAvatar: (accessToken: string, imageDataUrl: string, mimeType: string) => Promise<AuthApiResponse<UpdateAvatarResult>>;
-  private readonly now: () => number;
+  private readonly getAccessToken: AvatarAccessTokenGetter;
+  private readonly encodeFileToDataUrl: AvatarDataUrlEncoder;
+  private readonly updateAvatar: AvatarUpdateGateway;
+  private readonly now: AvatarNowGetter;
 
   constructor(options?: AvatarUploadApiOptions) {
     this.getAccessToken = options?.getAccessToken || (() => AuthSessionStore.getAccessToken());

@@ -11,6 +11,18 @@ import { IndexUnsavedActionTheme } from './IndexUnsavedActionBar';
 import { IndexToolbarTheme } from './IndexToolbar';
 import { IndexWeatherHintTheme } from './IndexWeatherHintBar';
 
+export type IndexPageVoidCallback = () => void;
+export type IndexPageVisibleChangeCallback = (visible: boolean) => void;
+export type IndexPageMoveToScheduleCallback = (item: TravelPlanItem) => void;
+export type IndexPageDayCollapsedCallback = (dayOffset: number) => boolean;
+export type IndexPageDayToggleCallback = (dayOffset: number) => void;
+export type IndexPageEventCallback = (item: EventEntity) => void;
+export type IndexPageConflictActionCallback = (
+  item: EventEntity,
+  strategy: 'delay' | 'compress' | 'advance' | 'smart',
+  gapMinutes: number
+) => void;
+
 export interface IndexPageTopAreaProps {
   planTitle: string;
   strategyMode: number;
@@ -31,17 +43,17 @@ export interface IndexPageTopAreaProps {
   dividerColor: string;
   toolbarTheme: IndexToolbarTheme;
   weatherTheme: IndexWeatherHintTheme;
-  onBack: () => void;
-  onOpenSettings: () => void;
-  onEnterCompanion: () => void;
-  onRefreshWeather: () => void;
-  onToggleHint: () => void;
-  onToggleScore: () => void;
-  onHintPopupVisibleChange: (visible: boolean) => void;
-  onScorePopupVisibleChange: (visible: boolean) => void;
-  onToggleBacklogExpand: () => void;
-  onMoveToSchedule: (item: TravelPlanItem) => void;
-  onMoveAllToSchedule: () => void;
+  onBack: IndexPageVoidCallback;
+  onOpenSettings: IndexPageVoidCallback;
+  onEnterCompanion: IndexPageVoidCallback;
+  onRefreshWeather: IndexPageVoidCallback;
+  onToggleHint: IndexPageVoidCallback;
+  onToggleScore: IndexPageVoidCallback;
+  onHintPopupVisibleChange: IndexPageVisibleChangeCallback;
+  onScorePopupVisibleChange: IndexPageVisibleChangeCallback;
+  onToggleBacklogExpand: IndexPageVoidCallback;
+  onMoveToSchedule: IndexPageMoveToScheduleCallback;
+  onMoveAllToSchedule: IndexPageVoidCallback;
 }
 
 export interface IndexPageScheduleAreaProps {
@@ -56,21 +68,21 @@ export interface IndexPageScheduleAreaProps {
   hasUnsavedChanges: boolean;
   timelineTheme: IndexTimelineTheme;
   unsavedTheme: IndexUnsavedActionTheme;
-  onIsDayCollapsed: (dayOffset: number) => boolean;
-  onToggleDay: (dayOffset: number) => void;
-  onRefresh: () => void;
-  onOpenEditDialog: (item: EventEntity) => void;
-  onOpenTimeEditDialog: (item: EventEntity) => void;
-  onGapFound: (item: EventEntity) => void;
-  onResolveConflictAction: (item: EventEntity, strategy: 'delay' | 'compress' | 'advance' | 'smart', gapMinutes: number) => void;
-  onConfirmMoveToBacklog: (item: EventEntity) => void;
-  onConfirmDeleteEvent: (item: EventEntity) => void;
-  onOpenGapOptimize: () => void;
-  onFilter: () => void;
-  onAi: () => void;
-  onAdd: () => void;
-  onUndo: () => void;
-  onSave: () => void;
+  onIsDayCollapsed: IndexPageDayCollapsedCallback;
+  onToggleDay: IndexPageDayToggleCallback;
+  onRefresh: IndexPageVoidCallback;
+  onOpenEditDialog: IndexPageEventCallback;
+  onOpenTimeEditDialog: IndexPageEventCallback;
+  onGapFound: IndexPageEventCallback;
+  onResolveConflictAction: IndexPageConflictActionCallback;
+  onConfirmMoveToBacklog: IndexPageEventCallback;
+  onConfirmDeleteEvent: IndexPageEventCallback;
+  onOpenGapOptimize: IndexPageVoidCallback;
+  onFilter: IndexPageVoidCallback;
+  onAi: IndexPageVoidCallback;
+  onAdd: IndexPageVoidCallback;
+  onUndo: IndexPageVoidCallback;
+  onSave: IndexPageVoidCallback;
 }
 
 export interface IndexPageCompanionOverlayProps {
@@ -150,33 +162,33 @@ export struct IndexPageLayout {
   };
   @Prop companionOverlayZIndex: number = 10;
 
-  onBack: () => void = () => {};
-  onOpenSettings: () => void = () => {};
-  onEnterCompanion: () => void = () => {};
-  onRefreshWeather: () => void = () => {};
-  onToggleHint: () => void = () => {};
-  onToggleScore: () => void = () => {};
-  onHintPopupVisibleChange: (visible: boolean) => void = (_visible: boolean) => {};
-  onScorePopupVisibleChange: (visible: boolean) => void = (_visible: boolean) => {};
-  onToggleBacklogExpand: () => void = () => {};
-  onMoveToSchedule: (item: TravelPlanItem) => void = (_item: TravelPlanItem) => {};
-  onMoveAllToSchedule: () => void = () => {};
-  onIsDayCollapsed: (dayOffset: number) => boolean = (_dayOffset: number) => false;
-  onToggleDay: (dayOffset: number) => void = (_dayOffset: number) => {};
-  onScheduleRefresh: () => void = () => {};
-  onOpenEditDialog: (item: EventEntity) => void = (_item: EventEntity) => {};
-  onOpenTimeEditDialog: (item: EventEntity) => void = (_item: EventEntity) => {};
-  onGapFound: (item: EventEntity) => void = (_item: EventEntity) => {};
-  onResolveConflictAction: (item: EventEntity, strategy: 'delay' | 'compress' | 'advance' | 'smart', gapMinutes: number) => void =
+  onBack: IndexPageVoidCallback = () => {};
+  onOpenSettings: IndexPageVoidCallback = () => {};
+  onEnterCompanion: IndexPageVoidCallback = () => {};
+  onRefreshWeather: IndexPageVoidCallback = () => {};
+  onToggleHint: IndexPageVoidCallback = () => {};
+  onToggleScore: IndexPageVoidCallback = () => {};
+  onHintPopupVisibleChange: IndexPageVisibleChangeCallback = (_visible: boolean) => {};
+  onScorePopupVisibleChange: IndexPageVisibleChangeCallback = (_visible: boolean) => {};
+  onToggleBacklogExpand: IndexPageVoidCallback = () => {};
+  onMoveToSchedule: IndexPageMoveToScheduleCallback = (_item: TravelPlanItem) => {};
+  onMoveAllToSchedule: IndexPageVoidCallback = () => {};
+  onIsDayCollapsed: IndexPageDayCollapsedCallback = (_dayOffset: number) => false;
+  onToggleDay: IndexPageDayToggleCallback = (_dayOffset: number) => {};
+  onScheduleRefresh: IndexPageVoidCallback = () => {};
+  onOpenEditDialog: IndexPageEventCallback = (_item: EventEntity) => {};
+  onOpenTimeEditDialog: IndexPageEventCallback = (_item: EventEntity) => {};
+  onGapFound: IndexPageEventCallback = (_item: EventEntity) => {};
+  onResolveConflictAction: IndexPageConflictActionCallback =
     (_item: EventEntity, _strategy: 'delay' | 'compress' | 'advance' | 'smart', _gapMinutes: number) => {};
-  onConfirmMoveToBacklog: (item: EventEntity) => void = (_item: EventEntity) => {};
-  onConfirmDeleteEvent: (item: EventEntity) => void = (_item: EventEntity) => {};
-  onOpenGapOptimize: () => void = () => {};
-  onFilter: () => void = () => {};
-  onAi: () => void = () => {};
-  onAdd: () => void = () => {};
-  onUndo: () => void = () => {};
-  onSave: () => void = () => {};
+  onConfirmMoveToBacklog: IndexPageEventCallback = (_item: EventEntity) => {};
+  onConfirmDeleteEvent: IndexPageEventCallback = (_item: EventEntity) => {};
+  onOpenGapOptimize: IndexPageVoidCallback = () => {};
+  onFilter: IndexPageVoidCallback = () => {};
+  onAi: IndexPageVoidCallback = () => {};
+  onAdd: IndexPageVoidCallback = () => {};
+  onUndo: IndexPageVoidCallback = () => {};
+  onSave: IndexPageVoidCallback = () => {};
 
   buildTopAreaProps(): IndexPageTopAreaProps {
     return {

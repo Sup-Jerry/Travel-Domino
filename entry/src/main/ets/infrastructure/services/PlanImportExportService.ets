@@ -13,13 +13,20 @@ interface TransactionStoreLike {
   rollBack(): void;
 }
 
+type TransactionStoreGetter = () => TransactionStoreLike | null;
+type PlanCreator = (title: string, startDate: number) => Promise<number>;
+type AutoAmapRouteUpdater = (id: number, enabled: boolean) => Promise<void>;
+type PlanStatusUpdater = (id: number, status: number) => Promise<void>;
+type EventInserter = (planId: number, item: TravelPlanItem) => Promise<number>;
+type PlanHardDeleter = (id: number) => Promise<void>;
+
 interface PlanJsonTransferDeps {
-  getStore: () => TransactionStoreLike | null;
-  createPlan: (title: string, startDate: number) => Promise<number>;
-  updateAutoAmapRoute: (id: number, enabled: boolean) => Promise<void>;
-  updatePlanStatus: (id: number, status: number) => Promise<void>;
-  insertEvent: (planId: number, item: TravelPlanItem) => Promise<number>;
-  hardDeletePlan: (id: number) => Promise<void>;
+  getStore: TransactionStoreGetter;
+  createPlan: PlanCreator;
+  updateAutoAmapRoute: AutoAmapRouteUpdater;
+  updatePlanStatus: PlanStatusUpdater;
+  insertEvent: EventInserter;
+  hardDeletePlan: PlanHardDeleter;
 }
 
 export class PlanJsonImportCancelToken {

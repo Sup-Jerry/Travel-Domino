@@ -28,6 +28,36 @@ export function getImmersiveNextStationText(name: string, forecastStart: string)
   return `下一站：${name}（${forecastStart}）`;
 }
 
+type ImmersiveTextGetter = () => string;
+type ImmersiveEventTextGetter = (event: EventEntity) => string;
+type ImmersiveStateGetter = () => boolean;
+type ImmersiveEventStateGetter = (event: EventEntity) => boolean;
+type ImmersiveEventAsyncCallback = (event: EventEntity) => Promise<void> | void;
+type ImmersiveNavigateCallback = (event?: EventEntity) => void;
+type ImmersiveSwipeCallback = (phase: ImmersiveSwipePhase, event?: GestureEvent) => void;
+
+function defaultImmersiveText(): string {
+  return '--';
+}
+
+function defaultImmersiveEventText(_event: EventEntity): string {
+  return '--';
+}
+
+function defaultImmersiveState(): boolean {
+  return false;
+}
+
+function defaultImmersiveEventState(_event: EventEntity): boolean {
+  return false;
+}
+
+function noopImmersiveEvent(_event: EventEntity): void {}
+
+function noopImmersiveNavigate(_event?: EventEntity): void {}
+
+function noopImmersiveSwipe(_phase: ImmersiveSwipePhase, _event?: GestureEvent): void {}
+
 @Component
 export struct CompanionImmersiveView {
   @Prop context: CompanionContext;
@@ -37,19 +67,18 @@ export struct CompanionImmersiveView {
   @Prop safeBottomInset: number = 0;
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
 
-  getRuntimeLabel: () => string = () => '--';
-  getPlannedRange: (event: EventEntity) => string = (_event: EventEntity) => '--';
-  getForecastStartText: (event: EventEntity) => string = (_event: EventEntity) => '--';
-  isCurrentEventPending: () => boolean = () => false;
-  isCurrentEventActive: () => boolean = () => false;
-  canStartFocused: (event: EventEntity) => boolean = (_event: EventEntity) => false;
-  canEndFocused: (event: EventEntity) => boolean = (_event: EventEntity) => false;
+  getRuntimeLabel: ImmersiveTextGetter = defaultImmersiveText;
+  getPlannedRange: ImmersiveEventTextGetter = defaultImmersiveEventText;
+  getForecastStartText: ImmersiveEventTextGetter = defaultImmersiveEventText;
+  isCurrentEventPending: ImmersiveStateGetter = defaultImmersiveState;
+  isCurrentEventActive: ImmersiveStateGetter = defaultImmersiveState;
+  canStartFocused: ImmersiveEventStateGetter = defaultImmersiveEventState;
+  canEndFocused: ImmersiveEventStateGetter = defaultImmersiveEventState;
 
-  onStartEvent: (event: EventEntity) => Promise<void> | void = (_event: EventEntity) => {};
-  onEndEvent: (event: EventEntity) => Promise<void> | void = (_event: EventEntity) => {};
-  onNavigate: (event?: EventEntity) => void = (_event?: EventEntity) => {};
-  onSwipeGesture: (phase: ImmersiveSwipePhase, event?: GestureEvent) => void =
-    (_phase: ImmersiveSwipePhase, _event?: GestureEvent) => {};
+  onStartEvent: ImmersiveEventAsyncCallback = noopImmersiveEvent;
+  onEndEvent: ImmersiveEventAsyncCallback = noopImmersiveEvent;
+  onNavigate: ImmersiveNavigateCallback = noopImmersiveNavigate;
+  onSwipeGesture: ImmersiveSwipeCallback = noopImmersiveSwipe;
 
   private getThemePalette() {
     return ThemeCenter.getPalette(this.effectiveTheme);

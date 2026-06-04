@@ -2,6 +2,9 @@ import { LoginWithHuaweiIDButton, loginComponentManager } from '@kit.AccountKit'
 import { HuaweiCredential } from '../../../domain/auth/AuthTypes';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
+type HuaweiCredentialAction = (credential: HuaweiCredential) => void;
+type HuaweiErrorAction = (message: string) => void;
+
 export function resolveHuaweiLoginErrorCode(err: Object): number {
   return Number((err as Record<string, Object>)?.code || 0);
 }
@@ -23,8 +26,8 @@ export struct HuaweiAccountLoginButton {
   private static readonly LOG_DOMAIN: number = 0x0000;
   private static readonly LOG_TAG: string = 'HuaweiLoginButton';
   @Prop @Watch('onAgreementAcceptedChanged') agreementAccepted: boolean = false;
-  onCredential: (credential: HuaweiCredential) => void = () => {};
-  onError: (message: string) => void = () => {};
+  onCredential: HuaweiCredentialAction = () => {};
+  onError: HuaweiErrorAction = () => {};
   private controller: loginComponentManager.LoginWithHuaweiIDButtonController =
     new loginComponentManager.LoginWithHuaweiIDButtonController();
 

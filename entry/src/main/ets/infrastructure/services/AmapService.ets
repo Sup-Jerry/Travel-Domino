@@ -62,28 +62,37 @@ interface AmapDrivingRouteResponse {
   route?: AmapDrivingRouteNode;
 }
 
+type PoiListSizeGetter = () => number;
+type PoiItemGetter = (index: number) => PoiItem | undefined;
+type PoiItemVisitor = (value: PoiItem) => void;
+type PoiItemForEach = (callback: PoiItemVisitor) => void;
+type GenericSizeGetter = () => number;
+type GenericItemGetter<T> = (idx: number) => T | undefined;
+type LatLonPointGetter = () => LatLonPoint | undefined;
+type PoiTitleGetter = () => string | undefined;
+
 interface PoiItemListLike {
   length?: number;
-  size?: (() => number) | number;
-  get?: (index: number) => PoiItem | undefined;
-  forEach?: (callback: (value: PoiItem) => void) => void;
+  size?: PoiListSizeGetter | number;
+  get?: PoiItemGetter;
+  forEach?: PoiItemForEach;
 }
 
 interface GenericListLike {
   length?: number;
-  size?: (() => number) | number;
+  size?: GenericSizeGetter | number;
 }
 
 interface GenericListGetter<T> {
-  get?: (idx: number) => T | undefined;
+  get?: GenericItemGetter<T>;
 }
 
 interface LatLonPointCarrier {
-  getLatLonPoint: () => LatLonPoint | undefined;
+  getLatLonPoint: LatLonPointGetter;
 }
 
 interface PoiTitleCarrier {
-  getTitle: () => string | undefined;
+  getTitle: PoiTitleGetter;
 }
 
 interface PoiSearchCacheEntry {

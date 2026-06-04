@@ -5,6 +5,18 @@ import { IndexBottomBar } from './IndexBottomBar';
 import { IndexTimelineTheme, IndexTimelineView } from './IndexTimelineView';
 import { IndexUnsavedActionBar, IndexUnsavedActionTheme } from './IndexUnsavedActionBar';
 
+export type IndexScheduleVoidCallback = () => void;
+export type IndexScheduleDayCollapsedCallback = (dayOffset: number) => boolean;
+export type IndexScheduleDayToggleCallback = (dayOffset: number) => void;
+export type IndexScheduleEventCallback = (item: EventEntity) => void;
+export type IndexScheduleTravelModeCallback = (item: EventEntity, mode: number) => void;
+export type IndexScheduleMinutesCallback = (item: EventEntity, minutes: number) => void;
+export type IndexScheduleConflictActionCallback = (
+  item: EventEntity,
+  strategy: ConflictActionStrategy,
+  gapMinutes: number
+) => void;
+
 export interface IndexScheduleTimelineViewProps {
   groupedEvents: DateGroup[];
   allEvents: EventEntity[];
@@ -14,26 +26,26 @@ export interface IndexScheduleTimelineViewProps {
   isPageRefreshing: boolean;
   gapsCount: number;
   theme: IndexTimelineTheme;
-  onIsDayCollapsed: (dayOffset: number) => boolean;
-  onToggleDay: (dayOffset: number) => void;
-  onRefresh: () => void;
-  onMoveUp: (item: EventEntity) => void;
-  onMoveDown: (item: EventEntity) => void;
-  onMainContentClick: (item: EventEntity) => void;
-  onTimeClick: (item: EventEntity) => void;
-  onTravelModeChange: (item: EventEntity, mode: number) => void;
-  onManualTravelInput: (item: EventEntity, minutes: number) => void;
-  onCommuteChange: (item: EventEntity, minutes: number) => void;
-  onConflictAction: (item: EventEntity, strategy: ConflictActionStrategy, gapMinutes: number) => void;
-  onMoveToBacklog: (item: EventEntity) => void;
-  onDeleteEvent: (item: EventEntity) => void;
-  onOpenGapOptimize: () => void;
+  onIsDayCollapsed: IndexScheduleDayCollapsedCallback;
+  onToggleDay: IndexScheduleDayToggleCallback;
+  onRefresh: IndexScheduleVoidCallback;
+  onMoveUp: IndexScheduleEventCallback;
+  onMoveDown: IndexScheduleEventCallback;
+  onMainContentClick: IndexScheduleEventCallback;
+  onTimeClick: IndexScheduleEventCallback;
+  onTravelModeChange: IndexScheduleTravelModeCallback;
+  onManualTravelInput: IndexScheduleMinutesCallback;
+  onCommuteChange: IndexScheduleMinutesCallback;
+  onConflictAction: IndexScheduleConflictActionCallback;
+  onMoveToBacklog: IndexScheduleEventCallback;
+  onDeleteEvent: IndexScheduleEventCallback;
+  onOpenGapOptimize: IndexScheduleVoidCallback;
 }
 
 export interface IndexScheduleBottomBarProps {
-  onFilter: () => void;
-  onAi: () => void;
-  onAdd: () => void;
+  onFilter: IndexScheduleVoidCallback;
+  onAi: IndexScheduleVoidCallback;
+  onAdd: IndexScheduleVoidCallback;
   aiEnabled: boolean;
   addEnabled: boolean;
 }
@@ -42,8 +54,8 @@ export interface IndexScheduleUnsavedActionBarProps {
   isVisible: boolean;
   marginBottom: number;
   theme: IndexUnsavedActionTheme;
-  onUndo: () => void;
-  onSave: () => void;
+  onUndo: IndexScheduleVoidCallback;
+  onSave: IndexScheduleVoidCallback;
 }
 
 export function shouldShowIndexScheduleBottomBar(isCompanionMode: boolean): boolean {
@@ -88,22 +100,22 @@ export struct IndexScheduleArea {
     cardBg: '#FFFFFF'
   };
 
-  onIsDayCollapsed: (dayOffset: number) => boolean = (_dayOffset: number) => false;
-  onToggleDay: (dayOffset: number) => void = (_dayOffset: number) => {};
-  onRefresh: () => void = () => {};
-  onOpenEditDialog: (item: EventEntity) => void = (_item: EventEntity) => {};
-  onOpenTimeEditDialog: (item: EventEntity) => void = (_item: EventEntity) => {};
-  onGapFound: (item: EventEntity) => void = (_item: EventEntity) => {};
-  onResolveConflictAction: (item: EventEntity, strategy: ConflictActionStrategy, gapMinutes: number) => void =
+  onIsDayCollapsed: IndexScheduleDayCollapsedCallback = (_dayOffset: number) => false;
+  onToggleDay: IndexScheduleDayToggleCallback = (_dayOffset: number) => {};
+  onRefresh: IndexScheduleVoidCallback = () => {};
+  onOpenEditDialog: IndexScheduleEventCallback = (_item: EventEntity) => {};
+  onOpenTimeEditDialog: IndexScheduleEventCallback = (_item: EventEntity) => {};
+  onGapFound: IndexScheduleEventCallback = (_item: EventEntity) => {};
+  onResolveConflictAction: IndexScheduleConflictActionCallback =
     (_item: EventEntity, _strategy: ConflictActionStrategy, _gapMinutes: number) => {};
-  onConfirmMoveToBacklog: (item: EventEntity) => void = (_item: EventEntity) => {};
-  onConfirmDeleteEvent: (item: EventEntity) => void = (_item: EventEntity) => {};
-  onOpenGapOptimize: () => void = () => {};
-  onFilter: () => void = () => {};
-  onAi: () => void = () => {};
-  onAdd: () => void = () => {};
-  onUndo: () => void = () => {};
-  onSave: () => void = () => {};
+  onConfirmMoveToBacklog: IndexScheduleEventCallback = (_item: EventEntity) => {};
+  onConfirmDeleteEvent: IndexScheduleEventCallback = (_item: EventEntity) => {};
+  onOpenGapOptimize: IndexScheduleVoidCallback = () => {};
+  onFilter: IndexScheduleVoidCallback = () => {};
+  onAi: IndexScheduleVoidCallback = () => {};
+  onAdd: IndexScheduleVoidCallback = () => {};
+  onUndo: IndexScheduleVoidCallback = () => {};
+  onSave: IndexScheduleVoidCallback = () => {};
 
   buildTimelineViewProps(): IndexScheduleTimelineViewProps {
     return {

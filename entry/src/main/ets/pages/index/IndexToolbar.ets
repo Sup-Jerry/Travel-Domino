@@ -5,6 +5,8 @@ export interface IndexToolbarTheme {
   textPrimary: string;
 }
 
+type IndexToolbarVoidAction = () => void;
+
 export function resolveIndexToolbarDisplayTitle(planTitle: string, maxLength: number = 7): string {
   return planTitle.length > maxLength ? `${planTitle.substring(0, maxLength)}...` : planTitle;
 }
@@ -71,10 +73,10 @@ export struct IndexToolbar {
     textPrimary: '#1F1F1F'
   };
 
-  onBack: () => void = () => {};
-  onOpenSettings: () => void = () => {};
-  onEnterCompanion: () => void = () => {};
-  onRefreshWeather: () => void = () => {};
+  onBack: IndexToolbarVoidAction = () => {};
+  onOpenSettings: IndexToolbarVoidAction = () => {};
+  onEnterCompanion: IndexToolbarVoidAction = () => {};
+  onRefreshWeather: IndexToolbarVoidAction = () => {};
 
   build() {
     Row() {

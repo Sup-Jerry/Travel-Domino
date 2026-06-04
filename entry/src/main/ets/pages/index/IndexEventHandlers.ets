@@ -3,9 +3,16 @@ import { TimelineViewModel } from '../../viewmodel/TimelineViewModel';
 import { TimelineInteractionHelper } from '../../viewmodel/TimelineInteractionHelper';
 
 export type ConflictActionStrategy = 'delay' | 'compress' | 'advance' | 'smart';
+export type IndexEventVoidCallback = () => void;
+export type IndexEventEntityCallback = (event: EventEntity) => void;
+export type IndexEventConflictCallback = (
+  event: EventEntity,
+  action: ConflictActionStrategy,
+  gap: number
+) => void;
 
 export class IndexEventHandlers {
-  static handleFilter(onOpenFilter: () => void): void {
+  static handleFilter(onOpenFilter: IndexEventVoidCallback): void {
     onOpenFilter();
   }
 
@@ -24,7 +31,7 @@ export class IndexEventHandlers {
   static handleMainContentClick(
     isArchived: boolean,
     item: EventEntity,
-    onOpenEdit: (event: EventEntity) => void
+    onOpenEdit: IndexEventEntityCallback
   ): void {
     if (isArchived) {
       return;
@@ -35,7 +42,7 @@ export class IndexEventHandlers {
   static handleEditItem(
     isArchived: boolean,
     item: EventEntity,
-    onOpenEdit: (event: EventEntity) => void
+    onOpenEdit: IndexEventEntityCallback
   ): void {
     IndexEventHandlers.handleMainContentClick(isArchived, item, onOpenEdit);
   }
@@ -43,7 +50,7 @@ export class IndexEventHandlers {
   static handleTimeClick(
     isArchived: boolean,
     item: EventEntity,
-    onOpenTimeEdit: (event: EventEntity) => void
+    onOpenTimeEdit: IndexEventEntityCallback
   ): void {
     if (isArchived) {
       return;
@@ -51,15 +58,19 @@ export class IndexEventHandlers {
     onOpenTimeEdit(item);
   }
 
-  static handleDeleteItem(item: EventEntity, onDelete: (event: EventEntity) => void): void {
+  static handleDeleteItem(item: EventEntity, onDelete: IndexEventEntityCallback): void {
     onDelete(item);
   }
 
-  static handleMoveToBacklog(item: EventEntity, onMove: (event: EventEntity) => void): void {
+  static handleMoveToBacklog(item: EventEntity, onMove: IndexEventEntityCallback): void {
     onMove(item);
   }
 
-  static handleAddItem(isArchived: boolean, onBlocked: () => void, onOpenAdd: () => void): void {
+  static handleAddItem(
+    isArchived: boolean,
+    onBlocked: IndexEventVoidCallback,
+    onOpenAdd: IndexEventVoidCallback
+  ): void {
     IndexEventHandlers.handleBottomAdd(isArchived, onBlocked, onOpenAdd);
   }
 
@@ -75,7 +86,7 @@ export class IndexEventHandlers {
     vm: TimelineViewModel,
     item: EventEntity,
     minutes: number,
-    onGapFound: (event: EventEntity) => void
+    onGapFound: IndexEventEntityCallback
   ): void {
     TimelineInteractionHelper.handleCommuteChange(vm, item, minutes, onGapFound);
   }
@@ -85,7 +96,7 @@ export class IndexEventHandlers {
     item: EventEntity,
     strategy: ConflictActionStrategy,
     gapMinutes: number,
-    onHandleConflict: (event: EventEntity, action: ConflictActionStrategy, gap: number) => void
+    onHandleConflict: IndexEventConflictCallback
   ): void {
     if (isArchived) {
       return;
@@ -98,19 +109,23 @@ export class IndexEventHandlers {
     item: EventEntity,
     strategy: ConflictActionStrategy,
     gapMinutes: number,
-    onHandleConflict: (event: EventEntity, action: ConflictActionStrategy, gap: number) => void
+    onHandleConflict: IndexEventConflictCallback
   ): void {
     IndexEventHandlers.handleConflictAction(isArchived, item, strategy, gapMinutes, onHandleConflict);
   }
 
-  static handleAiSuggestion(isArchived: boolean, onBlocked: () => void, onOpenAi: () => void): void {
+  static handleAiSuggestion(
+    isArchived: boolean,
+    onBlocked: IndexEventVoidCallback,
+    onOpenAi: IndexEventVoidCallback
+  ): void {
     IndexEventHandlers.handleBottomAi(isArchived, onBlocked, onOpenAi);
   }
 
   static handleBottomAi(
     isArchived: boolean,
-    onBlocked: () => void,
-    onOpenAi: () => void
+    onBlocked: IndexEventVoidCallback,
+    onOpenAi: IndexEventVoidCallback
   ): void {
     if (isArchived) {
       onBlocked();
@@ -121,8 +136,8 @@ export class IndexEventHandlers {
 
   static handleBottomAdd(
     isArchived: boolean,
-    onBlocked: () => void,
-    onOpenAdd: () => void
+    onBlocked: IndexEventVoidCallback,
+    onOpenAdd: IndexEventVoidCallback
   ): void {
     if (isArchived) {
       onBlocked();

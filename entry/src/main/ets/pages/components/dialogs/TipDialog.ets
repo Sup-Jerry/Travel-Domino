@@ -1,6 +1,8 @@
 ﻿// 文件路径: ets/pages/components/TipDialog.ets
 import { PreferenceManager } from '../../../common/utils/PreferenceManager'; // 修改点：引入管理器
 
+type TipDialogVoidAction = () => void;
+
 export function toggleTipDialogChecked(current: boolean): boolean {
   return !current;
 }
@@ -30,7 +32,7 @@ export struct TipDialog {
   title: string = '';
   message: string = '';
   storageKey: string = ''; // 对应的持久化 Key
-  onConfirm: () => void = () => {};
+  onConfirm: TipDialogVoidAction = () => {};
 
   @State isChecked: boolean = false;
 
