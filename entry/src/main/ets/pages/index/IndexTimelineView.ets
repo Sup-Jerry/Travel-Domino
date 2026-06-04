@@ -1,4 +1,4 @@
-import { EventEntity } from '../../model/entity/EventEntity';
+﻿import { EventEntity } from '../../model/entity/EventEntity';
 import { EventItemView } from '../components/views/EventItemView';
 import { DateGroup } from '../../viewmodel/TimelineViewModel';
 import { ConflictActionStrategy } from './IndexEventHandlers';
@@ -46,16 +46,6 @@ export function resolveIndexTimelineBottomSpacerHeight(isCompanionMode: boolean)
 }
 
 type IndexTimelineVoidCallback = () => void;
-type IndexTimelineDayCollapsedCallback = (dayOffset: number) => boolean;
-type IndexTimelineDayToggleCallback = (dayOffset: number) => void;
-type IndexTimelineEventCallback = (item: EventEntity) => void;
-type IndexTimelineTravelModeCallback = (item: EventEntity, mode: number) => void;
-type IndexTimelineMinutesCallback = (item: EventEntity, minutes: number) => void;
-type IndexTimelineConflictCallback = (
-  item: EventEntity,
-  strategy: ConflictActionStrategy,
-  gapMinutes: number
-) => void;
 
 function defaultIndexTimelineDayCollapsed(_dayOffset: number): boolean {
   return false;
@@ -94,19 +84,19 @@ export struct IndexTimelineView {
     warning: '#C58A2A'
   };
 
-  onIsDayCollapsed: IndexTimelineDayCollapsedCallback = defaultIndexTimelineDayCollapsed;
-  onToggleDay: IndexTimelineDayToggleCallback = noopIndexTimelineDayToggle;
+  onIsDayCollapsed = defaultIndexTimelineDayCollapsed;
+  onToggleDay = noopIndexTimelineDayToggle;
   onRefresh: IndexTimelineVoidCallback = noopIndexTimelineVoid;
-  onMoveUp: IndexTimelineEventCallback = noopIndexTimelineEvent;
-  onMoveDown: IndexTimelineEventCallback = noopIndexTimelineEvent;
-  onMainContentClick: IndexTimelineEventCallback = noopIndexTimelineEvent;
-  onTimeClick: IndexTimelineEventCallback = noopIndexTimelineEvent;
-  onTravelModeChange: IndexTimelineTravelModeCallback = noopIndexTimelineTravelMode;
-  onManualTravelInput: IndexTimelineMinutesCallback = noopIndexTimelineMinutes;
-  onCommuteChange: IndexTimelineMinutesCallback = noopIndexTimelineMinutes;
-  onConflictAction: IndexTimelineConflictCallback = noopIndexTimelineConflict;
-  onMoveToBacklog: IndexTimelineEventCallback = noopIndexTimelineEvent;
-  onDeleteEvent: IndexTimelineEventCallback = noopIndexTimelineEvent;
+  onMoveUp = noopIndexTimelineEvent;
+  onMoveDown = noopIndexTimelineEvent;
+  onMainContentClick = noopIndexTimelineEvent;
+  onTimeClick = noopIndexTimelineEvent;
+  onTravelModeChange = noopIndexTimelineTravelMode;
+  onManualTravelInput = noopIndexTimelineMinutes;
+  onCommuteChange = noopIndexTimelineMinutes;
+  onConflictAction = noopIndexTimelineConflict;
+  onMoveToBacklog = noopIndexTimelineEvent;
+  onDeleteEvent = noopIndexTimelineEvent;
   onOpenGapOptimize: IndexTimelineVoidCallback = noopIndexTimelineVoid;
 
   private shouldRenderGroupItems(dayOffset: number): boolean {
@@ -253,7 +243,7 @@ export struct IndexTimelineView {
             .width('100%')
             .padding({ top: 12, bottom: 12, left: 16, right: 16 })
             .justifyContent(FlexAlign.Center)
-            .onClick(() => this.onOpenGapOptimize());
+            .onClick(this.onOpenGapOptimize);
           };
         });
 

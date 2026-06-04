@@ -20,9 +20,9 @@ export struct IndexBottomBar {
 
   build() {
     PlanBottomActionBar({
-      onFilter: () => this.onFilter(),
-      onAi: () => this.onAi(),
-      onAdd: () => this.onAdd(),
+      onFilter: this.onFilter,
+      onAi: this.onAi,
+      onAdd: this.onAdd,
       aiEnabled: shouldEnableIndexBottomBarAi(this.aiEnabled),
       addEnabled: shouldEnableIndexBottomBarAdd(this.addEnabled)
     });

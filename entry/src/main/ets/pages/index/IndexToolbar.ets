@@ -88,7 +88,7 @@ export struct IndexToolbar {
       .backgroundColor(Color.Transparent)
       .padding({ left: 10, right: 10, top: 6, bottom: 6 })
       .borderRadius(8)
-      .onClick(() => this.onBack())
+      .onClick(this.onBack)
 
       Column() {
         Text(resolveIndexToolbarDisplayTitle(this.planTitle))
@@ -128,7 +128,7 @@ export struct IndexToolbar {
       }
       .padding(8)
       .margin({ right: 4 })
-      .onClick(() => this.onEnterCompanion())
+      .onClick(this.onEnterCompanion)
 
       if (shouldShowIndexToolbarWeatherAction(this.isCompanionMode, this.weatherFeatureEnabled)) {
         Button(this.weatherLoading ? '⏳' : '🌤️')
@@ -138,7 +138,7 @@ export struct IndexToolbar {
           .backgroundColor(this.theme.cardBgSoft)
           .fontColor(this.theme.textPrimary)
           .enabled(!this.weatherLoading)
-          .onClick(() => this.onRefreshWeather())
+          .onClick(this.onRefreshWeather)
       }
     }
     .width('100%')

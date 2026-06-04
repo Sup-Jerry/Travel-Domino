@@ -1,10 +1,6 @@
 ﻿import { ThemeCenter } from '../../../../common/utils/ThemeCenter';
 
 export type CompanionFilterState = 'ALL' | 'PENDING' | 'ACTIVE' | 'COMPLETED' | 'SKIPPED';
-type CompanionFilterVoidAction = () => void;
-type CompanionFilterSelectAction = (item: CompanionFilterState) => void;
-type CompanionFilterOptionsResolver = () => CompanionFilterState[];
-type CompanionFilterLabelResolver = (state: CompanionFilterState) => string;
 
 function noopCompanionFilterVoid(): void {}
 
@@ -51,10 +47,10 @@ export struct CompanionFilterPage {
   @Prop safeBottomInset: number = 0;
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
 
-  onClose: CompanionFilterVoidAction = noopCompanionFilterVoid;
-  onFilterSelect: CompanionFilterSelectAction = noopCompanionFilterSelect;
-  getFilterOptions: CompanionFilterOptionsResolver = defaultCompanionFilterOptions;
-  getFilterLabel: CompanionFilterLabelResolver = defaultCompanionFilterLabel;
+  onClose = noopCompanionFilterVoid;
+  onFilterSelect = noopCompanionFilterSelect;
+  getFilterOptions = defaultCompanionFilterOptions;
+  getFilterLabel = defaultCompanionFilterLabel;
 
   private getThemePalette() {
     return ThemeCenter.getPalette(this.effectiveTheme);

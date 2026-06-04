@@ -27,9 +27,9 @@ export struct IndexBacklogSection {
       BacklogView({
         items: this.items,
         isExpanded: this.isExpanded,
-        onToggleExpand: () => this.onToggleExpand(),
-        onMoveToSchedule: (item: TravelPlanItem) => this.onMoveToSchedule(item),
-        onMoveAllToSchedule: () => this.onMoveAllToSchedule()
+        onToggleExpand: this.onToggleExpand,
+    onMoveToSchedule: this.onMoveToSchedule,
+        onMoveAllToSchedule: this.onMoveAllToSchedule
       })
         .constraintSize({ maxHeight: resolveIndexBacklogSectionMaxHeight() })
         .zIndex(1);

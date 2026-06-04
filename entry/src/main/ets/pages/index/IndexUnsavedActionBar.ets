@@ -48,7 +48,7 @@ export struct IndexUnsavedActionBar {
             .fontSize(14)
             .fontColor(this.theme.textSecondary)
             .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-            .onClick(() => this.onUndo());
+            .onClick(this.onUndo);
 
           Line()
             .width(1)
@@ -61,7 +61,7 @@ export struct IndexUnsavedActionBar {
             .fontColor(this.theme.primary)
             .fontWeight(FontWeight.Bold)
             .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-            .onClick(() => this.onSave());
+            .onClick(this.onSave);
         }
       }
       .width('90%')

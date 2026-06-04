@@ -1,12 +1,6 @@
 ﻿import { EventEntity } from '../../../../model/entity/EventEntity';
 import { ThemeCenter } from '../../../../common/utils/ThemeCenter';
 
-type CompanionTimelineEventColorResolver = (event: EventEntity) => ResourceColor;
-type CompanionTimelineEventStringResolver = (event: EventEntity) => string;
-type CompanionTimelineItemTap = (event: EventEntity, index: number) => void;
-type CompanionTimelineScrollIndex = (start: number, end: number, center: number) => void;
-type CompanionTimelineVoidCallback = () => void;
-
 function defaultTimelineDotColor(_event: EventEntity): ResourceColor {
   return '#999';
 }
@@ -59,16 +53,16 @@ export struct CompanionTimelineSection {
   timelineScroller: Scroller = new Scroller();
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
 
-  getStateDotColor: CompanionTimelineEventColorResolver = defaultTimelineDotColor;
-  getEventStateLabel: CompanionTimelineEventStringResolver = defaultTimelineText;
-  getStateTagTextColor: CompanionTimelineEventColorResolver = defaultTimelineTextColor;
-  getStateTagBackgroundColor: CompanionTimelineEventColorResolver = defaultTimelineBackgroundColor;
-  getStateBorderColor: CompanionTimelineEventColorResolver = defaultTimelineBorderColor;
-  getTimelineSupplement: CompanionTimelineEventStringResolver = defaultTimelineText;
+  getStateDotColor = defaultTimelineDotColor;
+  getEventStateLabel = defaultTimelineText;
+  getStateTagTextColor = defaultTimelineTextColor;
+  getStateTagBackgroundColor = defaultTimelineBackgroundColor;
+  getStateBorderColor = defaultTimelineBorderColor;
+  getTimelineSupplement = defaultTimelineText;
 
-  onItemTap: CompanionTimelineItemTap = noopTimelineItemTap;
-  onScrollIndex: CompanionTimelineScrollIndex = noopTimelineScrollIndex;
-  onScrollStop: CompanionTimelineVoidCallback = noopTimelineVoid;
+  onItemTap = noopTimelineItemTap;
+  onScrollIndex = noopTimelineScrollIndex;
+  onScrollStop = noopTimelineVoid;
 
   private getThemePalette() {
     return ThemeCenter.getPalette(this.effectiveTheme);

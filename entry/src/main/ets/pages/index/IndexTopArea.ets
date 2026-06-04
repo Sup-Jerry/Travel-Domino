@@ -104,10 +104,10 @@ export struct IndexTopArea {
       weatherFeatureEnabled: this.weatherFeatureEnabled,
       weatherLoading: this.weatherLoading,
       theme: this.toolbarTheme,
-      onBack: () => this.onBack(),
-      onOpenSettings: () => this.onOpenSettings(),
-      onEnterCompanion: () => this.onEnterCompanion(),
-      onRefreshWeather: () => this.onRefreshWeather()
+      onBack: this.onBack,
+      onOpenSettings: this.onOpenSettings,
+      onEnterCompanion: this.onEnterCompanion,
+      onRefreshWeather: this.onRefreshWeather
     };
   }
 
@@ -121,10 +121,10 @@ export struct IndexTopArea {
       hintLines: this.hintLines,
       scoreLines: this.scoreLines,
       theme: this.weatherTheme,
-      onToggleHint: () => this.onToggleHint(),
-      onToggleScore: () => this.onToggleScore(),
-      onHintPopupVisibleChange: (visible: boolean) => this.onHintPopupVisibleChange(visible),
-      onScorePopupVisibleChange: (visible: boolean) => this.onScorePopupVisibleChange(visible)
+      onToggleHint: this.onToggleHint,
+      onToggleScore: this.onToggleScore,
+      onHintPopupVisibleChange: this.onHintPopupVisibleChange,
+      onScorePopupVisibleChange: this.onScorePopupVisibleChange
     };
   }
 
@@ -133,9 +133,9 @@ export struct IndexTopArea {
       events: this.events,
       isExpanded: this.backlogExpanded,
       dividerColor: this.dividerColor,
-      onToggleExpand: () => this.onToggleBacklogExpand(),
-      onMoveToSchedule: (item: TravelPlanItem) => this.onMoveToSchedule(item),
-      onMoveAllToSchedule: () => this.onMoveAllToSchedule()
+      onToggleExpand: this.onToggleBacklogExpand,
+      onMoveToSchedule: this.onMoveToSchedule,
+      onMoveAllToSchedule: this.onMoveAllToSchedule
     };
   }
 
