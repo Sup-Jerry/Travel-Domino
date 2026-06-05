@@ -738,5 +738,179 @@ export default function phase2BatchDSTest() {
       expect(invalidCoordinate === null).assertTrue();
       expect(invalidDuration === null).assertTrue();
     });
+
+    it('normal: amap_get_geocode_should_parse_web_coordinate_when_sdk_context_missing', 0, async () => {
+      // Arrange
+      const hooks = new AmapWebHooksDS();
+      hooks.setValidateNoop();
+      hooks.setRequest(async (_ownerTag: string, _requestName: string, _url: string, _options: Object): Promise<Object> => {
+        const response: HttpResponseDS = {
+          responseCode: 200,
+          result: '{"status":"1","geocodes":[{"location":"121.470000,31.230000"}]}'
+        };
+        return response as Object;
+      });
+
+      // Act
+      let coordinate: GeoCoordinate | null = null;
+      try {
+        coordinate = await AmapService.getGeocode('Museum DS');
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(coordinate?.lat ?? 0).assertEqual(31.23);
+      expect(coordinate?.lng ?? 0).assertEqual(121.47);
+    });
+
+    it('invalid: amap_get_geocode_should_return_null_for_web_non_200_and_exception', 0, async () => {
+      // Arrange
+      const hooks = new AmapWebHooksDS();
+      let call = 0;
+      hooks.setValidateNoop();
+      hooks.setRequest(async (): Promise<Object> => {
+        call += 1;
+        if (call === 1) {
+          const response: HttpResponseDS = { responseCode: 503, result: '{}' };
+          return response as Object;
+        }
+        throw new Error('geocode_web_failed_ds');
+      });
+
+      // Act
+      let non200: GeoCoordinate | null = new GeoCoordinate(1, 1);
+      let failed: GeoCoordinate | null = new GeoCoordinate(1, 1);
+      try {
+        non200 = await AmapService.getGeocode('Bad DS');
+        failed = await AmapService.getGeocode('Throw DS');
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(non200 === null).assertTrue();
+      expect(failed === null).assertTrue();
+    });
+
+    it('boundary: amap_search_poi_should_query_nationwide_when_nearby_empty', 0, async () => {
+      // Arrange
+      const hooks = new AmapStaticHooksDS();
+      let sdkCalls = 0;
+      hooks.setSearchPoiBySdk(async (
+        _context: common.Context,
+        _keyword: string,
+        _centerLat: number,
+        _centerLng: number,
+        _limit: number,
+        nearbyOnly: boolean
+      ): Promise<PoiSearchItem[]> => {
+        sdkCalls += 1;
+        return nearbyOnly ? [] : [new PoiSearchItem('Nationwide DS', 'Road', 31.7, 121.8, 30)];
+      });
+      hooks.setSearchPoiWithWebFallback(async (): Promise<PoiSearchItem[]> => []);
+
+      // Act
+      let items: PoiSearchItem[] = [];
+      try {
+        items = await AmapService.searchPoi({} as common.Context, 'nationwide_ds', 31.7, 121.8, 3);
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(sdkCalls).assertEqual(2);
+      expect(items.length).assertEqual(1);
+      expect(items[0].name).assertEqual('Nationwide DS');
+    });
+
+    it('regression: amap_search_poi_should_detect_md5_error_and_cache_web_fallback', 0, async () => {
+      // Arrange
+      const hooks = new AmapStaticHooksDS();
+      let fallbackCalls = 0;
+      hooks.setSearchPoiBySdk(async (): Promise<PoiSearchItem[]> => {
+        throw new Error('MD5 auth failed ds');
+      });
+      hooks.setSearchPoiWithWebFallback(async (): Promise<PoiSearchItem[]> => {
+        fallbackCalls += 1;
+        return [new PoiSearchItem('MD5 Fallback DS', 'Road', 31.8, 121.9, 40)];
+      });
+
+      // Act
+      let first: PoiSearchItem[] = [];
+      let second: PoiSearchItem[] = [];
+      try {
+        first = await AmapService.searchPoi({} as common.Context, 'md5_cache_ds', 31.8, 121.9, 3);
+        second = await AmapService.searchPoi({} as common.Context, 'md5_cache_ds', 31.8, 121.9, 3);
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(fallbackCalls).assertEqual(1);
+      expect(first.length).assertEqual(1);
+      expect(second.length).assertEqual(1);
+      expect(second[0].name).assertEqual('MD5 Fallback DS');
+    });
+
+    it('invalid: amap_city_code_and_regeo_web_should_return_null_for_business_miss', 0, async () => {
+      // Arrange
+      const hooks = new AmapWebHooksDS();
+      let call = 0;
+      hooks.setValidateNoop();
+      hooks.setRequest(async (): Promise<Object> => {
+        call += 1;
+        const response: HttpResponseDS = {
+          responseCode: 200,
+          result: call === 1
+            ? '{"status":"0","info":"bad","infocode":"10009","regeocode":{"addressComponent":{"adcode":"","citycode":""}}}'
+            : '{"status":"0","info":"bad","infocode":"10009"}'
+        };
+        return response as Object;
+      });
+
+      // Act
+      let cityCode: string | null = 'stale';
+      let place: string | null = 'stale';
+      try {
+        cityCode = await AmapService.getCityCodeByCoordinate(31.21, 121.41);
+        place = await AmapService.getRegeo(31.22, 121.42);
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(cityCode === null).assertTrue();
+      expect(place === null).assertTrue();
+    });
+
+    it('invalid: amap_city_code_and_regeo_web_should_return_null_for_non_200_and_exception', 0, async () => {
+      // Arrange
+      const hooks = new AmapWebHooksDS();
+      let call = 0;
+      hooks.setValidateNoop();
+      hooks.setRequest(async (): Promise<Object> => {
+        call += 1;
+        if (call === 1) {
+          const response: HttpResponseDS = { responseCode: 500, result: '{}' };
+          return response as Object;
+        }
+        throw new Error('amap_web_failed_ds');
+      });
+
+      // Act
+      let cityCode: string | null = 'stale';
+      let place: string | null = 'stale';
+      try {
+        cityCode = await AmapService.getCityCodeByCoordinate(31.25, 121.45);
+        place = await AmapService.getRegeo(31.26, 121.46);
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(cityCode === null).assertTrue();
+      expect(place === null).assertTrue();
+    });
   });
 }

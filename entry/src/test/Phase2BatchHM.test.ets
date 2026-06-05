@@ -10,8 +10,12 @@ import {
 } from '../main/ets/domain/strategy/TravelStrategyDimensions';
 import {
   GeoPointInput,
+  PlanNodeWeatherBinding,
+  ReplanChangeSummaryItem,
+  SoftReplanPreview,
   WeatherCollabOptions,
   WeatherSchedulePolicy,
+  WeatherSnapshot,
   WeatherStageType,
   WeatherSuggestion,
   WeatherSuggestionTriggerType,
@@ -20,6 +24,14 @@ import {
 import { ITimelineWeatherHost, TimelineWeatherService } from '../main/ets/domain/timeline/services/TimelineWeatherService';
 import { WeatherFacade } from '../main/ets/domain/services/WeatherFacade';
 import { WeatherRefreshScheduler } from '../main/ets/domain/services/WeatherRefreshScheduler';
+
+interface ReplanNodeSnapshotForHM {
+  id: number;
+  sortOrder: number;
+  duration: number;
+  startTs: number;
+  endTs: number;
+}
 
 class StrategyDataForHM implements ComposableStrategy {
   density: DensityLevel = DensityLevel.MEDIUM;
@@ -119,6 +131,7 @@ class HostMockForHM implements ITimelineWeatherHost {
 interface TimelineWeatherServicePrivateHM {
   buildExecutionStrategyHint(suggestion: WeatherSuggestion): string | undefined;
   buildExecutionStrategyAdjustment(suggestion: WeatherSuggestion): Object | undefined;
+  resolveReplanReasonCode(actionType: string): string;
   findNextPendingEvent(activeEventId: number): EventEntity | null;
   shouldSkipByLocationThreshold(currentLocation: GeoPointInput | null): boolean;
   measureDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number;
@@ -161,6 +174,45 @@ function createSuggestionForHM(triggerType: WeatherSuggestionTriggerType): Weath
     cooldownKey: `cool_hm_${triggerType}`,
     expiresAt: Date.now() + 60_000,
     actionPayload: {}
+  };
+}
+
+function createWeatherSnapshotForHM(text: string): WeatherSnapshot {
+  return {
+    locationKey: 'hm_location',
+    sourceType: 'PLAN_LOCATION',
+    weatherTime: 1700000000000,
+    fetchTime: 1700000000000,
+    conditionText: text,
+    conditionCode: text === 'rain' ? 'RAIN' : 'CLEAR',
+    temperatureCelsius: 26
+  };
+}
+
+function createBindingForHM(event: EventEntity, text: string): PlanNodeWeatherBinding {
+  return {
+    nodeId: `${event.id}`,
+    eventId: event.id,
+    nodeName: event.name,
+    weather: createWeatherSnapshotForHM(text),
+    suitabilityScore: 88,
+    riskTags: []
+  };
+}
+
+function createPreviewForHM(reasonCode: string): SoftReplanPreview {
+  return {
+    suggestionId: 'preview_hm',
+    actionType: 'REORDER',
+    changedOrder: false,
+    changedDurations: false,
+    skippedNodeIds: [],
+    affectedNodeIds: [],
+    reasonCode: reasonCode,
+    startFromEventId: 0,
+    changeSummary: [],
+    summary: '',
+    riskDelta: 0
   };
 }
 
@@ -252,6 +304,145 @@ export default function phase2BatchHMTest() {
       expect((location?.latitude ?? 0) !== 0).assertTrue();
       expect((location?.longitude ?? 0) !== 0).assertTrue();
       expect(distance > 0).assertTrue();
+    });
+
+    it('normal: replan_summary_should_report_order_duration_and_time_changes', 0, () => {
+      // Arrange
+      const bundle = createBundleForHM();
+      const before = new Map<number, ReplanNodeSnapshotForHM>();
+      const after = new Map<number, ReplanNodeSnapshotForHM>();
+      const beforeNode: ReplanNodeSnapshotForHM = { id: 21, sortOrder: 100, duration: 60, startTs: 1000, endTs: 4600 };
+      const afterNode: ReplanNodeSnapshotForHM = { id: 21, sortOrder: 200, duration: 45, startTs: 7000, endTs: 9700 };
+      before.set(21, beforeNode);
+      after.set(21, afterNode);
+
+      // Act
+      const summary = bundle.service.buildStructuredReplanSummary(
+        before as Object as Map<number, never>,
+        after as Object as Map<number, never>,
+        ['bad', '21']
+      );
+      const text = bundle.service.composeReplanSummaryText(createPreviewForHM('ok'), summary);
+
+      // Assert
+      expect(summary.length).assertEqual(3);
+      expect(text.indexOf('顺序变更 1 项') >= 0).assertTrue();
+      expect(text.indexOf('时长变更 1 项') >= 0).assertTrue();
+      expect(text.indexOf('时间偏移 1 项') >= 0).assertTrue();
+    });
+
+    it('boundary: replan_summary_should_fallback_to_no_op_for_empty_changes', 0, () => {
+      // Arrange
+      const bundle = createBundleForHM();
+
+      // Act
+      const summary = bundle.service.buildStructuredReplanSummary(
+        new Map<number, never>(),
+        new Map<number, never>(),
+        ['0', 'nan']
+      );
+      const stableText = bundle.service.composeReplanSummaryText(createPreviewForHM('ok'), summary);
+      const blockedText = bundle.service.composeReplanSummaryText(createPreviewForHM('immutable_blocked'), summary);
+
+      // Assert
+      expect(summary.length).assertEqual(1);
+      expect(summary[0].type).assertEqual('NO_OP');
+      expect(stableText.indexOf('计划保持稳定') >= 0).assertTrue();
+      expect(blockedText.indexOf('节点保护') >= 0).assertTrue();
+    });
+
+    it('invalid: soft_replan_public_helpers_should_reject_empty_or_missing_targets', 0, async () => {
+      // Arrange
+      const bundle = createBundleForHM();
+      const service = bundle.service as Object as TimelineWeatherServicePrivateHM;
+
+      // Act
+      const reorderEmpty = await bundle.service.applySoftReorder([]);
+      const shortenEmpty = await bundle.service.applySoftShorten([]);
+      const skipEmpty = await bundle.service.applySoftSkip([]);
+      const skipMissing = await bundle.service.applySoftSkip([404]);
+      const startId = bundle.service.resolveSoftReplanStartEventId(createPreviewForHM('ok'));
+      const reason = service.resolveReplanReasonCode('REPLACE_NODE');
+
+      // Assert
+      expect(reorderEmpty).assertFalse();
+      expect(shortenEmpty).assertFalse();
+      expect(skipEmpty).assertFalse();
+      expect(skipMissing).assertFalse();
+      expect(startId).assertEqual(0);
+      expect(reason).assertEqual('node_replaced');
+    });
+
+    it('conflict: immutable_node_detection_should_block_missing_done_and_locked_nodes', 0, () => {
+      // Arrange
+      const bundle = createBundleForHM();
+      const pending = createEventForHM(31);
+      const done = createEventForHM(32);
+      const locked = createEventForHM(33);
+      done.completion_status = EventEntity.STATE_COMPLETED;
+      locked.lock_status = 1;
+      locked.fixed_start_time = '09:30';
+      bundle.host.events = [pending, done, locked];
+
+      // Act
+      const pendingBlocked = bundle.service.containsImmutableNode([31]);
+      const missingBlocked = bundle.service.containsImmutableNode([999]);
+      const doneBlocked = bundle.service.containsImmutableNode([32]);
+      const lockedBlocked = bundle.service.containsImmutableNode([33]);
+
+      // Assert
+      expect(pendingBlocked).assertFalse();
+      expect(missingBlocked).assertTrue();
+      expect(doneBlocked).assertTrue();
+      expect(lockedBlocked).assertTrue();
+    });
+
+    it('regression: execution_weather_patch_should_update_only_pending_bound_events', 0, () => {
+      // Arrange
+      const bundle = createBundleForHM();
+      const pending = createEventForHM(41);
+      const done = createEventForHM(42);
+      done.completion_status = EventEntity.STATE_COMPLETED;
+      bundle.host.events = [pending, done];
+      const eventMap = new Map<number, PlanNodeWeatherBinding>();
+      eventMap.set(pending.id, createBindingForHM(pending, 'rain'));
+      eventMap.set(done.id, createBindingForHM(done, 'clear'));
+
+      // Act
+      bundle.service.patchExecutionWeatherToEvents(eventMap, false);
+
+      // Assert
+      expect(pending.weather_condition).assertEqual('RAIN');
+      expect(done.weather_condition).assertEqual('');
+    });
+
+    it('combined: weather_explanations_should_cover_score_hint_and_auto_refresh_edges', 0, () => {
+      // Arrange
+      const bundle = createBundleForHM();
+      const stale = createEventForHM(51);
+      stale.weather_fetch_time = 1;
+      const ignored = createEventForHM(52);
+      ignored.status = 0;
+      ignored.weather_fetch_time = Date.now();
+      bundle.host.events = [stale, ignored];
+      bundle.host.executionWeatherDisplaySource = 'CURRENT';
+      bundle.host.executionWeatherHint = '当前位置有雨';
+      bundle.host.weatherCollabSummary = '跨城稳定';
+      bundle.host.weatherPlanningHint = '计划天气良好';
+
+      // Act
+      const invalidScore = bundle.service.buildWeatherScoreExplanation(-1);
+      const highRisk = bundle.service.buildWeatherScoreExplanation(60);
+      const hint = bundle.service.buildWeatherHintExplanation();
+      const planningHint = bundle.service.buildPlanningWeatherHintExplanation();
+      const shouldRefresh = bundle.service.shouldAutoRefreshPlanningWeather(1);
+
+      // Assert
+      expect(invalidScore.indexOf('暂无可用') >= 0).assertTrue();
+      expect(highRisk.indexOf('高风险') >= 0).assertTrue();
+      expect(hint.indexOf(bundle.host.executionWeatherHint) >= 0).assertTrue();
+      expect(planningHint.indexOf(bundle.host.weatherPlanningHint) >= 0).assertTrue();
+      expect(shouldRefresh).assertTrue();
     });
   });
 }
