@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@ohos/hypium';
 import { MapServiceImpl } from '../main/ets/model/acl/MapServiceImpl';
 import { LocationInfo } from '../main/ets/model/interface/IMapService';
+import { GeoCoordinate } from '../main/ets/infrastructure/services/AmapService';
 
 interface MapServicePrivateCR {
   sanitizeError(error: Object): string;
@@ -18,6 +19,8 @@ interface MapServicePrivateCR {
   ): Promise<number | null>;
   pickLocationKeyword(location: LocationInfo): string;
   isValidCoordinate(lat: number, lng: number): boolean;
+  resolveCoordinate(location: LocationInfo, role: 'origin' | 'destination'): Promise<ResolvedCoordinateCR>;
+  resolveRouteEndpoints(origin: LocationInfo, destination: LocationInfo): Promise<ResolvedRouteEndpointsCR>;
 }
 
 class ErrorLikeCR {
@@ -27,6 +30,62 @@ class ErrorLikeCR {
   constructor(message: string, code: string = '') {
     this.message = message;
     this.code = code;
+  }
+}
+
+class ResolvedCoordinateCR {
+  lat: number = 0;
+  lng: number = 0;
+  source: string = '';
+  keyword: string = '';
+}
+
+class ResolvedRouteEndpointsCR {
+  fromLat: number = 0;
+  fromLng: number = 0;
+  toLat: number = 0;
+  toLng: number = 0;
+  ok: boolean = false;
+}
+
+class FakeRoutePathCR {
+  private readonly duration: number;
+
+  constructor(duration: number) {
+    this.duration = duration;
+  }
+
+  getDuration(): number {
+    return this.duration;
+  }
+}
+
+class FakeRouteResultCR {
+  private readonly paths: FakeRoutePathCR[];
+
+  constructor(paths: FakeRoutePathCR[]) {
+    this.paths = paths;
+  }
+
+  getPaths(): FakeRoutePathCR[] {
+    return this.paths;
+  }
+}
+
+class FakeRouteSearchCR {
+  public walkCalls: number = 0;
+  public busCalls: number = 0;
+  public walkResult: FakeRouteResultCR = new FakeRouteResultCR([]);
+  public busResult: FakeRouteResultCR = new FakeRouteResultCR([]);
+
+  public async calculateWalkRoute(_query: Object): Promise<FakeRouteResultCR> {
+    this.walkCalls += 1;
+    return this.walkResult;
+  }
+
+  public async calculateBusRoute(_query: Object): Promise<FakeRouteResultCR> {
+    this.busCalls += 1;
+    return this.busResult;
   }
 }
 
@@ -109,6 +168,114 @@ export default function phase2BatchCRTest() {
       expect(valid).assertTrue();
       expect(zeroInvalid).assertFalse();
       expect(fallback === null).assertTrue();
+    });
+
+    it('normal: map_service_resolve_coordinate_should_accept_valid_input_without_geocode', 0, async () => {
+      // Arrange
+      const service = new MapServiceImpl(null) as Object as MapServicePrivateCR;
+      let geocodeCalls = 0;
+      MapServiceImpl.setTestHooks({
+        geocodeResolver: async (_address: string): Promise<GeoCoordinate | null> => {
+          geocodeCalls += 1;
+          return new GeoCoordinate(30.1, 120.1);
+        }
+      });
+      // Act
+      const resolved = await service.resolveCoordinate(locationCR('name_cr', 'address_cr', 31.2, 121.4), 'origin');
+      // Assert
+      MapServiceImpl.setTestHooks(null);
+      expect(resolved.source).assertEqual('input');
+      expect(resolved.lat).assertEqual(31.2);
+      expect(geocodeCalls).assertEqual(0);
+    });
+
+    it('boundary: map_service_resolve_coordinate_should_geocode_trimmed_name_when_address_blank', 0, async () => {
+      // Arrange
+      const service = new MapServiceImpl(null) as Object as MapServicePrivateCR;
+      const location = locationCR('  scenic_cr  ', '   ', 0, 0);
+      let keyword = '';
+      MapServiceImpl.setTestHooks({
+        geocodeResolver: async (address: string): Promise<GeoCoordinate | null> => {
+          keyword = address;
+          return new GeoCoordinate(30.5, 120.5);
+        }
+      });
+      // Act
+      const resolved = await service.resolveCoordinate(location, 'destination');
+      // Assert
+      MapServiceImpl.setTestHooks(null);
+      expect(keyword).assertEqual('scenic_cr');
+      expect(resolved.source).assertEqual('geocode');
+      expect(location.latitude).assertEqual(30.5);
+      expect(location.longitude).assertEqual(120.5);
+    });
+
+    it('invalid: map_service_resolve_route_endpoints_should_report_not_ok_when_destination_misses_geocode', 0, async () => {
+      // Arrange
+      const service = new MapServiceImpl(null) as Object as MapServicePrivateCR;
+      MapServiceImpl.setTestHooks({
+        geocodeResolver: async (_address: string): Promise<GeoCoordinate | null> => null
+      });
+      // Act
+      const resolved = await service.resolveRouteEndpoints(
+        locationCR('origin_cr', '', 31.2, 121.4),
+        locationCR('destination_cr', 'missing_cr', 0, 0)
+      );
+      // Assert
+      MapServiceImpl.setTestHooks(null);
+      expect(resolved.ok).assertFalse();
+      expect(resolved.fromLat).assertEqual(31.2);
+      expect(resolved.toLat).assertEqual(0);
+    });
+
+    it('normal: map_service_get_duration_by_mode_should_use_walk_route_for_mode_four', 0, async () => {
+      // Arrange
+      const service = new MapServiceImpl(null);
+      const search = new FakeRouteSearchCR();
+      search.walkResult = new FakeRouteResultCR([new FakeRoutePathCR(181)]);
+      Reflect.set(service as Object, 'routeSearch', search as Object);
+      MapServiceImpl.setTestHooks({
+        routeApiEnabledResolver: async (): Promise<boolean> => true
+      });
+      // Act
+      const minutes = await service.getDurationByMode(
+        locationCR('walk_a_cr', '', 31.20, 121.40),
+        locationCR('walk_b_cr', '', 31.21, 121.41),
+        4,
+        '12:00'
+      );
+      // Assert
+      MapServiceImpl.setTestHooks(null);
+      expect(minutes).assertEqual(4);
+      expect(search.walkCalls).assertEqual(1);
+    });
+
+    it('boundary: map_service_get_duration_by_mode_should_use_destination_city_for_bus_when_origin_missing', 0, async () => {
+      // Arrange
+      const service = new MapServiceImpl(null);
+      const search = new FakeRouteSearchCR();
+      search.busResult = new FakeRouteResultCR([new FakeRoutePathCR(599)]);
+      Reflect.set(service as Object, 'routeSearch', search as Object);
+      let cityCalls = 0;
+      MapServiceImpl.setTestHooks({
+        routeApiEnabledResolver: async (): Promise<boolean> => true,
+        cityCodeResolver: async (_lat: number, _lng: number): Promise<string | null> => {
+          cityCalls += 1;
+          return cityCalls === 1 ? null : '021';
+        }
+      });
+      // Act
+      const minutes = await service.getDurationByMode(
+        locationCR('bus_a_cr', '', 31.20, 121.40),
+        locationCR('bus_b_cr', '', 31.21, 121.41),
+        3,
+        '13:00'
+      );
+      // Assert
+      MapServiceImpl.setTestHooks(null);
+      expect(minutes).assertEqual(10);
+      expect(search.busCalls).assertEqual(1);
+      expect(cityCalls).assertEqual(2);
     });
   });
 }
