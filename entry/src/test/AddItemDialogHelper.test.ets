@@ -1,4 +1,5 @@
 import { describe, it, expect } from '@ohos/hypium';
+import { abilityAccessCtrl, bundleManager, common } from '@kit.AbilityKit';
 import { ThemeCenter } from '../main/ets/common/utils/ThemeCenter';
 import { AppConfig } from '../main/ets/common/utils/AppConfig';
 import {
@@ -88,11 +89,153 @@ interface AddItemDialogPrivateTest {
   scopedStorageKey(base: string): string;
   canUseMapPicker(): boolean;
   isMapNativeRuntimeReady(): Promise<boolean>;
+  checkAndRequestPermission(): Promise<boolean>;
+  getUIContext(): AddItemDialogUiContextTest;
   initialRender(): void;
 }
 
 class AddItemDialogControllerMockTest {
   close(): void {}
+}
+
+interface AddItemDialogPermissionResultTest {
+  authResults: number[];
+}
+
+interface AddItemDialogPermissionManagerTest {
+  checkAccessToken(tokenId: number, permissionName: string): Promise<number>;
+  requestPermissionsFromUser(
+    hostContext: common.UIAbilityContext,
+    permissions: string[]
+  ): Promise<AddItemDialogPermissionResultTest>;
+}
+
+interface AddItemDialogAlertButtonTest {
+  value: string;
+  action: () => void | Promise<void>;
+}
+
+interface AddItemDialogAlertOptionsTest {
+  title: string;
+  message: string;
+  primaryButton: AddItemDialogAlertButtonTest;
+  secondaryButton: AddItemDialogAlertButtonTest;
+}
+
+interface AddItemDialogUiContextTest {
+  showAlertDialog(options: AddItemDialogAlertOptionsTest): void;
+  getHostContext(): Object;
+}
+
+interface AddItemDialogAppInfoTest {
+  accessTokenId: number;
+}
+
+interface AddItemDialogBundleInfoTest {
+  appInfo: AddItemDialogAppInfoTest;
+}
+
+class AddItemDialogBundleInfoMockTest implements AddItemDialogBundleInfoTest {
+  appInfo: AddItemDialogAppInfoTest;
+
+  constructor(tokenId: number) {
+    this.appInfo = new AddItemDialogAppInfoMockTest(tokenId);
+  }
+}
+
+class AddItemDialogAppInfoMockTest implements AddItemDialogAppInfoTest {
+  accessTokenId: number;
+
+  constructor(tokenId: number) {
+    this.accessTokenId = tokenId;
+  }
+}
+
+class AddItemDialogUiContextMockTest implements AddItemDialogUiContextTest {
+  public alertCount: number = 0;
+  public lastAlert?: AddItemDialogAlertOptionsTest;
+  private readonly hostContext: common.UIAbilityContext = {} as common.UIAbilityContext;
+
+  showAlertDialog(options: AddItemDialogAlertOptionsTest): void {
+    this.alertCount += 1;
+    this.lastAlert = options;
+  }
+
+  getHostContext(): Object {
+    return this.hostContext;
+  }
+}
+
+class AddItemDialogPermissionManagerMockTest implements AddItemDialogPermissionManagerTest {
+  public checkResult: number = abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED;
+  public requestResults: number[] = [0];
+  public throwOnCheck: boolean = false;
+  public throwOnRequest: boolean = false;
+
+  async checkAccessToken(_tokenId: number, _permissionName: string): Promise<number> {
+    if (this.throwOnCheck) {
+      throw new Error('add_item_check_failed');
+    }
+    return this.checkResult;
+  }
+
+  async requestPermissionsFromUser(
+    _hostContext: common.UIAbilityContext,
+    _permissions: string[]
+  ): Promise<AddItemDialogPermissionResultTest> {
+    if (this.throwOnRequest) {
+      throw new Error('add_item_request_failed');
+    }
+    return {
+      authResults: this.requestResults
+    };
+  }
+}
+
+class AddItemDialogAbilityHooksTest {
+  private readonly originCreateAtManager: Object;
+  private readonly originGetBundleInfoForSelf: Object;
+
+  constructor() {
+    const aacObj: Object = Reflect.get(globalThis, 'abilityAccessCtrl') as Object;
+    const bmObj: Object = Reflect.get(globalThis, 'bundleManager') as Object;
+    this.originCreateAtManager = Reflect.get(aacObj, 'createAtManager') as Object;
+    this.originGetBundleInfoForSelf = Reflect.get(bmObj, 'getBundleInfoForSelf') as Object;
+  }
+
+  setAtManager(manager: Object): void {
+    const aacObj: Object = Reflect.get(globalThis, 'abilityAccessCtrl') as Object;
+    Reflect.set(aacObj, 'createAtManager', (): Object => manager);
+  }
+
+  setBundleInfo(tokenId: number): void {
+    const bmObj: Object = Reflect.get(globalThis, 'bundleManager') as Object;
+    Reflect.set(bmObj, 'getBundleInfoForSelf', async (): Promise<AddItemDialogBundleInfoTest> => {
+      return new AddItemDialogBundleInfoMockTest(tokenId);
+    });
+  }
+
+  setBundleInfoThrow(): void {
+    const bmObj: Object = Reflect.get(globalThis, 'bundleManager') as Object;
+    Reflect.set(bmObj, 'getBundleInfoForSelf', async (): Promise<AddItemDialogBundleInfoTest> => {
+      throw new Error('add_item_bundle_failed');
+    });
+  }
+
+  restore(): void {
+    const aacObj: Object = Reflect.get(globalThis, 'abilityAccessCtrl') as Object;
+    const bmObj: Object = Reflect.get(globalThis, 'bundleManager') as Object;
+    Reflect.set(aacObj, 'createAtManager', this.originCreateAtManager);
+    Reflect.set(bmObj, 'getBundleInfoForSelf', this.originGetBundleInfoForSelf);
+  }
+}
+
+async function flushAddItemDialogMicrotasks(rounds: number = 4): Promise<void> {
+  let index = 0;
+  while (index < rounds) {
+    await Promise.resolve();
+    index += 1;
+  }
 }
 
 export default function addItemDialogHelperTest() {
@@ -432,5 +575,151 @@ export default function addItemDialogHelperTest() {
       expect(invalidLat).assertFalse();
       expect(invalidLng).assertFalse();
     });
+
+    it('boundary: add_item_dialog_calculate_duration_should_keep_previous_duration_when_end_not_after_start', 0, () => {
+      // Arrange
+      const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateTest;
+      page.duration = 45;
+      page.startTime = new Date(2026, 5, 10, 10, 0, 0, 0);
+      page.endTime = new Date(2026, 5, 10, 9, 50, 0, 0);
+
+      // Act
+      page.calculateDuration();
+
+      // Assert
+      expect(page.duration).assertEqual(45);
+    });
+
+    it('boundary: add_item_dialog_about_to_appear_should_keep_default_time_when_initial_time_format_invalid', 0, () => {
+      // Arrange
+      const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateTest;
+      page.setInitiallyProvidedValue({
+        initName: 'Museum',
+        initIsSchedule: true,
+        initDuration: 50,
+        initSuggestedTime: 'bad-value',
+        initFixedTime: '',
+        initDayOffset: 1,
+        initPreTravel: 0,
+        initPriority: 0,
+        planStartDate: new Date(2026, 5, 10, 0, 0, 0, 0).getTime()
+      });
+
+      // Act
+      page.aboutToAppear();
+      const startText = page.formatTime(page.startTime);
+
+      // Assert
+      expect(page.mode).assertEqual(1);
+      expect(page.preTravel).assertEqual(0);
+      expect(page.isMustVisit).assertFalse();
+      expect(startText).assertEqual('00:00');
+    });
+
+    it('normal: add_item_permission_should_return_true_when_location_already_granted', 0, async () => {
+      // Arrange
+      const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateTest;
+      const hooks = new AddItemDialogAbilityHooksTest();
+      const manager = new AddItemDialogPermissionManagerMockTest();
+      const uiContext = new AddItemDialogUiContextMockTest();
+      manager.checkResult = abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED;
+      hooks.setAtManager(manager as Object);
+      hooks.setBundleInfo(101);
+      Reflect.set(page as Object, 'getUIContext', (): AddItemDialogUiContextTest => uiContext);
+
+      try {
+        // Act
+        const granted = await page.checkAndRequestPermission();
+
+        // Assert
+        expect(granted).assertTrue();
+        expect(uiContext.alertCount).assertEqual(0);
+      } finally {
+        hooks.restore();
+      }
+    });
+
+    it('boundary: add_item_permission_should_return_false_when_bundle_lookup_fails', 0, async () => {
+      // Arrange
+      const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateTest;
+      const hooks = new AddItemDialogAbilityHooksTest();
+      const manager = new AddItemDialogPermissionManagerMockTest();
+      const uiContext = new AddItemDialogUiContextMockTest();
+      hooks.setAtManager(manager as Object);
+      hooks.setBundleInfoThrow();
+      Reflect.set(page as Object, 'getUIContext', (): AddItemDialogUiContextTest => uiContext);
+
+      try {
+        // Act
+        const granted = await page.checkAndRequestPermission();
+
+        // Assert
+        expect(granted).assertFalse();
+        expect(uiContext.alertCount).assertEqual(0);
+      } finally {
+        hooks.restore();
+      }
+    });
+
+    it('boundary: add_item_permission_should_return_false_when_user_cancels_explanation_dialog', 0,
+      async () => {
+        // Arrange
+        const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateTest;
+        const hooks = new AddItemDialogAbilityHooksTest();
+        const manager = new AddItemDialogPermissionManagerMockTest();
+        const uiContext = new AddItemDialogUiContextMockTest();
+        manager.checkResult = abilityAccessCtrl.GrantStatus.PERMISSION_DENIED;
+        hooks.setAtManager(manager as Object);
+        hooks.setBundleInfo(202);
+        Reflect.set(page as Object, 'getUIContext', (): AddItemDialogUiContextTest => uiContext);
+
+        try {
+          // Act
+          const cancelPromise = page.checkAndRequestPermission();
+          await flushAddItemDialogMicrotasks();
+          const firstAlert = uiContext.lastAlert;
+          if (firstAlert) {
+            firstAlert.primaryButton.action();
+          }
+          const cancelResult = await cancelPromise;
+
+          // Assert
+          expect(uiContext.alertCount).assertEqual(1);
+          expect(cancelResult).assertFalse();
+        } finally {
+          hooks.restore();
+        }
+      });
+
+    it('combined: add_item_permission_should_return_true_when_system_permission_request_is_denied', 0,
+      async () => {
+        // Arrange
+        const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateTest;
+        const hooks = new AddItemDialogAbilityHooksTest();
+        const manager = new AddItemDialogPermissionManagerMockTest();
+        const uiContext = new AddItemDialogUiContextMockTest();
+        manager.checkResult = abilityAccessCtrl.GrantStatus.PERMISSION_DENIED;
+        manager.requestResults = [1];
+        hooks.setAtManager(manager as Object);
+        hooks.setBundleInfo(203);
+        Reflect.set(page as Object, 'getUIContext', (): AddItemDialogUiContextTest => uiContext);
+
+        try {
+          // Act
+          const deniedPromise = page.checkAndRequestPermission();
+          await flushAddItemDialogMicrotasks();
+          const alert = uiContext.lastAlert;
+          if (alert) {
+            await alert.secondaryButton.action();
+          }
+          const deniedResult = await deniedPromise;
+
+          // Assert
+          expect(uiContext.alertCount).assertEqual(1);
+          expect(deniedResult).assertTrue();
+        } finally {
+          hooks.restore();
+        }
+      });
   });
 }

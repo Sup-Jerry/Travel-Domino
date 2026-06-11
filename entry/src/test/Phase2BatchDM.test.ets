@@ -581,5 +581,24 @@ export default function phase2BatchDMTest() {
       expect(service.archiveIds[0]).assertEqual(31);
       expect(service.softDeleteIds[0]).assertEqual(32);
     });
+
+    it('boundary: plan_list_handle_archive_and_soft_delete_should_open_tip_dialogs_when_skip_is_disabled', 0, async () => {
+      // Arrange
+      const service = new PlanServiceMockDM();
+      const page = createPageDM(service, new ArrivalCoordinatorMockDM(), new AuthFacadeMockDM(), new UiContextMockDM());
+      const pref = new PreferenceMockDM();
+      pref.skip = false;
+      const patch = new StaticPatchDM(PreferenceManager as Object, 'getInstance', (): PreferenceMockDM => pref);
+
+      // Act
+      await page.handleArchive(buildPlanDM(41, 'Archive Tip'));
+      await page.handleSoftDelete(buildPlanDM(42, 'Delete Tip'));
+      patch.restore();
+
+      // Assert
+      expect(service.archiveIds.length).assertEqual(0);
+      expect(service.softDeleteIds.length).assertEqual(0);
+      expect(page !== null).assertTrue();
+    });
   });
 }

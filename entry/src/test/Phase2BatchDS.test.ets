@@ -11,6 +11,10 @@ import { HttpRequestHelper } from '../main/ets/infrastructure/adapters/HttpReque
 
 interface AmapPrivateDS {
   extractPoiItems(result: Object | undefined): PoiSearchItem[];
+  normalizePoiNodes(nodes: Object | undefined): PoiSearchItem[];
+  readAsText(value: Object | undefined): string;
+  readAsNumber(value: Object | undefined): number;
+  getListSize(listObj: Object | undefined): number;
 
   readPoiCache(cacheKey: string): PoiSearchItem[] | null;
 
@@ -111,6 +115,55 @@ class PoiItemMockDS {
 
   getDistance(): number {
     return this.distance;
+  }
+}
+
+class PoiItemNoPointMockDS {
+  getLatLonPoint(): LatLonPointMockDS | undefined {
+    return undefined;
+  }
+
+  getTitle(): string {
+    return 'no_point_ds';
+  }
+
+  getSnippet(): string {
+    return 'snippet_ds';
+  }
+
+  getDistance(): number {
+    return 0;
+  }
+}
+
+class EmptyObjectDS {
+}
+
+class LengthListMockDS {
+  length: number;
+
+  constructor(length: number) {
+    this.length = length;
+  }
+}
+
+class NumericSizeListMockDS {
+  size: number;
+
+  constructor(size: number) {
+    this.size = size;
+  }
+}
+
+class FunctionSizeListMockDS {
+  private readonly value: number;
+
+  constructor(value: number) {
+    this.value = value;
+  }
+
+  size(): number {
+    return this.value;
   }
 }
 
@@ -287,11 +340,11 @@ class AmapSdkHooksDS {
     Reflect.set(this.poiPrototype, 'setBound', fn);
   }
 
-  setGetFromLocationName(fn: () => Promise<Object>): void {
+  setGetFromLocationName(fn: () => Promise<Object | null>): void {
     Reflect.set(this.geocodePrototype, 'getFromLocationName', fn);
   }
 
-  setGetFromLocation(fn: () => Promise<Object>): void {
+  setGetFromLocation(fn: () => Promise<Object | null>): void {
     Reflect.set(this.geocodePrototype, 'getFromLocation', fn);
   }
 
@@ -534,7 +587,7 @@ export default function phase2BatchDSTest() {
       // Arrange
       const api = AmapService as Object as AmapPrivateDS;
       const hooks = new AmapSdkHooksDS();
-      hooks.setGetFromLocation(async (): Promise<Object> => {
+      hooks.setGetFromLocation(async (): Promise<Object | null> => {
         return new RegeoResultMockDS('310000', '021') as Object;
       });
 
@@ -583,7 +636,7 @@ export default function phase2BatchDSTest() {
       // Arrange
       const api = AmapService as Object as AmapPrivateDS;
       const hooks = new AmapSdkHooksDS();
-      hooks.setGetFromLocation(async (): Promise<Object> => {
+      hooks.setGetFromLocation(async (): Promise<Object | null> => {
         return new RegeoResultMockDS('', '', 'Nanjing Road', [new TitlePoiMockDS('   ')]) as Object;
       });
 
@@ -793,6 +846,35 @@ export default function phase2BatchDSTest() {
       expect(failed === null).assertTrue();
     });
 
+    it('boundary: amap_private_scalar_helpers_should_handle_empty_and_mixed_inputs', 0, () => {
+      // Arrange
+      const api = AmapService as Object as AmapPrivateDS;
+
+      // Act
+      const emptyNodes = api.normalizePoiNodes(undefined);
+      const textFromNumber = api.readAsText(123 as Object);
+      const textFromObject = api.readAsText(new EmptyObjectDS() as Object);
+      const numericValue = api.readAsNumber(23 as Object);
+      const invalidNumeric = api.readAsNumber('bad' as Object);
+      const objectNumeric = api.readAsNumber(new EmptyObjectDS() as Object);
+      const lengthSize = api.getListSize(new LengthListMockDS(2) as Object);
+      const numberSize = api.getListSize(new NumericSizeListMockDS(3) as Object);
+      const fnSize = api.getListSize(new FunctionSizeListMockDS(4) as Object);
+      const fallbackSize = api.getListSize(new FunctionSizeListMockDS(Number.NaN) as Object);
+
+      // Assert
+      expect(emptyNodes.length).assertEqual(0);
+      expect(textFromNumber).assertEqual('123');
+      expect(textFromObject).assertEqual('');
+      expect(numericValue).assertEqual(23);
+      expect(Number.isNaN(invalidNumeric)).assertTrue();
+      expect(Number.isNaN(objectNumeric)).assertTrue();
+      expect(lengthSize).assertEqual(2);
+      expect(numberSize).assertEqual(3);
+      expect(fnSize).assertEqual(4);
+      expect(fallbackSize).assertEqual(0);
+    });
+
     it('boundary: amap_search_poi_should_query_nationwide_when_nearby_empty', 0, async () => {
       // Arrange
       const hooks = new AmapStaticHooksDS();
@@ -911,6 +993,389 @@ export default function phase2BatchDSTest() {
       // Assert
       expect(cityCode === null).assertTrue();
       expect(place === null).assertTrue();
+    });
+
+    it('boundary: amap_search_poi_with_web_fallback_should_return_nearby_only_when_count_is_enough', 0, async () => {
+      // Arrange
+      const api = AmapService as Object as AmapPrivateDS;
+      const hooks = new AmapWebHooksDS();
+      let aroundCalls = 0;
+      let textCalls = 0;
+      hooks.setValidateNoop();
+      hooks.setRequest(async (_ownerTag: string, _requestName: string, url: string, _options: Object): Promise<Object> => {
+        if (url.includes('/around?')) {
+          aroundCalls += 1;
+          const response: HttpResponseDS = {
+            responseCode: 200,
+            result: buildPoiPayloadDS(
+              '{"name":"A","address":"RoadA","location":"121.400000,31.200000","distance":"10"},' +
+                '{"name":"B","address":"RoadB","location":"121.410000,31.210000","distance":"20"},' +
+                '{"name":"C","address":"RoadC","location":"121.420000,31.220000","distance":"30"},' +
+                '{"name":"D","address":"RoadD","location":"121.430000,31.230000","distance":"40"},' +
+                '{"name":"E","address":"RoadE","location":"121.440000,31.240000","distance":"50"}'
+            )
+          };
+          return response as Object;
+        }
+        textCalls += 1;
+        const response: HttpResponseDS = { responseCode: 200, result: buildPoiPayloadDS('') };
+        return response as Object;
+      });
+
+      // Act
+      let items: PoiSearchItem[] = [];
+      try {
+        items = await api.searchPoiWithWebFallback('enough', 31.2, 121.4, 3);
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(aroundCalls).assertEqual(1);
+      expect(textCalls).assertEqual(0);
+      expect(items.length).assertEqual(3);
+      expect(items[0].name).assertEqual('A');
+      expect(items[2].name).assertEqual('C');
+    });
+
+    it('boundary: amap_search_poi_should_return_empty_for_blank_keyword', 0, async () => {
+      // Arrange
+      const hooks = new AmapStaticHooksDS();
+      let sdkCalls = 0;
+      hooks.setSearchPoiBySdk(async (): Promise<PoiSearchItem[]> => {
+        sdkCalls += 1;
+        return [];
+      });
+      hooks.setSearchPoiWithWebFallback(async (): Promise<PoiSearchItem[]> => {
+        return [new PoiSearchItem('unexpected', '', 31.2, 121.4, 1)];
+      });
+
+      // Act
+      let items: PoiSearchItem[] = [new PoiSearchItem('stale', '', 31.2, 121.4, 1)];
+      try {
+        items = await AmapService.searchPoi({} as common.Context, '   ', 31.2, 121.4, 5);
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(items.length).assertEqual(0);
+      expect(sdkCalls).assertEqual(0);
+    });
+
+    it('normal: amap_search_poi_should_return_sliced_nearby_and_refresh_cache_with_background_nationwide', 0, async () => {
+      // Arrange
+      const hooks = new AmapStaticHooksDS();
+      const api = AmapService as Object as AmapPrivateDS;
+      const cache = Reflect.get(AmapService as Object, 'poiSearchCache') as Map<string, Object>;
+      const cacheKey = api.buildPoiCacheKey('nearby_refresh_ds', 31.66, 121.77, 3);
+      cache.delete(cacheKey);
+      let sdkCalls = 0;
+      hooks.setSearchPoiBySdk(async (
+        _context: common.Context,
+        _keyword: string,
+        _centerLat: number,
+        _centerLng: number,
+        _limit: number,
+        nearbyOnly: boolean
+      ): Promise<PoiSearchItem[]> => {
+        sdkCalls += 1;
+        if (nearbyOnly) {
+          return [
+            new PoiSearchItem('Nearby-1', 'A', 31.6601, 121.7701, 1),
+            new PoiSearchItem('Nearby-2', 'B', 31.6602, 121.7702, 2)
+          ];
+        }
+        return [
+          new PoiSearchItem('Nearby-1', 'A2', 31.6601, 121.7701, 10),
+          new PoiSearchItem('Nearby-2', 'B2', 31.6602, 121.7702, 20),
+          new PoiSearchItem('Nationwide-3', 'C', 31.6603, 121.7703, 30)
+        ];
+      });
+      hooks.setSearchPoiWithWebFallback(async (): Promise<PoiSearchItem[]> => {
+        return [];
+      });
+
+      // Act
+      let first: PoiSearchItem[] = [];
+      let cached: PoiSearchItem[] | null = null;
+      try {
+        first = await AmapService.searchPoi({} as common.Context, 'nearby_refresh_ds', 31.66, 121.77, 3);
+        await Promise.resolve();
+        cached = api.readPoiCache(cacheKey);
+      } finally {
+        cache.delete(cacheKey);
+        hooks.restore();
+      }
+
+      // Assert
+      expect(sdkCalls).assertEqual(2);
+      expect(first.length).assertEqual(2);
+      expect(first[0].name).assertEqual('Nearby-1');
+      expect(cached?.length ?? 0).assertEqual(3);
+      expect(cached?.[2].name ?? '').assertEqual('Nationwide-3');
+    });
+
+    it('invalid: amap_get_city_code_by_sdk_geo_search_should_return_null_for_exception_and_empty_code', 0, async () => {
+      // Arrange
+      const api = AmapService as Object as AmapPrivateDS;
+      const hooks = new AmapSdkHooksDS();
+      let call = 0;
+      hooks.setGetFromLocation(async (): Promise<Object> => {
+        call += 1;
+        if (call === 1) {
+          throw new Error('city_code_sdk_fail_ds');
+        }
+        return new RegeoResultMockDS('', '') as Object;
+      });
+
+      // Act
+      let failedResult: string | null = 'stale';
+      let emptyCode: string | null = 'stale';
+      try {
+        failedResult = await api.getCityCodeBySdkGeoSearch({} as common.Context, 31.2, 121.4);
+        emptyCode = await api.getCityCodeBySdkGeoSearch({} as common.Context, 31.2, 121.4);
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(failedResult === null).assertTrue();
+      expect(emptyCode === null).assertTrue();
+    });
+
+    it('invalid: amap_get_geocode_sdk_variants_should_return_null_for_empty_and_invalid_results', 0, async () => {
+      // Arrange
+      const api = AmapService as Object as AmapPrivateDS;
+      const hooks = new AmapSdkHooksDS();
+      let poiCall = 0;
+      let geocodeCall = 0;
+      hooks.setSearchPOI(async (): Promise<Object> => {
+        poiCall += 1;
+        if (poiCall === 1) {
+          return new PoiResultMockDS([]) as Object;
+        }
+        return new PoiResultMockDS([
+          new PoiItemMockDS('Invalid', 'Road', 0, 0, 10)
+        ]) as Object;
+      });
+      hooks.setGetFromLocationName(async (): Promise<Object> => {
+        geocodeCall += 1;
+        return new PoiListMockDS([]) as Object;
+      });
+
+      // Act
+      let keywordEmpty: GeoCoordinate | null = new GeoCoordinate(1, 1);
+      let keywordInvalid: GeoCoordinate | null = new GeoCoordinate(1, 1);
+      let geoEmpty: GeoCoordinate | null = new GeoCoordinate(1, 1);
+      try {
+        keywordEmpty = await api.getGeocodeBySdkKeyword('empty_ds', {} as common.Context);
+        keywordInvalid = await api.getGeocodeBySdkKeyword('invalid_ds', {} as common.Context);
+        geoEmpty = await api.getGeocodeBySdkGeoSearch('geo_empty_ds', {} as common.Context);
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(keywordEmpty === null).assertTrue();
+      expect(keywordInvalid === null).assertTrue();
+      expect(geoEmpty === null).assertTrue();
+      expect(geocodeCall).assertEqual(1);
+    });
+
+    it('invalid: amap_get_regeo_by_sdk_geo_search_should_return_null_for_exception_and_blank_address', 0, async () => {
+      // Arrange
+      const api = AmapService as Object as AmapPrivateDS;
+      const hooks = new AmapSdkHooksDS();
+      let call = 0;
+      hooks.setGetFromLocation(async (): Promise<Object> => {
+        call += 1;
+        if (call === 1) {
+          throw new Error('regeo_sdk_fail_ds');
+        }
+        return new RegeoResultMockDS('', '', '   ', [new TitlePoiMockDS('   ')]) as Object;
+      });
+
+      // Act
+      let failedResult: string | null = 'stale';
+      let blankFallback: string | null = 'stale';
+      try {
+        failedResult = await api.getRegeoBySdkGeoSearch({} as common.Context, 31.24, 121.49);
+        blankFallback = await api.getRegeoBySdkGeoSearch({} as common.Context, 31.24, 121.49);
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(failedResult === null).assertTrue();
+      expect(blankFallback === null).assertTrue();
+    });
+
+    it('boundary: amap_get_regeo_variants_should_use_address_fallbacks_and_empty_result_guards', 0, async () => {
+      // Arrange
+      const api = AmapService as Object as AmapPrivateDS;
+      const sdkHooks = new AmapSdkHooksDS();
+      const webHooks = new AmapWebHooksDS();
+      let poiCall = 0;
+      sdkHooks.setSearchPOI(async (): Promise<Object> => {
+        poiCall += 1;
+        return new PoiResultMockDS([]) as Object;
+      });
+      sdkHooks.setGetFromLocation(async (): Promise<Object | null> => {
+        return new RegeoResultMockDS('', '', 'Address Fallback DS', [new TitlePoiMockDS('   ')]) as Object;
+      });
+      webHooks.setValidateNoop();
+      webHooks.setRequest(async (): Promise<Object> => {
+        const response: HttpResponseDS = {
+          responseCode: 200,
+          result: '{"status":"1","regeocode":{"formatted_address":"Web Address DS","pois":[]}}'
+        };
+        return response as Object;
+      });
+
+      // Act
+      let nearbyEmpty: string | null = 'stale';
+      let geoAddress: string | null = 'stale';
+      let webAddress: string | null = 'stale';
+      try {
+        nearbyEmpty = await api.getRegeoBySdkNearby({} as common.Context, 31.24, 121.48);
+        geoAddress = await api.getRegeoBySdkGeoSearch({} as common.Context, 31.24, 121.49);
+        webAddress = await AmapService.getRegeo(31.3, 121.5);
+      } finally {
+        sdkHooks.restore();
+        webHooks.restore();
+      }
+
+      // Assert
+      expect(nearbyEmpty === null).assertTrue();
+      expect(geoAddress ?? '').assertEqual('Address Fallback DS');
+      expect(webAddress ?? '').assertEqual('Web Address DS');
+      expect(poiCall).assertEqual(1);
+    });
+
+    it('invalid: amap_get_geocode_and_route_web_should_return_null_for_business_miss_and_empty_path', 0, async () => {
+      // Arrange
+      const hooks = new AmapWebHooksDS();
+      let call = 0;
+      hooks.setValidateNoop();
+      hooks.setRequest(async (): Promise<Object> => {
+        call += 1;
+        const response: HttpResponseDS = {
+          responseCode: 200,
+          result: call === 1
+            ? '{"status":"0","info":"bad","infocode":"10009"}'
+            : call === 2
+              ? '{"status":"1","geocodes":[{"location":"121.47"}]}'
+              : call === 3
+                ? '{"status":"0","info":"bad","infocode":"10009"}'
+                : '{"status":"1","route":{"paths":[]}}'
+        };
+        return response as Object;
+      });
+
+      // Act
+      let businessMiss: GeoCoordinate | null = new GeoCoordinate(1, 1);
+      let invalidLocation: GeoCoordinate | null = new GeoCoordinate(1, 1);
+      let routeBusinessMiss: number | null = 1;
+      let routeEmptyPath: number | null = 1;
+      try {
+        businessMiss = await AmapService.getGeocode('business_miss_ds');
+        invalidLocation = await AmapService.getGeocode('invalid_location_ds');
+        routeBusinessMiss = await AmapService.getDrivingDurationByWebApi(31.2, 121.4, 31.3, 121.5);
+        routeEmptyPath = await AmapService.getDrivingDurationByWebApi(31.2, 121.4, 31.3, 121.5);
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(businessMiss === null).assertTrue();
+      expect(invalidLocation === null).assertTrue();
+      expect(routeBusinessMiss === null).assertTrue();
+      expect(routeEmptyPath === null).assertTrue();
+    });
+
+    it('boundary: amap_get_regeo_with_sdk_fallback_should_return_web_result_without_nearby_retry', 0, async () => {
+      // Arrange
+      const originGetRegeoBySdkGeoSearch = Reflect.get(AmapService as Object, 'getRegeoBySdkGeoSearch') as Object;
+      const originGetRegeo = Reflect.get(AmapService as Object, 'getRegeo') as Object;
+      const originGetRegeoBySdkNearby = Reflect.get(AmapService as Object, 'getRegeoBySdkNearby') as Object;
+      let nearbyCalls = 0;
+      Reflect.set(AmapService as Object, 'getRegeoBySdkGeoSearch', async (): Promise<string | null> => null);
+      Reflect.set(AmapService as Object, 'getRegeo', async (): Promise<string | null> => 'Web Place DS');
+      Reflect.set(AmapService as Object, 'getRegeoBySdkNearby', async (): Promise<string | null> => {
+        nearbyCalls += 1;
+        return 'Nearby Place DS';
+      });
+
+      // Act
+      let place: string | null = null;
+      try {
+        place = await AmapService.getRegeoWithSdkFallback(31.28, 121.52, {} as common.Context);
+      } finally {
+        Reflect.set(AmapService as Object, 'getRegeoBySdkGeoSearch', originGetRegeoBySdkGeoSearch);
+        Reflect.set(AmapService as Object, 'getRegeo', originGetRegeo);
+        Reflect.set(AmapService as Object, 'getRegeoBySdkNearby', originGetRegeoBySdkNearby);
+      }
+
+      // Assert
+      expect(place ?? '').assertEqual('Web Place DS');
+      expect(nearbyCalls).assertEqual(0);
+    });
+
+    it('boundary: amap_merge_poi_results_should_dedupe_and_use_default_limit_for_non_positive_limit', 0, () => {
+      // Arrange
+      const first = new PoiSearchItem('Museum', 'A', 31.2, 121.4, 10);
+      const duplicate = new PoiSearchItem('Museum', 'B', 31.2, 121.4, 12);
+      const second = new PoiSearchItem('Cafe', 'C', 31.3, 121.5, 20);
+
+      // Act
+      const merged = AmapService.mergePoiResults([first], [duplicate, second], 0);
+
+      // Assert
+      expect(merged.length).assertEqual(2);
+      expect(merged[0].name).assertEqual('Museum');
+      expect(merged[1].name).assertEqual('Cafe');
+    });
+
+    it('boundary: amap_should_fallback_to_nationwide_should_cover_threshold_edges', 0, () => {
+      // Arrange
+      // Act
+      const fallbackTrue = AmapService.shouldFallbackToNationwide(2, 3);
+      const fallbackFalse = AmapService.shouldFallbackToNationwide(3, 3);
+
+      // Assert
+      expect(fallbackTrue).assertTrue();
+      expect(fallbackFalse).assertFalse();
+    });
+
+    it('invalid: amap_to_poi_search_item_should_return_null_for_missing_point_invalid_coordinate_and_blank_name', 0, () => {
+      // Arrange
+      const noPoint = new PoiItemNoPointMockDS();
+      const invalidCoordinate = new PoiItemMockDS('BadCoord', 'Addr', 0, 0, 5);
+      const blankName = new PoiItemMockDS('   ', 'Addr', 31.24, 121.48, 5);
+
+      // Act
+      const noPointItem = AmapService.toPoiSearchItem(noPoint as never);
+      const invalidCoordinateItem = AmapService.toPoiSearchItem(invalidCoordinate as never);
+      const blankNameItem = AmapService.toPoiSearchItem(blankName as never);
+
+      // Assert
+      expect(noPointItem === null).assertTrue();
+      expect(invalidCoordinateItem === null).assertTrue();
+      expect(blankNameItem === null).assertTrue();
+    });
+
+    it('boundary: amap_to_poi_search_item_should_drop_negative_distance_but_keep_valid_core_fields', 0, () => {
+      // Arrange
+      const poi = new PoiItemMockDS('Library', 'West Rd', 31.25, 121.49, -8);
+
+      // Act
+      const item = AmapService.toPoiSearchItem(poi as never);
+
+      // Assert
+      expect(item !== null).assertTrue();
+      expect(item?.name ?? '').assertEqual('Library');
+      expect(item?.distance === undefined).assertTrue();
     });
   });
 }

@@ -304,6 +304,33 @@ export default function phase2CoreCoverageBatchHTest() {
       expect(bundle.facade.resolveSchedulePolicyCalls > 0).assertTrue();
     });
 
+    it('boundary: timeline_weather_service_start_scheduler_should_force_refresh_execution_when_entering_execution_stage', 0, async () => {
+      // Arrange
+      const bundle = createBundleForH();
+      bundle.host.weatherFeatureEnabled = true;
+      bundle.facade.policy.forceRefreshOnEnter = true;
+      let refreshCalls = 0;
+      const originRefreshExecutionWeather = Reflect.get(bundle.service as Object, 'refreshExecutionWeather') as Object;
+      Reflect.set(bundle.service as Object, 'refreshExecutionWeather', async (
+        forceRefresh: boolean,
+        trigger: string,
+        stage: string
+      ): Promise<void> => {
+        refreshCalls += 1;
+        expect(forceRefresh).assertTrue();
+        expect(trigger).assertEqual('ENTER_EXECUTION');
+        expect(stage).assertEqual('IN_PROGRESS');
+      });
+
+      // Act
+      bundle.service.startExecutionWeatherScheduler(bundle.host.planId, 'IN_PROGRESS');
+
+      // Assert
+      Reflect.set(bundle.service as Object, 'refreshExecutionWeather', originRefreshExecutionWeather);
+      expect(refreshCalls).assertEqual(1);
+      expect(bundle.scheduler.startCalls).assertEqual(1);
+    });
+
     it('regression: td-20260415-timeline-weather-refresh_execution_should_skip_when_location_delta_below_threshold', 0, async () => {
       // Arrange
       const bundle = createBundleForH();
@@ -358,4 +385,3 @@ export default function phase2CoreCoverageBatchHTest() {
     });
   });
 }
-

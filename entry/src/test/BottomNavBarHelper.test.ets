@@ -617,6 +617,90 @@ export default function bottomNavBarHelperTest() {
       expect(page.navLocked).assertFalse();
     });
 
+    it('boundary: global_bottom_nav_set_tab_pressed_should_noop_when_state_is_unchanged', 0, () => {
+      // Arrange
+      const page = new GlobalBottomNavBar(undefined, {} as LocalStorage) as Object as GlobalBottomNavBarPrivateTest;
+      const routedUrls: string[] = [];
+      const fakeRouter = new GlobalBottomNavRouterImplTest(routedUrls);
+      const fakeUiContext = new GlobalBottomNavUIContextImplTest(fakeRouter);
+      page.getUIContext = (): GlobalBottomNavUIContextTest => fakeUiContext;
+      page.pressedTab = 'search';
+
+      // Act
+      page.setTabPressed('search', true);
+
+      // Assert
+      expect(page.pressedTab).assertEqual('search');
+    });
+
+    it('boundary: global_bottom_nav_on_tab_touch_should_ignore_unhandled_move_event', 0, () => {
+      // Arrange
+      const page = new GlobalBottomNavBar(undefined, {} as LocalStorage) as Object as GlobalBottomNavBarPrivateTest;
+      const routedUrls: string[] = [];
+      const fakeRouter = new GlobalBottomNavRouterImplTest(routedUrls);
+      const fakeUiContext = new GlobalBottomNavUIContextImplTest(fakeRouter);
+      page.getUIContext = (): GlobalBottomNavUIContextTest => fakeUiContext;
+      page.pressedTab = 'archive';
+
+      // Act
+      page.onTabTouch('archive', new BottomNavTouchEventTest(TouchType.Move));
+
+      // Assert
+      expect(page.pressedTab).assertEqual('archive');
+    });
+
+    it('combined: global_bottom_nav_navigate_to_should_use_search_callback_without_router_replace', 0, async (done: () => void) => {
+      // Arrange
+      const page = new GlobalBottomNavBar(undefined, {} as LocalStorage) as Object as GlobalBottomNavBarPrivateTest;
+      const routedUrls: string[] = [];
+      const fakeRouter = new GlobalBottomNavRouterImplTest(routedUrls);
+      const fakeUiContext = new GlobalBottomNavUIContextImplTest(fakeRouter);
+      page.getUIContext = (): GlobalBottomNavUIContextTest => fakeUiContext;
+      page.currentTab = 'home';
+      let searchCount = 0;
+      page.onSearchTap = async (): Promise<void> => {
+        searchCount += 1;
+      };
+
+      // Act
+      await page.navigateTo('search');
+
+      // Assert
+      expect(searchCount).assertEqual(1);
+      expect(routedUrls.length).assertEqual(0);
+      done();
+    });
+
+    it('combined: global_bottom_nav_handle_tab_tap_should_route_and_auto_unlock_after_delay', 0, async (done: () => void) => {
+      // Arrange
+      const page = new GlobalBottomNavBar(undefined, {} as LocalStorage) as Object as GlobalBottomNavBarPrivateTest;
+      const routedUrls: string[] = [];
+      const fakeRouter = new GlobalBottomNavRouterImplTest(routedUrls);
+      const fakeUiContext = new GlobalBottomNavUIContextImplTest(fakeRouter);
+      page.getUIContext = (): GlobalBottomNavUIContextTest => fakeUiContext;
+      page.currentTab = 'home';
+      page.navLocked = false;
+      page.transitionTab = '';
+
+      // Act
+      page.handleTabTap('archive');
+      const lockedDuringTransition = page.navLocked;
+      const transitionDuringAnimation = page.transitionTab;
+      await new Promise<void>((resolve: () => void) => {
+        setTimeout(() => {
+          resolve();
+        }, 360);
+      });
+
+      // Assert
+      expect(lockedDuringTransition).assertTrue();
+      expect(transitionDuringAnimation).assertEqual('archive');
+      expect(routedUrls.includes('pages/ArchivePage')).assertTrue();
+      expect(page.transitionTab).assertEqual('');
+      expect(page.navLocked).assertFalse();
+      done();
+    });
+
     it('combined: plan_bottom_action_bar_should_keep_disabled_actions_and_dark_palette_consistent', 0, () => {
       // Arrange
       const page = new PlanBottomActionBar(undefined, {} as LocalStorage) as Object as PlanBottomActionBarPrivateTest;

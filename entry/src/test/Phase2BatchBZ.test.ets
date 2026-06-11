@@ -1090,6 +1090,25 @@ export default function phase2BatchBZTest() {
         expect(page.loading).assertFalse();
       });
 
+      it('boundary: login_page_huawei_button_should_ignore_duplicate_request_when_same_scene_is_active', 0, async () => {
+        // Arrange
+        const page = createLoginPageForTest() as LoginPagePrivateBZ;
+        const authFacade = new LoginAuthFacadeMockBZ();
+        const credential = new HuaweiCredential();
+        page.agreementAccepted = true;
+        page.loading = true;
+        page.activeLoginScene = 'huawei';
+        Reflect.set(page as Object, 'authFacade', authFacade as Object);
+
+        // Act
+        await page.loginWithHuaweiButton(credential);
+
+        // Assert
+        expect(authFacade.buttonCalls.length).assertEqual(0);
+        expect(page.loading).assertTrue();
+        expect(page.activeLoginScene).assertEqual('huawei');
+      });
+
       it('conflict: login_page_huawei_button_should_toast_failure_and_skip_route_when_result_unsuccessful', 0, async () => {
         // Arrange
         const page = createLoginPageForTest() as LoginPagePrivateBZ;
@@ -1168,6 +1187,53 @@ export default function phase2BatchBZTest() {
         expect(page.loading).assertFalse();
       });
 
+      it('invalid: login_page_api_fallback_should_stop_before_facade_when_agreement_missing', 0, async () => {
+        // Arrange
+        const page = createLoginPageForTest() as LoginPagePrivateBZ;
+        const authFacade = new LoginAuthFacadeMockBZ();
+        const toasts: string[] = [];
+        page.agreementAccepted = false;
+        Reflect.set(page as Object, 'authFacade', authFacade as Object);
+        Reflect.set(page as Object, 'toast', (message: string): void => {
+          toasts.push(message);
+        });
+
+        // Act
+        await page.loginWithHuaweiApiFallback();
+
+        // Assert
+        expect(authFacade.buttonCalls.length).assertEqual(0);
+        expect(toasts.length).assertEqual(1);
+        expect(toasts[0]).assertEqual(resolveLoginAgreementRequiredToast());
+        expect(page.loading).assertFalse();
+      });
+
+      it('conflict: login_page_api_fallback_should_toast_failure_and_skip_route_when_result_unsuccessful', 0, async () => {
+        // Arrange
+        const page = createLoginPageForTest() as LoginPagePrivateBZ;
+        const router = new LoginRouterMockBZ();
+        const hostContext = new HostContextMockBZ() as Object;
+        const uiContext: LoginUiContextLikeBZ = new LoginUiContextMockBZ(router, hostContext);
+        const authFacade = new LoginAuthFacadeMockBZ();
+        const toasts: string[] = [];
+        authFacade.nextButtonResult = buildAuthResultBZ(false, null, 'api_down');
+        page.agreementAccepted = true;
+        Reflect.set(page as Object, 'authFacade', authFacade as Object);
+        Reflect.set(page as Object, 'getUIContext', (): LoginUiContextLikeBZ => uiContext);
+        Reflect.set(page as Object, 'toast', (message: string): void => {
+          toasts.push(message);
+        });
+
+        // Act
+        await page.loginWithHuaweiApiFallback();
+
+        // Assert
+        expect(authFacade.buttonCalls.length).assertEqual(1);
+        expect(router.pushedUrls.length).assertEqual(0);
+        expect(toasts.length).assertEqual(1);
+        expect(page.loading).assertFalse();
+      });
+
       it('combined: login_page_guest_login_should_route_only_on_success_and_reset_loading_after_exception', 0, async () => {
         // Arrange
         const page = createLoginPageForTest() as LoginPagePrivateBZ;
@@ -1195,6 +1261,53 @@ export default function phase2BatchBZTest() {
         expect(router.pushedUrls.length).assertEqual(1);
         expect(router.pushedUrls[0]).assertEqual('pages/PlanListPage');
         expect(toasts.length).assertEqual(2);
+        expect(page.loading).assertFalse();
+      });
+
+      it('boundary: login_page_guest_login_should_stop_before_facade_when_agreement_missing', 0, async () => {
+        // Arrange
+        const page = createLoginPageForTest() as LoginPagePrivateBZ;
+        const authFacade = new LoginAuthFacadeMockBZ();
+        const toasts: string[] = [];
+        page.agreementAccepted = false;
+        Reflect.set(page as Object, 'authFacade', authFacade as Object);
+        Reflect.set(page as Object, 'toast', (message: string): void => {
+          toasts.push(message);
+        });
+
+        // Act
+        await page.loginAsGuest();
+
+        // Assert
+        expect(authFacade.guestCallCount).assertEqual(0);
+        expect(toasts.length).assertEqual(1);
+        expect(toasts[0]).assertEqual(resolveLoginAgreementRequiredToast());
+        expect(page.loading).assertFalse();
+      });
+
+      it('conflict: login_page_guest_login_should_toast_failure_when_result_unsuccessful', 0, async () => {
+        // Arrange
+        const page = createLoginPageForTest() as LoginPagePrivateBZ;
+        const router = new LoginRouterMockBZ();
+        const hostContext = new HostContextMockBZ() as Object;
+        const uiContext: LoginUiContextLikeBZ = new LoginUiContextMockBZ(router, hostContext);
+        const authFacade = new LoginAuthFacadeMockBZ();
+        const toasts: string[] = [];
+        authFacade.nextGuestResult = buildAuthResultBZ(false, null, 'guest_down');
+        page.agreementAccepted = true;
+        Reflect.set(page as Object, 'authFacade', authFacade as Object);
+        Reflect.set(page as Object, 'getUIContext', (): LoginUiContextLikeBZ => uiContext);
+        Reflect.set(page as Object, 'toast', (message: string): void => {
+          toasts.push(message);
+        });
+
+        // Act
+        await page.loginAsGuest();
+
+        // Assert
+        expect(authFacade.guestCallCount).assertEqual(1);
+        expect(router.pushedUrls.length).assertEqual(0);
+        expect(toasts.length).assertEqual(1);
         expect(page.loading).assertFalse();
       });
 

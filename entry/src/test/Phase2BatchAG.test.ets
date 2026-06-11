@@ -1469,5 +1469,368 @@ export default function phase2BatchAGTest() {
       expect(plan.status).assertEqual('COMPRESS_CONFIRM');
       expect(bundle.host.recalculateFromIndexCalls.length).assertEqual(1);
     });
+
+    it('invalid: compression_fix_conflict_should_not_recalculate_when_resolver_returns_false', 0, async () => {
+      // Arrange
+      const hooks = new ConflictResolverHooksForAG();
+      hooks.result = false;
+      hooks.attach();
+      const target = createEventForAG(20, 'target');
+      const bundle = createCompressionServiceForAG([target]);
+
+      // Act
+      await bundle.service.fixConflict(target, 25);
+      hooks.restore();
+
+      // Assert
+      expect(hooks.calls.length).assertEqual(1);
+      expect(bundle.host.recalculateFromEventIdCalls.length).assertEqual(0);
+    });
+
+    it('boundary: compression_smart_fix_conflict_should_noop_when_target_not_conflict_or_not_in_events', 0, async () => {
+      // Arrange
+      const missing = createEventForAG(21, 'missing');
+      missing.is_conflict = true;
+      const plain = createEventForAG(22, 'plain');
+      plain.is_conflict = false;
+      const bundle = createCompressionServiceForAG([plain]);
+
+      // Act
+      await bundle.service.smartFixConflict(plain);
+      await bundle.service.smartFixConflict(missing);
+
+      // Assert
+      expect(bundle.host.recalculateFromIndexCalls.length).assertEqual(0);
+      expect(bundle.host.markHasUnsavedPostponeCalls).assertEqual(0);
+    });
+
+    it('invalid: compression_build_selection_context_should_return_null_for_first_target_or_invalid_time', 0, () => {
+      // Arrange
+      const first = createEventForAG(23, 'first');
+      const target = createEventForAG(24, 'target');
+      const bundle = createCompressionServiceForAG([first, target]);
+
+      // Act
+      const firstTargetContext = bundle.service.buildCompressionSelectionContext(0, '09:00');
+      const invalidTimeContext = bundle.service.buildCompressionSelectionContext(1, 'bad-time');
+
+      // Assert
+      expect(firstTargetContext === null).assertTrue();
+      expect(invalidTimeContext === null).assertTrue();
+    });
+
+    it('conflict: compression_preview_advance_adjust_should_reject_non_continuous_selection', 0, () => {
+      // Arrange
+      const first = createEventForAG(25, 'first');
+      first.fixed_start_time = '09:00';
+      const second = createEventForAG(26, 'second');
+      second.fixed_start_time = '10:00';
+      const third = createEventForAG(27, 'third');
+      third.fixed_start_time = '11:00';
+      const target = createEventForAG(28, 'target');
+      target.fixed_start_time = '12:30';
+      const bundle = createCompressionServiceForAG([first, second, third, target]);
+
+      // Act
+      const preview = bundle.service.previewAdvanceAdjust(3, new Set<number>([25, 27]), '08:30');
+
+      // Assert
+      expect(preview.valid).assertFalse();
+      expect(preview.message).assertEqual('仅支持选择连续地点');
+      expect(preview.selectedCount).assertEqual(2);
+    });
+
+    it('boundary: compression_preview_advance_adjust_should_reject_non_earlier_target_start_time', 0, () => {
+      // Arrange
+      const first = createEventForAG(29, 'first');
+      first.fixed_start_time = '09:00';
+      const target = createEventForAG(30, 'target');
+      target.fixed_start_time = '10:30';
+      const bundle = createCompressionServiceForAG([first, target]);
+
+      // Act
+      const preview = bundle.service.previewAdvanceAdjust(1, new Set<number>([29]), '09:00');
+
+      // Assert
+      expect(preview.valid).assertFalse();
+      expect(preview.message).assertEqual('新开始时间必须早于当前计划开始时间');
+      expect(preview.selectedCount).assertEqual(1);
+    });
+
+    it('conflict: compression_preview_advance_adjust_should_reject_when_next_unselected_item_would_conflict', 0, () => {
+      // Arrange
+      const first = createEventForAG(31, 'first');
+      first.fixed_start_time = '09:00';
+      first.duration = 60;
+      const second = createEventForAG(32, 'second');
+      second.fixed_start_time = '10:10';
+      second.duration = 40;
+      const blocker = createEventForAG(33, 'blocker');
+      blocker.fixed_start_time = '10:10';
+      blocker.duration = 30;
+      blocker.pre_travel_min = 20;
+      const target = createEventForAG(34, 'target');
+      target.fixed_start_time = '12:00';
+      const bundle = createCompressionServiceForAG([first, second, blocker, target]);
+
+      // Act
+      const preview = bundle.service.previewAdvanceAdjust(3, new Set<number>([31, 32]), '08:20');
+
+      // Assert
+      expect(preview.valid).assertFalse();
+      expect(preview.message).assertEqual('调整后将与后续地点冲突');
+      expect(preview.items.length).assertEqual(2);
+    });
+
+    it('invalid: compression_preview_advance_adjust_should_reject_invalid_time_and_empty_selection', 0, () => {
+      // Arrange
+      const first = createEventForAG(35, 'first');
+      first.fixed_start_time = '09:00';
+      const target = createEventForAG(36, 'target');
+      target.fixed_start_time = '10:00';
+      const bundle = createCompressionServiceForAG([first, target]);
+
+      // Act
+      const invalidTimePreview = bundle.service.previewAdvanceAdjust(1, new Set<number>([35]), 'bad-time');
+      const emptySelectionPreview = bundle.service.previewAdvanceAdjust(1, new Set<number>(), '08:30');
+
+      // Assert
+      expect(invalidTimePreview.valid).assertFalse();
+      expect(invalidTimePreview.message).assertEqual('新开始时间格式无效');
+      expect(emptySelectionPreview.valid).assertFalse();
+      expect(emptySelectionPreview.message).assertEqual('仅支持选择连续地点');
+    });
+
+    it('invalid: compression_apply_advance_adjust_should_return_failure_when_preview_invalid', 0, async () => {
+      // Arrange
+      const first = createEventForAG(37, 'first');
+      first.fixed_start_time = '09:00';
+      const target = createEventForAG(38, 'target');
+      target.fixed_start_time = '10:00';
+      target.gap_minutes = 18;
+      const bundle = createCompressionServiceForAG([first, target]);
+
+      // Act
+      const result = await bundle.service.applyAdvanceAdjust(1, new Set<number>(), '08:30');
+
+      // Assert
+      expect(result.success).assertFalse();
+      expect(result.appliedCount).assertEqual(0);
+      expect(result.remainingGapMinutes).assertEqual(18);
+      expect(bundle.host.recalculateFromIndexCalls.length).assertEqual(0);
+    });
+
+    it('invalid: compression_calculate_plan_by_selection_should_return_overload_when_no_selectable_items_chosen', 0, () => {
+      // Arrange
+      const first = createEventForAG(39, 'first');
+      first.duration = 80;
+      const target = createEventForAG(40, 'target');
+      target.pre_travel_min = 50;
+      target.fixed_start_time = '08:40';
+      const bundle = createCompressionServiceForAG([first, target]);
+
+      // Act
+      const plan = bundle.service.calculateCompressionPlanBySelection(1, '08:40', new Set<number>(), 'RATIO');
+
+      // Assert
+      expect(plan.status).assertEqual('OVERLOAD');
+      expect(plan.capacityMinutes).assertEqual(0);
+      expect((plan.remainingGapMinutes ?? 0) > 0).assertTrue();
+    });
+
+    it('boundary: compression_apply_plan_should_noop_when_affected_items_empty', 0, () => {
+      // Arrange
+      const first = createEventForAG(41, 'first');
+      const target = createEventForAG(42, 'target');
+      const bundle = createCompressionServiceForAG([first, target]);
+
+      // Act
+      bundle.service.applyCompressionPlan({
+        status: 'NO_ACTION',
+        msg: 'noop',
+        affectedItems: []
+      });
+
+      // Assert
+      expect(bundle.host.recalculateFromIndexCalls.length).assertEqual(0);
+      expect(first.duration).assertEqual(60);
+    });
+
+    it('boundary: compression_smart_fix_conflict_should_return_when_conflict_item_is_not_rigid', 0, async () => {
+      // Arrange
+      const first = createEventForAG(43, 'first');
+      const target = createEventForAG(44, 'target');
+      target.is_conflict = true;
+      target.lock_status = 0;
+      const bundle = createCompressionServiceForAG([first, target]);
+
+      // Act
+      await bundle.service.smartFixConflict(target);
+
+      // Assert
+      expect(bundle.host.markHasUnsavedPostponeCalls).assertEqual(0);
+      expect(bundle.host.recalculateFromIndexCalls.length).assertEqual(0);
+    });
+
+    it('conflict: compression_smart_fix_conflict_should_leave_conflict_for_manual_fix_when_plan_is_not_compressible', 0, async () => {
+      // Arrange
+      const first = createEventForAG(45, 'first');
+      const target = createEventForAG(46, 'target');
+      target.is_conflict = true;
+      target.lock_status = 1;
+      target.fixed_start_time = '09:00';
+      const bundle = createCompressionServiceForAG([first, target]);
+      Reflect.set(bundle.service as Object, 'calculateCompressionPlan', (): CompressionPlan => {
+        return {
+          status: 'OVERLOAD',
+          msg: 'manual_fix_needed',
+          affectedItems: []
+        };
+      });
+
+      // Act
+      await bundle.service.smartFixConflict(target);
+
+      // Assert
+      expect(bundle.host.markHasUnsavedPostponeCalls).assertEqual(0);
+      expect(bundle.host.recalculateFromIndexCalls.length).assertEqual(0);
+    });
+
+    it('combined: compression_build_selection_context_should_skip_cross_day_and_inactive_items_before_collecting_same_day_candidates', 0, () => {
+      // Arrange
+      const otherDay = createEventForAG(47, 'other_day', 1);
+      otherDay.fixed_start_time = '08:00';
+      const inactive = createEventForAG(48, 'inactive');
+      inactive.status = 0;
+      const selectable = createEventForAG(49, 'selectable');
+      selectable.duration = 90;
+      selectable.fixed_start_time = '09:00';
+      const target = createEventForAG(50, 'target');
+      target.fixed_start_time = '10:30';
+      target.pre_travel_min = 40;
+      const bundle = createCompressionServiceForAG([otherDay, inactive, selectable, target]);
+
+      // Act
+      const context = bundle.service.buildCompressionSelectionContext(3, '09:40', 20);
+
+      // Assert
+      expect(context !== null).assertTrue();
+      expect(context?.candidates.length ?? 0).assertEqual(1);
+      expect(context?.candidates[0].id ?? 0).assertEqual(49);
+      expect(context?.candidates[0].selectable ?? false).assertTrue();
+    });
+
+    it('boundary: compression_build_advance_adjust_context_should_skip_rigid_candidate_inside_same_day_chain', 0, () => {
+      // Arrange
+      const pivot = createEventForAG(51, 'pivot');
+      pivot.fixed_start_time = '08:00';
+      pivot.lock_status = 1;
+      const rigid = createEventForAG(52, 'rigid_middle');
+      rigid.fixed_start_time = '09:00';
+      rigid.lock_status = 1;
+      const movable = createEventForAG(53, 'movable');
+      movable.fixed_start_time = '10:00';
+      const target = createEventForAG(54, 'target');
+      target.fixed_start_time = '11:30';
+      const bundle = createCompressionServiceForAG([pivot, rigid, movable, target]);
+
+      // Act
+      const context = bundle.service.buildAdvanceAdjustContext(3);
+
+      // Assert
+      expect(context !== null).assertTrue();
+      expect(context?.candidates.length ?? 0).assertEqual(1);
+      expect(context?.candidates[0].id ?? 0).assertEqual(53);
+    });
+
+    it('invalid: compression_preview_advance_adjust_should_return_no_candidate_message_when_target_has_no_movable_chain', 0, () => {
+      // Arrange
+      const target = createEventForAG(55, 'target');
+      target.fixed_start_time = '09:30';
+      const bundle = createCompressionServiceForAG([target]);
+
+      // Act
+      const preview = bundle.service.previewAdvanceAdjust(0, new Set<number>([55]), '08:30');
+
+      // Assert
+      expect(preview.valid).assertFalse();
+      expect(preview.message).assertEqual('当前无可前移地点');
+      expect(preview.items.length).assertEqual(0);
+    });
+
+    it('normal: compression_preview_advance_adjust_should_allow_boundary_aligned_start_after_skipping_inactive_previous_item', 0, () => {
+      // Arrange
+      const rigid = createEventForAG(56, 'rigid');
+      rigid.fixed_start_time = '08:00';
+      rigid.lock_status = 1;
+      const inactive = createEventForAG(57, 'inactive');
+      inactive.status = 0;
+      const selected = createEventForAG(58, 'selected');
+      selected.fixed_start_time = '09:30';
+      selected.duration = 60;
+      const target = createEventForAG(59, 'target');
+      target.fixed_start_time = '11:00';
+      const bundle = createCompressionServiceForAG([rigid, inactive, selected, target]);
+
+      // Act
+      const preview = bundle.service.previewAdvanceAdjust(3, new Set<number>([58]), '09:00');
+
+      // Assert
+      expect(preview.valid).assertTrue();
+      expect(preview.firstNewStartTime).assertEqual('09:00');
+      expect(preview.remainingGapMinutes >= 0).assertTrue();
+    });
+
+    it('normal: compression_preview_advance_adjust_should_ignore_inactive_gap_between_selected_item_and_target', 0, () => {
+      // Arrange
+      const rigid = createEventForAG(60, 'rigid');
+      rigid.fixed_start_time = '08:00';
+      rigid.lock_status = 1;
+      const selected = createEventForAG(61, 'selected');
+      selected.fixed_start_time = '09:30';
+      selected.duration = 60;
+      const skipped = createEventForAG(62, 'skipped');
+      skipped.status = 0;
+      const target = createEventForAG(63, 'target');
+      target.fixed_start_time = '11:30';
+      const bundle = createCompressionServiceForAG([rigid, selected, skipped, target]);
+
+      // Act
+      const preview = bundle.service.previewAdvanceAdjust(3, new Set<number>([61]), '09:00');
+
+      // Assert
+      expect(preview.valid).assertTrue();
+      expect(preview.items.length).assertEqual(1);
+      expect(preview.items[0].id).assertEqual(61);
+    });
+
+    it('normal: compression_apply_advance_adjust_should_recalculate_from_previous_index_and_finish_without_remaining_gap', 0, async () => {
+      // Arrange
+      const hooks = new RepoHooksForAG();
+      hooks.attachSuccess();
+      const rigid = createEventForAG(64, 'rigid');
+      rigid.fixed_start_time = '08:00';
+      rigid.lock_status = 1;
+      const selected = createEventForAG(65, 'selected');
+      selected.fixed_start_time = '09:30';
+      selected.duration = 60;
+      const target = createEventForAG(66, 'target');
+      target.fixed_start_time = '11:30';
+      target.gap_minutes = 0;
+      const bundle = createCompressionServiceForAG([rigid, selected, target]);
+
+      // Act
+      const result = await bundle.service.applyAdvanceAdjust(2, new Set<number>([65]), '09:00');
+      hooks.restore();
+
+      // Assert
+      expect(result.success).assertTrue();
+      expect(result.remainingGapMinutes).assertEqual(0);
+      expect(result.message).assertEqual('前移调整已应用');
+      expect(bundle.host.recalculateFromIndexCalls.length).assertEqual(1);
+      expect(bundle.host.recalculateFromIndexCalls[0]).assertEqual(0);
+      expect(hooks.updates.length).assertEqual(1);
+      expect(selected.fixed_start_time).assertEqual('09:00');
+    });
   });
 }

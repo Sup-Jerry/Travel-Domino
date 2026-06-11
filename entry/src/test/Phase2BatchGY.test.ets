@@ -5,6 +5,9 @@ interface AiServicePrivateGY {
   isSufficientForRequirement(items: AiRawItem[], requirement: Object): boolean;
   isFallbackAcceptableForMultiDay(items: AiRawItem[], requirement: Object): boolean;
   getInsufficientReason(items: AiRawItem[], requirement: Object): string;
+  isTimeoutLikeError(error: Object): boolean;
+  shouldRetryError(error: Object): boolean;
+  resolveNon200ErrorMessage(response: Object): string;
 }
 
 class RequirementStubGY {
@@ -14,6 +17,14 @@ class RequirementStubGY {
   totalMinItems: number = 1;
   totalMaxItems: number = 3;
   allowAccommodation: boolean = false;
+}
+
+class EmptyErrorStubGY {
+}
+
+class HttpResponseStubGY {
+  responseCode: number = 200;
+  result: string = '';
 }
 
 function createRequirementGY(
@@ -100,31 +111,116 @@ export default function phase2BatchGYTest() {
       expect(reason).assertEqual('unexpected_accommodation');
     });
 
-    it('normal: validator_marker_should_cover_normal_case', 0, () => {
+    it('normal: ai_service_should_accept_sufficient_non_hotel_items_when_requirement_is_met', 0, () => {
       // Arrange
-      const marker = true;
+      const privateApi = AiService as Object as AiServicePrivateGY;
+      const requirement = createRequirementGY(2, 1, 3, 2, 6, false);
+      const items: AiRawItem[] = [
+        createItemGY('spot_1', 0),
+        createItemGY('food_1', 1),
+        createItemGY('spot_2', 0)
+      ];
+
       // Act
-      const result = marker;
+      const accepted = privateApi.isSufficientForRequirement(items, requirement as Object);
+
       // Assert
-      expect(result).assertTrue();
+      expect(accepted).assertTrue();
     });
 
-    it('invalid: validator_marker_should_cover_invalid_case', 0, () => {
+    it('boundary: ai_service_should_default_requested_days_for_blank_prompt_and_zero_day_phrase', 0, () => {
       // Arrange
-      const marker = true;
+      const blankPrompt = '   ';
+      const zeroDayPrompt = '零天行程';
+
       // Act
-      const result = marker;
+      const blankDays = AiService.resolveRequestedDaysFromPrompt(blankPrompt);
+      const zeroDays = AiService.resolveRequestedDaysFromPrompt(zeroDayPrompt);
+
       // Assert
-      expect(result).assertTrue();
+      expect(blankDays).assertEqual(1);
+      expect(zeroDays).assertEqual(1);
     });
 
-    it('combined: validator_marker_should_cover_combined_case', 0, () => {
+    it('normal: ai_service_should_accept_multi_day_fallback_when_counts_and_hotel_limits_are_safe', 0, () => {
       // Arrange
-      const marker = true;
+      const privateApi = AiService as Object as AiServicePrivateGY;
+      const requirement = createRequirementGY(2, 3, 5, 6, 10, true);
+      const items: AiRawItem[] = [
+        createItemGY('hotel_1', 2, 600),
+        createItemGY('spot_1', 0),
+        createItemGY('food_1', 1),
+        createItemGY('spot_2', 0),
+        createItemGY('food_2', 1)
+      ];
+
       // Act
-      const result = marker;
+      const accepted = privateApi.isFallbackAcceptableForMultiDay(items, requirement as Object);
+
       // Assert
-      expect(result).assertTrue();
+      expect(accepted).assertTrue();
+    });
+
+    it('boundary: ai_service_should_reject_multi_day_fallback_for_single_day_or_empty_items', 0, () => {
+      // Arrange
+      const privateApi = AiService as Object as AiServicePrivateGY;
+      const singleDayRequirement = createRequirementGY(1, 2, 4, 2, 4, false);
+      const multiDayRequirement = createRequirementGY(2, 2, 4, 4, 8, false);
+
+      // Act
+      const singleDayAccepted = privateApi.isFallbackAcceptableForMultiDay(
+        [createItemGY('spot_1', 0), createItemGY('food_1', 1)],
+        singleDayRequirement as Object
+      );
+      const emptyAccepted = privateApi.isFallbackAcceptableForMultiDay([], multiDayRequirement as Object);
+
+      // Assert
+      expect(singleDayAccepted).assertFalse();
+      expect(emptyAccepted).assertFalse();
+    });
+
+    it('invalid: ai_service_private_error_guards_should_not_retry_plain_objects_or_unknown_messages', 0, () => {
+      // Arrange
+      const privateApi = AiService as Object as AiServicePrivateGY;
+      const unknownResponse = new HttpResponseStubGY();
+      unknownResponse.responseCode = 418;
+      unknownResponse.result = '{"message":"teapot"}';
+      const plainError = new EmptyErrorStubGY();
+
+      // Act
+      const timeoutLike = privateApi.isTimeoutLikeError(plainError as Object);
+      const retryable = privateApi.shouldRetryError(plainError as Object);
+      const message = privateApi.resolveNon200ErrorMessage(unknownResponse as Object);
+
+      // Assert
+      expect(timeoutLike).assertFalse();
+      expect(retryable).assertFalse();
+      expect(message).assertEqual('网络请求失败');
+    });
+
+    it('combined: ai_service_should_report_non_hotel_shortage_and_unknown_reason_for_private_requirement_paths', 0, () => {
+      // Arrange
+      const privateApi = AiService as Object as AiServicePrivateGY;
+      const strictRequirement = createRequirementGY(3, 1, 3, 3, 9, true);
+      const strictItems: AiRawItem[] = [
+        createItemGY('hotel_1', 2, 600),
+        createItemGY('spot_1', 0),
+        createItemGY('spot_2', 0)
+      ];
+      const balancedRequirement = createRequirementGY(2, 1, 3, 2, 6, true);
+      const balancedItems: AiRawItem[] = [
+        createItemGY('hotel_1', 2, 600),
+        createItemGY('spot_1', 0),
+        createItemGY('food_1', 1)
+      ];
+
+      // Act
+      const shortageReason = privateApi.getInsufficientReason(strictItems, strictRequirement as Object);
+      const unknownReason = privateApi.getInsufficientReason(balancedItems, balancedRequirement as Object);
+
+      // Assert
+      expect(shortageReason).assertEqual('insufficient_non_hotel_2_lt_3');
+      expect(unknownReason).assertEqual('unknown');
     });
   });
 }

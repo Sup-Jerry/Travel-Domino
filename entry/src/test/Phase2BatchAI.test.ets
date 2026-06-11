@@ -1485,6 +1485,94 @@ export default function phase2BatchAITest() {
       expect(ordered[0].id).assertEqual(outdoorEarly.id);
       expect(ordered[2].id).assertEqual(dayTwo.id);
     });
+
+    it('boundary: weather_context_builder_collab_context_should_mark_city_point_fallback_when_city_missing', 0, () => {
+      // Arrange
+      const builder = new WeatherContextBuilder() as Object as WeatherContextBuilderPrivateAI;
+      const event = createEventForBatch(950, 1, 31.2, 121.2, 1);
+      event.address = '   ';
+      const binding = createBindingForBatch(event, 77, [], '');
+
+      // Act
+      const collab = builder.buildCollabContext([event], [binding], {
+        enableMultiDay: true,
+        enableMultiCity: true
+      });
+
+      // Assert
+      expect(collab.dayWindowCount).assertEqual(1);
+      expect(collab.cityGroupCount).assertEqual(1);
+      expect(collab.cityMissCount).assertEqual(1);
+      expect(collab.fallbackPath.indexOf('CITY_FALLBACK_POINT') >= 0).assertTrue();
+    });
+
+    it('boundary: weather_context_builder_day_windows_should_cover_improving_trend', 0, () => {
+      // Arrange
+      const builder = new WeatherContextBuilder() as Object as WeatherContextBuilderPrivateAI;
+      const first = createEventForBatch(951, 1, 31.3, 121.3, 1);
+      first.dynamic_day_offset = 0;
+      const second = createEventForBatch(952, 1, 31.4, 121.4, 2);
+      second.dynamic_day_offset = 1;
+      const bindings: PlanNodeWeatherBinding[] = [
+        createBindingForBatch(first, 82, []),
+        createBindingForBatch(second, 70, [])
+      ];
+
+      // Act
+      const dayWindows = builder.buildDayWindows([first, second], bindings);
+
+      // Assert
+      expect(dayWindows.length).assertEqual(2);
+      expect(dayWindows[1].trendTag).assertEqual('IMPROVING');
+    });
+
+    it('boundary: weather_context_builder_private_sequence_helpers_should_cover_missing_active_and_missing_next_index', 0, () => {
+      // Arrange
+      const builder = new WeatherContextBuilder() as Object as WeatherContextBuilderPrivateAI;
+      const first = createEventForBatch(953, 1, 31.5, 121.5, 1);
+      const second = createEventForBatch(954, 1, 31.6, 121.6, 2);
+      const outsider = createEventForBatch(999, 1, 30.0, 120.0, 9);
+
+      // Act
+      const fallbackNext = builder.resolveNextNode([first, second], outsider);
+      const fallbackFuture = builder.resolveFutureNodes([first, second], outsider, 1);
+
+      // Assert
+      expect(fallbackNext?.id ?? 0).assertEqual(first.id);
+      expect(fallbackFuture.length).assertEqual(1);
+      expect(fallbackFuture[0].id).assertEqual(first.id);
+    });
+
+    it('boundary: weather_context_builder_current_geo_should_fallback_to_next_node_when_active_invalid', 0, () => {
+      // Arrange
+      const builder = new WeatherContextBuilder() as Object as WeatherContextBuilderPrivateAI;
+      const active = createEventForBatch(955, 1, 0, 0, 1);
+      const next = createEventForBatch(956, 1, 31.7, 121.7, 2);
+
+      // Act
+      const geo = builder.resolveCurrentGeoPoint(undefined, active, next);
+
+      // Assert
+      expect(geo?.latitude ?? 0).assertEqual(next.latitude);
+      expect(geo?.longitude ?? 0).assertEqual(next.longitude);
+    });
+
+    it('combined: weather_context_builder_weather_match_helpers_should_cover_shower_text_alert_and_false_paths', 0, () => {
+      // Arrange
+      const builder = new WeatherContextBuilder() as Object as WeatherContextBuilderPrivateAI;
+
+      // Act
+      const rainByCode = builder.isRainWeather('SHOWER_LIGHT', '');
+      const rainFalse = builder.isRainWeather('SUNNY', '晴');
+      const severeByText = builder.isSevereWeather('', '雷暴大风');
+      const severeFalse = builder.isSevereWeather('SUNNY', '晴');
+
+      // Assert
+      expect(rainByCode).assertTrue();
+      expect(rainFalse).assertFalse();
+      expect(severeByText).assertTrue();
+      expect(severeFalse).assertFalse();
+    });
   });
 }
 

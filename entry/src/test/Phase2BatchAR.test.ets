@@ -1414,6 +1414,39 @@ export default function phase2BatchARTest() {
       }
     });
 
+    it('boundary: apply_runtime_transition_should_ignore_same_event_and_unusable_active_plan_rows', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
+      clearDirtyPlanIdsAR();
+      const store = new FakeRdbStoreAR();
+      store.queueQueryRows([createEventStateRowAR(266, 9166, 1, 0, 0, EventEntity.STATE_PENDING)]);
+      store.queueQueryRows([
+        createEventStateRowAR(266, 9166, 1, 10, 0, EventEntity.STATE_PENDING),
+        createEventStateRowAR(888, 9777, 1, 20, 0, EventEntity.STATE_PENDING)
+      ]);
+      store.queueQueryRows([createPlanRowAR(9777, 1, 2)]);
+      store.queueUpdateResult(1);
+      const hooks = new RdbHooksAR();
+      hooks.bindStore(store as Object);
+      try {
+        const result = await EventRepositoryImpl.applyRuntimeTransition({
+          planId: 9166,
+          eventId: 266,
+          transition: 'START',
+          timestamp: 1888
+        });
+        const dirty = EventRepositoryImpl.consumeDirtyPlanIds();
+        expect(result.ok).assertTrue();
+        expect(result.reason).assertEqual('ok');
+        expect(result.startTime).assertEqual(1888);
+        expect(dirty[0]).assertEqual(9166);
+      } finally {
+        hooks.restore();
+        clearDirtyPlanIdsAR();
+      }
+    });
+
     it('normal: apply_runtime_transition_should_complete_started_event', 0, async () => {
       // Arrange
       // Act
@@ -1620,6 +1653,26 @@ export default function phase2BatchARTest() {
       }
     });
 
+    it('boundary: find_global_active_event_should_return_null_when_all_candidates_filtered', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
+      const store = new FakeRdbStoreAR();
+      store.queueQueryRows([
+        createActiveEventRowAR(305, 9205, 'ExcludedOnly', 210),
+        createActiveEventRowAR(306, 9206, 'UnusableOnly', 205)
+      ]);
+      store.queueQueryRows([createPlanRowAR(9206, 1, 2)]);
+      const hooks = new RdbHooksAR();
+      hooks.bindStore(store as Object);
+      try {
+        const result = await EventRepositoryImpl.findGlobalActiveEvent(305);
+        expect(result === null).assertTrue();
+      } finally {
+        hooks.restore();
+      }
+    });
+
     it('invalid: find_global_active_event_should_return_null_when_query_fails', 0, async () => {
       // Arrange
       // Act
@@ -1716,6 +1769,27 @@ export default function phase2BatchARTest() {
         const dirty = EventRepositoryImpl.consumeDirtyPlanIds();
         expect(store.deleteCalls.length).assertEqual(1);
         expect(dirty[0]).assertEqual(9401);
+      } finally {
+        hooks.restore();
+        clearDirtyPlanIdsAR();
+      }
+    });
+
+    it('boundary: hard_delete_event_should_delete_without_marking_dirty_when_plan_lookup_misses', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
+      clearDirtyPlanIdsAR();
+      const store = new FakeRdbStoreAR();
+      store.queueQueryRows([]);
+      store.queueDeleteResult(1);
+      const hooks = new RdbHooksAR();
+      hooks.bindStore(store as Object);
+      try {
+        await EventRepositoryImpl.hardDeleteEvent(502);
+        const dirty = EventRepositoryImpl.consumeDirtyPlanIds();
+        expect(store.deleteCalls.length).assertEqual(1);
+        expect(dirty.length).assertEqual(0);
       } finally {
         hooks.restore();
         clearDirtyPlanIdsAR();

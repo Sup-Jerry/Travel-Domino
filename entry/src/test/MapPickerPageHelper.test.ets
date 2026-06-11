@@ -44,6 +44,8 @@ interface MapPickerPagePrivateTest {
   searchToken: number;
   searchDebounceTimer: number;
   addressDebounceTimer: number;
+  addressRequestSeq: number;
+  latestAppliedAddressSeq: number;
   effectiveTheme: string;
   onMapReady(): void;
   scheduleFetchAddress(lat: number, lng: number): void;
@@ -559,6 +561,134 @@ export default function mapPickerPageHelperTest() {
       Reflect.set(AmapService as Object, 'searchPoi', originalSearchPoi);
     });
 
+    it('boundary: map_picker_instance_run_search_should_ignore_outdated_result_when_search_token_changes', 0, async () => {
+      // Arrange
+      const page = createMapPickerPageForTest() as MapPickerPagePrivateTest;
+      const originalSearchPoi = Reflect.get(AmapService as Object, 'searchPoi') as (
+        context: Object,
+        keyword: string,
+        lat: number,
+        lng: number,
+        limit: number
+      ) => Promise<Object[]>;
+      const existing = new MapPickerPoiSearchItemRenderTest();
+      existing.name = 'existing';
+      page.searchResults = [existing];
+      Reflect.set(page as Object, 'uiContext', new MapPickerHostContextMockTest());
+      Reflect.set(AmapService as Object, 'searchPoi', async (): Promise<Object[]> => {
+        page.searchToken = page.searchToken + 1;
+        return [new MapPickerPoiSearchItemRenderTest()];
+      });
+
+      try {
+        // Act
+        await page.runSearch('museum');
+
+        // Assert
+        expect(page.searchResults.length).assertEqual(1);
+        expect((page.searchResults[0] as MapPickerPoiSearchItemTest).name).assertEqual('existing');
+        expect(page.searching).assertTrue();
+      } finally {
+        Reflect.set(AmapService as Object, 'searchPoi', originalSearchPoi);
+      }
+    });
+
+    it('normal: map_picker_fetch_address_should_apply_sdk_regeo_result_when_non_blank', 0, async () => {
+      // Arrange
+      const page = createMapPickerPageForTest() as MapPickerPagePrivateTest;
+      const originalGetRegeo = Reflect.get(AmapService as Object, 'getRegeoWithSdkFallback') as (
+        lat: number,
+        lng: number,
+        context: Object | null
+      ) => Promise<string>;
+      Reflect.set(AmapService as Object, 'getRegeoWithSdkFallback', async (): Promise<string> => 'Xi an Bell Tower');
+
+      try {
+        // Act
+        await page.fetchAddress(34.26, 108.95);
+
+        // Assert
+        expect(page.currentAddress).assertEqual('Xi an Bell Tower');
+        expect(page.latestAppliedAddressSeq).assertEqual(1);
+      } finally {
+        Reflect.set(AmapService as Object, 'getRegeoWithSdkFallback', originalGetRegeo);
+      }
+    });
+
+    it('boundary: map_picker_fetch_address_should_fallback_to_coordinate_when_regeo_blank_and_current_address_pending', 0, async () => {
+      // Arrange
+      const page = createMapPickerPageForTest() as MapPickerPagePrivateTest;
+      const originalGetRegeo = Reflect.get(AmapService as Object, 'getRegeoWithSdkFallback') as (
+        lat: number,
+        lng: number,
+        context: Object | null
+      ) => Promise<string>;
+      Reflect.set(AmapService as Object, 'getRegeoWithSdkFallback', async (): Promise<string> => '   ');
+
+      try {
+        // Act
+        await page.fetchAddress(31.2304, 121.4737);
+
+        // Assert
+        expect(page.currentAddress).assertEqual(buildMapPickerCoordinateFallbackAddress(31.2304, 121.4737));
+      } finally {
+        Reflect.set(AmapService as Object, 'getRegeoWithSdkFallback', originalGetRegeo);
+      }
+    });
+
+    it('boundary: map_picker_fetch_address_should_keep_existing_non_pending_address_when_regeo_blank', 0, async () => {
+      // Arrange
+      const page = createMapPickerPageForTest() as MapPickerPagePrivateTest;
+      const originalGetRegeo = Reflect.get(AmapService as Object, 'getRegeoWithSdkFallback') as (
+        lat: number,
+        lng: number,
+        context: Object | null
+      ) => Promise<string>;
+      page.addressRequestSeq = 4;
+      page.latestAppliedAddressSeq = 4;
+      Reflect.set(AmapService as Object, 'getRegeoWithSdkFallback', async (): Promise<string> => {
+        page.currentAddress = 'saved from poi';
+        return '';
+      });
+
+      try {
+        // Act
+        await page.fetchAddress(30.1, 120.2);
+
+        // Assert
+        expect(page.currentAddress).assertEqual('saved from poi');
+        expect(page.latestAppliedAddressSeq).assertEqual(5);
+      } finally {
+        Reflect.set(AmapService as Object, 'getRegeoWithSdkFallback', originalGetRegeo);
+      }
+    });
+
+    it('conflict: map_picker_fetch_address_should_ignore_stale_response_when_newer_request_already_started', 0, async () => {
+      // Arrange
+      const page = createMapPickerPageForTest() as MapPickerPagePrivateTest;
+      const originalGetRegeo = Reflect.get(AmapService as Object, 'getRegeoWithSdkFallback') as (
+        lat: number,
+        lng: number,
+        context: Object | null
+      ) => Promise<string>;
+      page.currentAddress = 'before';
+      Reflect.set(AmapService as Object, 'getRegeoWithSdkFallback', async (): Promise<string> => {
+        page.addressRequestSeq = 3;
+        return 'late result';
+      });
+
+      try {
+        // Act
+        await page.fetchAddress(30.1, 120.2);
+
+        // Assert
+        expect(page.currentAddress).assertEqual('正在解析附近地名...');
+        expect(page.latestAppliedAddressSeq).assertEqual(0);
+      } finally {
+        Reflect.set(AmapService as Object, 'getRegeoWithSdkFallback', originalGetRegeo);
+      }
+    });
+
     it('boundary: map_picker_instance_confirm_selection_should_block_zero_coordinate', 0, () => {
       // Arrange
       const page = createMapPickerPageForTest() as MapPickerPagePrivateTest;
@@ -701,5 +831,6 @@ export default function mapPickerPageHelperTest() {
         done();
       }, 380);
     });
+
   });
 }

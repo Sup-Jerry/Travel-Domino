@@ -1,6 +1,9 @@
 import { describe, it, expect } from '@ohos/hypium';
 import { AppStorageKeys } from '../main/ets/common/constants/AppStorageKeys';
 import { PlanItem } from '../main/ets/infrastructure/persistence/PlanRepositoryImpl';
+import { CompactPlanSerializer } from '../main/ets/domain/serializers/CompactPlanSerializer';
+import { PlanSerializer } from '../main/ets/domain/serializers/PlanSerializer';
+import { PlanImportExportService } from '../main/ets/infrastructure/services/PlanImportExportService';
 import { TravelPlanItem } from '../main/ets/model/interface/IStandardEvent';
 import {
   buildPlanListShareEventItems,
@@ -23,6 +26,7 @@ interface PlanListPagePrivateTest {
   isRefreshing: boolean;
   isArrivalDialogOpen: boolean;
   effectiveTheme: string;
+  exportJsonText: string;
   lastNotifyPermissionPromptAt: number;
   lastLocationPermissionPromptAt: number;
   getThemePalette(): PlanListPaletteTest;
@@ -34,6 +38,8 @@ interface PlanListPagePrivateTest {
   consumeNotificationNavRoute(): void;
   loadPlans(): Promise<void>;
   handlePullRefresh(): Promise<void>;
+  exportPlanAsJson(item: PlanItem): Promise<void>;
+  importPlanFromJson(jsonText: string, cancelToken: Object): Promise<void>;
   executeArchive(planId: number): Promise<void>;
   executeSoftDelete(planId: number): Promise<void>;
   handleHardDelete(item: PlanItem): void;
@@ -62,9 +68,15 @@ class PlanListRouteOptionsTest {
 class PlanListRouterMockTest {
   pushedUrls: string[] = [];
   replacedUrls: string[] = [];
+  pushedOptions: PlanListRouteOptionsTest[] = [];
+  shouldThrowOnPush: boolean = false;
 
   pushUrl(options: PlanListRouteOptionsTest): void {
+    if (this.shouldThrowOnPush) {
+      throw new Error('push_failed');
+    }
     this.pushedUrls.push(options.url);
+    this.pushedOptions.push(options);
   }
 
   replaceUrl(options: PlanListRouteOptionsTest): Promise<void> {
@@ -254,6 +266,35 @@ class PlanListArrivalCoordinatorMockTest {
   }
 }
 
+class PlanListStaticPatchTest {
+  private readonly target: Object;
+  private readonly key: string;
+  private readonly original: Object;
+
+  constructor(target: Object, key: string, replacement: Object) {
+    this.target = target;
+    this.key = key;
+    this.original = Reflect.get(target, key) as Object;
+    Reflect.set(this.target, this.key, replacement);
+  }
+
+  restore(): void {
+    Reflect.set(this.target, this.key, this.original);
+  }
+}
+
+interface PlanListParsedPayloadTest {
+  plan: PlanListParsedPlanMetaTest;
+  events: TravelPlanItem[];
+}
+
+class PlanListParsedPlanMetaTest {
+  title: string = '';
+  startDate: number = 0;
+  status: number = 0;
+  enableAutoAmapRoute: boolean = false;
+}
+
 function buildShareEvent(): TravelPlanItem {
   const item = {} as TravelPlanItem;
   item.fixedStartTime = '09:30';
@@ -271,6 +312,28 @@ function buildPlanListPlanForTest(id: number, title: string): PlanItem {
   item.startDate = 1710000000000;
   item.createdAt = 1710000000000;
   return item;
+}
+
+function buildParsedPlanForExportTest(eventCount: number): PlanListParsedPayloadTest {
+  const events: TravelPlanItem[] = [];
+  for (let index = 0; index < eventCount; index += 1) {
+    const item = buildShareEvent();
+    item.name = `event_${index}`;
+    item.dayOffset = Math.floor(index / 3);
+    item.sortOrder = index;
+    item.duration = 30 + (index % 4) * 15;
+    item.fixedStartTime = '09:00';
+    events.push(item);
+  }
+  const plan = new PlanListParsedPlanMetaTest();
+  plan.title = 'share_plan_test';
+  plan.startDate = 1711000000000;
+  plan.status = 1;
+  plan.enableAutoAmapRoute = true;
+  const payload = {} as PlanListParsedPayloadTest;
+  payload.plan = plan;
+  payload.events = events;
+  return payload;
 }
 
 export default function planListPageHelperTest() {
@@ -959,6 +1022,242 @@ export default function planListPageHelperTest() {
       expect(locationPromptCount).assertEqual(1);
       expect(page.lastNotifyPermissionPromptAt > 0).assertTrue();
       expect(page.lastLocationPermissionPromptAt > 0).assertTrue();
+    });
+
+    it('boundary: plan_list_first_entry_prompt_should_skip_mark_and_dialog_when_reprompt_cooldown_not_met', 0, async () => {
+      // Arrange
+      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
+      const uiContext = new PlanListUiContextMockTest();
+      const service = new PlanListPlanServiceMockTest();
+      const promptState = new PlanListPromptStateTest();
+      promptState.notifyPrompted = true;
+      promptState.locationPrompted = true;
+      const now = Date.now();
+      page.lastNotifyPermissionPromptAt = now;
+      page.lastLocationPermissionPromptAt = now;
+      Reflect.set(page as Object, 'getUIContext', (): PlanListUiContextMockTest => uiContext);
+      Reflect.set(page as Object, 'planService', service as Object);
+      Reflect.set(service as Object, 'getArrivalPromptState', async (_context: Object): Promise<PlanListPromptStateTest> => {
+        return promptState;
+      });
+      service.notifyEnabled = false;
+      service.locationGranted = false;
+
+      // Act
+      await page.ensureArrivalPermissionPromptOnFirstEntry();
+
+      // Assert
+      expect(service.notifyPromptedMarkCount).assertEqual(0);
+      expect(service.locationPromptedMarkCount).assertEqual(0);
+      expect(uiContext.alertCount).assertEqual(0);
+      expect(page.lastNotifyPermissionPromptAt).assertEqual(now);
+      expect(page.lastLocationPermissionPromptAt).assertEqual(now);
+    });
+
+    it('normal: plan_list_export_should_truncate_share_events_and_open_dialog', 0, async () => {
+      // Arrange
+      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
+      const toastMessages: string[] = [];
+      let opened = false;
+      let openedTotalEvents = 0;
+      let openedTotalDays = 0;
+      const exportPatch = new PlanListStaticPatchTest(
+        PlanImportExportService as Object,
+        'exportPlanToJson',
+        (async (_planId: number): Promise<string> => 'json_plan_list_test') as Object
+      );
+      const parsePatch = new PlanListStaticPatchTest(
+        PlanSerializer as Object,
+        'deserializePlan',
+        ((_json: string): PlanListParsedPayloadTest => buildParsedPlanForExportTest(55)) as Object
+      );
+      const compressPatch = new PlanListStaticPatchTest(
+        CompactPlanSerializer as Object,
+        'compressForShare',
+        ((_meta: Object, events: TravelPlanItem[]): string => `compressed-${events.length}`) as Object
+      );
+      Reflect.set(page as Object, 'safeShowToast', (message: string): void => {
+        toastMessages.push(message);
+      });
+      Reflect.set(page as Object, 'openExportDialog', (payload: Object): void => {
+        opened = true;
+        openedTotalEvents = Number(Reflect.get(payload, 'totalEvents'));
+        openedTotalDays = Number(Reflect.get(payload, 'totalDays'));
+      });
+
+      // Act
+      await page.exportPlanAsJson(buildPlanListPlanForTest(3001, 'share_target'));
+      compressPatch.restore();
+      parsePatch.restore();
+      exportPatch.restore();
+
+      // Assert
+      expect(page.exportJsonText).assertEqual('compressed-50');
+      expect(opened).assertTrue();
+      expect(openedTotalEvents).assertEqual(50);
+      expect(openedTotalDays).assertEqual(17);
+      expect(toastMessages.length).assertEqual(1);
+    });
+
+    it('boundary: plan_list_export_should_keep_all_events_without_truncation_when_limit_not_exceeded', 0, async () => {
+      // Arrange
+      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
+      const toastMessages: string[] = [];
+      let openedTotalEvents = 0;
+      const exportPatch = new PlanListStaticPatchTest(
+        PlanImportExportService as Object,
+        'exportPlanToJson',
+        (async (_planId: number): Promise<string> => 'json_plan_list_not_truncated') as Object
+      );
+      const parsePatch = new PlanListStaticPatchTest(
+        PlanSerializer as Object,
+        'deserializePlan',
+        ((_json: string): PlanListParsedPayloadTest => buildParsedPlanForExportTest(50)) as Object
+      );
+      const compressPatch = new PlanListStaticPatchTest(
+        CompactPlanSerializer as Object,
+        'compressForShare',
+        ((_meta: Object, events: TravelPlanItem[]): string => `compressed-${events.length}`) as Object
+      );
+      Reflect.set(page as Object, 'safeShowToast', (message: string): void => {
+        toastMessages.push(message);
+      });
+      Reflect.set(page as Object, 'openExportDialog', (payload: Object): void => {
+        openedTotalEvents = Number(Reflect.get(payload, 'totalEvents'));
+      });
+
+      // Act
+      await page.exportPlanAsJson(buildPlanListPlanForTest(3003, 'share_full'));
+      compressPatch.restore();
+      parsePatch.restore();
+      exportPatch.restore();
+
+      // Assert
+      expect(page.exportJsonText).assertEqual('compressed-50');
+      expect(openedTotalEvents).assertEqual(50);
+      expect(toastMessages.length).assertEqual(0);
+    });
+
+    it('invalid: plan_list_export_should_fallback_to_toast_when_service_throws', 0, async () => {
+      // Arrange
+      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
+      const toastMessages: string[] = [];
+      const exportPatch = new PlanListStaticPatchTest(
+        PlanImportExportService as Object,
+        'exportPlanToJson',
+        (async (_planId: number): Promise<string> => {
+          throw new Error('export_failed');
+        }) as Object
+      );
+      Reflect.set(page as Object, 'safeShowToast', (message: string): void => {
+        toastMessages.push(message);
+      });
+
+      // Act
+      await page.exportPlanAsJson(buildPlanListPlanForTest(3002, 'share_fail'));
+      exportPatch.restore();
+
+      // Assert
+      expect(toastMessages.length).assertEqual(1);
+    });
+
+    it('combined: plan_list_import_should_handle_cancel_and_reload_successfully', 0, async () => {
+      // Arrange
+      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
+      const service = new PlanListPlanServiceMockTest();
+      const toastMessages: string[] = [];
+      service.visiblePlans = [buildPlanListPlanForTest(401, 'imported_plan')];
+      Reflect.set(page as Object, 'planService', service as Object);
+      Reflect.set(page as Object, 'safeShowToast', (message: string): void => {
+        toastMessages.push(message);
+      });
+      const importPatch = new PlanListStaticPatchTest(
+        PlanImportExportService as Object,
+        'importPlanFromJson',
+        (async (jsonText: string, _cancelToken: Object): Promise<number> => {
+          if (jsonText === 'cancel') {
+            throw new Error('import_cancelled');
+          }
+          return 401;
+        }) as Object
+      );
+
+      // Act
+      await page.importPlanFromJson('cancel', new Object());
+      await page.importPlanFromJson('success', new Object());
+      importPatch.restore();
+
+      // Assert
+      expect(toastMessages.length).assertEqual(2);
+      expect(page.planList.length).assertEqual(1);
+      expect(page.planList[0].id).assertEqual(401);
+    });
+
+    it('invalid: plan_list_import_should_show_generic_failure_toast_when_reason_is_not_cancelled', 0, async () => {
+      // Arrange
+      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
+      const toastMessages: string[] = [];
+      Reflect.set(page as Object, 'safeShowToast', (message: string): void => {
+        toastMessages.push(message);
+      });
+      const importPatch = new PlanListStaticPatchTest(
+        PlanImportExportService as Object,
+        'importPlanFromJson',
+        (async (_jsonText: string, _cancelToken: Object): Promise<number> => {
+          throw new Error('import_bad_payload');
+        }) as Object
+      );
+
+      // Act
+      await page.importPlanFromJson('bad_payload', new Object());
+      importPatch.restore();
+
+      // Assert
+      expect(toastMessages.length).assertEqual(1);
+      expect(toastMessages[0]).assertEqual('导入失败：数据格式不合法或内容超限');
+    });
+
+    it('invalid: plan_list_notification_route_should_fallback_title_and_swallow_router_error', 0, () => {
+      // Arrange
+      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
+      const uiContext = new PlanListUiContextMockTest();
+      const payload = new PlanListNotificationPayloadTest();
+      payload.planId = 88;
+      payload.eventId = 0;
+      payload.forceCompanionMode = false;
+      uiContext.router.shouldThrowOnPush = true;
+      Reflect.set(page as Object, 'getUIContext', (): PlanListUiContextMockTest => uiContext);
+      AppStorage.setOrCreate(AppStorageKeys.NOTIFICATION_NAV_PAYLOAD, JSON.stringify(payload));
+
+      // Act
+      page.consumeNotificationNavRoute();
+      const cleared = AppStorage.get<string>(AppStorageKeys.NOTIFICATION_NAV_PAYLOAD) ?? 'x';
+
+      // Assert
+      expect(cleared).assertEqual('');
+      expect(uiContext.router.pushedUrls.length).assertEqual(0);
+      expect(uiContext.router.pushedOptions.length).assertEqual(0);
+    });
+
+    it('boundary: plan_list_notification_route_should_clear_invalid_plan_id_without_navigation', 0, () => {
+      // Arrange
+      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
+      const uiContext = new PlanListUiContextMockTest();
+      const payload = new PlanListNotificationPayloadTest();
+      payload.planId = 0;
+      payload.eventId = 12;
+      payload.forceCompanionMode = true;
+      Reflect.set(page as Object, 'getUIContext', (): PlanListUiContextMockTest => uiContext);
+      AppStorage.setOrCreate(AppStorageKeys.NOTIFICATION_NAV_PAYLOAD, JSON.stringify(payload));
+
+      // Act
+      page.consumeNotificationNavRoute();
+      const cleared = AppStorage.get<string>(AppStorageKeys.NOTIFICATION_NAV_PAYLOAD) ?? 'x';
+
+      // Assert
+      expect(cleared).assertEqual('');
+      expect(uiContext.router.pushedUrls.length).assertEqual(0);
+      expect(uiContext.router.pushedOptions.length).assertEqual(0);
     });
   });
 }
