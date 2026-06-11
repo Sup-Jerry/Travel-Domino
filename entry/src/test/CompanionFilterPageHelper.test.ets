@@ -652,5 +652,34 @@ export default function companionFilterPageHelperTest() {
       expect(getCompanionFilterBorderWidth('SKIPPED', 'SKIPPED')).assertEqual(1);
       expect(getCompanionFilterBorderWidth('ACTIVE', 'SKIPPED')).assertEqual(0);
     });
+
+    it('combined: filter_page_initial_render_should_cover_all_unselected_pending_completed_and_skipped_visual_branches', 0, () => {
+      // Arrange
+      const page = new CompanionFilterPage(undefined, {} as LocalStorage) as Object as CompanionFilterPagePrivateTest;
+      page.effectiveTheme = 'dark';
+      page.getFilterOptions = (): CompanionFilterState[] => ['PENDING', 'COMPLETED', 'SKIPPED'];
+      page.getFilterLabel = (state: CompanionFilterState): string => `branch_${state}`;
+      page.setInitiallyProvidedValue({
+        showFilterPage: true,
+        companionFilterState: 'ACTIVE',
+        safeTopInset: 3,
+        safeBottomInset: 4
+      });
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(isCompanionFilterSelected('PENDING', page.companionFilterState)).assertFalse();
+      expect(getCompanionFilterBorderType('PENDING')).assertEqual('pending');
+      expect(getCompanionFilterBorderType('COMPLETED')).assertEqual('completed');
+      expect(getCompanionFilterBorderType('SKIPPED')).assertEqual('skipped');
+    });
   });
 }

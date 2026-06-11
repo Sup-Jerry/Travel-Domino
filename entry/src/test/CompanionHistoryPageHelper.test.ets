@@ -581,6 +581,170 @@ export default function companionHistoryPageHelperTest() {
       expect(page.historySummary).assertNull();
     });
 
+    it('combined: history_page_text_helpers_should_cover_action_subtext_and_color_branches', 0, () => {
+      // Arrange
+      const page = new CompanionHistoryPage(undefined, {} as LocalStorage) as Object as CompanionHistoryPagePrivateTest;
+      const dayKey = DateUtil.formatLocalDate(1713254400000);
+      const arrive = buildHistoryTimelineItem(41, '西湖', 'ARRIVE', 1713254400000, dayKey);
+      arrive.deviationMinutes = 0;
+      const skip = buildHistoryTimelineItem(42, '机场', 'SKIP', 1713256200000, dayKey);
+      const active = buildHistoryTimelineItem(43, '车站', 'ACTIVE', 1713258000000, dayKey);
+      const abnormalArrive = buildHistoryTimelineItem(44, '故宫', 'ARRIVE', 1713259800000, dayKey);
+      abnormalArrive.isAbnormal = true;
+      abnormalArrive.deviationMinutes = 0;
+      const darkPalette = ThemeCenter.getPalette('dark');
+      page.effectiveTheme = 'dark';
+
+      // Act
+      const arriveActionText = page.getTimelineActionText(arrive);
+      const skipActionText = page.getTimelineActionText(skip);
+      const consistentSubText = page.getTimelineSubText(arrive);
+      const activeColor = page.getTimelineSubTextColor(active);
+      const abnormalColor = page.getTimelineSubTextColor(abnormalArrive);
+      const normalColor = page.getTimelineSubTextColor(arrive);
+
+      // Assert
+      expect(arriveActionText).assertEqual('到达 西湖');
+      expect(skipActionText).assertEqual('跳过 机场');
+      expect(consistentSubText).assertEqual('与计划一致');
+      expect(activeColor).assertEqual(darkPalette.success);
+      expect(abnormalColor).assertEqual(darkPalette.danger);
+      expect(normalColor).assertEqual(darkPalette.textSecondary);
+    });
+
+    it('combined: history_page_detail_fallbacks_should_cover_selected_latest_and_time_branches', 0, () => {
+      // Arrange
+      const selectedFallbackPage = new CompanionHistoryPage(undefined, {} as LocalStorage) as Object as CompanionHistoryPagePrivateTest;
+      const latestDetailPage = new CompanionHistoryPage(undefined, {} as LocalStorage) as Object as CompanionHistoryPagePrivateTest;
+      const dayKey = DateUtil.formatLocalDate(1713254400000);
+      const unrelated = buildHistoryTimelineItem(51, '灵隐寺', 'ARRIVE', 1713254400000, dayKey);
+      const selected = buildHistoryTimelineItem(52, '西湖', 'ARRIVE', 1713258000000, dayKey);
+      selected.address = ' 杭州西湖景区 ';
+      selected.actualEnd = selected.actualStart + (45 * 60 * 1000);
+      selected.stayMinutes = 45;
+      selectedFallbackPage.historyTimelineItems = [unrelated];
+      selectedFallbackPage.historyTimelineFilter = 'all';
+      selectedFallbackPage.historyViewMode = 'detail';
+      selectedFallbackPage.historySummary = null;
+      selectedFallbackPage.selectedHistoryTimelineItem = selected;
+
+      const latest = buildHistoryTimelineItem(53, '博物馆', 'ARRIVE', 1713261600000, dayKey);
+      latest.plannedStart = 1713260700000;
+      latest.actualStart = 1713261600000;
+      latest.actualEnd = latest.actualStart + (35 * 60 * 1000);
+      latest.stayMinutes = 0;
+      latest.address = ' 博物馆东门 ';
+      latestDetailPage.historyTimelineSummary = buildHistoryTimelineSummary('detail_time');
+      latestDetailPage.historyTimelineItems = [latest];
+      latestDetailPage.historyTimelineFilter = 'all';
+      latestDetailPage.historyViewMode = 'detail';
+      latestDetailPage.historySummary = buildPlaceCheckinSummary('博物馆');
+      latestDetailPage.selectedHistoryTimelineItem = null;
+
+      // Act
+      const fallbackPlaceName = selectedFallbackPage.getCurrentHistoryPlaceName();
+      const fallbackLatest = selectedFallbackPage.getCurrentHistoryLatestItem();
+      const fallbackAddress = selectedFallbackPage.getHistoryAddress('西湖');
+      const plannedStartText = latestDetailPage.getCurrentHistoryPlannedStartText();
+      const actualStartText = latestDetailPage.getCurrentHistoryActualStartText();
+      const actualEndText = latestDetailPage.getCurrentHistoryActualEndText();
+      const stayText = latestDetailPage.getCurrentHistoryStayText();
+
+      // Assert
+      expect(fallbackPlaceName).assertEqual('西湖');
+      expect(fallbackLatest?.id).assertEqual(selected.id);
+      expect(fallbackAddress).assertEqual('杭州西湖景区');
+      expect(plannedStartText).assertEqual(latestDetailPage.formatTs(latest.plannedStart));
+      expect(actualStartText).assertEqual(latestDetailPage.formatTs(latest.actualStart));
+      expect(actualEndText).assertEqual(latestDetailPage.formatTs(latest.actualEnd));
+      expect(stayText).assertEqual('35 分钟');
+    });
+
+    it('combined: history_page_status_deviation_and_group_sort_should_cover_remaining_private_branches', 0, () => {
+      // Arrange
+      const dayKey = DateUtil.formatLocalDate(1713254400000);
+      const sortPage = new CompanionHistoryPage(undefined, {} as LocalStorage) as Object as CompanionHistoryPagePrivateTest;
+      const sameTsA = buildHistoryTimelineItem(61, '植物园', 'ARRIVE', 1713254400000, dayKey);
+      const sameTsB = buildHistoryTimelineItem(60, '植物园', 'LEAVE', 1713254400000, dayKey);
+      sortPage.historyTimelineSummary = buildHistoryTimelineSummary('equal_ts');
+      sortPage.historyTimelineItems = [sameTsA, sameTsB];
+      sortPage.historyTimelineFilter = 'all';
+      sortPage.historyViewMode = 'timeline';
+      sortPage.historySummary = null;
+      sortPage.selectedHistoryTimelineItem = sameTsA;
+
+      const skipPage = new CompanionHistoryPage(undefined, {} as LocalStorage) as Object as CompanionHistoryPagePrivateTest;
+      const skip = buildHistoryTimelineItem(62, '机场', 'SKIP', 1713256200000, dayKey);
+      skipPage.historyTimelineSummary = buildHistoryTimelineSummary('skip_status');
+      skipPage.historyTimelineItems = [skip];
+      skipPage.historyTimelineFilter = 'all';
+      skipPage.historyViewMode = 'detail';
+      skipPage.historySummary = buildPlaceCheckinSummary('机场');
+      skipPage.selectedHistoryTimelineItem = null;
+
+      const activePage = new CompanionHistoryPage(undefined, {} as LocalStorage) as Object as CompanionHistoryPagePrivateTest;
+      const active = buildHistoryTimelineItem(63, '车站', 'ACTIVE', 1713258000000, dayKey);
+      activePage.historyTimelineSummary = buildHistoryTimelineSummary('active_status');
+      activePage.historyTimelineItems = [active];
+      activePage.historyTimelineFilter = 'all';
+      activePage.historyViewMode = 'detail';
+      activePage.historySummary = buildPlaceCheckinSummary('车站');
+      activePage.selectedHistoryTimelineItem = null;
+
+      const pendingPage = new CompanionHistoryPage(undefined, {} as LocalStorage) as Object as CompanionHistoryPagePrivateTest;
+      const pending = buildHistoryTimelineItem(64, '码头', 'ARRIVE', 1713261600000, dayKey);
+      Reflect.set(pending as Object, 'actionType', 'PENDING');
+      pending.actualStart = 0;
+      pending.actualEnd = 0;
+      pending.status = 0;
+      pending.deviationMinutes = 0;
+      pendingPage.historyTimelineSummary = buildHistoryTimelineSummary('pending_status');
+      pendingPage.historyTimelineItems = [pending];
+      pendingPage.historyTimelineFilter = 'all';
+      pendingPage.historyViewMode = 'detail';
+      pendingPage.historySummary = buildPlaceCheckinSummary('码头');
+      pendingPage.selectedHistoryTimelineItem = null;
+
+      const positiveDeviationPage = new CompanionHistoryPage(undefined, {} as LocalStorage) as Object as CompanionHistoryPagePrivateTest;
+      const late = buildHistoryTimelineItem(65, '展馆', 'ARRIVE', 1713263400000, dayKey);
+      late.deviationMinutes = 12;
+      positiveDeviationPage.historyTimelineSummary = buildHistoryTimelineSummary('late_status');
+      positiveDeviationPage.historyTimelineItems = [late];
+      positiveDeviationPage.historyTimelineFilter = 'all';
+      positiveDeviationPage.historyViewMode = 'detail';
+      positiveDeviationPage.historySummary = buildPlaceCheckinSummary('展馆');
+      positiveDeviationPage.selectedHistoryTimelineItem = null;
+
+      const negativeDeviationPage = new CompanionHistoryPage(undefined, {} as LocalStorage) as Object as CompanionHistoryPagePrivateTest;
+      const early = buildHistoryTimelineItem(66, '剧院', 'ARRIVE', 1713265200000, dayKey);
+      early.deviationMinutes = -8;
+      negativeDeviationPage.historyTimelineSummary = buildHistoryTimelineSummary('early_status');
+      negativeDeviationPage.historyTimelineItems = [early];
+      negativeDeviationPage.historyTimelineFilter = 'all';
+      negativeDeviationPage.historyViewMode = 'detail';
+      negativeDeviationPage.historySummary = buildPlaceCheckinSummary('剧院');
+      negativeDeviationPage.selectedHistoryTimelineItem = null;
+
+      // Act
+      const groups = sortPage.getHistoryTimelineGroups() as Record<string, Object>[];
+      const skipStatus = skipPage.getCurrentHistoryStatusText();
+      const activeStatus = activePage.getCurrentHistoryStatusText();
+      const pendingStatus = pendingPage.getCurrentHistoryStatusText();
+      const positiveDeviation = positiveDeviationPage.getCurrentHistoryDeviationText();
+      const negativeDeviation = negativeDeviationPage.getCurrentHistoryDeviationText();
+
+      // Assert
+      expect(groups.length).assertEqual(1);
+      const firstGroupItems = groups[0]['items'] as HistoryTimelineItem[];
+      expect(firstGroupItems[0].id).assertEqual(60);
+      expect(firstGroupItems[1].id).assertEqual(61);
+      expect(skipStatus).assertEqual('已跳过');
+      expect(activeStatus).assertEqual('进行中');
+      expect(pendingStatus).assertEqual('未开始');
+      expect(positiveDeviation).assertEqual('晚到 12 分钟');
+      expect(negativeDeviation).assertEqual('早到 8 分钟');
+    });
+
 
   });
 }
