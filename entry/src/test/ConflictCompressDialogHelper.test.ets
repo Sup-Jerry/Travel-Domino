@@ -29,6 +29,7 @@ interface ConflictCompressDialogPrivateTest {
   selectedIds: Set<number>;
   previewPlan: CompressionPlan | null;
   safeShowToast(message: string, duration?: number): void;
+  refreshPreview(): void;
   getSelectableCandidates(): CompressionSelectionCandidate[];
   isAllSelected(): boolean;
   toggleSelectAll(next: boolean): void;
@@ -279,6 +280,91 @@ export default function conflictCompressDialogHelperTest() {
       expect(threw).assertFalse();
     });
 
+    it('boundary: conflict_compress_dialog_refresh_preview_should_clear_preview_when_context_missing', 0, () => {
+      // Arrange
+      const page = new ConflictCompressDialog(undefined, {} as LocalStorage) as Object as ConflictCompressDialogPrivateTest;
+      page.context = null;
+      page.previewPlan = {
+        status: 'OVERLOAD',
+        msg: 'stale',
+        affectedItems: [],
+        remainingGapMinutes: 8,
+        capacityMinutes: 10,
+        mode: 'RATIO'
+      };
+
+      // Act
+      page.refreshPreview();
+
+      // Assert
+      expect(page.previewPlan === null).assertTrue();
+    });
+
+    it('boundary: conflict_compress_dialog_get_selectable_candidates_should_return_empty_without_context', 0, () => {
+      // Arrange
+      const page = new ConflictCompressDialog(undefined, {} as LocalStorage) as Object as ConflictCompressDialogPrivateTest;
+      page.context = null;
+
+      // Act
+      const selectable = page.getSelectableCandidates();
+
+      // Assert
+      expect(selectable.length).assertEqual(0);
+    });
+
+    it('normal: conflict_compress_dialog_toggle_one_should_add_checked_selectable_candidate', 0, () => {
+      // Arrange
+      const page = new ConflictCompressDialog(undefined, {} as LocalStorage) as Object as ConflictCompressDialogPrivateTest;
+      const selectableCandidate = {
+        id: 9,
+        index: 0,
+        name: '午餐',
+        oldVal: 50,
+        minAllowed: 30,
+        maxReducible: 20,
+        isRigid: false,
+        selectable: true
+      } as CompressionSelectionCandidate;
+      page.context = {
+        targetIndex: 1,
+        targetTime: '11:40',
+        neededGapMinutes: 15,
+        naturalArrivalMinutes: 600,
+        chainStartIndex: 0,
+        candidates: [selectableCandidate]
+      };
+      page.selectedIds = new Set<number>();
+      page.mode = 'RATIO';
+
+      // Act
+      page.toggleOne(selectableCandidate, true);
+
+      // Assert
+      expect(page.selectedIds.has(selectableCandidate.id)).assertTrue();
+    });
+
+    it('boundary: conflict_compress_dialog_preview_new_duration_should_fallback_to_old_value_without_preview_plan', 0, () => {
+      // Arrange
+      const page = new ConflictCompressDialog(undefined, {} as LocalStorage) as Object as ConflictCompressDialogPrivateTest;
+      const candidate = {
+        id: 10,
+        index: 3,
+        name: '景点B',
+        oldVal: 45,
+        minAllowed: 20,
+        maxReducible: 25,
+        isRigid: false,
+        selectable: true
+      } as CompressionSelectionCandidate;
+      page.previewPlan = null;
+
+      // Act
+      const newDuration = page.getPreviewNewDuration(candidate);
+
+      // Assert
+      expect(newDuration).assertEqual(45);
+    });
+
     it('normal: conflict_compress_dialog_initial_render_should_support_selectable_preview_branch', 0, () => {
       // Arrange
       const page = new ConflictCompressDialog(undefined, {} as LocalStorage) as Object as ConflictCompressDialogPrivateTest;
@@ -355,6 +441,67 @@ export default function conflictCompressDialogHelperTest() {
 
       // Assert
       expect(threw).assertFalse();
+    });
+
+    it('boundary: conflict_compress_dialog_initial_render_should_support_empty_context_branch', 0, () => {
+      // Arrange
+      const page = new ConflictCompressDialog(undefined, {} as LocalStorage) as Object as ConflictCompressDialogPrivateTest;
+      let threw = false;
+      page.targetIndex = 4;
+      page.targetTime = '13:30';
+      page.targetName = '午后站点';
+      page.context = null;
+      page.previewPlan = null;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('combined: conflict_compress_dialog_initial_render_should_support_equal_mode_visual_branch', 0, () => {
+      // Arrange
+      const page = new ConflictCompressDialog(undefined, {} as LocalStorage) as Object as ConflictCompressDialogPrivateTest;
+      let threw = false;
+      page.targetIndex = 5;
+      page.targetTime = '15:00';
+      page.targetName = '返程点';
+      page.mode = 'EQUAL';
+      page.context = {
+        targetIndex: 5,
+        targetTime: '15:00',
+        neededGapMinutes: 20,
+        naturalArrivalMinutes: 900,
+        chainStartIndex: 2,
+        candidates: [
+          { id: 21, index: 2, name: '咖啡', oldVal: 40, minAllowed: 20, maxReducible: 20, isRigid: false, selectable: true }
+        ]
+      };
+      page.selectedIds = new Set<number>([21]);
+      page.previewPlan = {
+        status: 'COMPRESS_CONFIRM',
+        msg: 'ok',
+        affectedItems: [{ index: 2, name: '咖啡', oldVal: 40, newVal: 25 }],
+        remainingGapMinutes: 0,
+        capacityMinutes: 20,
+        mode: 'EQUAL'
+      };
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.mode).assertEqual('EQUAL');
     });
   });
 }

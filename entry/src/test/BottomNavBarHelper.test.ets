@@ -110,6 +110,7 @@ interface GlobalBottomNavBarPrivateTest {
   setTabPressed(tab: AppNavTab, pressed: boolean): void;
   onTabTouch(tab: AppNavTab, event: BottomNavTouchEventTest): void;
   handleTabTap(tab: AppNavTab): void;
+  build(): void;
   initialRender(): void;
 }
 
@@ -131,6 +132,7 @@ interface PlanBottomActionBarPrivateTest {
   setInitiallyProvidedValue(params: PlanBottomActionBarParamsTest): void;
   updateStateVars(params: PlanBottomActionBarParamsTest): void;
   getPalette(): BottomNavPaletteTest;
+  build(): void;
   initialRender(): void;
 }
 
@@ -715,6 +717,106 @@ export default function bottomNavBarHelperTest() {
       expect(page.aiEnabled).assertFalse();
       expect(page.addEnabled).assertFalse();
       expect(palette.textTertiary).assertEqual(ThemeCenter.getPalette('dark').textTertiary);
+    });
+
+    it('combined: global_bottom_nav_initial_render_should_cover_archive_active_and_pressed_visual_branches', 0, () => {
+      // Arrange
+      const activePage = new GlobalBottomNavBar(undefined, {} as LocalStorage) as Object as GlobalBottomNavBarPrivateTest;
+      const pressedPage = new GlobalBottomNavBar(undefined, {} as LocalStorage) as Object as GlobalBottomNavBarPrivateTest;
+      const routedUrls: string[] = [];
+      const fakeRouter = new GlobalBottomNavRouterImplTest(routedUrls);
+      const fakeUiContext = new GlobalBottomNavUIContextImplTest(fakeRouter);
+      activePage.getUIContext = (): GlobalBottomNavUIContextTest => fakeUiContext;
+      pressedPage.getUIContext = (): GlobalBottomNavUIContextTest => fakeUiContext;
+      activePage.currentTab = 'archive';
+      activePage.transitionTab = 'archive';
+      activePage.pressedTab = '';
+      activePage.showCenterFab = false;
+      pressedPage.currentTab = 'home';
+      pressedPage.transitionTab = '';
+      pressedPage.pressedTab = 'archive';
+      pressedPage.showCenterFab = false;
+      let activeThrew = false;
+      let pressedThrew = false;
+
+      // Act
+      try {
+        activePage.initialRender();
+      } catch (_error) {
+        activeThrew = true;
+      }
+      try {
+        pressedPage.initialRender();
+      } catch (_error) {
+        pressedThrew = true;
+      }
+
+      // Assert
+      expect(activeThrew).assertFalse();
+      expect(pressedThrew).assertFalse();
+      expect(activePage.isVisualActive('archive')).assertTrue();
+      expect(pressedPage.isTabPressed('archive')).assertTrue();
+    });
+
+    it('combined: global_bottom_nav_initial_render_should_cover_home_active_pressed_and_fab_visual_branches', 0, () => {
+      // Arrange
+      const activePage = new GlobalBottomNavBar(undefined, {} as LocalStorage) as Object as GlobalBottomNavBarPrivateTest;
+      const pressedFabPage = new GlobalBottomNavBar(undefined, {} as LocalStorage) as Object as GlobalBottomNavBarPrivateTest;
+      const routedUrls: string[] = [];
+      const fakeRouter = new GlobalBottomNavRouterImplTest(routedUrls);
+      const fakeUiContext = new GlobalBottomNavUIContextImplTest(fakeRouter);
+      activePage.getUIContext = (): GlobalBottomNavUIContextTest => fakeUiContext;
+      pressedFabPage.getUIContext = (): GlobalBottomNavUIContextTest => fakeUiContext;
+      activePage.currentTab = 'home';
+      activePage.pressedTab = '';
+      activePage.showCenterFab = true;
+      activePage.fabPressed = false;
+      pressedFabPage.currentTab = 'profile';
+      pressedFabPage.pressedTab = 'home';
+      pressedFabPage.showCenterFab = true;
+      pressedFabPage.fabPressed = true;
+      let activeThrew = false;
+      let pressedFabThrew = false;
+
+      // Act
+      try {
+        activePage.initialRender();
+      } catch (_error) {
+        activeThrew = true;
+      }
+      try {
+        pressedFabPage.initialRender();
+      } catch (_error) {
+        pressedFabThrew = true;
+      }
+
+      // Assert
+      expect(activeThrew).assertFalse();
+      expect(pressedFabThrew).assertFalse();
+      expect(activePage.isVisualActive('home')).assertTrue();
+      expect(pressedFabPage.isTabPressed('home')).assertTrue();
+      expect(pressedFabPage.fabPressed).assertTrue();
+    });
+
+    it('boundary: plan_bottom_action_bar_initial_render_should_cover_disabled_ai_and_add_visual_branches', 0, () => {
+      // Arrange
+      const page = new PlanBottomActionBar(undefined, {} as LocalStorage) as Object as PlanBottomActionBarPrivateTest;
+      page.effectiveTheme = 'dark';
+      page.aiEnabled = false;
+      page.addEnabled = false;
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.aiEnabled).assertFalse();
+      expect(page.addEnabled).assertFalse();
     });
   });
 }

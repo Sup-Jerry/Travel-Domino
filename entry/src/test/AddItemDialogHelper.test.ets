@@ -616,6 +616,34 @@ export default function addItemDialogHelperTest() {
       expect(startText).assertEqual('00:00');
     });
 
+    it('normal: add_item_dialog_about_to_appear_should_prefer_fixed_time_and_positive_pretravel_for_named_schedule', 0, () => {
+      // Arrange
+      const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateTest;
+      page.setInitiallyProvidedValue({
+        initName: 'Gallery',
+        initIsSchedule: true,
+        initDuration: 40,
+        initSuggestedTime: '09:15',
+        initFixedTime: '11:45',
+        initDayOffset: 2,
+        initPreTravel: 18,
+        initPriority: 1,
+        planStartDate: new Date(2026, 5, 10, 0, 0, 0, 0).getTime()
+      });
+
+      // Act
+      page.aboutToAppear();
+      const startText = page.formatTime(page.startTime);
+      const endText = page.formatTime(page.endTime);
+
+      // Assert
+      expect(page.mode).assertEqual(1);
+      expect(page.preTravel).assertEqual(18);
+      expect(page.isMustVisit).assertTrue();
+      expect(startText).assertEqual('11:45');
+      expect(endText).assertEqual('12:25');
+    });
+
     it('normal: add_item_permission_should_return_true_when_location_already_granted', 0, async () => {
       // Arrange
       const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateTest;
@@ -721,5 +749,86 @@ export default function addItemDialogHelperTest() {
           hooks.restore();
         }
       });
+
+    it('normal: add_item_permission_should_return_true_when_system_permission_request_succeeds', 0,
+      async () => {
+        // Arrange
+        const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateTest;
+        const hooks = new AddItemDialogAbilityHooksTest();
+        const manager = new AddItemDialogPermissionManagerMockTest();
+        const uiContext = new AddItemDialogUiContextMockTest();
+        manager.checkResult = abilityAccessCtrl.GrantStatus.PERMISSION_DENIED;
+        manager.requestResults = [0];
+        hooks.setAtManager(manager as Object);
+        hooks.setBundleInfo(204);
+        Reflect.set(page as Object, 'getUIContext', (): AddItemDialogUiContextTest => uiContext);
+
+        try {
+          // Act
+          const grantedPromise = page.checkAndRequestPermission();
+          await flushAddItemDialogMicrotasks();
+          const alert = uiContext.lastAlert;
+          if (alert) {
+            await alert.secondaryButton.action();
+          }
+          const granted = await grantedPromise;
+
+          // Assert
+          expect(uiContext.alertCount).assertEqual(1);
+          expect(granted).assertTrue();
+        } finally {
+          hooks.restore();
+        }
+      });
+
+    it('combined: add_item_dialog_initial_render_should_support_schedule_and_backlog_visual_branches', 0, () => {
+      // Arrange
+      const schedulePage = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateTest;
+      const backlogPage = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateTest;
+      let scheduleThrew = false;
+      let backlogThrew = false;
+
+      schedulePage.controller = new AddItemDialogControllerMockTest() as Object;
+      schedulePage.mode = 1;
+      schedulePage.name = 'Schedule Spot';
+      schedulePage.note = 'fixed route';
+      schedulePage.duration = 55;
+      schedulePage.isSchedule = true;
+      schedulePage.isAnchor = true;
+      schedulePage.isMustVisit = true;
+      schedulePage.showTip = true;
+      schedulePage.effectiveTheme = 'dark';
+      schedulePage.startTime = new Date(2026, 5, 12, 10, 20, 0, 0);
+      schedulePage.endTime = new Date(2026, 5, 12, 11, 15, 0, 0);
+
+      backlogPage.controller = new AddItemDialogControllerMockTest() as Object;
+      backlogPage.mode = 0;
+      backlogPage.name = 'Backlog Spot';
+      backlogPage.note = '';
+      backlogPage.duration = 30;
+      backlogPage.isSchedule = false;
+      backlogPage.isAnchor = false;
+      backlogPage.isMustVisit = false;
+      backlogPage.showTip = false;
+      backlogPage.effectiveTheme = 'light';
+      backlogPage.startTime = new Date(2026, 5, 12, 8, 0, 0, 0);
+      backlogPage.endTime = new Date(2026, 5, 12, 8, 30, 0, 0);
+
+      // Act
+      try {
+        schedulePage.initialRender();
+      } catch (_error) {
+        scheduleThrew = true;
+      }
+      try {
+        backlogPage.initialRender();
+      } catch (_error) {
+        backlogThrew = true;
+      }
+
+      // Assert
+      expect(scheduleThrew).assertFalse();
+      expect(backlogThrew).assertFalse();
+    });
   });
 }
