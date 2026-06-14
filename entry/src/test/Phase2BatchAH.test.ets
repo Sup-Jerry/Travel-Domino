@@ -1513,6 +1513,72 @@ export default function phase2BatchAHTest() {
       eventHooks.restore();
       expect(message.indexOf('rollback_ai_count_mismatch') >= 0).assertTrue();
     });
+
+    it('boundary: timeline_ai_apply_replan_preview_overwrite_should_skip_missing_inserted_target', 0, async () => {
+      // Arrange
+      const eventHooks = new StaticHooksForAH(EventRepositoryImpl as Object, ['deleteEventsBySource', 'updateFields']);
+      const entityHooks = new StaticHooksForAH(EventEntity as Object, ['fromInterface']);
+      const originalFromInterface = Reflect.get(EventEntity as Object, 'fromInterface') as
+        (item: TravelPlanItem, planId: number) => EventEntity;
+      const persistence = new SnapshotPersistenceForAH(createPlanSnapshotForAH('北京一日游', 0));
+      const host = new TimelineAiHostForAH();
+      host.persistence = persistence;
+      host.events = [createEventForAH(1, 'old_ai', 1)];
+      let updateCalls = 0;
+      eventHooks.set('deleteEventsBySource', async (): Promise<void> => {
+        return;
+      });
+      eventHooks.set('updateFields', async (): Promise<void> => {
+        updateCalls += 1;
+      });
+      entityHooks.set('fromInterface', (item: TravelPlanItem, planId: number): EventEntity => {
+        const copied: TravelPlanItem = {
+          id: (item.id || 0) + 99,
+          name: item.name,
+          duration: item.duration,
+          type: item.type,
+          preTravelMinutes: item.preTravelMinutes,
+          sortOrder: item.sortOrder,
+          status: item.status,
+          lockStatus: item.lockStatus,
+          fixedStartTime: item.fixedStartTime,
+          dayOffset: item.dayOffset,
+          itemType: item.itemType,
+          priority: item.priority,
+          isTravelManual: item.isTravelManual,
+          source: item.source,
+          aiReasoning: item.aiReasoning,
+          delFlag: item.delFlag,
+          groupId: item.groupId,
+          address: item.address,
+          travelMode: item.travelMode
+        };
+        return originalFromInterface(copied, planId);
+      });
+      TimelineAiService.setInsertAiEventHookForTest(async (): Promise<number> => {
+        return 5001;
+      });
+      const service = new TimelineAiService(host);
+      const preview: AiReplanPreviewResult = {
+        prompt: '北京一日游',
+        strategyMode: 0,
+        generatedAt: Date.now(),
+        itemCount: 1,
+        items: [{ name: 'missing_target_ai', duration: 60, itemType: 0, aiReasoning: 'r' }]
+      };
+
+      // Act
+      await service.applyReplanPreview(preview, 'OVERWRITE');
+
+      // Assert
+      TimelineAiService.setInsertAiEventHookForTest(null);
+      entityHooks.restore();
+      eventHooks.restore();
+      expect(updateCalls).assertEqual(0);
+      expect(host.events.length).assertEqual(1);
+      expect(host.events[0].id).assertEqual(5100);
+      expect(host.events[0].status).assertEqual(0);
+    });
   });
 
   describe('phase2BatchAHTimelineExecutionService', () => {
