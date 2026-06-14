@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@ohos/hypium';
 import agconnect from '@hw-agconnect/api-ohos';
+import { AGConnectCloudDB } from '@hw-agconnect/database-ohos';
 import { UserProfileRepositoryImpl } from '../main/ets/infrastructure/persistence/UserProfileRepositoryImpl';
 import { UserProfileEntity } from '../main/ets/domain/entity/UserProfileEntity';
 
@@ -59,6 +60,10 @@ class NumericStringCarrierForUserProfileTest implements TimestampCarrierForUserP
   }
 }
 
+class MissingToStringCarrierForUserProfileTest {
+  toString: Object | undefined = undefined;
+}
+
 class FakeSnapshotForUserProfileTest {
   getSnapshotObjects(): Object[] | undefined {
     return undefined;
@@ -82,6 +87,20 @@ class FakeCloudDbForUserProfileTest {
   async openCloudDBZone(_config: Object): Promise<Object> {
     this.openCount++;
     return this.zone;
+  }
+}
+
+class FakeCloudDbFactoryForUserProfileTest {
+  getInstanceCount: number = 0;
+  private readonly instanceValue: Object;
+
+  constructor(instanceValue: Object) {
+    this.instanceValue = instanceValue;
+  }
+
+  async getInstance(_options: Object): Promise<Object> {
+    this.getInstanceCount++;
+    return this.instanceValue;
   }
 }
 
@@ -269,6 +288,18 @@ export default function userProfileRepositoryImplTest() {
       expect(profile === null).assertTrue();
     });
 
+    it('boundary: private_timestamp_helper_should_return_zero_when_to_string_is_missing', 0, () => {
+      // Arrange
+      const repo = new UserProfileRepositoryImpl() as Object as UserProfileRepositoryPrivateForTest;
+      const carrier = new MissingToStringCarrierForUserProfileTest();
+
+      // Act
+      const timestamp = repo.toTimestamp(carrier as Object);
+
+      // Assert
+      expect(timestamp).assertEqual(0);
+    });
+
     it('boundary: create_default_profile_should_short_circuit_when_existing_profile_already_present', 0, async () => {
       // Arrange
       const repo = new UserProfileRepositoryImpl() as Object as UserProfileRepositoryPrivateForTest;
@@ -304,6 +335,36 @@ export default function userProfileRepositoryImplTest() {
       expect(zone === fakeZone).assertTrue();
       expect(fakeCloudDb.openCount).assertEqual(1);
       expect(timestamp).assertEqual(123456);
+    });
+
+    it('combined: private_open_cloud_db_zone_internal_should_create_cloud_db_when_cache_missing', 0, async () => {
+      // Arrange
+      const repo = new UserProfileRepositoryImpl() as Object as UserProfileRepositoryPrivateForTest;
+      const originInstance = Reflect.get(agconnect as Object, 'instance') as Object;
+      const originCloudDbGetInstance = Reflect.get(AGConnectCloudDB as Object, 'getInstance') as Object;
+      const fakeZone = new Object();
+      const fakeCloudDb = new FakeCloudDbForUserProfileTest(fakeZone);
+      const factory = new FakeCloudDbFactoryForUserProfileTest(fakeCloudDb as Object);
+      Reflect.set(agconnect as Object, 'instance', (): Object => {
+        return new FakeAgconnectInstanceForUserProfileTest() as Object;
+      });
+      Reflect.set(AGConnectCloudDB as Object, 'getInstance', async (options: Object): Promise<Object> => {
+        return factory.getInstance(options);
+      });
+      repo.bindContext(new FakeContextForUserProfileTest() as Object);
+      Reflect.set(repo as Object, 'cloudDb', null);
+
+      // Act
+      const zone = await repo.openCloudDbZoneInternal();
+      const cachedCloudDb = Reflect.get(repo as Object, 'cloudDb') as Object;
+      Reflect.set(AGConnectCloudDB as Object, 'getInstance', originCloudDbGetInstance);
+      Reflect.set(agconnect as Object, 'instance', originInstance);
+
+      // Assert
+      expect(zone === fakeZone).assertTrue();
+      expect(factory.getInstanceCount).assertEqual(1);
+      expect(cachedCloudDb === fakeCloudDb).assertTrue();
+      expect(fakeCloudDb.openCount).assertEqual(1);
     });
 
     it('invalid: private_open_cloud_db_zone_internal_should_throw_wrapped_error_when_all_zone_names_fail', 0, async () => {
