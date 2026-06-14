@@ -1573,6 +1573,132 @@ export default function phase2BatchAITest() {
       expect(severeByText).assertTrue();
       expect(severeFalse).assertFalse();
     });
+
+    it('boundary: weather_context_builder_should_fallback_to_now_when_planning_start_time_missing', 0, async () => {
+      // Arrange
+      const weatherService = new FakeWeatherServiceForBatch();
+      const builder = new WeatherContextBuilder(weatherService, new FakeRiskEvaluatorForBatch(), new FakePolicyResolverForBatch());
+      const event = createEventForBatch(960, 1, 31.8, 121.8, 1);
+      event.dynamic_start_time = 0;
+
+      // Act
+      const result = await builder.buildPlanningContext([event]);
+
+      // Assert
+      expect(weatherService.lastBatchPoints.length).assertEqual(1);
+      expect((weatherService.lastBatchPoints[0].targetTime ?? 0) > 0).assertTrue();
+      expect(result.context.bindings[0].weather === undefined).assertTrue();
+    });
+
+    it('boundary: weather_context_builder_should_fallback_to_now_when_execution_start_time_missing', 0, async () => {
+      // Arrange
+      const weatherService = new FakeWeatherServiceForBatch();
+      const builder = new WeatherContextBuilder(weatherService, new FakeRiskEvaluatorForBatch(), new FakePolicyResolverForBatch());
+      const event = createEventForBatch(961, 1, 31.9, 121.9, 1);
+      event.dynamic_start_time = 0;
+      weatherService.currentInfo = null;
+
+      // Act
+      const result = await builder.buildExecutionContext([event], undefined);
+
+      // Assert
+      expect(weatherService.lastBatchPoints.length).assertEqual(1);
+      expect((weatherService.lastBatchPoints[0].targetTime ?? 0) > 0).assertTrue();
+      expect(result.context.bindings[0].weather === undefined).assertTrue();
+    });
+
+    it('boundary: weather_context_builder_execution_suggestions_should_keep_single_rain_target_order', 0, () => {
+      // Arrange
+      const builder = new WeatherContextBuilder();
+      const context = createBaseExecutionContextForBatch(['RAIN']);
+      context.nextNodeWeather = {
+        locationKey: 'k_single',
+        sourceType: 'PLAN_LOCATION',
+        weatherTime: 1,
+        fetchTime: 1,
+        conditionCode: 'RAIN',
+        conditionText: '小雨'
+      };
+
+      // Act
+      const suggestions = builder.buildExecutionSuggestions(context);
+      const targetOrderNodeIds = suggestions[0].actionPayload?.targetOrderNodeIds ?? [];
+
+      // Assert
+      expect(suggestions.length).assertEqual(2);
+      expect(targetOrderNodeIds.length).assertEqual(1);
+      expect(targetOrderNodeIds[0]).assertEqual('1');
+    });
+
+    it('boundary: weather_context_builder_execution_suggestions_should_return_unknown_replacement_when_risk_tags_empty', 0, () => {
+      // Arrange
+      const builder = new WeatherContextBuilder();
+      const context = createBaseExecutionContextForBatch([]);
+
+      // Act
+      const suggestions = builder.buildExecutionSuggestions(context);
+
+      // Assert
+      expect(suggestions.length).assertEqual(1);
+      expect(suggestions[0].triggerType).assertEqual('UNKNOWN');
+      expect(suggestions[0].actionType).assertEqual('REPLACE_NODE');
+    });
+
+    it('combined: weather_context_builder_adjustments_should_use_event_temperature_fallback_and_allow_empty_related_ids', 0, () => {
+      // Arrange
+      const builder = new WeatherContextBuilder();
+      const outdoor = createEventForBatch(962, 1, 32.0, 122.0, 1);
+      outdoor.type = 0;
+      outdoor.weather_temperature = 38;
+      const binding = createBindingForBatch(outdoor, 75, []);
+      binding.weather = undefined;
+      const heatContext = createBaseExecutionContextForBatch([]);
+      heatContext.futureNodeWeatherList = [binding];
+
+      const indoor = createEventForBatch(963, 1, 32.1, 122.1, 1);
+      indoor.type = 1;
+      const infoContext = createBaseExecutionContextForBatch(['COLD']);
+      infoContext.futureNodeWeatherList = [createBindingForBatch(indoor, 80, [])];
+
+      // Act
+      const shortenSuggestions = builder.buildExecutionAdjustments(88, heatContext, [outdoor]);
+      const infoSuggestions = builder.buildExecutionAdjustments(89, infoContext, [indoor]);
+
+      // Assert
+      expect(shortenSuggestions.length).assertEqual(1);
+      expect(shortenSuggestions[0].actionType).assertEqual('SHORTEN_STAY');
+      expect(infoSuggestions.length).assertEqual(1);
+      expect(infoSuggestions[0].actionType).assertEqual('NONE');
+      expect((infoSuggestions[0].relatedNodeIds ?? []).length).assertEqual(0);
+    });
+
+    it('boundary: weather_context_builder_day_windows_should_fallback_orphan_binding_to_day_zero_and_high_preference_text', 0, () => {
+      // Arrange
+      const builder = new WeatherContextBuilder() as Object as WeatherContextBuilderPrivateAI;
+      const event = createEventForBatch(964, 1, 32.2, 122.2, 1);
+      event.dynamic_day_offset = 3;
+      const orphan = createEventForBatch(965, 1, 32.3, 122.3, 2);
+      const bindings: PlanNodeWeatherBinding[] = [createBindingForBatch(orphan, 84, [])];
+
+      // Act
+      const dayWindows = builder.buildDayWindows([event], bindings);
+      const summary = new WeatherContextBuilder().buildPromptSummary({
+        stage: 'CONFIRMED',
+        generatedAt: 1,
+        bindings: [createBindingForBatch(event, 84, [])],
+        routeSuitability: { routeScore: 84, riskTags: [], summaryText: 'ok' }
+      }, {
+        heatSensitivity: 2,
+        rainSensitivity: 0,
+        weatherRiskTolerance: 2
+      });
+
+      // Assert
+      expect(dayWindows.length).assertEqual(1);
+      expect(dayWindows[0].dayOffset).assertEqual(0);
+      expect(summary.indexOf('怕热高') >= 0).assertTrue();
+      expect(summary.indexOf('怕雨低') >= 0).assertTrue();
+    });
   });
 }
 
