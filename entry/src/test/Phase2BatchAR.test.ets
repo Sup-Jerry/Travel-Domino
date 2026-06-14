@@ -976,6 +976,24 @@ export default function phase2BatchARTest() {
       }
     });
 
+    it('boundary: insert_event_should_return_minus_one_when_store_missing', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
+      clearDirtyPlanIdsAR();
+      const hooks = new RdbHooksAR();
+      hooks.bindStore(null);
+      try {
+        const rowId = await EventRepositoryImpl.insertEvent(34, createTravelPlanItemAR('NoStore'));
+        const dirty = EventRepositoryImpl.consumeDirtyPlanIds();
+        expect(rowId).assertEqual(-1);
+        expect(dirty.length).assertEqual(0);
+      } finally {
+        hooks.restore();
+        clearDirtyPlanIdsAR();
+      }
+    });
+
     it('normal: save_all_events_should_update_insert_and_delete_stale_rows', 0, async () => {
       // Arrange
       // Act
@@ -1060,6 +1078,23 @@ export default function phase2BatchARTest() {
       expect(store.commitCount).assertEqual(0);
     });
 
+    it('boundary: save_all_events_should_return_early_when_store_missing', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
+      clearDirtyPlanIdsAR();
+      const hooks = new RdbHooksAR();
+      hooks.bindStore(null);
+      try {
+        await EventRepositoryImpl.saveAllEvents(44, [createTravelPlanItemAR('NoStore', 1)]);
+        const dirty = EventRepositoryImpl.consumeDirtyPlanIds();
+        expect(dirty.length).assertEqual(0);
+      } finally {
+        hooks.restore();
+        clearDirtyPlanIdsAR();
+      }
+    });
+
     it('normal: get_all_events_should_map_rows_into_items', 0, async () => {
       // Arrange
       // Act
@@ -1090,6 +1125,27 @@ export default function phase2BatchARTest() {
       try {
         const items = await EventRepositoryImpl.getAllEvents(7002);
         expect(items.length).assertEqual(0);
+      } finally {
+        hooks.restore();
+      }
+    });
+
+    it('boundary: get_all_events_should_map_flow_type_when_lock_status_is_not_positive', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
+      const row = createEventRowAR(72, 7004);
+      Reflect.set(row, 'lock_status', 0);
+      Reflect.set(row, 'latitude', 0);
+      const store = new FakeRdbStoreAR();
+      store.queueQueryRows([row]);
+      const hooks = new RdbHooksAR();
+      hooks.bindStore(store as Object);
+      try {
+        const items = await EventRepositoryImpl.getAllEvents(7004);
+        expect(items.length).assertEqual(1);
+        expect(items[0].type).assertEqual('FLOW');
+        expect(items[0].lockStatus).assertEqual(0);
       } finally {
         hooks.restore();
       }
@@ -1237,6 +1293,26 @@ export default function phase2BatchARTest() {
         const dirty = EventRepositoryImpl.consumeDirtyPlanIds();
         expect(store.rollbackCount).assertEqual(1);
         expect(store.commitCount).assertEqual(0);
+        expect(dirty.length).assertEqual(0);
+      } finally {
+        hooks.restore();
+        clearDirtyPlanIdsAR();
+      }
+    });
+
+    it('boundary: update_timeline_consistency_should_commit_without_mark_dirty_when_hint_missing', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
+      clearDirtyPlanIdsAR();
+      const store = new FakeRdbStoreAR();
+      store.queueUpdateResult(1);
+      const hooks = new RdbHooksAR();
+      hooks.bindStore(store as Object);
+      try {
+        await EventRepositoryImpl.updateTimelineConsistency([createTravelPlanItemAR('NoHint', 94)]);
+        const dirty = EventRepositoryImpl.consumeDirtyPlanIds();
+        expect(store.commitCount).assertEqual(1);
         expect(dirty.length).assertEqual(0);
       } finally {
         hooks.restore();
@@ -1545,6 +1621,36 @@ export default function phase2BatchARTest() {
       }
     });
 
+    it('boundary: apply_runtime_transition_should_reuse_plan_usable_cache_for_repeated_unusable_plan', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
+      clearDirtyPlanIdsAR();
+      const store = new FakeRdbStoreAR();
+      store.queueQueryRows([createEventStateRowAR(267, 9167, 1, 0, 0, EventEntity.STATE_PENDING)]);
+      store.queueQueryRows([
+        createEventStateRowAR(889, 9778, 1, 20, 0, EventEntity.STATE_PENDING),
+        createEventStateRowAR(890, 9778, 1, 30, 0, EventEntity.STATE_PENDING)
+      ]);
+      store.queueQueryRows([createPlanRowAR(9778, 1, 2)]);
+      store.queueUpdateResult(1);
+      const hooks = new RdbHooksAR();
+      hooks.bindStore(store as Object);
+      try {
+        const result = await EventRepositoryImpl.applyRuntimeTransition({
+          planId: 9167,
+          eventId: 267,
+          transition: 'START',
+          timestamp: 1999
+        });
+        expect(result.ok).assertTrue();
+        expect(store.queryCalls.length).assertEqual(3);
+      } finally {
+        hooks.restore();
+        clearDirtyPlanIdsAR();
+      }
+    });
+
     it('normal: apply_runtime_transition_should_complete_started_event', 0, async () => {
       // Arrange
       // Act
@@ -1782,6 +1888,41 @@ export default function phase2BatchARTest() {
       try {
         const result = await EventRepositoryImpl.findGlobalActiveEvent();
         expect(result === null).assertTrue();
+      } finally {
+        hooks.restore();
+      }
+    });
+
+    it('boundary: find_global_active_event_should_return_null_when_store_missing', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
+      const hooks = new RdbHooksAR();
+      hooks.bindStore(null);
+      try {
+        const result = await EventRepositoryImpl.findGlobalActiveEvent();
+        expect(result === null).assertTrue();
+      } finally {
+        hooks.restore();
+      }
+    });
+
+    it('boundary: find_global_active_event_should_reuse_plan_usable_cache_for_repeated_unusable_plan', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
+      const store = new FakeRdbStoreAR();
+      store.queueQueryRows([
+        createActiveEventRowAR(307, 9207, 'TrashA', 220),
+        createActiveEventRowAR(308, 9207, 'TrashB', 210)
+      ]);
+      store.queueQueryRows([createPlanRowAR(9207, 1, 2)]);
+      const hooks = new RdbHooksAR();
+      hooks.bindStore(store as Object);
+      try {
+        const result = await EventRepositoryImpl.findGlobalActiveEvent();
+        expect(result === null).assertTrue();
+        expect(store.queryCalls.length).assertEqual(2);
       } finally {
         hooks.restore();
       }
