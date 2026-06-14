@@ -9,6 +9,7 @@ import planStateMachineCoreTest from './PlanStateMachineCore.test';
 import planStateMachineLinkTest from './PlanStateMachineLink.test';
 import planStateMachineTCSuiteTest from './PlanStateMachineTCSuite.test';
 import aiServiceTest from './AiService.test';
+import aiResponseParserCoverageTest from './AiResponseParserCoverage.test';
 import preferenceManagerTest from './PreferenceManager.test';
 import mapServiceImplTest from './MapServiceImpl.test';
 import dateUtilTest from './DateUtil.test';
@@ -405,6 +406,7 @@ const registeredSuiteNames: string[] = [
   'PlanStateMachineLink',
   'PlanStateMachineTCSuite',
   'AiService',
+  'AiResponseParserCoverage',
   'PreferenceManager',
   'MapServiceImpl',
   'DateUtil',
@@ -824,6 +826,7 @@ export default function testsuite() {
   planStateMachineLinkTest();
   planStateMachineTCSuiteTest();
   aiServiceTest();
+  aiResponseParserCoverageTest();
   preferenceManagerTest();
   mapServiceImplTest();
   dateUtilTest();
