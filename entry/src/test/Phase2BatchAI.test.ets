@@ -1630,6 +1630,27 @@ export default function phase2BatchAITest() {
       expect(targetOrderNodeIds[0]).assertEqual('1');
     });
 
+    it('combined: weather_context_builder_execution_suggestions_should_swap_first_two_rain_targets_when_multiple_nodes_exist', 0, () => {
+      // Arrange
+      const builder = new WeatherContextBuilder();
+      const context = createBaseExecutionContextForBatch(['RAIN']);
+      context.futureNodeWeatherList = [
+        { nodeId: '1', eventId: 1, nodeName: 'event_1', suitabilityScore: 70, riskTags: ['RAIN'] },
+        { nodeId: '2', eventId: 2, nodeName: 'event_2', suitabilityScore: 72, riskTags: ['RAIN'] },
+        { nodeId: '3', eventId: 3, nodeName: 'event_3', suitabilityScore: 74, riskTags: ['RAIN'] }
+      ];
+
+      // Act
+      const suggestions = builder.buildExecutionSuggestions(context);
+      const targetOrderNodeIds = suggestions[0].actionPayload?.targetOrderNodeIds ?? [];
+
+      // Assert
+      expect(targetOrderNodeIds.length).assertEqual(3);
+      expect(targetOrderNodeIds[0]).assertEqual('2');
+      expect(targetOrderNodeIds[1]).assertEqual('1');
+      expect(targetOrderNodeIds[2]).assertEqual('3');
+    });
+
     it('boundary: weather_context_builder_execution_suggestions_should_return_unknown_replacement_when_risk_tags_empty', 0, () => {
       // Arrange
       const builder = new WeatherContextBuilder();
@@ -1670,6 +1691,26 @@ export default function phase2BatchAITest() {
       expect(infoSuggestions.length).assertEqual(1);
       expect(infoSuggestions[0].actionType).assertEqual('NONE');
       expect((infoSuggestions[0].relatedNodeIds ?? []).length).assertEqual(0);
+    });
+
+    it('boundary: weather_context_builder_adjustments_should_keep_temperature_undefined_when_binding_and_event_temperature_missing', 0, () => {
+      // Arrange
+      const builder = new WeatherContextBuilder();
+      const mild = createEventForBatch(966, 1, 32.4, 122.4, 1);
+      mild.type = 0;
+      mild.weather_temperature = Number.NaN;
+      const binding = createBindingForBatch(mild, 82, ['COLD']);
+      binding.weather = undefined;
+      const context = createBaseExecutionContextForBatch(['COLD']);
+      context.futureNodeWeatherList = [binding];
+
+      // Act
+      const suggestions = builder.buildExecutionAdjustments(90, context, [mild]);
+
+      // Assert
+      expect(suggestions.length).assertEqual(1);
+      expect(suggestions[0].actionType).assertEqual('NONE');
+      expect((suggestions[0].relatedNodeIds ?? []).length).assertEqual(0);
     });
 
     it('boundary: weather_context_builder_day_windows_should_fallback_orphan_binding_to_day_zero_and_high_preference_text', 0, () => {
