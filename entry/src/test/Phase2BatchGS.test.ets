@@ -1,14 +1,20 @@
 import { describe, expect, it } from '@ohos/hypium';
 import { EventEntity } from '../main/ets/model/entity/EventEntity';
 import { WeatherContextBuilder } from '../main/ets/domain/services/WeatherContextBuilder';
+import { AmapWeatherService } from '../main/ets/infrastructure/services/AmapWeatherService';
+import { WeatherInfo } from '../main/ets/infrastructure/adapters/IWeatherAdapter';
+import { ExecutionContext } from '../main/ets/domain/statemachine/ExecutionContext';
+import { PlanStatus } from '../main/ets/domain/statemachine/PlanStatus';
 import {
   CityWeatherBucket,
+  GeoPointInput,
   PlanNodeWeatherBinding,
   WeatherContext,
   WeatherDayWindow,
   WeatherSnapshot,
   WeatherSuggestion,
-  WeatherTrendTag
+  WeatherTrendTag,
+  WeatherUserPreference
 } from '../main/ets/domain/services/WeatherModels';
 
 interface WeatherContextBuilderPrivateGS {
@@ -16,10 +22,48 @@ interface WeatherContextBuilderPrivateGS {
   buildCollabSummary(dayWindows: WeatherDayWindow[], cityBuckets: CityWeatherBucket[], trendTag: WeatherTrendTag): string;
   resolveDominantTrend(dayWindows: WeatherDayWindow[]): WeatherTrendTag;
   resolveDayTrendTag(previous: WeatherDayWindow | null, currentScore: number, currentRiskTags: string[]): WeatherTrendTag;
+  resolveExecutionGeoByContext(context?: ExecutionContext): GeoPointInput | undefined;
   resolveNextNode(pendingEvents: EventEntity[], activeEvent?: EventEntity): EventEntity | undefined;
   resolveFutureNodes(pendingEvents: EventEntity[], nextNode?: EventEntity, maxCount?: number): EventEntity[];
   resolveTriggerType(tags?: string[]): string;
   isOutdoorEvent(event?: EventEntity): boolean;
+  preferenceSummary(preference: WeatherUserPreference): string;
+  getOrderedScheduledEvents(events: EventEntity[]): EventEntity[];
+}
+
+class MockWeatherServiceGS extends AmapWeatherService {
+  public batchWeather: Map<string, WeatherInfo> = new Map<string, WeatherInfo>();
+  public currentWeather: WeatherInfo | null = null;
+
+  async batchGetWeather(_points: Object[]): Promise<Map<string, WeatherInfo>> {
+    return this.batchWeather;
+  }
+
+  async getWeatherByGeoPoint(
+    _latitude: number,
+    _longitude: number,
+    _targetTime?: number,
+    _sourceType: 'CURRENT_LOCATION' | 'PLAN_LOCATION' = 'PLAN_LOCATION',
+    _forceRefresh: boolean = false
+  ): Promise<WeatherInfo | null> {
+    return this.currentWeather;
+  }
+
+  toSnapshotByPoint(pointKey: string, info: WeatherInfo): WeatherSnapshot {
+    return {
+      locationKey: pointKey,
+      sourceType: 'PLAN_LOCATION',
+      weatherTime: 1,
+      fetchTime: 1,
+      conditionCode: info.condition,
+      conditionText: info.condition,
+      temperatureCelsius: info.temperature,
+      humidity: info.humidity,
+      windSpeed: info.windSpeed,
+      reportTime: info.reportTime,
+      cityCode: info.cityCode
+    };
+  }
 }
 
 function createEventGS(id: number, name: string, duration: number = 60): EventEntity {
@@ -84,6 +128,17 @@ function createExecutionContextGS(): WeatherContext {
     executionRiskScore: 88,
     executionRiskTags: [],
     futureNodeWeatherList: []
+  };
+}
+
+function createWeatherInfoGS(condition: string, temperature: number = 24): WeatherInfo {
+  return {
+    temperature: temperature,
+    condition: condition,
+    humidity: 60,
+    windSpeed: 3,
+    reportTime: '2026-06-14 10:00:00',
+    cityCode: '330100'
   };
 }
 
@@ -253,6 +308,174 @@ export default function phase2BatchGSTest() {
       // Assert
       expect(empty).assertEqual('');
       expect(cityOnly).assertEqual('1城协同已纳入');
+    });
+
+    it('normal: weather_context_builder_should_cover_confirmed_inprogress_and_non_error_refresh_failure', 0, async () => {
+      // Arrange
+      const weatherService = new MockWeatherServiceGS();
+      const builder = new WeatherContextBuilder(weatherService);
+      const confirmedEvent = createEventGS(741, 'confirmed_node');
+      confirmedEvent.latitude = 30.1;
+      confirmedEvent.longitude = 120.1;
+      confirmedEvent.dynamic_start_time = 1710000000000;
+      const executionEvent = createEventGS(742, 'execution_node');
+      executionEvent.latitude = 30.2;
+      executionEvent.longitude = 120.2;
+      executionEvent.dynamic_start_time = 1710003600000;
+      executionEvent.completion_status = EventEntity.STATE_PENDING;
+      const context: ExecutionContext = {
+        planId: 'plan_gs',
+        status: PlanStatus.IN_PROGRESS,
+        plannedStartTime: 1,
+        plannedEndTime: 2,
+        completedNodeIds: [],
+        skippedNodeIds: [],
+        lastKnownLatitude: 30.3,
+        lastKnownLongitude: 120.3,
+        isAutoStarted: true,
+        isPaused: false,
+        updatedAt: 3
+      };
+      const failingBuilder = new WeatherContextBuilder(weatherService);
+      Reflect.set(failingBuilder as Object, 'buildPlanningContext', async (): Promise<Object> => {
+        return new Promise<Object>((_resolve, reject: (reason?: Object) => void): void => {
+          reject('refresh_fail' as Object);
+        });
+      });
+
+      // Act
+      const confirmedResult = await builder.refreshWeatherByStatus('plan_gs', PlanStatus.CONFIRMED, [confirmedEvent]);
+      const inProgressResult = await builder.refreshWeatherByStatus('plan_gs', PlanStatus.IN_PROGRESS, [executionEvent], context);
+      const failedResult = await failingBuilder.refreshWeatherByStatus('plan_gs', PlanStatus.DRAFT, [confirmedEvent]);
+
+      // Assert
+      expect(confirmedResult.success).assertTrue();
+      expect((confirmedResult.snapshotVersion ?? '').indexOf('CONFIRMED_') === 0).assertTrue();
+      expect(inProgressResult.success).assertTrue();
+      expect((inProgressResult.snapshotVersion ?? '').indexOf('IN_PROGRESS_') === 0).assertTrue();
+      expect(failedResult.success).assertFalse();
+      expect(failedResult.errorMessage).assertEqual('refresh_failed');
+    });
+
+    it('boundary: weather_context_builder_should_cover_execution_weather_fallback_and_zero_context_geo', 0, async () => {
+      // Arrange
+      const weatherService = new MockWeatherServiceGS();
+      const builder = new WeatherContextBuilder(weatherService);
+      const privateBuilder = builder as Object as WeatherContextBuilderPrivateGS;
+      const pending = createEventGS(751, 'pending_node');
+      pending.latitude = 31.1;
+      pending.longitude = 121.1;
+      pending.dynamic_start_time = 1710007200000;
+      pending.completion_status = EventEntity.STATE_PENDING;
+      pending.sort_order = 10;
+      const zeroContext: ExecutionContext = {
+        planId: 'plan_zero',
+        status: PlanStatus.READY,
+        plannedStartTime: 1,
+        plannedEndTime: 2,
+        completedNodeIds: [],
+        skippedNodeIds: [],
+        lastKnownLatitude: 0,
+        lastKnownLongitude: 0,
+        isAutoStarted: false,
+        isPaused: false,
+        updatedAt: 3
+      };
+
+      // Act
+      const geo = privateBuilder.resolveExecutionGeoByContext(zeroContext);
+      const result = await builder.buildExecutionContext([pending], undefined, false);
+
+      // Assert
+      expect(geo === undefined).assertTrue();
+      expect(result.sourceEvents.length).assertEqual(1);
+      expect(result.context.currentLocationWeather === undefined).assertTrue();
+      expect(result.context.futureNodeWeatherList?.length ?? 0).assertEqual(1);
+    });
+
+    it('conflict: weather_context_builder_should_cover_single_rain_target_heat_notice_and_empty_info_tags', 0, () => {
+      // Arrange
+      const builder = new WeatherContextBuilder();
+      const rainContext = createExecutionContextGS();
+      rainContext.generatedAt = 1700000000991;
+      rainContext.executionRiskScore = 66;
+      rainContext.executionRiskTags = ['RAIN'];
+      rainContext.nextNodeWeather = {
+        locationKey: 'rain_next',
+        sourceType: 'PLAN_LOCATION',
+        weatherTime: 1,
+        fetchTime: 1,
+        conditionCode: 'RAIN',
+        conditionText: 'rain',
+        temperatureCelsius: 20
+      };
+      rainContext.futureNodeWeatherList = [createBindingGS(createEventGS(761, 'solo_rain'), 82)];
+      const heatContext = createExecutionContextGS();
+      heatContext.generatedAt = 1700000000992;
+      heatContext.executionRiskScore = 88;
+      heatContext.executionRiskTags = ['HEAT'];
+      heatContext.nextNodeWeather = {
+        locationKey: 'heat_next',
+        sourceType: 'PLAN_LOCATION',
+        weatherTime: 1,
+        fetchTime: 1,
+        conditionCode: 'SUNNY',
+        conditionText: 'sunny',
+        temperatureCelsius: 36
+      };
+      heatContext.futureNodeWeatherList = [createBindingGS(createEventGS(762, 'solo_heat'), 80)];
+      const emptyContext = createExecutionContextGS();
+      emptyContext.generatedAt = 1700000000993;
+      emptyContext.executionRiskTags = [];
+      emptyContext.futureNodeWeatherList = [createBindingGS(createEventGS(763, 'stable_node'), 79)];
+
+      // Act
+      const rainSuggestions = builder.buildExecutionSuggestions(rainContext);
+      const heatSuggestions = builder.buildExecutionSuggestions(heatContext);
+      const emptySuggestions = builder.buildExecutionSuggestions(emptyContext);
+
+      // Assert
+      expect(((rainSuggestions[0].actionPayload?.targetOrderNodeIds ?? []) as string[]).length).assertEqual(1);
+      expect(heatSuggestions[0].level).assertEqual('NOTICE');
+      expect(emptySuggestions.length).assertEqual(1);
+    });
+
+    it('regression: weather_context_builder_private_summary_and_sort_should_cover_stable_medium_and_equal_order', 0, () => {
+      // Arrange
+      const builder = new WeatherContextBuilder() as Object as WeatherContextBuilderPrivateGS;
+      const stableWindow: WeatherDayWindow = {
+        dayOffset: 3,
+        windowScore: 82,
+        riskTags: [],
+        trendTag: 'STABLE'
+      };
+      const first = createEventGS(771, 'same_order_a');
+      const second = createEventGS(770, 'same_order_b');
+      first.sort_order = 50;
+      second.sort_order = 50;
+      const preferenceTextInput: WeatherUserPreference = {
+        heatSensitivity: 1,
+        rainSensitivity: 1,
+        weatherRiskTolerance: 1
+      };
+
+      // Act
+      const stableTrend = builder.resolveDominantTrend([stableWindow]);
+      const warmingSummary = builder.buildCollabSummary([], [], 'WARMING');
+      const improvingSummary = builder.buildCollabSummary([stableWindow], [], 'IMPROVING');
+      const mediumPreference = builder.preferenceSummary(preferenceTextInput);
+      const ordered = builder.getOrderedScheduledEvents([first, second]);
+      const steadyTrend = builder.resolveDayTrendTag(stableWindow, 91, []);
+      const unknownTrend = builder.resolveDayTrendTag(stableWindow, 83, ['UNKNOWN']);
+
+      // Assert
+      expect(stableTrend).assertEqual('STABLE');
+      expect(warmingSummary).assertEqual('');
+      expect(improvingSummary).assertEqual('1日趋势：改善');
+      expect(mediumPreference.indexOf('中') >= 0).assertTrue();
+      expect(ordered[0].id).assertEqual(770);
+      expect(steadyTrend).assertEqual('STABLE');
+      expect(unknownTrend).assertEqual('UNKNOWN');
     });
 
     it('normal: validator_marker_should_cover_normal_case', 0, () => {
