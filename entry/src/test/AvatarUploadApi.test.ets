@@ -11,6 +11,92 @@ interface AvatarUploadApiPrivate {
   readFileAsDataUrl: (fileUriText: string, mimeType: string) => string;
 }
 
+interface AvatarUploadApiRuntimeDepsPrivate {
+  runtimeDeps: Object;
+}
+
+type AvatarUploadCreateFileUri = (raw: string) => Object;
+type AvatarUploadCreateBase64Helper = () => Object;
+
+class AvatarUploadBase64HelperStub {
+  public encodeToStringSync(_content: Uint8Array, _type: Object): string {
+    return 'QUJD';
+  }
+}
+
+class AvatarUploadFileUriStub {
+  path: string;
+
+  constructor(raw: string) {
+    this.path = raw.replace('file://', '');
+  }
+}
+
+class AvatarUploadFileStatStub {
+  size: number;
+
+  constructor(size: number) {
+    this.size = size;
+  }
+}
+
+class AvatarUploadOpenedFileStub {
+  fd: number;
+
+  constructor(fd: number) {
+    this.fd = fd;
+  }
+}
+
+class AvatarUploadOpenModeStub {
+  READ_ONLY: number = 0;
+}
+
+class AvatarUploadRuntimeDepsStub {
+  statSync: (path: string) => Object;
+  openSync: (path: string, mode: number) => number;
+  readSync: (fd: number, buffer: ArrayBuffer) => number;
+  closeSync: (fd: number) => void;
+  readOnlyMode: number;
+  createFileUri: AvatarUploadCreateFileUri;
+  createBase64Helper: AvatarUploadCreateBase64Helper;
+  basicType: Object;
+
+  constructor(
+    statSize: number,
+    fd: number,
+    readSize: number,
+    createBase64Helper?: AvatarUploadCreateBase64Helper
+  ) {
+    this.statSync = (_path: string): Object => new AvatarUploadFileStatStub(statSize) as Object;
+    this.openSync = (_path: string, _mode: number): number => fd;
+    this.readSync = (_fd: number, _buffer: ArrayBuffer): number => readSize;
+    this.closeSync = (_fd: number): void => {};
+    this.readOnlyMode = new AvatarUploadOpenModeStub().READ_ONLY;
+    this.createFileUri = (raw: string): Object => new AvatarUploadFileUriStub(raw) as Object;
+    this.createBase64Helper = createBase64Helper || (() => new AvatarUploadBase64HelperStub() as Object);
+    this.basicType = new Object();
+  }
+}
+
+class AvatarUploadRuntimeDepsHooks {
+  private readonly avatarUploadApiObj: Object;
+  private readonly originRuntimeDeps: Object;
+
+  constructor() {
+    this.avatarUploadApiObj = AvatarUploadApi as Object;
+    this.originRuntimeDeps = Reflect.get(this.avatarUploadApiObj, 'runtimeDeps') as Object;
+  }
+
+  public replace(runtimeDeps: Object): void {
+    Reflect.set(this.avatarUploadApiObj, 'runtimeDeps', runtimeDeps);
+  }
+
+  public restore(): void {
+    Reflect.set(this.avatarUploadApiObj, 'runtimeDeps', this.originRuntimeDeps);
+  }
+}
+
 export default function avatarUploadApiTest() {
   describe('avatarUploadApiTest', () => {
     it('normal: upload_api_should_return_synced_when_gateway_success', 0, async (done: () => void) => {
@@ -627,6 +713,80 @@ export default function avatarUploadApiTest() {
       expect(String(result.remoteUrl || '')).assertEqual('');
       expect(String(result.requestId)).assertEqual('avatar_req_5004');
       done();
+    });
+
+    it('boundary: upload_api_read_file_as_data_url_should_fallback_to_default_mime_when_blank', 0, () => {
+      // Arrange
+      const privateApi = AvatarUploadApi as Object as AvatarUploadApiPrivate;
+      const runtimeDepsHooks = new AvatarUploadRuntimeDepsHooks();
+      runtimeDepsHooks.replace(new AvatarUploadRuntimeDepsStub(3, 1, 3) as Object);
+
+      try {
+        // Act
+        const dataUrl = privateApi.readFileAsDataUrl('file://C:/avatar.jpg', '   ');
+
+        // Assert
+        expect(dataUrl).assertEqual('data:image/jpeg;base64,QUJD');
+      } finally {
+        runtimeDepsHooks.restore();
+      }
+    });
+
+    it('normal: upload_api_read_file_as_data_url_should_keep_explicit_mime_when_present', 0, () => {
+      // Arrange
+      const privateApi = AvatarUploadApi as Object as AvatarUploadApiPrivate;
+      const runtimeDepsHooks = new AvatarUploadRuntimeDepsHooks();
+      runtimeDepsHooks.replace(new AvatarUploadRuntimeDepsStub(3, 1, 3) as Object);
+
+      try {
+        // Act
+        const dataUrl = privateApi.readFileAsDataUrl('file://C:/avatar.png', ' image/png ');
+
+        // Assert
+        expect(dataUrl).assertEqual('data:image/png;base64,QUJD');
+      } finally {
+        runtimeDepsHooks.restore();
+      }
+    });
+
+    it('invalid: upload_api_read_file_as_data_url_should_throw_when_file_is_empty', 0, () => {
+      // Arrange
+      const privateApi = AvatarUploadApi as Object as AvatarUploadApiPrivate;
+      const runtimeDepsHooks = new AvatarUploadRuntimeDepsHooks();
+      runtimeDepsHooks.replace(new AvatarUploadRuntimeDepsStub(0, 1, 0) as Object);
+      let message = '';
+
+      try {
+        // Act
+        privateApi.readFileAsDataUrl('file://C:/empty-avatar.jpg', 'image/png');
+      } catch (error) {
+        // Assert
+        message = privateApi.errorMessage(error as Object);
+      } finally {
+        runtimeDepsHooks.restore();
+      }
+
+      expect(message).assertEqual('avatar_file_empty');
+    });
+
+    it('regression: upload_api_read_file_as_data_url_should_throw_when_read_size_is_zero', 0, () => {
+      // Arrange
+      const privateApi = AvatarUploadApi as Object as AvatarUploadApiPrivate;
+      const runtimeDepsHooks = new AvatarUploadRuntimeDepsHooks();
+      runtimeDepsHooks.replace(new AvatarUploadRuntimeDepsStub(4, 2, 0) as Object);
+      let message = '';
+
+      try {
+        // Act
+        privateApi.readFileAsDataUrl('file://C:/zero-read-avatar.jpg', 'image/jpeg');
+      } catch (error) {
+        // Assert
+        message = privateApi.errorMessage(error as Object);
+      } finally {
+        runtimeDepsHooks.restore();
+      }
+
+      expect(message).assertEqual('avatar_file_read_empty');
     });
   });
 }
