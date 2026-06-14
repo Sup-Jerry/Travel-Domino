@@ -25,6 +25,7 @@ import { ITimelineWeatherHost, TimelineWeatherService } from '../main/ets/domain
 import { WeatherFacade } from '../main/ets/domain/services/WeatherFacade';
 import { WeatherRefreshScheduler } from '../main/ets/domain/services/WeatherRefreshScheduler';
 import { PreferenceManager } from '../main/ets/common/utils/PreferenceManager';
+import { EventRepositoryImpl } from '../main/ets/infrastructure/persistence/EventRepositoryImpl';
 
 interface ReplanNodeSnapshotForHM {
   id: number;
@@ -137,6 +138,7 @@ interface TimelineWeatherServicePrivateHM {
   shouldSkipByLocationThreshold(currentLocation: GeoPointInput | null): boolean;
   measureDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number;
   resolveExecutionCurrentLocation(): GeoPointInput | null;
+  filterActiveExecutionSuggestions(items: WeatherSuggestion[]): WeatherSuggestion[];
 }
 
 class ServiceBundleForHM {
@@ -219,17 +221,31 @@ class PreferenceManagerMockForHM {
 
 class StaticHooksForHM {
   private readonly originPreferenceGetInstance: Object;
+  private readonly originUpdateFields: Object;
+  private readonly originUpdateTimelineConsistency: Object;
 
   constructor() {
     this.originPreferenceGetInstance = Reflect.get(PreferenceManager as Object, 'getInstance') as Object;
+    this.originUpdateFields = Reflect.get(EventRepositoryImpl as Object, 'updateFields') as Object;
+    this.originUpdateTimelineConsistency = Reflect.get(EventRepositoryImpl as Object, 'updateTimelineConsistency') as Object;
   }
 
   setPreferenceGetInstance(fn: () => PreferenceManagerMockForHM): void {
     Reflect.set(PreferenceManager as Object, 'getInstance', fn);
   }
 
+  setUpdateFields(fn: (id: number, updates: Object[], planIdHint?: number) => Promise<void>): void {
+    Reflect.set(EventRepositoryImpl as Object, 'updateFields', fn);
+  }
+
+  setUpdateTimelineConsistency(fn: (items: Object[], planIdHint?: number) => Promise<void>): void {
+    Reflect.set(EventRepositoryImpl as Object, 'updateTimelineConsistency', fn);
+  }
+
   restore(): void {
     Reflect.set(PreferenceManager as Object, 'getInstance', this.originPreferenceGetInstance);
+    Reflect.set(EventRepositoryImpl as Object, 'updateFields', this.originUpdateFields);
+    Reflect.set(EventRepositoryImpl as Object, 'updateTimelineConsistency', this.originUpdateTimelineConsistency);
   }
 }
 
@@ -413,6 +429,25 @@ export default function phase2BatchHMTest() {
       expect(distance > 0).assertTrue();
     });
 
+    it('boundary: scheduler_should_trigger_execution_refresh_when_force_enter_in_execution_stage', 0, () => {
+      // Arrange
+      const bundle = createBundleForHM();
+      let executionRefreshCalls = 0;
+      bundle.host.currentWeatherSchedulePolicy.forceRefreshOnEnter = true;
+      Reflect.set(bundle.service as Object, 'refreshExecutionWeather', async (_force: boolean, trigger: string): Promise<void> => {
+        if (trigger === 'ENTER_EXECUTION') {
+          executionRefreshCalls += 1;
+        }
+        return;
+      });
+
+      // Act
+      bundle.service.startExecutionWeatherScheduler(bundle.host.planId, 'IN_PROGRESS');
+
+      // Assert
+      expect(executionRefreshCalls).assertEqual(1);
+    });
+
     it('normal: replan_summary_should_report_order_duration_and_time_changes', 0, () => {
       // Arrange
       const bundle = createBundleForHM();
@@ -495,6 +530,32 @@ export default function phase2BatchHMTest() {
       expect(target.duration).assertEqual(30);
     });
 
+    it('normal: soft_reorder_should_rebuild_schedule_when_targets_are_resolved', 0, async () => {
+      // Arrange
+      const bundle = createBundleForHM();
+      const hooks = new StaticHooksForHM();
+      let updateCalls = 0;
+      const first = createEventForHM(71);
+      const second = createEventForHM(72);
+      const third = createEventForHM(73);
+      first.actual_start_time = 1;
+      first.actual_end_time = 0;
+      bundle.host.events = [first, second, third];
+      hooks.setUpdateTimelineConsistency(async (_items: Object[], _planIdHint?: number): Promise<void> => {
+        updateCalls += 1;
+      });
+
+      // Act
+      const changed = await bundle.service.applySoftReorder(['73', '72']);
+
+      // Assert
+      expect(changed).assertTrue();
+      expect(updateCalls).assertEqual(1);
+      expect(bundle.host.events[1].id).assertEqual(73);
+      expect(bundle.host.events[2].id).assertEqual(72);
+      hooks.restore();
+    });
+
     it('conflict: immutable_node_detection_should_block_missing_done_and_locked_nodes', 0, () => {
       // Arrange
       const bundle = createBundleForHM();
@@ -565,6 +626,29 @@ export default function phase2BatchHMTest() {
       expect(hint.indexOf(bundle.host.executionWeatherHint) >= 0).assertTrue();
       expect(planningHint.indexOf(bundle.host.weatherPlanningHint) >= 0).assertTrue();
       expect(shouldRefresh).assertTrue();
+    });
+
+    it('combined: suggestion_filter_and_reason_code_should_cover_expired_active_sort_and_default_reason', 0, () => {
+      // Arrange
+      const bundle = createBundleForHM();
+      const service = bundle.service as Object as TimelineWeatherServicePrivateHM;
+      const warning = createSuggestionForHM('RAIN');
+      const info = createSuggestionForHM('HEAT');
+      const expired = createSuggestionForHM('UNKNOWN');
+      warning.level = 'WARNING';
+      warning.createdAt = 2;
+      info.level = 'INFO';
+      info.createdAt = 1;
+      expired.expiresAt = Date.now() - 1;
+
+      // Act
+      const filtered = service.filterActiveExecutionSuggestions([info, expired, warning]);
+      const reason = service.resolveReplanReasonCode('NONE');
+
+      // Assert
+      expect(filtered.length).assertEqual(2);
+      expect(filtered[0].level).assertEqual('WARNING');
+      expect(reason).assertEqual('soft_replan');
     });
 
     it('boundary: weather_hint_explanation_should_fallback_to_next_node_and_empty_collab_copy', 0, () => {
@@ -650,6 +734,29 @@ export default function phase2BatchHMTest() {
       expect(nextText.indexOf('rain') >= 0).assertTrue();
       expect(fallbackText.indexOf('按下一节点天气估算') >= 0).assertTrue();
       expect(facade.buildExecutionContextCalls).assertEqual(2);
+    });
+
+    it('regression: patch_execution_weather_should_persist_when_force_refresh_and_event_id_positive', 0, async () => {
+      // Arrange
+      const bundle = createBundleForHM();
+      const hooks = new StaticHooksForHM();
+      const pending = createEventForHM(81);
+      const eventMap = new Map<number, PlanNodeWeatherBinding>();
+      let updateCalls = 0;
+      eventMap.set(pending.id, createBindingForHM(pending, 'rain'));
+      bundle.host.events = [pending];
+      hooks.setUpdateFields(async (_id: number, _updates: Object[], _planIdHint?: number): Promise<void> => {
+        updateCalls += 1;
+      });
+
+      // Act
+      bundle.service.patchExecutionWeatherToEvents(eventMap, true);
+      await Promise.resolve();
+
+      // Assert
+      expect(updateCalls).assertEqual(1);
+      expect(pending.weather_condition).assertEqual('RAIN');
+      hooks.restore();
     });
   });
 }
