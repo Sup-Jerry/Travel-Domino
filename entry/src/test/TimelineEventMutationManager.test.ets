@@ -337,6 +337,22 @@ export default function timelineEventMutationManagerTest() {
       expect(host.events[0].pre_travel_min).assertEqual(0);
     });
 
+    it('boundary: add_new_item_should_set_hard_lock_for_anchor_item', 0, async () => {
+      // Arrange
+      const host = new FakeTimelineEventMutationHost();
+      const originInsert = Reflect.get(EventRepositoryImpl as Object, 'insertEvent') as Object;
+      Reflect.set(EventRepositoryImpl as Object, 'insertEvent', async (): Promise<number> => 66);
+      try {
+        const manager = createManager(host);
+        // Act
+        await manager.addNewItem('locked_anchor', 50, true, '07:00', 0, 10, true);
+      } finally {
+        Reflect.set(EventRepositoryImpl as Object, 'insertEvent', originInsert);
+      }
+      // Assert
+      expect(host.events[0].lock_status).assertEqual(1);
+    });
+
     it('boundary: update_manual_commute_should_skip_persist_for_transient_item', 0, () => {
       // Arrange
       const host = new FakeTimelineEventMutationHost();
@@ -385,6 +401,27 @@ export default function timelineEventMutationManagerTest() {
       // Assert
       expect(host.recalculateFromIndexLast).assertEqual(1);
       expect(host.saveCalls).assertEqual(1);
+    });
+
+    it('boundary: move_event_should_swap_downward_adjacent_scheduled_items', 0, async () => {
+      // Arrange
+      const host = new FakeTimelineEventMutationHost();
+      const first = createEvent(67, 1, 0, '08:00', 0);
+      const second = createEvent(68, 1, 100, '09:00', 0);
+      host.events = [first, second];
+      const originConsistency = Reflect.get(EventRepositoryImpl as Object, 'updateTimelineConsistency') as Object;
+      Reflect.set(EventRepositoryImpl as Object, 'updateTimelineConsistency', async (): Promise<void> => {});
+      try {
+        const manager = createManager(host);
+        // Act
+        await manager.moveEvent(0, 'down');
+      } finally {
+        Reflect.set(EventRepositoryImpl as Object, 'updateTimelineConsistency', originConsistency);
+      }
+      // Assert
+      expect(host.events[0].id).assertEqual(68);
+      expect(host.events[1].id).assertEqual(67);
+      expect(host.recalculateFromIndexLast).assertEqual(0);
     });
 
     it('invalid: hard_delete_should_throw_for_invalid_item', 0, async () => {
@@ -508,6 +545,22 @@ export default function timelineEventMutationManagerTest() {
       expect(host.events[0].fixed_start_time).assertEqual('07:30');
       expect(updateFieldsCalls).assertEqual(0);
       expect(consistencyCalls).assertEqual(1);
+    });
+
+    it('boundary: insert_smart_for_compat_should_skip_backlog_items_before_schedule_insert', 0, () => {
+      // Arrange
+      const host = new FakeTimelineEventMutationHost();
+      const backlog = createEvent(92, 0, 0, '', 0);
+      const schedule = createEvent(93, 1, 100, '10:00', 0);
+      const inserting = createEvent(94, 1, 0, '09:00', 0);
+      host.events = [backlog, schedule];
+      const manager = createManager(host);
+      // Act
+      manager.insertSmartForCompat(inserting);
+      // Assert
+      expect(host.events[0].id).assertEqual(92);
+      expect(host.events[1].id).assertEqual(94);
+      expect(host.events[2].id).assertEqual(93);
     });
   });
 }
