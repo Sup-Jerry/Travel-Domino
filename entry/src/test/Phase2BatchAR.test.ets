@@ -1055,6 +1055,51 @@ export default function phase2BatchARTest() {
       }
     });
 
+    it('boundary: save_all_events_should_default_status_to_schedule_when_input_status_missing', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
+      clearDirtyPlanIdsAR();
+      const store = new FakeRdbStoreAR();
+      store.queueUpdateResult(1);
+      store.queueQueryRows([createIdRowAR(556)]);
+      const hooks = new RdbHooksAR();
+      hooks.bindStore(store as Object);
+      const item = createTravelPlanItemAR('StatusDefault', 556);
+      Reflect.set(item as Object, 'status', undefined);
+      try {
+        await EventRepositoryImpl.saveAllEvents(421, [item]);
+        const call = store.updateCalls[0] as Object;
+        const bucket = Reflect.get(call, 'valueBucket') as Object;
+        expect(Number(Reflect.get(bucket, EventEntity.STATUS))).assertEqual(1);
+      } finally {
+        hooks.restore();
+        clearDirtyPlanIdsAR();
+      }
+    });
+
+    it('boundary: save_all_events_should_commit_when_insert_returns_non_positive_id', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
+      clearDirtyPlanIdsAR();
+      const store = new FakeRdbStoreAR();
+      store.queueInsertResult(-1);
+      store.queueQueryRows([]);
+      const hooks = new RdbHooksAR();
+      hooks.bindStore(store as Object);
+      try {
+        await EventRepositoryImpl.saveAllEvents(422, [createTravelPlanItemAR('NegativeInsert')]);
+        const dirty = EventRepositoryImpl.consumeDirtyPlanIds();
+        expect(store.insertCalls.length).assertEqual(1);
+        expect(store.commitCount).assertEqual(1);
+        expect(dirty[0]).assertEqual(422);
+      } finally {
+        hooks.restore();
+        clearDirtyPlanIdsAR();
+      }
+    });
+
     it('invalid: save_all_events_should_rollback_and_throw_when_store_update_fails', 0, async () => {
       // Arrange
       // Act
@@ -1077,6 +1122,7 @@ export default function phase2BatchARTest() {
       expect(store.rollbackCount).assertEqual(1);
       expect(store.commitCount).assertEqual(0);
     });
+
 
     it('boundary: save_all_events_should_return_early_when_store_missing', 0, async () => {
       // Arrange
@@ -1320,6 +1366,23 @@ export default function phase2BatchARTest() {
       }
     });
 
+    it('boundary: update_timeline_consistency_should_return_early_when_store_missing', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
+      clearDirtyPlanIdsAR();
+      const hooks = new RdbHooksAR();
+      hooks.bindStore(null);
+      try {
+        await EventRepositoryImpl.updateTimelineConsistency([createTravelPlanItemAR('NoStoreTimeline', 95)], 806);
+        const dirty = EventRepositoryImpl.consumeDirtyPlanIds();
+        expect(dirty.length).assertEqual(0);
+      } finally {
+        hooks.restore();
+        clearDirtyPlanIdsAR();
+      }
+    });
+
     it('normal: update_single_field_should_update_bucket_and_mark_dirty', 0, async () => {
       // Arrange
       // Act
@@ -1384,6 +1447,7 @@ export default function phase2BatchARTest() {
       expect(message).assertEqual('single_field_failed_ar');
     });
 
+
     it('normal: update_fields_should_write_all_pairs_and_mark_dirty', 0, async () => {
       // Arrange
       // Act
@@ -1405,6 +1469,47 @@ export default function phase2BatchARTest() {
         expect(Number(Reflect.get(bucket, EventEntity.STATUS))).assertEqual(1);
         expect(Number(Reflect.get(bucket, EventEntity.DAY_OFFSET))).assertEqual(2);
         expect(dirty[0]).assertEqual(903);
+      } finally {
+        hooks.restore();
+        clearDirtyPlanIdsAR();
+      }
+    });
+
+    it('boundary: update_fields_should_mark_dirty_from_hint_without_plan_lookup', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
+      clearDirtyPlanIdsAR();
+      const store = new FakeRdbStoreAR();
+      store.queueUpdateResult(1);
+      const hooks = new RdbHooksAR();
+      hooks.bindStore(store as Object);
+      try {
+        await EventRepositoryImpl.updateFields(108, [{ column: EventEntity.STATUS, value: 1 }], 904);
+        const dirty = EventRepositoryImpl.consumeDirtyPlanIds();
+        expect(store.queryCalls.length).assertEqual(0);
+        expect(dirty[0]).assertEqual(904);
+      } finally {
+        hooks.restore();
+        clearDirtyPlanIdsAR();
+      }
+    });
+
+    it('boundary: update_fields_should_skip_mark_dirty_when_plan_lookup_misses', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
+      clearDirtyPlanIdsAR();
+      const store = new FakeRdbStoreAR();
+      store.queueUpdateResult(1);
+      store.queueQueryRows([]);
+      const hooks = new RdbHooksAR();
+      hooks.bindStore(store as Object);
+      try {
+        await EventRepositoryImpl.updateFields(109, [{ column: EventEntity.STATUS, value: 1 }]);
+        const dirty = EventRepositoryImpl.consumeDirtyPlanIds();
+        expect(store.queryCalls.length).assertEqual(1);
+        expect(dirty.length).assertEqual(0);
       } finally {
         hooks.restore();
         clearDirtyPlanIdsAR();
@@ -1450,6 +1555,7 @@ export default function phase2BatchARTest() {
       }
       expect(message).assertEqual('fields_failed_ar');
     });
+
 
     it('normal: apply_runtime_transition_should_start_pending_event', 0, async () => {
       // Arrange
@@ -2073,6 +2179,7 @@ export default function phase2BatchARTest() {
       }
       expect(message).assertEqual('hard_delete_failed_ar');
     });
+
 
     it('normal: delete_events_by_source_should_delete_and_mark_dirty', 0, async () => {
       // Arrange
