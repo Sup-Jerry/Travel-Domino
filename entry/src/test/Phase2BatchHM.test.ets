@@ -173,6 +173,7 @@ class ExecutionBuildResultDataForHM {
 
 class WeatherFacadeMockForHM {
   allowLocationTrigger: boolean = true;
+  forceRefreshOnEnter: boolean = false;
   buildExecutionContextCalls: number = 0;
   currentLocationWeather: WeatherSnapshot | undefined = undefined;
   nextNodeWeather: WeatherSnapshot | undefined = undefined;
@@ -181,6 +182,7 @@ class WeatherFacadeMockForHM {
     const policy = new SchedulePolicyDataForHM();
     policy.stage = stage;
     policy.allowLocationTrigger = this.allowLocationTrigger;
+    policy.forceRefreshOnEnter = this.forceRefreshOnEnter;
     return policy;
   }
 
@@ -216,6 +218,18 @@ class PreferenceManagerMockForHM {
 
   async isWeatherFeatureEnabled(): Promise<boolean> {
     return this.featureEnabled;
+  }
+}
+
+class SchedulerMockForHM {
+  callback: (() => void) | undefined = undefined;
+
+  start(_intervalMs: number, callback: () => void): void {
+    this.callback = callback;
+  }
+
+  stop(): void {
+    this.callback = undefined;
   }
 }
 
@@ -448,6 +462,30 @@ export default function phase2BatchHMTest() {
       expect(executionRefreshCalls).assertEqual(1);
     });
 
+    it('boundary: scheduler_should_skip_planning_refresh_when_snapshot_is_still_fresh', 0, () => {
+      // Arrange
+      const bundle = createBundleForHM();
+      const facade = new WeatherFacadeMockForHM();
+      const scheduler = new SchedulerMockForHM();
+      let planningRefreshCalls = 0;
+      facade.forceRefreshOnEnter = true;
+      bundle.host.currentPlanStatus = PlanStatus.CONFIRMED;
+      Reflect.set(bundle.service as Object, 'weatherFacade', facade as Object);
+      Reflect.set(bundle.service as Object, 'weatherScheduler', scheduler as Object);
+      Reflect.set(bundle.service as Object, 'shouldAutoRefreshPlanningWeather', (): boolean => false);
+      Reflect.set(bundle.service as Object, 'refreshPlanningWeather', async (): Promise<void> => {
+        planningRefreshCalls += 1;
+      });
+
+      // Act
+      bundle.service.startExecutionWeatherScheduler(bundle.host.planId, 'CONFIRMED');
+      scheduler.callback?.();
+
+      // Assert
+      expect(planningRefreshCalls).assertEqual(0);
+      expect(bundle.host.executionWeatherEnabled).assertTrue();
+    });
+
     it('normal: replan_summary_should_report_order_duration_and_time_changes', 0, () => {
       // Arrange
       const bundle = createBundleForHM();
@@ -491,6 +529,25 @@ export default function phase2BatchHMTest() {
       expect(summary[0].type).assertEqual('NO_OP');
       expect(stableText.indexOf('计划保持稳定') >= 0).assertTrue();
       expect(blockedText.indexOf('节点保护') >= 0).assertTrue();
+    });
+
+    it('boundary: replan_summary_should_skip_ids_missing_before_or_after_snapshot', 0, () => {
+      // Arrange
+      const bundle = createBundleForHM();
+      const before = new Map<number, ReplanNodeSnapshotForHM>();
+      const after = new Map<number, ReplanNodeSnapshotForHM>();
+      before.set(91, { id: 91, sortOrder: 100, duration: 60, startTs: 1000, endTs: 4600 });
+
+      // Act
+      const summary = bundle.service.buildStructuredReplanSummary(
+        before as Object as Map<number, never>,
+        after as Object as Map<number, never>,
+        ['91']
+      );
+
+      // Assert
+      expect(summary.length).assertEqual(1);
+      expect(summary[0].type).assertEqual('NO_OP');
     });
 
     it('invalid: soft_replan_public_helpers_should_reject_empty_or_missing_targets', 0, async () => {
@@ -553,6 +610,51 @@ export default function phase2BatchHMTest() {
       expect(updateCalls).assertEqual(1);
       expect(bundle.host.events[1].id).assertEqual(73);
       expect(bundle.host.events[2].id).assertEqual(72);
+      hooks.restore();
+    });
+
+    it('invalid: soft_reorder_should_return_false_when_part_of_targets_are_missing', 0, async () => {
+      // Arrange
+      const bundle = createBundleForHM();
+      const hooks = new StaticHooksForHM();
+      let updateCalls = 0;
+      const first = createEventForHM(74);
+      const second = createEventForHM(75);
+      bundle.host.events = [first, second];
+      hooks.setUpdateTimelineConsistency(async (_items: Object[], _planIdHint?: number): Promise<void> => {
+        updateCalls += 1;
+      });
+
+      // Act
+      const changed = await bundle.service.applySoftReorder(['74', '999']);
+
+      // Assert
+      expect(changed).assertFalse();
+      expect(updateCalls).assertEqual(0);
+      hooks.restore();
+    });
+
+    it('boundary: soft_reorder_should_keep_scheduled_items_ahead_of_non_schedule_items_after_sort', 0, async () => {
+      // Arrange
+      const bundle = createBundleForHM();
+      const hooks = new StaticHooksForHM();
+      const first = createEventForHM(76);
+      const second = createEventForHM(77);
+      const unscheduled = createEventForHM(78);
+      unscheduled.status = 0;
+      bundle.host.events = [first, second, unscheduled];
+      hooks.setUpdateTimelineConsistency(async (_items: Object[], _planIdHint?: number): Promise<void> => {
+        return;
+      });
+
+      // Act
+      const changed = await bundle.service.applySoftReorder(['77', '76']);
+
+      // Assert
+      expect(changed).assertTrue();
+      expect(bundle.host.events[0].status).assertEqual(1);
+      expect(bundle.host.events[1].status).assertEqual(1);
+      expect(bundle.host.events[2].status).assertEqual(0);
       hooks.restore();
     });
 
@@ -700,6 +802,32 @@ export default function phase2BatchHMTest() {
       hooks.restore();
     });
 
+    it('boundary: reload_weather_preference_should_keep_runtime_when_feature_remains_enabled', 0, async () => {
+      // Arrange
+      const bundle = createBundleForHM();
+      const hooks = new StaticHooksForHM();
+      const prefMock = new PreferenceManagerMockForHM();
+      prefMock.featureEnabled = true;
+      prefMock.preference = {
+        heatSensitivity: 0,
+        rainSensitivity: 2,
+        weatherRiskTolerance: 1
+      };
+      bundle.host.weatherPlanningHint = 'planning_keep_hm';
+      bundle.host.executionWeatherHint = 'execution_keep_hm';
+      hooks.setPreferenceGetInstance((): PreferenceManagerMockForHM => prefMock);
+
+      // Act
+      await bundle.service.reloadWeatherUserPreference();
+
+      // Assert
+      expect(bundle.host.weatherFeatureEnabled).assertTrue();
+      expect(bundle.host.weatherUserPreference.rainSensitivity).assertEqual(2);
+      expect(bundle.host.weatherPlanningHint).assertEqual('planning_keep_hm');
+      expect(bundle.host.executionWeatherHint).assertEqual('execution_keep_hm');
+      hooks.restore();
+    });
+
     it('combined: refresh_execution_weather_should_cover_current_next_fallback_and_location_cooldown', 0, async () => {
       // Arrange
       const bundle = createBundleForHM();
@@ -734,6 +862,43 @@ export default function phase2BatchHMTest() {
       expect(nextText.indexOf('rain') >= 0).assertTrue();
       expect(fallbackText.indexOf('按下一节点天气估算') >= 0).assertTrue();
       expect(facade.buildExecutionContextCalls).assertEqual(2);
+    });
+
+    it('boundary: refresh_execution_weather_should_allow_location_trigger_after_cooldown_and_hide_nan_temperature', 0, async () => {
+      // Arrange
+      const bundle = createBundleForHM();
+      const facade = new WeatherFacadeMockForHM();
+      const active = createEventForHM(63, 31.2304, 121.4737);
+      const next = createEventForHM(64, 31.2404, 121.4837);
+      bundle.host.activeEvent = active;
+      bundle.host.events = [active, next];
+      bundle.host.currentPlanStatus = PlanStatus.IN_PROGRESS;
+      bundle.host.executionWeatherEnabled = true;
+      bundle.host.executionWeatherLocationTriggerCooldownMs = 60_000;
+      bundle.host.executionWeatherLastLocationTriggerAt = Date.now() - 120_000;
+      Reflect.set(bundle.service as Object, 'weatherFacade', facade as Object);
+      facade.currentLocationWeather = createWeatherSnapshotForHM('cloudy');
+      facade.currentLocationWeather.temperatureCelsius = Number.NaN;
+      facade.nextNodeWeather = createWeatherSnapshotForHM('windy');
+      facade.nextNodeWeather.temperatureCelsius = Number.NaN;
+
+      // Act
+      await bundle.service.refreshExecutionWeather(false, 'LOCATION_CHANGE', 'IN_PROGRESS');
+      const currentText = bundle.host.executionWeatherCurrentText;
+      const nextText = bundle.host.executionWeatherNextText;
+      facade.currentLocationWeather = undefined;
+      await bundle.service.refreshExecutionWeather(false, 'MANUAL', 'IN_PROGRESS');
+      const fallbackText = bundle.host.executionWeatherCurrentText;
+
+      // Assert
+      expect(facade.buildExecutionContextCalls).assertEqual(2);
+      expect(currentText.indexOf('cloudy') >= 0).assertTrue();
+      expect(currentText.indexOf('°C') >= 0).assertFalse();
+      expect(nextText.indexOf('windy') >= 0).assertTrue();
+      expect(nextText.indexOf('°C') >= 0).assertFalse();
+      expect(fallbackText.indexOf('windy') >= 0).assertTrue();
+      expect(fallbackText.indexOf('°C') >= 0).assertFalse();
+      expect(bundle.host.executionWeatherLastLocationTriggerAt > 0).assertTrue();
     });
 
     it('regression: patch_execution_weather_should_persist_when_force_refresh_and_event_id_positive', 0, async () => {
