@@ -204,6 +204,11 @@ interface ActiveEventRowAR {
   actual_start_time: number;
 }
 
+interface EventRepositoryPrivateApiAR {
+  resolvePlanIdByEventId(eventId: number): Promise<number>;
+  isPlanUsableForRuntime(rdbStore: relationalStore.RdbStore, planId: number): Promise<boolean>;
+}
+
 class FakeRdbStoreAR {
   public beginCount: number = 0;
   public commitCount: number = 0;
@@ -799,6 +804,99 @@ export default function phase2BatchARTest() {
       EventRepositoryImpl.consumeDirtyPlanIds();
       const ids = EventRepositoryImpl.consumeDirtyPlanIds();
       expect(ids.length).assertEqual(0);
+    });
+
+    it('boundary: resolve_plan_id_by_event_id_should_return_plan_id_when_row_exists', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
+      const privateApi = EventRepositoryImpl as Object as EventRepositoryPrivateApiAR;
+      const store = new FakeRdbStoreAR();
+      store.queueQueryRows([createPlanIdRowAR(5101)]);
+      const hooks = new RdbHooksAR();
+      hooks.bindStore(store as Object);
+      try {
+        const planId = await privateApi.resolvePlanIdByEventId(501);
+        expect(planId).assertEqual(5101);
+      } finally {
+        hooks.restore();
+      }
+    });
+
+    it('boundary: resolve_plan_id_by_event_id_should_return_minus_one_when_row_missing', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
+      const privateApi = EventRepositoryImpl as Object as EventRepositoryPrivateApiAR;
+      const store = new FakeRdbStoreAR();
+      store.queueQueryRows([]);
+      const hooks = new RdbHooksAR();
+      hooks.bindStore(store as Object);
+      try {
+        const planId = await privateApi.resolvePlanIdByEventId(502);
+        expect(planId).assertEqual(-1);
+      } finally {
+        hooks.restore();
+      }
+    });
+
+    it('invalid: resolve_plan_id_by_event_id_should_return_minus_one_when_query_fails', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
+      const privateApi = EventRepositoryImpl as Object as EventRepositoryPrivateApiAR;
+      const store = new FakeRdbStoreAR();
+      store.queueQueryError('resolve_plan_failed_ar');
+      const hooks = new RdbHooksAR();
+      hooks.bindStore(store as Object);
+      try {
+        const planId = await privateApi.resolvePlanIdByEventId(503);
+        expect(planId).assertEqual(-1);
+      } finally {
+        hooks.restore();
+      }
+    });
+
+    it('boundary: is_plan_usable_for_runtime_should_cover_invalid_missing_deleted_and_ready_plan', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
+      const privateApi = EventRepositoryImpl as Object as EventRepositoryPrivateApiAR;
+      const store = new FakeRdbStoreAR();
+      store.queueQueryRows([]);
+      store.queueQueryRows([createPlanRowAR(6102, 1, 1)]);
+      store.queueQueryRows([createPlanRowAR(6103, 0, 1)]);
+      const hooks = new RdbHooksAR();
+      hooks.bindStore(store as Object);
+      try {
+        const invalidPlan = await privateApi.isPlanUsableForRuntime(store as Object as relationalStore.RdbStore, 0);
+        const missingPlan = await privateApi.isPlanUsableForRuntime(store as Object as relationalStore.RdbStore, 6101);
+        const deletedPlan = await privateApi.isPlanUsableForRuntime(store as Object as relationalStore.RdbStore, 6102);
+        const readyPlan = await privateApi.isPlanUsableForRuntime(store as Object as relationalStore.RdbStore, 6103);
+        expect(invalidPlan).assertFalse();
+        expect(missingPlan).assertFalse();
+        expect(deletedPlan).assertFalse();
+        expect(readyPlan).assertTrue();
+      } finally {
+        hooks.restore();
+      }
+    });
+
+    it('invalid: is_plan_usable_for_runtime_should_return_false_when_query_fails', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
+      const privateApi = EventRepositoryImpl as Object as EventRepositoryPrivateApiAR;
+      const store = new FakeRdbStoreAR();
+      store.queueQueryError('plan_usable_failed_ar');
+      const hooks = new RdbHooksAR();
+      hooks.bindStore(store as Object);
+      try {
+        const usable = await privateApi.isPlanUsableForRuntime(store as Object as relationalStore.RdbStore, 6104);
+        expect(usable).assertFalse();
+      } finally {
+        hooks.restore();
+      }
     });
 
     it('normal: insert_event_should_insert_and_mark_plan_dirty', 0, async () => {
