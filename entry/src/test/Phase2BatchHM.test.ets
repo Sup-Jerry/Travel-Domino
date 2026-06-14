@@ -17,6 +17,7 @@ import {
   WeatherSchedulePolicy,
   WeatherSnapshot,
   WeatherStageType,
+  WeatherTrendTag,
   WeatherSuggestion,
   WeatherSuggestionTriggerType,
   WeatherUserPreference
@@ -26,6 +27,9 @@ import { WeatherFacade } from '../main/ets/domain/services/WeatherFacade';
 import { WeatherRefreshScheduler } from '../main/ets/domain/services/WeatherRefreshScheduler';
 import { PreferenceManager } from '../main/ets/common/utils/PreferenceManager';
 import { EventRepositoryImpl } from '../main/ets/infrastructure/persistence/EventRepositoryImpl';
+import { PlanRepositoryImpl } from '../main/ets/infrastructure/persistence/PlanRepositoryImpl';
+import { GeoCoordinate, AmapService } from '../main/ets/infrastructure/services/AmapService';
+import { WeatherCollabContext, WeatherContextBuildResult } from '../main/ets/domain/services/WeatherModels';
 
 interface ReplanNodeSnapshotForHM {
   id: number;
@@ -139,6 +143,7 @@ interface TimelineWeatherServicePrivateHM {
   measureDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number;
   resolveExecutionCurrentLocation(): GeoPointInput | null;
   filterActiveExecutionSuggestions(items: WeatherSuggestion[]): WeatherSuggestion[];
+  backfillPlanningCoordinatesByName(scheduleEvents: EventEntity[]): Promise<void>;
 }
 
 class ServiceBundleForHM {
@@ -237,11 +242,15 @@ class StaticHooksForHM {
   private readonly originPreferenceGetInstance: Object;
   private readonly originUpdateFields: Object;
   private readonly originUpdateTimelineConsistency: Object;
+  private readonly originUpdateStrategyDimensions: Object;
+  private readonly originGetGeocode: Object;
 
   constructor() {
     this.originPreferenceGetInstance = Reflect.get(PreferenceManager as Object, 'getInstance') as Object;
     this.originUpdateFields = Reflect.get(EventRepositoryImpl as Object, 'updateFields') as Object;
     this.originUpdateTimelineConsistency = Reflect.get(EventRepositoryImpl as Object, 'updateTimelineConsistency') as Object;
+    this.originUpdateStrategyDimensions = Reflect.get(PlanRepositoryImpl as Object, 'updateStrategyDimensions') as Object;
+    this.originGetGeocode = Reflect.get(AmapService as Object, 'getGeocode') as Object;
   }
 
   setPreferenceGetInstance(fn: () => PreferenceManagerMockForHM): void {
@@ -256,10 +265,22 @@ class StaticHooksForHM {
     Reflect.set(EventRepositoryImpl as Object, 'updateTimelineConsistency', fn);
   }
 
+  setUpdateStrategyDimensions(
+    fn: (planId: number, density: number, pace: number, preference: number, energy: number) => Promise<void>
+  ): void {
+    Reflect.set(PlanRepositoryImpl as Object, 'updateStrategyDimensions', fn);
+  }
+
+  setGetGeocode(fn: (address: string) => Promise<GeoCoordinate | null>): void {
+    Reflect.set(AmapService as Object, 'getGeocode', fn);
+  }
+
   restore(): void {
     Reflect.set(PreferenceManager as Object, 'getInstance', this.originPreferenceGetInstance);
     Reflect.set(EventRepositoryImpl as Object, 'updateFields', this.originUpdateFields);
     Reflect.set(EventRepositoryImpl as Object, 'updateTimelineConsistency', this.originUpdateTimelineConsistency);
+    Reflect.set(PlanRepositoryImpl as Object, 'updateStrategyDimensions', this.originUpdateStrategyDimensions);
+    Reflect.set(AmapService as Object, 'getGeocode', this.originGetGeocode);
   }
 }
 
@@ -333,6 +354,45 @@ function createPreviewForHM(reasonCode: string): SoftReplanPreview {
     changeSummary: [],
     summary: '',
     riskDelta: 0
+  };
+}
+
+function createWeatherCollabContextForHM(trendTag: WeatherTrendTag = 'RAIN_PERSIST'): WeatherCollabContext {
+  return {
+    dayWindows: [],
+    cityBuckets: [],
+    collabSummary: 'hm_collab_summary',
+    dayWindowCount: 0,
+    cityGroupCount: 0,
+    cityCappedCount: 0,
+    cityMissCount: 0,
+    trendTag: trendTag,
+    fallbackPath: 'none'
+  };
+}
+
+function createPlanningResultForHM(
+  event: EventEntity,
+  generatedAt: number,
+  routeScore: number,
+  trendTag: WeatherTrendTag = 'RAIN_PERSIST'
+): WeatherContextBuildResult {
+  const eventMap = new Map<number, PlanNodeWeatherBinding>();
+  eventMap.set(event.id, createBindingForHM(event, 'rain'));
+  return {
+    context: {
+      stage: 'PLANNING',
+      generatedAt: generatedAt,
+      bindings: [],
+      routeSuitability: {
+        routeScore: routeScore,
+        riskTags: ['RAIN'],
+        summaryText: 'hm_planning_summary'
+      },
+      collabContext: createWeatherCollabContextForHM(trendTag)
+    },
+    eventMap: eventMap,
+    sourceEvents: [event]
   };
 }
 
@@ -921,6 +981,145 @@ export default function phase2BatchHMTest() {
       // Assert
       expect(updateCalls).assertEqual(1);
       expect(pending.weather_condition).assertEqual('RAIN');
+      hooks.restore();
+    });
+
+    it('boundary: planning_apply_should_skip_event_persist_and_strategy_write_when_key_already_applied', 0, async () => {
+      // Arrange
+      const bundle = createBundleForHM();
+      const hooks = new StaticHooksForHM();
+      const pending = createEventForHM(0);
+      let eventUpdateCalls = 0;
+      let strategyUpdateCalls = 0;
+      const generatedAt = 1700001234567;
+      const routeScore = 50;
+      bundle.host.events = [pending];
+      Reflect.set(bundle.service as Object, 'weatherStrategyAppliedKey', `${generatedAt}_${routeScore}`);
+      hooks.setUpdateFields(async (): Promise<void> => {
+        eventUpdateCalls += 1;
+      });
+      hooks.setUpdateStrategyDimensions(async (): Promise<void> => {
+        strategyUpdateCalls += 1;
+      });
+
+      // Act
+      await bundle.service.applyPlanningWeatherResult(createPlanningResultForHM(pending, generatedAt, routeScore), true);
+
+      // Assert
+      expect(eventUpdateCalls).assertEqual(0);
+      expect(strategyUpdateCalls).assertEqual(0);
+      expect(bundle.host.weatherStrategyHint.length > 0).assertTrue();
+      hooks.restore();
+    });
+
+    it('boundary: planning_backfill_should_update_memory_without_persist_when_event_id_is_not_positive', 0, async () => {
+      // Arrange
+      const bundle = createBundleForHM();
+      const hooks = new StaticHooksForHM();
+      const pending = createEventForHM(0, 0, 0);
+      pending.name = '西湖';
+      let updateCalls = 0;
+      hooks.setGetGeocode(async (_address: string): Promise<GeoCoordinate | null> => new GeoCoordinate(30.25, 120.16));
+      hooks.setUpdateFields(async (): Promise<void> => {
+        updateCalls += 1;
+      });
+
+      // Act
+      await (bundle.service as Object as TimelineWeatherServicePrivateHM).backfillPlanningCoordinatesByName([pending]);
+
+      // Assert
+      expect(pending.latitude).assertEqual(30.25);
+      expect(pending.longitude).assertEqual(120.16);
+      expect(updateCalls).assertEqual(0);
+      hooks.restore();
+    });
+
+    it('boundary: suggestion_filter_should_drop_null_items_before_sorting', 0, () => {
+      // Arrange
+      const bundle = createBundleForHM();
+      const service = bundle.service as Object as TimelineWeatherServicePrivateHM;
+      const warning = createSuggestionForHM('RAIN');
+      warning.level = 'WARNING';
+      const info = createSuggestionForHM('HEAT');
+      info.level = 'INFO';
+      const input: WeatherSuggestion[] = [warning, info];
+      Reflect.set(input as Object, '0', null);
+
+      // Act
+      const filtered = service.filterActiveExecutionSuggestions(input);
+
+      // Assert
+      expect(filtered.length).assertEqual(1);
+      expect(filtered[0].level).assertEqual('INFO');
+    });
+
+    it('boundary: soft_replan_future_candidates_should_fallback_to_head_when_active_id_is_nan', 0, () => {
+      // Arrange
+      const bundle = createBundleForHM();
+      const active = createEventForHM(Number.NaN);
+      const second = createEventForHM(92);
+      const third = createEventForHM(93);
+      const fourth = createEventForHM(94);
+      active.actual_start_time = 1;
+      bundle.host.events = [active, second, third, fourth];
+
+      // Act
+      const candidates = bundle.service.getSoftReplanFutureCandidates();
+
+      // Assert
+      expect(candidates.length).assertEqual(3);
+      expect(Number.isNaN(candidates[0].id)).assertTrue();
+      expect(candidates[1].id).assertEqual(92);
+      expect(candidates[2].id).assertEqual(93);
+    });
+
+    it('invalid: soft_reorder_should_fail_when_resolved_targets_cannot_all_map_back_to_schedule', 0, async () => {
+      // Arrange
+      const bundle = createBundleForHM();
+      const hooks = new StaticHooksForHM();
+      let updateCalls = 0;
+      const scheduled = createEventForHM(74);
+      bundle.host.events = [scheduled];
+      Reflect.set(bundle.host as Object, 'getOrderedScheduleEvents', (): EventEntity[] => {
+        const first = createEventForHM(74);
+        const second = createEventForHM(999);
+        return [first, second];
+      });
+      hooks.setUpdateTimelineConsistency(async (): Promise<void> => {
+        updateCalls += 1;
+      });
+
+      // Act
+      const changed = await bundle.service.applySoftReorder(['74', '999']);
+
+      // Assert
+      expect(changed).assertFalse();
+      expect(updateCalls).assertEqual(0);
+      hooks.restore();
+    });
+
+    it('boundary: soft_reorder_should_keep_original_item_when_duplicate_target_consumes_reordered_pool', 0, async () => {
+      // Arrange
+      const bundle = createBundleForHM();
+      const hooks = new StaticHooksForHM();
+      let updateCalls = 0;
+      const first = createEventForHM(80);
+      const duplicate = createEventForHM(80);
+      duplicate.sort_order = 100;
+      const last = createEventForHM(81);
+      last.sort_order = 200;
+      bundle.host.events = [first, duplicate, last];
+      hooks.setUpdateTimelineConsistency(async (): Promise<void> => {
+        updateCalls += 1;
+      });
+
+      // Act
+      const changed = await bundle.service.applySoftReorder(['80', '81']);
+
+      // Assert
+      expect(changed).assertTrue();
+      expect(updateCalls).assertEqual(1);
+      expect(bundle.host.events.length).assertEqual(3);
       hooks.restore();
     });
   });
