@@ -1012,6 +1012,33 @@ export default function phase2BatchHMTest() {
       hooks.restore();
     });
 
+    it('boundary: planning_apply_should_clear_strategy_hint_when_weather_decision_causes_no_effective_change', 0, async () => {
+      // Arrange
+      const bundle = createBundleForHM();
+      const hooks = new StaticHooksForHM();
+      const pending = createEventForHM(0);
+      let strategyUpdateCalls = 0;
+      bundle.host.events = [pending];
+      bundle.host.weatherStrategyHint = 'stale_hint_hm';
+      Reflect.set(bundle.host as Object, 'getCurrentStrategy', async (): Promise<ComposableStrategy> => {
+        const strategy = new StrategyDataForHM();
+        strategy.density = DensityLevel.LOW;
+        return strategy;
+      });
+      hooks.setUpdateStrategyDimensions(async (): Promise<void> => {
+        strategyUpdateCalls += 1;
+      });
+
+      // Act
+      await bundle.service.applyPlanningWeatherResult(createPlanningResultForHM(pending, 1700001234999, 50), true);
+
+      // Assert
+      expect(strategyUpdateCalls).assertEqual(0);
+      expect(bundle.host.currentStrategyMode).assertEqual(0);
+      expect(bundle.host.weatherStrategyHint).assertEqual('');
+      hooks.restore();
+    });
+
     it('boundary: planning_backfill_should_update_memory_without_persist_when_event_id_is_not_positive', 0, async () => {
       // Arrange
       const bundle = createBundleForHM();
