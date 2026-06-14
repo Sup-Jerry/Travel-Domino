@@ -1,4 +1,5 @@
 import { describe, it, expect } from '@ohos/hypium';
+import { DateUtil } from '../main/ets/common/utils/DateUtil';
 import { AppStorageKeys } from '../main/ets/common/constants/AppStorageKeys';
 import { PlanItem } from '../main/ets/infrastructure/persistence/PlanRepositoryImpl';
 import { CompactPlanSerializer } from '../main/ets/domain/serializers/CompactPlanSerializer';
@@ -398,6 +399,22 @@ export default function planListPageHelperTest() {
       event.computedStartTime = 'invalid';
       // Act
       const end = resolvePlanListShareEndTime(event, 90);
+      // Assert
+      expect(end).assertEqual('--:--');
+    });
+
+    it('boundary: plan_list_share_end_should_fallback_when_duration_is_invalid_number', 0, () => {
+      // Arrange
+      const event = buildShareEvent();
+      const originCalculateEndTime = Reflect.get(DateUtil as Object, 'calculateEndTime') as Object;
+      Reflect.set(DateUtil as Object, 'calculateEndTime', (_startTime: string, _duration: number): string => {
+        return 'invalid_end_time';
+      });
+
+      // Act
+      const end = resolvePlanListShareEndTime(event, Number.NaN);
+      Reflect.set(DateUtil as Object, 'calculateEndTime', originCalculateEndTime);
+
       // Assert
       expect(end).assertEqual('--:--');
     });
@@ -1054,6 +1071,44 @@ export default function planListPageHelperTest() {
       expect(page.lastLocationPermissionPromptAt).assertEqual(now);
     });
 
+    it('combined: plan_list_first_entry_prompt_should_reprompt_without_re_marking_after_cooldown', 0, async () => {
+      // Arrange
+      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
+      const uiContext = new PlanListUiContextMockTest();
+      const service = new PlanListPlanServiceMockTest();
+      const promptState = new PlanListPromptStateTest();
+      promptState.notifyPrompted = true;
+      promptState.locationPrompted = true;
+      let notifyPromptCount = 0;
+      let locationPromptCount = 0;
+      page.lastNotifyPermissionPromptAt = 1;
+      page.lastLocationPermissionPromptAt = 1;
+      Reflect.set(page as Object, 'getUIContext', (): PlanListUiContextMockTest => uiContext);
+      Reflect.set(page as Object, 'planService', service as Object);
+      Reflect.set(service as Object, 'getArrivalPromptState', async (_context: Object): Promise<PlanListPromptStateTest> => {
+        return promptState;
+      });
+      Reflect.set(page as Object, 'ensureNotificationPermissionPrompt', async (_context: Object): Promise<void> => {
+        notifyPromptCount += 1;
+      });
+      Reflect.set(page as Object, 'ensureLocationPermissionPrompt', async (_context: Object): Promise<void> => {
+        locationPromptCount += 1;
+      });
+      service.notifyEnabled = false;
+      service.locationGranted = false;
+
+      // Act
+      await page.ensureArrivalPermissionPromptOnFirstEntry();
+
+      // Assert
+      expect(service.notifyPromptedMarkCount).assertEqual(0);
+      expect(service.locationPromptedMarkCount).assertEqual(0);
+      expect(notifyPromptCount).assertEqual(1);
+      expect(locationPromptCount).assertEqual(1);
+      expect(page.lastNotifyPermissionPromptAt > 1).assertTrue();
+      expect(page.lastLocationPermissionPromptAt > 1).assertTrue();
+    });
+
     it('normal: plan_list_export_should_truncate_share_events_and_open_dialog', 0, async () => {
       // Arrange
       const page = createPlanListPageForTest() as PlanListPagePrivateTest;
@@ -1215,6 +1270,30 @@ export default function planListPageHelperTest() {
       // Assert
       expect(toastMessages.length).assertEqual(1);
       expect(toastMessages[0]).assertEqual('导入失败：数据格式不合法或内容超限');
+    });
+
+    it('invalid: plan_list_import_should_stringify_non_error_failure_reason', 0, async () => {
+      // Arrange
+      const page = createPlanListPageForTest() as PlanListPagePrivateTest;
+      const toastMessages: string[] = [];
+      Reflect.set(page as Object, 'safeShowToast', (message: string): void => {
+        toastMessages.push(message);
+      });
+      const importPatch = new PlanListStaticPatchTest(
+        PlanImportExportService as Object,
+        'importPlanFromJson',
+        (async (_jsonText: string, _cancelToken: Object): Promise<number> => {
+          return Promise.reject('plain_failure');
+        }) as Object
+      );
+
+      // Act
+      await page.importPlanFromJson('plain_failure_payload', new Object());
+      importPatch.restore();
+
+      // Assert
+      expect(toastMessages.length).assertEqual(1);
+      expect(toastMessages[0].length > 0).assertTrue();
     });
 
     it('invalid: plan_list_notification_route_should_fallback_title_and_swallow_router_error', 0, () => {
