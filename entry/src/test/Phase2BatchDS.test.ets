@@ -2,10 +2,11 @@ import { describe, expect, it } from '@ohos/hypium';
 import {
   GeocodeSearch,
   PoiSearch,
-  PoiSearchBound
+  PoiSearchBound,
+  PoiItem
 } from '@amap/amap_lbs_search';
 import { common } from '@kit.AbilityKit';
-import { AmapService, GeoCoordinate, PoiSearchItem } from '../main/ets/infrastructure/services/AmapService';
+import { AmapPoiSearchNode, AmapService, GeoCoordinate, PoiSearchItem } from '../main/ets/infrastructure/services/AmapService';
 import { AppConfig } from '../main/ets/common/utils/AppConfig';
 import { HttpRequestHelper } from '../main/ets/infrastructure/adapters/HttpRequestHelper';
 
@@ -220,6 +221,33 @@ class ForEachOnlyPoiResultMockDS {
 
   getPois(): ForEachOnlyPoiListMockDS {
     return new ForEachOnlyPoiListMockDS(this.pois);
+  }
+}
+
+class NaNSizeListMockDS {
+  size(): number {
+    return Number.NaN;
+  }
+}
+
+class NoIterPoiResultMockDS {
+  getPois(): NaNSizeListMockDS {
+    return new NaNSizeListMockDS();
+  }
+}
+
+class AmapPoiSearchNodeMockDS implements AmapPoiSearchNode {
+  id?: string;
+  name?: string;
+  address?: string;
+  location?: string;
+  distance?: string;
+
+  constructor(name: string, address: string, location: string, distance: string) {
+    this.name = name;
+    this.address = address;
+    this.location = location;
+    this.distance = distance;
   }
 }
 
@@ -1376,6 +1404,347 @@ export default function phase2BatchDSTest() {
       expect(item !== null).assertTrue();
       expect(item?.name ?? '').assertEqual('Library');
       expect(item?.distance === undefined).assertTrue();
+    });
+
+    it('boundary: amap_normalize_poi_nodes_should_skip_malformed_location_segments', 0, () => {
+      // Arrange
+      const nodes: AmapPoiSearchNode[] = [
+        new AmapPoiSearchNodeMockDS('Malformed DS', 'Road', '121.470000', '12')
+      ];
+
+      // Act
+      const items = AmapService.normalizePoiNodes(nodes);
+
+      // Assert
+      expect(items.length).assertEqual(0);
+    });
+
+    it('boundary: amap_extract_poi_items_should_return_empty_when_list_has_no_iteration_methods', 0, () => {
+      // Arrange
+      const api = AmapService as Object as AmapPrivateDS;
+      const result = new NoIterPoiResultMockDS();
+
+      // Act
+      const items = api.extractPoiItems(result);
+
+      // Assert
+      expect(items.length).assertEqual(0);
+    });
+
+    it('boundary: amap_search_poi_by_sdk_should_skip_bound_when_not_nearby_only', 0, async () => {
+      // Arrange
+      const api = AmapService as Object as AmapPrivateDS;
+      const hooks = new AmapSdkHooksDS();
+      let boundApplied = false;
+      hooks.setCreateCircleSearchBound((_center: Object, _radius: number, _strict: boolean): Object => {
+        return new BoundMarkerDS() as Object;
+      });
+      hooks.setBound((_bound: Object): void => {
+        boundApplied = true;
+      });
+      hooks.setSearchPOI(async (): Promise<Object> => {
+        return new PoiResultMockDS([
+          new PoiItemMockDS('Museum Text DS', 'Road', 31.33, 121.57, 18)
+        ]) as Object;
+      });
+
+      // Act
+      let items: PoiSearchItem[] = [];
+      try {
+        items = await api.searchPoiBySdk({} as common.Context, 'Museum Text DS', 31.33, 121.57, 2, false);
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(boundApplied).assertFalse();
+      expect(items.length).assertEqual(1);
+    });
+
+    it('boundary: amap_search_poi_by_web_api_should_use_text_endpoint_and_default_limit_for_non_positive_limit', 0, async () => {
+      // Arrange
+      const api = AmapService as Object as AmapPrivateDS;
+      const hooks = new AmapWebHooksDS();
+      let capturedUrl = '';
+      hooks.setValidateNoop();
+      hooks.setRequest(async (_ownerTag: string, _requestName: string, url: string, _options: Object): Promise<Object> => {
+        capturedUrl = url;
+        const response: HttpResponseDS = {
+          responseCode: 200,
+          result: buildPoiPayloadDS('{"name":"Text DS","address":"Road","location":"121.510000,31.220000","distance":"11"}')
+        };
+        return response as Object;
+      });
+
+      // Act
+      let items: PoiSearchItem[] = [];
+      try {
+        items = await api.searchPoiByWebApi('text ds', 31.22, 121.51, 0, false);
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(items.length).assertEqual(1);
+      expect(capturedUrl.includes('/text?')).assertTrue();
+      expect(capturedUrl.includes('&offset=10')).assertTrue();
+    });
+
+    it('boundary: amap_search_poi_should_fallback_for_non_md5_sdk_error', 0, async () => {
+      // Arrange
+      const hooks = new AmapStaticHooksDS();
+      let fallbackCalls = 0;
+      hooks.setSearchPoiBySdk(async (): Promise<PoiSearchItem[]> => {
+        throw new Error('plain sdk failed ds');
+      });
+      hooks.setSearchPoiWithWebFallback(async (): Promise<PoiSearchItem[]> => {
+        fallbackCalls += 1;
+        return [new PoiSearchItem('Plain Fallback DS', 'Road', 31.91, 121.91, 9)];
+      });
+
+      // Act
+      let items: PoiSearchItem[] = [];
+      try {
+        items = await AmapService.searchPoi({} as common.Context, 'plain_fallback_ds', 31.91, 121.91, 2);
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(fallbackCalls).assertEqual(1);
+      expect(items.length).assertEqual(1);
+      expect(items[0].name).assertEqual('Plain Fallback DS');
+    });
+
+    it('invalid: amap_get_geocode_sdk_keyword_should_return_null_when_top_coordinate_becomes_invalid', 0, async () => {
+      // Arrange
+      const api = AmapService as Object as AmapPrivateDS;
+      const hooks = new AmapSdkHooksDS();
+      const originExtractPoiItems = Reflect.get(AmapService as Object, 'extractPoiItems') as Object;
+      hooks.setSearchPOI(async (): Promise<Object> => {
+        return new PoiResultMockDS([
+          new PoiItemMockDS('Ignored DS', 'Road', 31.2, 121.4, 1)
+        ]) as Object;
+      });
+      Reflect.set(AmapService as Object, 'extractPoiItems', (_result: Object): PoiSearchItem[] => {
+        return [new PoiSearchItem('Invalid Top DS', 'Road', 0, 0, 1)];
+      });
+
+      // Act
+      let coordinate: GeoCoordinate | null = new GeoCoordinate(1, 1);
+      try {
+        coordinate = await api.getGeocodeBySdkKeyword('invalid_top_ds', {} as common.Context);
+      } finally {
+        Reflect.set(AmapService as Object, 'extractPoiItems', originExtractPoiItems);
+        hooks.restore();
+      }
+
+      // Assert
+      expect(coordinate === null).assertTrue();
+    });
+
+    it('normal: amap_get_geocode_sdk_geo_search_should_return_coordinate_for_valid_point', 0, async () => {
+      // Arrange
+      const api = AmapService as Object as AmapPrivateDS;
+      const hooks = new AmapSdkHooksDS();
+      hooks.setGetFromLocationName(async (): Promise<Object> => {
+        return new PoiListMockDS([new GeocodeItemMockDS(31.28, 121.58)]) as Object;
+      });
+
+      // Act
+      let coordinate: GeoCoordinate | null = null;
+      try {
+        coordinate = await api.getGeocodeBySdkGeoSearch('valid_geo_ds', {} as common.Context);
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(coordinate?.lat ?? 0).assertEqual(31.28);
+      expect(coordinate?.lng ?? 0).assertEqual(121.58);
+    });
+
+    it('boundary: amap_get_geocode_should_fallback_to_web_when_sdk_keyword_returns_null', 0, async () => {
+      // Arrange
+      const originGetRuntimeContext = Reflect.get(AmapService as Object, 'getRuntimeContext') as Object;
+      const originGetGeocodeBySdkGeoSearch = Reflect.get(AmapService as Object, 'getGeocodeBySdkGeoSearch') as Object;
+      const originGetGeocodeBySdkKeyword = Reflect.get(AmapService as Object, 'getGeocodeBySdkKeyword') as Object;
+      const originGetGeocodeByWeb = Reflect.get(AmapService as Object, 'getGeocodeByWeb') as Object;
+      Reflect.set(AmapService as Object, 'getRuntimeContext', (): Object => new EmptyObjectDS() as Object);
+      Reflect.set(AmapService as Object, 'getGeocodeBySdkGeoSearch', async (): Promise<GeoCoordinate | null> => null);
+      Reflect.set(AmapService as Object, 'getGeocodeBySdkKeyword', async (): Promise<GeoCoordinate | null> => null);
+      Reflect.set(AmapService as Object, 'getGeocodeByWeb', async (): Promise<GeoCoordinate | null> => {
+        return new GeoCoordinate(30.55, 120.66);
+      });
+
+      // Act
+      let coordinate: GeoCoordinate | null = null;
+      try {
+        coordinate = await AmapService.getGeocode('web_only_ds');
+      } finally {
+        Reflect.set(AmapService as Object, 'getRuntimeContext', originGetRuntimeContext);
+        Reflect.set(AmapService as Object, 'getGeocodeBySdkGeoSearch', originGetGeocodeBySdkGeoSearch);
+        Reflect.set(AmapService as Object, 'getGeocodeBySdkKeyword', originGetGeocodeBySdkKeyword);
+        Reflect.set(AmapService as Object, 'getGeocodeByWeb', originGetGeocodeByWeb);
+      }
+
+      // Assert
+      expect(coordinate?.lat ?? 0).assertEqual(30.55);
+      expect(coordinate?.lng ?? 0).assertEqual(120.66);
+    });
+
+    it('invalid: amap_route_web_should_cover_nan_strategy_non_200_and_non_10009_business_miss', 0, async () => {
+      // Arrange
+      const hooks = new AmapWebHooksDS();
+      let call = 0;
+      let firstUrl = '';
+      hooks.setValidateNoop();
+      hooks.setRequest(async (_ownerTag: string, _requestName: string, url: string, _options: Object): Promise<Object> => {
+        call += 1;
+        if (call === 1) {
+          firstUrl = url;
+          const response: HttpResponseDS = {
+            responseCode: 500,
+            result: '{}'
+          };
+          return response as Object;
+        }
+        const response: HttpResponseDS = {
+          responseCode: 200,
+          result: '{"status":"0","info":"bad","infocode":"10001"}'
+        };
+        return response as Object;
+      });
+
+      // Act
+      let non200: number | null = 1;
+      let businessMiss: number | null = 1;
+      try {
+        non200 = await AmapService.getDrivingDurationByWebApi(31.2, 121.4, 31.3, 121.5, Number.NaN);
+        businessMiss = await AmapService.getDrivingDurationByWebApi(31.2, 121.4, 31.3, 121.5, 2);
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(firstUrl.includes('strategy=0')).assertTrue();
+      expect(non200 === null).assertTrue();
+      expect(businessMiss === null).assertTrue();
+    });
+
+    it('invalid: amap_get_city_code_sdk_geo_search_should_return_null_when_sdk_result_missing', 0, async () => {
+      // Arrange
+      const api = AmapService as Object as AmapPrivateDS;
+      const hooks = new AmapSdkHooksDS();
+      hooks.setGetFromLocation(async (): Promise<Object | null> => null);
+
+      // Act
+      let cityCode: string | null = 'stale';
+      try {
+        cityCode = await api.getCityCodeBySdkGeoSearch({} as common.Context, 31.29, 121.59);
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(cityCode === null).assertTrue();
+    });
+
+    it('invalid: amap_get_regeo_should_return_null_for_non_200_and_empty_success_payload', 0, async () => {
+      // Arrange
+      const hooks = new AmapWebHooksDS();
+      let call = 0;
+      hooks.setValidateNoop();
+      hooks.setRequest(async (): Promise<Object> => {
+        call += 1;
+        if (call === 1) {
+          const response: HttpResponseDS = {
+            responseCode: 500,
+            result: '{}'
+          };
+          return response as Object;
+        }
+        const response: HttpResponseDS = {
+          responseCode: 200,
+          result: '{"status":"1","regeocode":{"pois":[],"formatted_address":""},"info":"ok","infocode":"10001"}'
+        };
+        return response as Object;
+      });
+
+      // Act
+      let non200: string | null = 'stale';
+      let emptySuccess: string | null = 'stale';
+      try {
+        non200 = await AmapService.getRegeo(31.31, 121.61);
+        emptySuccess = await AmapService.getRegeo(31.32, 121.62);
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(non200 === null).assertTrue();
+      expect(emptySuccess === null).assertTrue();
+    });
+
+    it('normal: amap_get_regeo_by_sdk_nearby_should_return_top_name_when_available', 0, async () => {
+      // Arrange
+      const api = AmapService as Object as AmapPrivateDS;
+      const hooks = new AmapSdkHooksDS();
+      hooks.setCreateCircleSearchBound((_center: Object, _radius: number, _strict: boolean): Object => {
+        return new BoundMarkerDS() as Object;
+      });
+      hooks.setBound((_bound: Object): void => {
+      });
+      hooks.setSearchPOI(async (): Promise<Object> => {
+        return new PoiResultMockDS([
+          new PoiItemMockDS('Nearby Success DS', 'Road', 31.34, 121.64, 6)
+        ]) as Object;
+      });
+
+      // Act
+      let place: string | null = null;
+      try {
+        place = await api.getRegeoBySdkNearby({} as common.Context, 31.34, 121.64);
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(place ?? '').assertEqual('Nearby Success DS');
+    });
+
+    it('boundary: amap_get_regeo_sdk_geo_search_should_cover_missing_result_empty_pois_and_poi_title_success', 0, async () => {
+      // Arrange
+      const api = AmapService as Object as AmapPrivateDS;
+      const hooks = new AmapSdkHooksDS();
+      let call = 0;
+      hooks.setGetFromLocation(async (): Promise<Object | null> => {
+        call += 1;
+        if (call === 1) {
+          return null;
+        }
+        if (call === 2) {
+          return new RegeoResultMockDS('', '', 'Address Only DS', []) as Object;
+        }
+        return new RegeoResultMockDS('', '', '', [new TitlePoiMockDS('Poi Success DS')]) as Object;
+      });
+
+      // Act
+      let missing: string | null = 'stale';
+      let addressOnly: string | null = 'stale';
+      let poiTitle: string | null = 'stale';
+      try {
+        missing = await api.getRegeoBySdkGeoSearch({} as common.Context, 31.35, 121.65);
+        addressOnly = await api.getRegeoBySdkGeoSearch({} as common.Context, 31.35, 121.65);
+        poiTitle = await api.getRegeoBySdkGeoSearch({} as common.Context, 31.35, 121.65);
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(missing === null).assertTrue();
+      expect(addressOnly ?? '').assertEqual('Address Only DS');
+      expect(poiTitle ?? '').assertEqual('Poi Success DS');
     });
   });
 }
