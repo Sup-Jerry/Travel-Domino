@@ -24,6 +24,7 @@ import {
 import { ITimelineWeatherHost, TimelineWeatherService } from '../main/ets/domain/timeline/services/TimelineWeatherService';
 import { WeatherFacade } from '../main/ets/domain/services/WeatherFacade';
 import { WeatherRefreshScheduler } from '../main/ets/domain/services/WeatherRefreshScheduler';
+import { PreferenceManager } from '../main/ets/common/utils/PreferenceManager';
 
 interface ReplanNodeSnapshotForHM {
   id: number;
@@ -141,6 +142,95 @@ interface TimelineWeatherServicePrivateHM {
 class ServiceBundleForHM {
   host: HostMockForHM = new HostMockForHM();
   service: TimelineWeatherService = new TimelineWeatherService(this.host, new WeatherFacade(), new WeatherRefreshScheduler());
+}
+
+class WeatherCollabContextDataForHM {
+  collabSummary: string = '';
+  cityGroupCount: number = 0;
+  dayWindowCount: number = 0;
+  cityCappedCount: number = 0;
+  cityMissCount: number = 0;
+  trendTag: string = 'STABLE';
+  fallbackPath: string = 'none';
+}
+
+class ExecutionContextDataForHM {
+  stage: WeatherStageType = 'IN_PROGRESS';
+  generatedAt: number = 1700000000000;
+  currentLocationWeather: WeatherSnapshot | undefined = undefined;
+  nextNodeWeather: WeatherSnapshot | undefined = undefined;
+  executionRiskScore: number = 82;
+  collabContext: WeatherCollabContextDataForHM = new WeatherCollabContextDataForHM();
+}
+
+class ExecutionBuildResultDataForHM {
+  context: ExecutionContextDataForHM = new ExecutionContextDataForHM();
+  eventMap: Map<number, PlanNodeWeatherBinding> = new Map<number, PlanNodeWeatherBinding>();
+  sourceEvents: EventEntity[] = [];
+}
+
+class WeatherFacadeMockForHM {
+  allowLocationTrigger: boolean = true;
+  buildExecutionContextCalls: number = 0;
+  currentLocationWeather: WeatherSnapshot | undefined = undefined;
+  nextNodeWeather: WeatherSnapshot | undefined = undefined;
+
+  resolveSchedulePolicy(stage: WeatherStageType): WeatherSchedulePolicy {
+    const policy = new SchedulePolicyDataForHM();
+    policy.stage = stage;
+    policy.allowLocationTrigger = this.allowLocationTrigger;
+    return policy;
+  }
+
+  async buildExecutionContext(
+    events: EventEntity[],
+    _currentLocation?: GeoPointInput,
+    _forceRefresh: boolean = false,
+    _preference?: WeatherUserPreference,
+    _options?: WeatherCollabOptions,
+    stage: WeatherStageType = 'IN_PROGRESS'
+  ): Promise<Object> {
+    this.buildExecutionContextCalls += 1;
+    const result = new ExecutionBuildResultDataForHM();
+    result.context.stage = stage;
+    result.context.currentLocationWeather = this.currentLocationWeather;
+    result.context.nextNodeWeather = this.nextNodeWeather;
+    result.sourceEvents = events;
+    return result as Object;
+  }
+
+  buildExecutionAdjustments(): WeatherSuggestion[] {
+    return [];
+  }
+}
+
+class PreferenceManagerMockForHM {
+  featureEnabled: boolean = true;
+  preference: WeatherUserPreference = new UserPreferenceDataForHM();
+
+  async getWeatherUserPreference(): Promise<WeatherUserPreference> {
+    return this.preference;
+  }
+
+  async isWeatherFeatureEnabled(): Promise<boolean> {
+    return this.featureEnabled;
+  }
+}
+
+class StaticHooksForHM {
+  private readonly originPreferenceGetInstance: Object;
+
+  constructor() {
+    this.originPreferenceGetInstance = Reflect.get(PreferenceManager as Object, 'getInstance') as Object;
+  }
+
+  setPreferenceGetInstance(fn: () => PreferenceManagerMockForHM): void {
+    Reflect.set(PreferenceManager as Object, 'getInstance', fn);
+  }
+
+  restore(): void {
+    Reflect.set(PreferenceManager as Object, 'getInstance', this.originPreferenceGetInstance);
+  }
 }
 
 function createBundleForHM(): ServiceBundleForHM {
@@ -273,6 +363,23 @@ export default function phase2BatchHMTest() {
       expect(missing?.id ?? 0).assertEqual(1);
     });
 
+    it('boundary: next_pending_event_should_return_first_pending_when_active_event_id_is_not_positive', 0, () => {
+      // Arrange
+      const bundle = createBundleForHM();
+      const service = bundle.service as Object as TimelineWeatherServicePrivateHM;
+      const done = createEventForHM(4);
+      const firstPending = createEventForHM(5);
+      const secondPending = createEventForHM(6);
+      done.completion_status = EventEntity.STATE_COMPLETED;
+      bundle.host.events = [done, firstPending, secondPending];
+
+      // Act
+      const found = service.findNextPendingEvent(0);
+
+      // Assert
+      expect(found?.id ?? 0).assertEqual(5);
+    });
+
     it('regression: location_threshold_should_only_skip_when_delta_is_below_configured_meters', 0, () => {
       // Arrange
       const bundle = createBundleForHM();
@@ -373,6 +480,21 @@ export default function phase2BatchHMTest() {
       expect(reason).assertEqual('node_replaced');
     });
 
+    it('boundary: soft_shorten_should_use_default_duration_when_suggestion_is_invalid', 0, async () => {
+      // Arrange
+      const bundle = createBundleForHM();
+      const target = createEventForHM(34);
+      target.duration = 30;
+      bundle.host.events = [target];
+
+      // Act
+      const changed = await bundle.service.applySoftShorten([34], 0);
+
+      // Assert
+      expect(changed).assertFalse();
+      expect(target.duration).assertEqual(30);
+    });
+
     it('conflict: immutable_node_detection_should_block_missing_done_and_locked_nodes', 0, () => {
       // Arrange
       const bundle = createBundleForHM();
@@ -443,6 +565,91 @@ export default function phase2BatchHMTest() {
       expect(hint.indexOf(bundle.host.executionWeatherHint) >= 0).assertTrue();
       expect(planningHint.indexOf(bundle.host.weatherPlanningHint) >= 0).assertTrue();
       expect(shouldRefresh).assertTrue();
+    });
+
+    it('boundary: weather_hint_explanation_should_fallback_to_next_node_and_empty_collab_copy', 0, () => {
+      // Arrange
+      const bundle = createBundleForHM();
+      bundle.host.executionWeatherDisplaySource = 'NEXT_FALLBACK';
+      bundle.host.executionWeatherHint = '';
+      bundle.host.weatherPlanningHint = '';
+      bundle.host.weatherCollabSummary = '';
+      bundle.host.executionWeatherCollabSummary = '';
+
+      // Act
+      const hint = bundle.service.buildWeatherHintExplanation();
+
+      // Assert
+      expect(hint.indexOf('下一节点天气估算') >= 0).assertTrue();
+      expect(hint.indexOf('当前暂无额外天气提示') >= 0).assertTrue();
+      expect(hint.indexOf('当前无跨日跨城协同摘要') >= 0).assertTrue();
+    });
+
+    it('regression: reload_weather_preference_should_clear_runtime_when_feature_disabled', 0, async () => {
+      // Arrange
+      const bundle = createBundleForHM();
+      const hooks = new StaticHooksForHM();
+      const prefMock = new PreferenceManagerMockForHM();
+      prefMock.featureEnabled = false;
+      prefMock.preference = {
+        heatSensitivity: 2,
+        rainSensitivity: 0,
+        weatherRiskTolerance: 2
+      };
+      bundle.host.weatherPlanningHint = 'planning_hm';
+      bundle.host.weatherCollabSummary = 'collab_hm';
+      bundle.host.executionWeatherHint = 'execution_hm';
+      bundle.host.executionWeatherCurrentText = 'current_hm';
+      bundle.host.executionWeatherDisplaySource = 'CURRENT';
+      hooks.setPreferenceGetInstance((): PreferenceManagerMockForHM => prefMock);
+
+      // Act
+      await bundle.service.reloadWeatherUserPreference();
+
+      // Assert
+      expect(bundle.host.weatherFeatureEnabled).assertFalse();
+      expect(bundle.host.weatherUserPreference.heatSensitivity).assertEqual(2);
+      expect(bundle.host.weatherPlanningHint).assertEqual('');
+      expect(bundle.host.executionWeatherHint).assertEqual('');
+      expect(bundle.host.executionWeatherCurrentText).assertEqual('');
+      expect(bundle.host.executionWeatherDisplaySource).assertEqual('UNKNOWN');
+      hooks.restore();
+    });
+
+    it('combined: refresh_execution_weather_should_cover_current_next_fallback_and_location_cooldown', 0, async () => {
+      // Arrange
+      const bundle = createBundleForHM();
+      const facade = new WeatherFacadeMockForHM();
+      const active = createEventForHM(61, 31.2304, 121.4737);
+      const next = createEventForHM(62, 31.2404, 121.4837);
+      bundle.host.activeEvent = active;
+      bundle.host.events = [active, next];
+      bundle.host.currentPlanStatus = PlanStatus.IN_PROGRESS;
+      bundle.host.executionWeatherEnabled = true;
+      bundle.host.executionWeatherLocationTriggerCooldownMs = 60_000;
+      Reflect.set(bundle.service as Object, 'weatherFacade', facade as Object);
+
+      facade.currentLocationWeather = createWeatherSnapshotForHM('sunny');
+      facade.nextNodeWeather = createWeatherSnapshotForHM('rain');
+
+      // Act
+      await bundle.service.refreshExecutionWeather(false, 'MANUAL', 'IN_PROGRESS');
+      const currentText = bundle.host.executionWeatherCurrentText;
+      const nextText = bundle.host.executionWeatherNextText;
+
+      facade.currentLocationWeather = undefined;
+      await bundle.service.refreshExecutionWeather(false, 'MANUAL', 'IN_PROGRESS');
+      const fallbackText = bundle.host.executionWeatherCurrentText;
+
+      bundle.host.executionWeatherLastLocationTriggerAt = Date.now();
+      await bundle.service.refreshExecutionWeather(false, 'LOCATION_CHANGE', 'IN_PROGRESS');
+
+      // Assert
+      expect(bundle.host.executionWeatherDisplaySource).assertEqual('NEXT_FALLBACK');
+      expect(currentText.indexOf('sunny') >= 0).assertTrue();
+      expect(nextText.indexOf('rain') >= 0).assertTrue();
+      expect(fallbackText.indexOf('按下一节点天气估算') >= 0).assertTrue();
+      expect(facade.buildExecutionContextCalls).assertEqual(2);
     });
   });
 }
