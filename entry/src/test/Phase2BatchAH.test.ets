@@ -30,6 +30,7 @@ import { EventRepositoryImpl } from '../main/ets/infrastructure/persistence/Even
 import { AdaptationPrompt } from '../main/ets/domain/strategy/StrategyAdaptationEngine';
 import { ComposableStrategy } from '../main/ets/domain/strategy/TravelStrategyDimensions';
 import { UserBehaviorTracker } from '../main/ets/domain/strategy/UserBehaviorTracker';
+import { WeatherStrategyAdjustment } from '../main/ets/common/utils/weather/WeatherReminderStore';
 import {
   ITimelineExecutionHost,
   ReflowHint,
@@ -141,6 +142,9 @@ class AiPersistenceForAH extends PlanPersistenceFacade {
       events: []
     };
   }
+}
+
+class EmptyWeatherAdjustmentForAH implements WeatherStrategyAdjustment {
 }
 
 class SnapshotPersistenceForAH extends AiPersistenceForAH {
@@ -733,6 +737,14 @@ export default function phase2BatchAHTest() {
       expect(offsets.every((item: number) => item === 0)).assertTrue();
     });
 
+    it('invalid: timeline_ai_build_day_offsets_should_return_empty_when_total_is_not_finite', 0, () => {
+      // Arrange
+      // Act
+      // Assert
+      const offsets = TimelineAiService.buildAiDayOffsets(Number.NaN, 3, 1);
+      expect(offsets.length).assertEqual(0);
+    });
+
     it('normal: timeline_ai_get_strategy_mode_should_return_current_host_mode', 0, () => {
       // Arrange
       // Act
@@ -915,6 +927,35 @@ export default function phase2BatchAHTest() {
       const service = new TimelineAiService(host);
       const changed = await service.applyWeatherStrategyAdjustment(undefined, 'x');
       expect(changed).assertFalse();
+    });
+
+    it('boundary: timeline_ai_apply_weather_strategy_adjustment_should_return_false_when_only_preference_provided', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
+      const host = new TimelineAiHostForAH();
+      const service = new TimelineAiService(host);
+      const changed = await service.applyWeatherStrategyAdjustment(new EmptyWeatherAdjustmentForAH(), 'x');
+      expect(changed).assertFalse();
+    });
+
+    it('boundary: timeline_ai_apply_weather_strategy_adjustment_should_allow_pace_only_change_without_overwriting_blank_hint', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
+      const hooks = new PlanRepoHooksForAH();
+      hooks.setUpdateStrategyDimensions(async (): Promise<void> => {
+        return;
+      });
+      const host = new TimelineAiHostForAH();
+      host.currentStrategy = { density: 1, pace: 1, preference: 0, energy: 1 };
+      host.weatherStrategyHint = 'keep_hint';
+      const service = new TimelineAiService(host);
+      const changed = await service.applyWeatherStrategyAdjustment({ pace: 1 }, '   ');
+      hooks.restore();
+      expect(changed).assertTrue();
+      expect(host.currentStrategyMode).assertEqual(-1);
+      expect(host.weatherStrategyHint).assertEqual('keep_hint');
     });
 
     it('normal: timeline_ai_apply_execution_suggestion_with_strategy_should_apply_and_return_success', 0, async () => {
@@ -1170,6 +1211,39 @@ export default function phase2BatchAHTest() {
       expect(message).assertEqual('AI 未返回可用地点，请调整描述后重试');
     });
 
+    it('boundary: timeline_ai_generate_by_ai_should_keep_default_start_hint_when_schedule_exists_without_end_time', 0, async () => {
+      // Arrange
+      const aiHooks = new StaticHooksForAH(AiService as Object, ['generateItineraryWithStrategy']);
+      const eventHooks = new StaticHooksForAH(EventRepositoryImpl as Object, ['insertEvent']);
+      const persistence = new SnapshotPersistenceForAH(createPlanSnapshotForAH('seed', 0));
+      const host = new TimelineAiHostForAH();
+      host.persistence = persistence;
+      host.weatherFeatureEnabled = false;
+      const schedule = createEventForAH(20, 'manual_schedule');
+      schedule.dynamic_end_time = 0;
+      host.events = [schedule];
+      let capturedRequest = {} as AiGenerateRequest;
+      let idSeed = 3000;
+      aiHooks.set('generateItineraryWithStrategy', async (request: AiGenerateRequest): Promise<AiRawItem[]> => {
+        capturedRequest = request;
+        return createAiItemsForAH(['g1']);
+      });
+      eventHooks.set('insertEvent', async (): Promise<number> => {
+        idSeed += 1;
+        return idSeed;
+      });
+      const service = new TimelineAiService(host);
+
+      // Act
+      await service.generateByAi('广州一日游', 0);
+
+      // Assert
+      aiHooks.restore();
+      eventHooks.restore();
+      expect(capturedRequest.userPrompt.indexOf('建议从上午9:00开始') >= 0).assertTrue();
+      expect(host.events.length).assertEqual(2);
+    });
+
     it('boundary: timeline_ai_restore_from_undo_token_should_restore_custom_mode_dimensions', 0, async () => {
       // Arrange
       const planHooks = new StaticHooksForAH(PlanRepositoryImpl as Object, ['updateStrategyDimensions']);
@@ -1264,6 +1338,180 @@ export default function phase2BatchAHTest() {
       eventHooks.restore();
       expect(lastSort).assertEqual(100);
       expect(host.events[0].sort_order).assertEqual(100);
+    });
+
+    it('boundary: timeline_ai_apply_replan_preview_should_use_repository_insert_when_test_hook_absent', 0, async () => {
+      // Arrange
+      const eventHooks = new StaticHooksForAH(EventRepositoryImpl as Object, ['insertEvent']);
+      const persistence = new SnapshotPersistenceForAH(createPlanSnapshotForAH('北京一日游', 0));
+      const host = new TimelineAiHostForAH();
+      host.persistence = persistence;
+      let insertCalls = 0;
+      eventHooks.set('insertEvent', async (): Promise<number> => {
+        insertCalls += 1;
+        return 4001;
+      });
+      const service = new TimelineAiService(host);
+      const preview: AiReplanPreviewResult = {
+        prompt: '北京一日游',
+        strategyMode: 0,
+        generatedAt: Date.now(),
+        itemCount: 1,
+        items: [{ name: 'repo_insert_ai', duration: 60, itemType: 0, aiReasoning: 'r' }]
+      };
+
+      // Act
+      await service.applyReplanPreview(preview, 'KEEP');
+
+      // Assert
+      eventHooks.restore();
+      expect(insertCalls).assertEqual(1);
+      expect(host.events.length).assertEqual(1);
+      expect(host.events[0].id).assertEqual(4001);
+    });
+
+    it('invalid: timeline_ai_private_normalize_strategy_mode_should_fallback_unknown_mode_to_zero', 0, () => {
+      // Arrange
+      // Act
+      // Assert
+      const normalize = Reflect.get(TimelineAiService as Object, 'normalizeStrategyMode') as (mode: number) => number;
+      const normalized = normalize(99);
+      expect(normalized).assertEqual(0);
+    });
+
+    it('invalid: timeline_ai_apply_replan_preview_should_report_mode_mismatch_when_rollback_snapshot_is_inconsistent', 0, async () => {
+      // Arrange
+      const eventHooks = new StaticHooksForAH(EventRepositoryImpl as Object, ['insertEvent']);
+      const host = new TimelineAiHostForAH();
+      eventHooks.set('insertEvent', async (): Promise<number> => {
+        throw new Error('insert_failed_ah_mode');
+      });
+      const service = new TimelineAiService(host);
+      const token: AiReplanUndoToken = {
+        createdAt: Date.now(),
+        events: [],
+        strategyMode: 0,
+        strategyDensity: 1,
+        strategyPace: 1,
+        strategyPreference: 0,
+        strategyEnergy: 1,
+        lastAiPrompt: '',
+        lastStrategyExplanation: ''
+      };
+      Reflect.set(service as Object, 'captureUndoToken', async (): Promise<AiReplanUndoToken> => token);
+      Reflect.set(service as Object, 'restoreUndoSnapshotUnsafe', async (_token: AiReplanUndoToken): Promise<void> => {
+        host.currentStrategyMode = 1;
+        host.events = [];
+      });
+      const preview: AiReplanPreviewResult = {
+        prompt: '北京一日游',
+        strategyMode: 0,
+        generatedAt: Date.now(),
+        itemCount: 1,
+        items: [{ name: 'mode_mismatch_ai', duration: 60, itemType: 0, aiReasoning: 'r' }]
+      };
+      let message = '';
+
+      // Act
+      try {
+        await service.applyReplanPreview(preview, 'KEEP');
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
+      }
+
+      // Assert
+      eventHooks.restore();
+      expect(message.indexOf('rollback_mode_mismatch') >= 0).assertTrue();
+    });
+
+    it('invalid: timeline_ai_apply_replan_preview_should_report_event_count_mismatch_when_rollback_snapshot_is_inconsistent', 0, async () => {
+      // Arrange
+      const eventHooks = new StaticHooksForAH(EventRepositoryImpl as Object, ['insertEvent']);
+      const host = new TimelineAiHostForAH();
+      eventHooks.set('insertEvent', async (): Promise<number> => {
+        throw new Error('insert_failed_ah_count');
+      });
+      const service = new TimelineAiService(host);
+      const token: AiReplanUndoToken = {
+        createdAt: Date.now(),
+        events: [],
+        strategyMode: 0,
+        strategyDensity: 1,
+        strategyPace: 1,
+        strategyPreference: 0,
+        strategyEnergy: 1,
+        lastAiPrompt: '',
+        lastStrategyExplanation: ''
+      };
+      Reflect.set(service as Object, 'captureUndoToken', async (): Promise<AiReplanUndoToken> => token);
+      Reflect.set(service as Object, 'restoreUndoSnapshotUnsafe', async (_token: AiReplanUndoToken): Promise<void> => {
+        host.currentStrategyMode = 0;
+        host.events = [createEventForAH(1, 'one')];
+      });
+      const preview: AiReplanPreviewResult = {
+        prompt: '北京一日游',
+        strategyMode: 0,
+        generatedAt: Date.now(),
+        itemCount: 1,
+        items: [{ name: 'count_mismatch_ai', duration: 60, itemType: 0, aiReasoning: 'r' }]
+      };
+      let message = '';
+
+      // Act
+      try {
+        await service.applyReplanPreview(preview, 'KEEP');
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
+      }
+
+      // Assert
+      eventHooks.restore();
+      expect(message.indexOf('rollback_event_count_mismatch') >= 0).assertTrue();
+    });
+
+    it('invalid: timeline_ai_apply_replan_preview_should_report_ai_count_mismatch_when_rollback_snapshot_is_inconsistent', 0, async () => {
+      // Arrange
+      const eventHooks = new StaticHooksForAH(EventRepositoryImpl as Object, ['insertEvent']);
+      const host = new TimelineAiHostForAH();
+      eventHooks.set('insertEvent', async (): Promise<number> => {
+        throw new Error('insert_failed_ah_ai_count');
+      });
+      const service = new TimelineAiService(host);
+      const token: AiReplanUndoToken = {
+        createdAt: Date.now(),
+        events: [createTravelItemForAH(1, 'plain_one', 0)],
+        strategyMode: 0,
+        strategyDensity: 1,
+        strategyPace: 1,
+        strategyPreference: 0,
+        strategyEnergy: 1,
+        lastAiPrompt: '',
+        lastStrategyExplanation: ''
+      };
+      Reflect.set(service as Object, 'captureUndoToken', async (): Promise<AiReplanUndoToken> => token);
+      Reflect.set(service as Object, 'restoreUndoSnapshotUnsafe', async (_token: AiReplanUndoToken): Promise<void> => {
+        host.currentStrategyMode = 0;
+        host.events = [createEventForAH(1, 'ai_one', 1)];
+      });
+      const preview: AiReplanPreviewResult = {
+        prompt: '北京一日游',
+        strategyMode: 0,
+        generatedAt: Date.now(),
+        itemCount: 1,
+        items: [{ name: 'ai_count_mismatch_ai', duration: 60, itemType: 0, aiReasoning: 'r' }]
+      };
+      let message = '';
+
+      // Act
+      try {
+        await service.applyReplanPreview(preview, 'KEEP');
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
+      }
+
+      // Assert
+      eventHooks.restore();
+      expect(message.indexOf('rollback_ai_count_mismatch') >= 0).assertTrue();
     });
   });
 
