@@ -156,10 +156,7 @@ export class AiResponseParser {
           .replace(/(?:ai_reasoning|reason|推荐理由|理由)\s*[:：].*$/ig, '')
           .replace(/[|,，;；]+/g, ' ')
           .trim();
-        const splitByDash = candidate.split(/[-—–]/);
-        if (splitByDash.length > 0) {
-          candidate = splitByDash[0].trim();
-        }
+        candidate = candidate.split(/[-—–]/)[0].trim();
         name = candidate;
       }
       if (!name) {
