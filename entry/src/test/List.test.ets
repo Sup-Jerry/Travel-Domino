@@ -4,6 +4,7 @@ import automatedTest from './AutomatedTest.test';
 import conflictCompressionTest from './ConflictCompression.test';
 import planJsonTransferServiceTest from './PlanJsonTransferService.test';
 import timeConstraintSolverTest from './TimeConstraintSolver.test';
+import timeConstraintSolverResolveGlobalStartMinCoverageTest from './TimeConstraintSolverResolveGlobalStartMinCoverage.test';
 import planStateFlowTest from './PlanStateFlow.test';
 import planStateMachineCoreTest from './PlanStateMachineCore.test';
 import planStateMachineLinkTest from './PlanStateMachineLink.test';
@@ -401,6 +402,7 @@ const registeredSuiteNames: string[] = [
   'ConflictCompression',
   'PlanJsonTransferService',
   'TimeConstraintSolver',
+  'TimeConstraintSolverResolveGlobalStartMinCoverage',
   'PlanStateFlow',
   'PlanStateMachineCore',
   'PlanStateMachineLink',
@@ -821,6 +823,7 @@ export default function testsuite() {
   conflictCompressionTest();
   planJsonTransferServiceTest();
   timeConstraintSolverTest();
+  timeConstraintSolverResolveGlobalStartMinCoverageTest();
   planStateFlowTest();
   planStateMachineCoreTest();
   planStateMachineLinkTest();
