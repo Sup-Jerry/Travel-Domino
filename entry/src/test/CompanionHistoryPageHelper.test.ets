@@ -745,6 +745,163 @@ export default function companionHistoryPageHelperTest() {
       expect(negativeDeviation).assertEqual('早到 8 分钟');
     });
 
+    it('boundary: history_page_latest_item_should_return_null_when_selected_place_does_not_match', 0, () => {
+      // Arrange
+      const page = new CompanionHistoryPage(undefined, {} as LocalStorage) as Object as CompanionHistoryPagePrivateTest;
+      const dayKey = DateUtil.formatLocalDate(1713254400000);
+      const unrelated = buildHistoryTimelineItem(71, '灵隐寺', 'ARRIVE', 1713254400000, dayKey);
+      const selected = buildHistoryTimelineItem(72, '西湖', 'ARRIVE', 1713258000000, dayKey);
+      page.historySummary = buildPlaceCheckinSummary('博物馆');
+      page.historyTimelineItems = [unrelated];
+      page.selectedHistoryTimelineItem = selected;
+
+      // Act
+      const latest = page.getCurrentHistoryLatestItem();
+
+      // Assert
+      expect(latest).assertNull();
+    });
+
+    it('combined: history_page_initial_render_should_cover_timeline_summary_detail_and_filter_highlight_branches', 0, () => {
+      // Arrange
+      const dayKey = DateUtil.formatLocalDate(1713254400000);
+      const completedItem = buildHistoryTimelineItem(81, '西湖', 'LEAVE', 1713254400000, dayKey);
+      const skippedItem = buildHistoryTimelineItem(82, '机场', 'SKIP', 1713258000000, dayKey);
+      const abnormalItem = buildHistoryTimelineItem(83, '车站', 'ARRIVE', 1713261600000, dayKey);
+      abnormalItem.isAbnormal = true;
+
+      const timelineNoSummaryPage = new CompanionHistoryPage(undefined, {} as LocalStorage) as Object as CompanionHistoryPagePrivateTest;
+      timelineNoSummaryPage.setInitiallyProvidedValue({
+        showHistoryPage: true,
+        historyTimelineSummary: null,
+        historyTimelineItems: [completedItem],
+        historyTimelineFilter: 'all',
+        historyViewMode: 'timeline',
+        historySummary: null,
+        vm: null,
+        selectedHistoryTimelineItem: null,
+        safeTopInset: 6,
+        safeBottomInset: 8
+      });
+
+      const timelineEmptyPage = new CompanionHistoryPage(undefined, {} as LocalStorage) as Object as CompanionHistoryPagePrivateTest;
+      timelineEmptyPage.setInitiallyProvidedValue({
+        showHistoryPage: true,
+        historyTimelineSummary: buildHistoryTimelineSummary('empty_timeline'),
+        historyTimelineItems: [],
+        historyTimelineFilter: 'all',
+        historyViewMode: 'timeline',
+        historySummary: null,
+        vm: null,
+        selectedHistoryTimelineItem: null,
+        safeTopInset: 6,
+        safeBottomInset: 8
+      });
+
+      const detailPage = new CompanionHistoryPage(undefined, {} as LocalStorage) as Object as CompanionHistoryPagePrivateTest;
+      detailPage.setInitiallyProvidedValue({
+        showHistoryPage: true,
+        historyTimelineSummary: buildHistoryTimelineSummary('detail_branch'),
+        historyTimelineItems: [completedItem],
+        historyTimelineFilter: 'all',
+        historyViewMode: 'detail',
+        historySummary: buildPlaceCheckinSummary('西湖'),
+        vm: null,
+        selectedHistoryTimelineItem: completedItem,
+        safeTopInset: 6,
+        safeBottomInset: 8
+      });
+
+      const completedFilterPage = new CompanionHistoryPage(undefined, {} as LocalStorage) as Object as CompanionHistoryPagePrivateTest;
+      completedFilterPage.setInitiallyProvidedValue({
+        showHistoryPage: true,
+        historyTimelineSummary: buildHistoryTimelineSummary('completed_filter'),
+        historyTimelineItems: [completedItem],
+        historyTimelineFilter: 'completed',
+        historyViewMode: 'timeline',
+        historySummary: null,
+        vm: null,
+        selectedHistoryTimelineItem: null,
+        safeTopInset: 6,
+        safeBottomInset: 8
+      });
+
+      const skippedFilterPage = new CompanionHistoryPage(undefined, {} as LocalStorage) as Object as CompanionHistoryPagePrivateTest;
+      skippedFilterPage.setInitiallyProvidedValue({
+        showHistoryPage: true,
+        historyTimelineSummary: buildHistoryTimelineSummary('skipped_filter'),
+        historyTimelineItems: [skippedItem],
+        historyTimelineFilter: 'skipped',
+        historyViewMode: 'timeline',
+        historySummary: null,
+        vm: null,
+        selectedHistoryTimelineItem: null,
+        safeTopInset: 6,
+        safeBottomInset: 8
+      });
+
+      const abnormalFilterPage = new CompanionHistoryPage(undefined, {} as LocalStorage) as Object as CompanionHistoryPagePrivateTest;
+      abnormalFilterPage.setInitiallyProvidedValue({
+        showHistoryPage: true,
+        historyTimelineSummary: buildHistoryTimelineSummary('abnormal_filter'),
+        historyTimelineItems: [abnormalItem],
+        historyTimelineFilter: 'abnormal',
+        historyViewMode: 'timeline',
+        historySummary: null,
+        vm: null,
+        selectedHistoryTimelineItem: null,
+        safeTopInset: 6,
+        safeBottomInset: 8
+      });
+
+      let timelineNoSummaryThrew = false;
+      let timelineEmptyThrew = false;
+      let detailThrew = false;
+      let completedThrew = false;
+      let skippedThrew = false;
+      let abnormalThrew = false;
+
+      // Act
+      try {
+        timelineNoSummaryPage.initialRender();
+      } catch (_error) {
+        timelineNoSummaryThrew = true;
+      }
+      try {
+        timelineEmptyPage.initialRender();
+      } catch (_error) {
+        timelineEmptyThrew = true;
+      }
+      try {
+        detailPage.initialRender();
+      } catch (_error) {
+        detailThrew = true;
+      }
+      try {
+        completedFilterPage.initialRender();
+      } catch (_error) {
+        completedThrew = true;
+      }
+      try {
+        skippedFilterPage.initialRender();
+      } catch (_error) {
+        skippedThrew = true;
+      }
+      try {
+        abnormalFilterPage.initialRender();
+      } catch (_error) {
+        abnormalThrew = true;
+      }
+
+      // Assert
+      expect(timelineNoSummaryThrew).assertFalse();
+      expect(timelineEmptyThrew).assertFalse();
+      expect(detailThrew).assertFalse();
+      expect(completedThrew).assertFalse();
+      expect(skippedThrew).assertFalse();
+      expect(abnormalThrew).assertFalse();
+    });
+
 
   });
 }
