@@ -210,9 +210,7 @@ export class AiService {
     const arabicMatch = normalized.match(/([1-9]\d{0,2})(?:天|日)/);
     if (arabicMatch && arabicMatch[1]) {
       const parsed = Number(arabicMatch[1]);
-      if (Number.isFinite(parsed)) {
-        return Math.min(AiService.MAX_REQUESTED_DAYS, Math.max(AiService.DEFAULT_REQUESTED_DAYS, Math.floor(parsed)));
-      }
+      return Math.min(AiService.MAX_REQUESTED_DAYS, Math.max(AiService.DEFAULT_REQUESTED_DAYS, Math.floor(parsed)));
     }
 
     const zhMatch = normalized.match(/([零一二两俩三四五六七八九十]{1,3})(?:天|日)/);
@@ -291,7 +289,7 @@ export class AiService {
       hilog.warn(
         0x0000,
         AiService.TAG,
-        `[AI_DEBUG][strategy_range_runtime] mode=${request.strategyMode || 0}, source=preset_fallback, dailyMin=${fallbackRange.min}, dailyMax=${fallbackRange.max}, reason=${error instanceof Error ? error.message : JSON.stringify(error)}`
+        `[AI_DEBUG][strategy_range_runtime] mode=${request.strategyMode || 0}, source=preset_fallback, dailyMin=${fallbackRange.min}, dailyMax=${fallbackRange.max}, reason=${(error as Error).message}`
       );
       return fallbackRange;
     }
@@ -526,9 +524,6 @@ export class AiService {
       if (Number.isFinite(status) && status > 0) {
         return Math.floor(status);
       }
-      return 0;
-    }
-    if (!(error instanceof Error)) {
       return 0;
     }
     return 0;
@@ -773,8 +768,7 @@ export class AiService {
       return items;
     } catch (error) {
       hilog.error(0x0000, AiService.TAG, `[AI_TRACE][generateItinerary] failed, error=${JSON.stringify(error)}`);
-      const rethrowMessage = error instanceof Error ? error.message : 'AI 请求失败';
-      throw new Error(rethrowMessage);
+      throw new Error((error as Error).message);
     }
   }
 
@@ -849,7 +843,7 @@ ${multiDayConstraintPrompt}
           hilog.error(
             0x0000,
             AiService.TAG,
-            `[AI_DEBUG][strategy_attempt_error] mode=${mode}, retry=${retry}, elapsedMs=${elapsedMs}, timeoutLike=${timeoutLike ? 1 : 0}, retryable=${retryable ? 1 : 0}, reason=${error instanceof Error ? error.message : JSON.stringify(error)}, canFallback=${canUseFallback ? 1 : 0}, bestEffortCount=${bestEffortItems.length}`
+            `[AI_DEBUG][strategy_attempt_error] mode=${mode}, retry=${retry}, elapsedMs=${elapsedMs}, timeoutLike=${timeoutLike ? 1 : 0}, retryable=${retryable ? 1 : 0}, reason=${(error as Error).message}, canFallback=${canUseFallback ? 1 : 0}, bestEffortCount=${bestEffortItems.length}`
           );
           if (canUseFallback) {
             finalItems = bestEffortItems;
@@ -880,8 +874,7 @@ ${multiDayConstraintPrompt}
             await AiService.waitBeforeRetry(retry);
             continue;
           }
-          const retryError = error instanceof Error ? error.message : JSON.stringify(error);
-          throw new Error(retryError);
+          throw new Error((error as Error).message);
         }
 
         finalItems = AiService.sanitizeItemsByRequirement(parsedItems, requirement);
@@ -950,11 +943,10 @@ ${multiDayConstraintPrompt}
       }
       return finalItems;
     } catch (error) {
-      const rethrowMessage = error instanceof Error ? error.message : 'AI 请求失败';
       if (AiService.isTimeoutLikeError(error as Object)) {
         throw new Error('AI 服务响应超时，请稍后重试');
       }
-      throw new Error(rethrowMessage);
+      throw new Error((error as Error).message);
     }
   }
 
