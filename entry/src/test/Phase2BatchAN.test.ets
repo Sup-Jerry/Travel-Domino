@@ -1664,6 +1664,22 @@ function registerEventMutationTests(): void {
       expect(host.recalculateFromEventIdCalls).assertEqual(0);
     });
 
+    it('invalid: update_manual_commute_should_ignore_null_item', 0, () => {
+      // Arrange
+      const host = new FakeMutationHost();
+      let updateCalls = 0;
+      const updatePatch = new StaticPatch(EventRepositoryImpl, 'updateSingleField', async (): Promise<void> => {
+        updateCalls += 1;
+      });
+      const manager = createManager(host);
+      // Act
+      manager.updateManualCommute(null as never, 15);
+      updatePatch.restore();
+      // Assert
+      expect(updateCalls).assertEqual(0);
+      expect(host.recalculateFromEventIdCalls).assertEqual(0);
+    });
+
     it('normal: move_event_should_swap_adjacent_scheduled_items', 0, async () => {
       // Arrange
       const host = new FakeMutationHost();
@@ -1753,6 +1769,36 @@ function registerEventMutationTests(): void {
       });
       // Assert
       expect(message).assertEqual('save_fail');
+    });
+
+    it('boundary: move_all_backlog_to_schedule_should_keep_pretravel_when_auto_route_disabled', 0, async () => {
+      // Arrange
+      class SortSpyEventsAN extends Array<EventEntity> {
+        sort(compareFn?: (a: EventEntity, b: EventEntity) => number) {
+          if (compareFn) {
+            compareFn(createEvent(360, 'mix_schedule', 1, 0, '08:00', 0), createEvent(361, 'mix_backlog', 0, 0, '', 0));
+          }
+          super.sort(compareFn);
+          return this;
+        }
+      }
+      const host = new FakeMutationHost();
+      host.enableAutoAmapRoute = false;
+      const scheduled = createEvent(36, 'scheduled', 1, 100, '09:00', 0);
+      const backlog = createEvent(37, 'backlog', 0, 0, '', 0);
+      backlog.pre_travel_min = 18;
+      const events = new SortSpyEventsAN();
+      events.push(scheduled);
+      events.push(backlog);
+      host.events = events;
+      const manager = createManager(host);
+      // Act
+      const moved = await manager.moveAllBacklogToSchedule();
+      // Assert
+      expect(moved).assertEqual(1);
+      expect(backlog.status).assertEqual(1);
+      expect(backlog.pre_travel_min).assertEqual(18);
+      expect(host.saveCalls).assertEqual(1);
     });
 
     it('normal: move_to_backlog_should_demote_schedule_and_save', 0, async () => {
@@ -2011,6 +2057,31 @@ function registerEventMutationTests(): void {
       expect(target.longitude).assertEqual(22);
       const hasLatitudeUpdate = lastUpdates.some((item: Record<string, Object>) => String(item['column']) === 'latitude');
       expect(hasLatitudeUpdate).assertFalse();
+    });
+
+    it('boundary: update_event_info_should_reinsert_when_target_removed_during_persist', 0, async () => {
+      // Arrange
+      const host = new FakeMutationHost();
+      const target = createEvent(84, 'origin84', 1, 100, '09:00', 0);
+      const tail = createEvent(85, 'tail84', 1, 200, '12:00', 0);
+      host.events = [target, tail];
+      let timelineConsistencyCount = 0;
+      const patchUpdateFields = new StaticPatch(EventRepositoryImpl, 'updateFields', async (): Promise<void> => {
+        host.events.splice(0, 1);
+      });
+      const patchTimeline = new StaticPatch(EventRepositoryImpl, 'updateTimelineConsistency', async (): Promise<void> => {
+        timelineConsistencyCount += 1;
+      });
+      const manager = createManager(host);
+      // Act
+      await manager.updateEventInfo(84, 'origin84', 60, '08:30', 0, false, 'note84', 2);
+      patchUpdateFields.restore();
+      patchTimeline.restore();
+      // Assert
+      expect(host.events[0].id).assertEqual(84);
+      expect(host.events[1].id).assertEqual(85);
+      expect(timelineConsistencyCount).assertEqual(1);
+      expect(host.recalculateFromEventIdCalls).assertEqual(1);
     });
 
     it('normal: insert_smart_for_compat_should_insert_schedule_item_by_day_and_time', 0, () => {
