@@ -209,6 +209,14 @@ interface EventRepositoryPrivateApiAR {
   isPlanUsableForRuntime(rdbStore: relationalStore.RdbStore, planId: number): Promise<boolean>;
 }
 
+class NonErrorUpdateFailureAR {
+  code: string = 'update_failed_object_ar';
+}
+
+class NonErrorDeleteFailureAR {
+  code: string = 'delete_failed_object_ar';
+}
+
 class FakeRdbStoreAR {
   public beginCount: number = 0;
   public commitCount: number = 0;
@@ -217,6 +225,8 @@ class FakeRdbStoreAR {
   public updateCalls: Object[] = [];
   public deleteCalls: Object[] = [];
   public queryCalls: Object[] = [];
+  public updateShouldRejectObject: boolean = false;
+  public deleteShouldRejectObject: boolean = false;
   private readonly insertOutcomes: Array<number | Error> = [];
   private readonly updateOutcomes: Array<number | Error> = [];
   private readonly deleteOutcomes: Array<number | Error> = [];
@@ -250,12 +260,20 @@ class FakeRdbStoreAR {
     this.updateOutcomes.push(new Error(message));
   }
 
+  queueUpdateNonErrorFailure(): void {
+    this.updateShouldRejectObject = true;
+  }
+
   queueDeleteResult(changedRows: number): void {
     this.deleteOutcomes.push(changedRows);
   }
 
   queueDeleteError(message: string): void {
     this.deleteOutcomes.push(new Error(message));
+  }
+
+  queueDeleteNonErrorFailure(): void {
+    this.deleteShouldRejectObject = true;
   }
 
   queueQueryRows(rows: Object[]): FakeResultSetAR {
@@ -281,6 +299,9 @@ class FakeRdbStoreAR {
   async update(valueBucket: Object, predicates: Object): Promise<number> {
     const updateCall: UpdateCallAR = { valueBucket: valueBucket, predicates: predicates };
     this.updateCalls.push(updateCall);
+    if (this.updateShouldRejectObject) {
+      return Promise.reject(new NonErrorUpdateFailureAR());
+    }
     const outcome = this.updateOutcomes.length > 0 ? this.updateOutcomes.shift() : 1;
     if (outcome instanceof Error) {
       throw outcome;
@@ -290,6 +311,9 @@ class FakeRdbStoreAR {
 
   async delete(predicates: Object): Promise<number> {
     this.deleteCalls.push(predicates);
+    if (this.deleteShouldRejectObject) {
+      return Promise.reject(new NonErrorDeleteFailureAR());
+    }
     const outcome = this.deleteOutcomes.length > 0 ? this.deleteOutcomes.shift() : 1;
     if (outcome instanceof Error) {
       throw outcome;
@@ -1123,6 +1147,29 @@ export default function phase2BatchARTest() {
       expect(store.commitCount).assertEqual(0);
     });
 
+    it('invalid: save_all_events_should_wrap_non_error_failure', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
+      clearDirtyPlanIdsAR();
+      const store = new FakeRdbStoreAR();
+      store.queueUpdateNonErrorFailure();
+      const hooks = new RdbHooksAR();
+      hooks.bindStore(store as Object);
+      let message = '';
+      try {
+        await EventRepositoryImpl.saveAllEvents(45, [createTravelPlanItemAR('WrapObject', 123)]);
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
+      } finally {
+        hooks.restore();
+        clearDirtyPlanIdsAR();
+      }
+      expect(message).assertEqual('[ID_FIX][SAVE_FAIL] planId=45');
+      expect(store.rollbackCount).assertEqual(1);
+      expect(store.commitCount).assertEqual(0);
+    });
+
 
     it('boundary: save_all_events_should_return_early_when_store_missing', 0, async () => {
       // Arrange
@@ -1447,6 +1494,27 @@ export default function phase2BatchARTest() {
       expect(message).assertEqual('single_field_failed_ar');
     });
 
+    it('invalid: update_single_field_should_wrap_non_error_failure', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
+      clearDirtyPlanIdsAR();
+      const store = new FakeRdbStoreAR();
+      store.queueUpdateNonErrorFailure();
+      const hooks = new RdbHooksAR();
+      hooks.bindStore(store as Object);
+      let message = '';
+      try {
+        await EventRepositoryImpl.updateSingleField(104, EventEntity.STATUS, 1);
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
+      } finally {
+        hooks.restore();
+        clearDirtyPlanIdsAR();
+      }
+      expect(message).assertEqual(`[updateSingleField] failed id=104, column=${EventEntity.STATUS}`);
+    });
+
 
     it('normal: update_fields_should_write_all_pairs_and_mark_dirty', 0, async () => {
       // Arrange
@@ -1554,6 +1622,27 @@ export default function phase2BatchARTest() {
         clearDirtyPlanIdsAR();
       }
       expect(message).assertEqual('fields_failed_ar');
+    });
+
+    it('invalid: update_fields_should_wrap_non_error_failure', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
+      clearDirtyPlanIdsAR();
+      const store = new FakeRdbStoreAR();
+      store.queueUpdateNonErrorFailure();
+      const hooks = new RdbHooksAR();
+      hooks.bindStore(store as Object);
+      let message = '';
+      try {
+        await EventRepositoryImpl.updateFields(110, [{ column: EventEntity.STATUS, value: 1 }]);
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
+      } finally {
+        hooks.restore();
+        clearDirtyPlanIdsAR();
+      }
+      expect(message).assertEqual('[updateFields] failed id=110');
     });
 
 
@@ -2178,6 +2267,28 @@ export default function phase2BatchARTest() {
         clearDirtyPlanIdsAR();
       }
       expect(message).assertEqual('hard_delete_failed_ar');
+    });
+
+    it('invalid: hard_delete_event_should_wrap_non_error_failure', 0, async () => {
+      // Arrange
+      // Act
+      // Assert
+      clearDirtyPlanIdsAR();
+      const store = new FakeRdbStoreAR();
+      store.queueQueryRows([createPlanIdRowAR(9403)]);
+      store.queueDeleteNonErrorFailure();
+      const hooks = new RdbHooksAR();
+      hooks.bindStore(store as Object);
+      let message = '';
+      try {
+        await EventRepositoryImpl.hardDeleteEvent(504);
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
+      } finally {
+        hooks.restore();
+        clearDirtyPlanIdsAR();
+      }
+      expect(message).assertEqual('[hardDeleteEvent] failed id=504');
     });
 
 

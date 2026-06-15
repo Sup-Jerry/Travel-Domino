@@ -2,6 +2,30 @@ import { describe, expect, it } from '@ohos/hypium';
 import { PlanRepositoryImpl } from '../main/ets/infrastructure/persistence/PlanRepositoryImpl';
 import { RdbHelper } from '../main/ets/common/utils/RdbHelper';
 
+class FakePredicatesForAC {
+  public readonly tableName: string;
+  public readonly clauses: string[] = [];
+
+  constructor(tableName: string) {
+    this.tableName = tableName;
+  }
+
+  equalTo(column: string, value: Object): FakePredicatesForAC {
+    this.clauses.push(`eq:${column}:${String(value)}`);
+    return this;
+  }
+
+  and(): FakePredicatesForAC {
+    this.clauses.push('and');
+    return this;
+  }
+
+  lessThanOrEqualTo(column: string, value: Object): FakePredicatesForAC {
+    this.clauses.push(`lte:${column}:${String(value)}`);
+    return this;
+  }
+}
+
 class FakeResultSetForAC {
   hasFirstRow: boolean = false;
   closeCount: number = 0;
@@ -182,17 +206,24 @@ class FakeHelperForAC {
 
 class StaticHooksForAC {
   private readonly originGetInstance: Object;
+  private readonly originPredicates: Object;
 
   constructor() {
     this.originGetInstance = Reflect.get(RdbHelper, 'getInstance') as Object;
+    this.originPredicates = Reflect.get(Reflect.get(globalThis, 'relationalStore') as Object, 'RdbPredicates') as Object;
   }
 
   setGetInstance(fn: () => Object): void {
     Reflect.set(RdbHelper, 'getInstance', fn);
   }
 
+  useFakePredicates(): void {
+    Reflect.set(Reflect.get(globalThis, 'relationalStore') as Object, 'RdbPredicates', FakePredicatesForAC);
+  }
+
   restore(): void {
     Reflect.set(RdbHelper, 'getInstance', this.originGetInstance);
+    Reflect.set(Reflect.get(globalThis, 'relationalStore') as Object, 'RdbPredicates', this.originPredicates);
   }
 }
 
@@ -461,33 +492,63 @@ export default function phase2CoreCoverageBatchACTest() {
       const store = new FakeRdbStoreForAC();
       const hooks = new StaticHooksForAC();
       hooks.setGetInstance((): Object => createHelperInstanceForAC(store as Object));
+      hooks.useFakePredicates();
       // Act
       const emptyDeleted = await PlanRepositoryImpl.purgeOldTrash();
       hooks.restore();
       // Assert
       expect(emptyDeleted).assertEqual(0);
+      expect(store.queryCount).assertEqual(1);
+      expect(store.resultSet.closeCount).assertEqual(1);
       expect(store.beginTxCount).assertEqual(0);
       expect(store.deleteCount).assertEqual(0);
+      expect(store.commitCount).assertEqual(0);
+      expect(store.rollbackCount).assertEqual(0);
     });
 
-    it('combined: purge_old_trash_should_enter_transaction_and_mark_dirty_when_expired_plan_ids_exist', 0, async () => {
+    it('combined: purge_old_trash_should_commit_without_log_branch_when_expired_plan_ids_exist_but_delete_returns_zero', 0, async () => {
       // Arrange
       clearDirtyPoolForAC();
-      const store = new FakeRdbStoreForAC();
-      store.resultSet.rowIds = [301, 302];
-      store.deleteReturnValue = 2;
+      const store = new FakePurgeStoreForAC([301, 302], 0);
       const hooks = new StaticHooksForAC();
       hooks.setGetInstance((): Object => createHelperInstanceForAC(store as Object));
+      hooks.useFakePredicates();
       // Act
       const deleted = await PlanRepositoryImpl.purgeOldTrash();
       const dirty = PlanRepositoryImpl.consumeDirtyPlanIds();
       hooks.restore();
       // Assert
-      expect(deleted >= 0).assertTrue();
-      expect(store.beginTxCount >= 0).assertTrue();
-      expect(store.commitCount >= 0).assertTrue();
-      expect(store.deleteCount >= 0).assertTrue();
-      expect(Array.isArray(dirty)).assertTrue();
+      expect(deleted).assertEqual(0);
+      expect(store.resultSet.closeCount).assertEqual(1);
+      expect(store.beginTxCount).assertEqual(1);
+      expect(store.commitCount).assertEqual(1);
+      expect(store.rollbackCount).assertEqual(0);
+      expect(store.deleteCount).assertEqual(3);
+      expect(dirty.length).assertEqual(2);
+      expect(dirty[0]).assertEqual(301);
+      expect(dirty[1]).assertEqual(302);
+    });
+
+    it('combined: purge_old_trash_should_log_branch_when_expired_plan_ids_exist_and_delete_returns_positive', 0, async () => {
+      // Arrange
+      clearDirtyPoolForAC();
+      const store = new FakePurgeStoreForAC([401], 1);
+      const hooks = new StaticHooksForAC();
+      hooks.setGetInstance((): Object => createHelperInstanceForAC(store as Object));
+      hooks.useFakePredicates();
+      // Act
+      const deleted = await PlanRepositoryImpl.purgeOldTrash();
+      const dirty = PlanRepositoryImpl.consumeDirtyPlanIds();
+      hooks.restore();
+      // Assert
+      expect(deleted).assertEqual(1);
+      expect(store.resultSet.closeCount).assertEqual(1);
+      expect(store.beginTxCount).assertEqual(1);
+      expect(store.commitCount).assertEqual(1);
+      expect(store.rollbackCount).assertEqual(0);
+      expect(store.deleteCount).assertEqual(2);
+      expect(dirty.length).assertEqual(1);
+      expect(dirty[0]).assertEqual(401);
     });
   });
 }
