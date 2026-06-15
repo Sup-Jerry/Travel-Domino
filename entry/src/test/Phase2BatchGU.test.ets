@@ -5,6 +5,7 @@ import { WeatherSearch } from '@amap/amap_lbs_search';
 
 interface AmapWeatherServicePrivateGU {
   getWeatherBySdk(cityName: string, context: Object): Promise<WeatherInfo | null>;
+  mapLiveNodeToInfo(node?: Object): WeatherInfo | null;
   mapForecastNodeToInfo(node?: Object): WeatherInfo | null;
   readAsText(value?: string): string;
   readAsNumber(value?: string): number;
@@ -59,6 +60,29 @@ class EmptyConditionLiveStubGU extends WeatherLiveStubGU {
   }
 }
 
+class InvalidNumberLiveStubGU extends WeatherLiveStubGU {
+  public getTemperature(): string {
+    return 'bad';
+  }
+
+  public getHumidity(): string {
+    return '';
+  }
+
+  public getWindPower(): string {
+    return 'NaN';
+  }
+}
+
+class InvalidNumberLiveNodeGU {
+  public adcode?: string = '310000';
+  public weather?: string = 'CLOUDY';
+  public temperature?: string = 'bad';
+  public humidity?: string = '';
+  public windpower?: string = 'NaN';
+  public reporttime?: string = '2026-04-24 10:00:00';
+}
+
 class SparseForecastNodeGU {
   public adcode?: string = '330100';
   public casts?: Object[] = [];
@@ -68,6 +92,10 @@ class SparseForecastCastGU {
   public dayweather?: string = 'FOG';
   public daytemp?: string = '  ';
   public nighttemp?: string = 'bad';
+}
+
+class BlankForecastCastGU extends SparseForecastCastGU {
+  public dayweather?: string = '   ';
 }
 
 class WeatherSearchHooksGU {
@@ -197,6 +225,44 @@ export default function phase2BatchGUTest() {
       }
     });
 
+    it('boundary: amap_weather_service_should_fallback_invalid_sdk_numbers_to_zero', 0, async () => {
+      // Arrange
+      const service = new AmapWeatherService();
+      const privateApi = service as Object as AmapWeatherServicePrivateGU;
+      const hooks = new WeatherSearchHooksGU();
+      hooks.install((listener: WeatherSearchListenerGU): void => {
+        listener.onWeatherLiveSearched(new WeatherLiveResultStubGU(new InvalidNumberLiveStubGU()) as Object, 0);
+      });
+
+      try {
+        // Act
+        const info = await privateApi.getWeatherBySdk('310000', new Object());
+
+        // Assert
+        expect(info !== null).assertTrue();
+        expect(info?.temperature ?? -1).assertEqual(0);
+        expect(info?.humidity ?? -1).assertEqual(0);
+        expect(info?.windSpeed ?? -1).assertEqual(0);
+      } finally {
+        hooks.restore();
+      }
+    });
+
+    it('boundary: amap_weather_service_private_live_mapper_should_fallback_invalid_numbers_to_zero', 0, () => {
+      // Arrange
+      const service = new AmapWeatherService();
+      const privateApi = service as Object as AmapWeatherServicePrivateGU;
+
+      // Act
+      const info = privateApi.mapLiveNodeToInfo(new InvalidNumberLiveNodeGU() as Object);
+
+      // Assert
+      expect(info !== null).assertTrue();
+      expect(info?.temperature ?? -1).assertEqual(0);
+      expect(info?.humidity ?? -1).assertEqual(0);
+      expect(info?.windSpeed ?? -1).assertEqual(0);
+    });
+
     it('combined: amap_weather_service_private_forecast_and_reader_helpers_should_cover_sparse_paths', 0, () => {
       // Arrange
       const service = new AmapWeatherService();
@@ -216,6 +282,21 @@ export default function phase2BatchGUTest() {
       expect(info?.temperature || 0).assertEqual(0);
       expect(blankText).assertEqual('');
       expect(Number.isNaN(undefinedNumber)).assertTrue();
+    });
+
+    it('invalid: amap_weather_service_private_forecast_mapper_should_return_null_when_condition_is_blank', 0, () => {
+      // Arrange
+      const service = new AmapWeatherService();
+      const privateApi = service as Object as AmapWeatherServicePrivateGU;
+      const cast = new BlankForecastCastGU();
+      const node = new SparseForecastNodeGU();
+      node.casts = [cast as Object];
+
+      // Act
+      const info = privateApi.mapForecastNodeToInfo(node as Object);
+
+      // Assert
+      expect(info === null).assertTrue();
     });
 
     it('invalid: validator_marker_should_cover_invalid_case', 0, () => {
