@@ -215,10 +215,7 @@ export class AmapWeatherService implements IWeatherAdapter {
     cityEntries.sort((a: [string, CityBatchPoint[]], b: [string, CityBatchPoint[]]) => {
       const firstA = a[1][0];
       const firstB = b[1][0];
-      const rank = (item?: CityBatchPoint): number => {
-        if (!item) {
-          return 9;
-        }
+      const rank = (item: CityBatchPoint): number => {
         if ((item.point.sourceType ?? 'PLAN_LOCATION') === 'CURRENT_LOCATION') {
           return 1;
         }

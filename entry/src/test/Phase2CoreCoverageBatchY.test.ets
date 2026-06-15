@@ -251,6 +251,61 @@ export default function phase2CoreCoverageBatchYTest() {
       expect(map.values().next().value.condition).assertEqual('RAIN');
     });
 
+    it('boundary: amap_weather_batch_should_return_empty_map_when_input_is_empty', 0, async () => {
+      // Arrange
+      const service = new TestableAmapWeatherServiceForY();
+
+      // Act
+      const map = await service.batchGetWeather([]);
+
+      // Assert
+      expect(map.size).assertEqual(0);
+      expect(service.getWeatherCallCount).assertEqual(0);
+    });
+
+    it('boundary: amap_weather_batch_should_reuse_cached_result_when_force_refresh_is_false', 0, async () => {
+      // Arrange
+      const service = new TestableAmapWeatherServiceForY();
+      const hooks = new StaticHooksForY();
+      hooks.setGetCityCodeByCoordinate(async (_lat: number, _lng: number): Promise<string | null> => {
+        return 'CITY_BATCH_CACHE';
+      });
+      service.weatherByCity.set('CITY_BATCH_CACHE', createWeatherForY('CITY_BATCH_CACHE', 28, 'CLOUDY'));
+      const point = createPointForY(31.11, 121.22, 'PLAN_LOCATION', false, 1700000004001);
+
+      // Act
+      const first = await service.batchGetWeather([point]);
+      const second = await service.batchGetWeather([point]);
+      hooks.restore();
+
+      // Assert
+      expect(first.size).assertEqual(1);
+      expect(second.size).assertEqual(1);
+      expect(service.getWeatherCallCount).assertEqual(1);
+    });
+
+    it('regression: amap_weather_batch_should_bypass_cached_result_when_force_refresh_is_true', 0, async () => {
+      // Arrange
+      const service = new TestableAmapWeatherServiceForY();
+      const hooks = new StaticHooksForY();
+      hooks.setGetCityCodeByCoordinate(async (_lat: number, _lng: number): Promise<string | null> => {
+        return 'CITY_BATCH_REFRESH';
+      });
+      service.weatherByCity.set('CITY_BATCH_REFRESH', createWeatherForY('CITY_BATCH_REFRESH', 30, 'SUNNY'));
+      const point = createPointForY(31.33, 121.44, 'PLAN_LOCATION', false, 1700000004002);
+      const refreshPoint = createPointForY(31.33, 121.44, 'PLAN_LOCATION', true, 1700000004002);
+
+      // Act
+      const first = await service.batchGetWeather([point]);
+      const second = await service.batchGetWeather([refreshPoint]);
+      hooks.restore();
+
+      // Assert
+      expect(first.size).assertEqual(1);
+      expect(second.size).assertEqual(1);
+      expect(service.getWeatherCallCount).assertEqual(2);
+    });
+
     it('combined: amap_weather_snapshot_roundtrip_and_get_weather_without_runtime_context_should_keep_safe_defaults', 0, async () => {
       // Arrange
       const service = new AmapWeatherService();
