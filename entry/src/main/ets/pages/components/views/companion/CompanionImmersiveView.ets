@@ -84,12 +84,60 @@ export struct CompanionImmersiveView {
     return ThemeCenter.getPalette(this.effectiveTheme);
   }
 
+  private hasCurrentEvent(): boolean {
+    return !!this.context.currentEvent;
+  }
+
+  private shouldRenderPrimaryAction(): boolean {
+    return shouldShowImmersivePrimaryAction(
+      this.isCurrentEventPending(),
+      this.isCurrentEventActive(),
+      this.context.runtimeState
+    );
+  }
+
+  private getPrimaryActionBackgroundColor(): ResourceColor {
+    return this.isCurrentEventPending() ? this.getThemePalette().success : this.getThemePalette().warning;
+  }
+
+  private hasNextEvent(): boolean {
+    return !!this.context.nextEvent;
+  }
+
+  private async handlePrimaryActionClick(): Promise<void> {
+    const current = this.context.currentEvent;
+    if (!current) {
+      return;
+    }
+    if (this.isCurrentEventPending()) {
+      await this.onStartEvent(current);
+      return;
+    }
+    await this.onEndEvent(current);
+  }
+
+  private handleNavigateClick(): void {
+    this.onNavigate(this.context.currentEvent || undefined);
+  }
+
+  private handleSwipeStart(event: GestureEvent): void {
+    this.onSwipeGesture('start', event);
+  }
+
+  private handleSwipeUpdate(event: GestureEvent): void {
+    this.onSwipeGesture('update', event);
+  }
+
+  private handleSwipeEnd(event: GestureEvent): void {
+    this.onSwipeGesture('end', event);
+  }
+
   build() {
     Column({ space: 18 }) {
       Blank().layoutWeight(1);
 
-      if (this.context.currentEvent) {
-        Text(this.context.currentEvent.name)
+      if (this.hasCurrentEvent()) {
+        Text((this.context.currentEvent as EventEntity).name)
           .fontSize(42)
           .fontWeight(FontWeight.Bold)
           .fontColor(this.getThemePalette().textPrimary)
@@ -97,7 +145,7 @@ export struct CompanionImmersiveView {
           .textAlign(TextAlign.Center)
           .textOverflow({ overflow: TextOverflow.Ellipsis });
 
-        Text(`${this.getRuntimeLabel()} | ${this.getPlannedRange(this.context.currentEvent)}`)
+        Text(`${this.getRuntimeLabel()} | ${this.getPlannedRange(this.context.currentEvent as EventEntity)}`)
           .fontSize(14)
           .fontColor(this.getThemePalette().textSecondary)
           .padding({ left: 16, right: 16, top: 8, bottom: 8 })
@@ -105,39 +153,27 @@ export struct CompanionImmersiveView {
           .borderRadius(16);
 
         Row({ space: 10 }) {
-          if (shouldShowImmersivePrimaryAction(this.isCurrentEventPending(), this.isCurrentEventActive(), this.context.runtimeState)) {
+          if (this.shouldRenderPrimaryAction()) {
             Button(getImmersivePrimaryActionLabel(this.isCurrentEventPending()))
               .layoutWeight(2)
               .height(50)
               .enabled(
                 getImmersivePrimaryActionEnabled(
                   this.isCurrentEventPending(),
-                  this.canStartFocused(this.context.currentEvent),
-                  this.canEndFocused(this.context.currentEvent)
+                  this.canStartFocused(this.context.currentEvent as EventEntity),
+                  this.canEndFocused(this.context.currentEvent as EventEntity)
                 )
               )
-              .backgroundColor(
-                this.isCurrentEventPending() ? this.getThemePalette().success : this.getThemePalette().warning
-              )
+              .backgroundColor(this.getPrimaryActionBackgroundColor())
               .fontColor(Color.White)
-              .onClick(async () => {
-                const current = this.context.currentEvent;
-                if (!current) {
-                  return;
-                }
-                if (this.isCurrentEventPending()) {
-                  await this.onStartEvent(current);
-                  return;
-                }
-                await this.onEndEvent(current);
-              });
+              .onClick(async () => this.handlePrimaryActionClick());
           }
           Button('导航')
             .layoutWeight(1)
             .height(50)
             .backgroundColor(this.getThemePalette().primary)
             .fontColor(Color.White)
-            .onClick(() => this.onNavigate(this.context.currentEvent || undefined));
+            .onClick(() => this.handleNavigateClick());
         }
         .width('78%');
       } else {
@@ -150,8 +186,13 @@ export struct CompanionImmersiveView {
           .fontColor(this.getThemePalette().textSecondary)
           .textAlign(TextAlign.Center)
           .padding({ left: 28, right: 28 });
-        if (this.context.nextEvent) {
-          Text(getImmersiveNextStationText(this.context.nextEvent.name, this.getForecastStartText(this.context.nextEvent)))
+        if (this.hasNextEvent()) {
+          Text(
+            getImmersiveNextStationText(
+              (this.context.nextEvent as EventEntity).name,
+              this.getForecastStartText(this.context.nextEvent as EventEntity)
+            )
+          )
             .fontSize(14)
             .fontColor(this.getThemePalette().textSecondary)
             .textAlign(TextAlign.Center)
@@ -175,15 +216,9 @@ export struct CompanionImmersiveView {
     .translate({ y: this.immersiveDragOffsetY })
     .priorityGesture(
       PanGesture({ direction: PanDirection.Vertical, distance: 64 })
-        .onActionStart((event: GestureEvent) => {
-          this.onSwipeGesture('start', event);
-        })
-        .onActionUpdate((event: GestureEvent) => {
-          this.onSwipeGesture('update', event);
-        })
-        .onActionEnd((event: GestureEvent) => {
-          this.onSwipeGesture('end', event);
-        })
+        .onActionStart((event: GestureEvent) => this.handleSwipeStart(event))
+        .onActionUpdate((event: GestureEvent) => this.handleSwipeUpdate(event))
+        .onActionEnd((event: GestureEvent) => this.handleSwipeEnd(event))
     );
   }
 }
