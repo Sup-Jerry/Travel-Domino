@@ -1,9 +1,51 @@
 import { describe, it, expect } from '@ohos/hypium';
 import { AiService, AiGenerateRequest, AiRawItem } from '../main/ets/infrastructure/services/AiService';
-import { AiDailyPoiRangeConfig } from '../main/ets/common/utils/PreferenceManager';
+import { AiDailyPoiRangeConfig, PreferenceManager } from '../main/ets/common/utils/PreferenceManager';
+import { HttpRequestHelper } from '../main/ets/infrastructure/adapters/HttpRequestHelper';
 
 interface AiServiceObjectBodyTest {
   message: string;
+}
+
+interface AiServicePrivateRequirementTest {
+  requestedDays: number;
+  dailyMinItems: number;
+  dailyMaxItems: number;
+  totalMinItems: number;
+  totalMaxItems: number;
+  allowAccommodation: boolean;
+}
+
+interface AiServicePrivateResponseLikeTest {
+  responseCode: number;
+  result: string | Object;
+}
+
+interface AiServicePrivateResultObjectTest {
+  detail: string;
+}
+
+interface AiServiceChoiceMessageObjectTest {
+  content: string;
+}
+
+interface AiServiceChoiceObjectTest {
+  message: AiServiceChoiceMessageObjectTest;
+}
+
+interface AiServiceSuccessObjectBodyTest {
+  choices: AiServiceChoiceObjectTest[];
+}
+
+interface AiServicePrivateDoRequestResponseTest {
+  responseCode: number;
+  result: string;
+}
+
+class AiServiceThrowingPreferenceManagerTest {
+  async getAiDailyPoiRangeConfig(): Promise<AiDailyPoiRangeConfig> {
+    throw new Error('preference_unavailable');
+  }
 }
 
 export default function aiServiceTest() {
@@ -65,6 +107,78 @@ export default function aiServiceTest() {
       expect(items.length).assertEqual(1);
       expect(items[0].name).assertEqual('景点C');
       expect(items[0].duration).assertEqual(90);
+    });
+
+    it('boundary: parse_model_response_should_accept_object_message_content_text', 0, () => {
+      // Arrange
+      const response = '{"choices":[{"message":{"content":{"text":"[{\\"name\\":\\"museum\\",\\"duration\\":120,\\"ai_reasoning\\":\\"r\\",\\"type\\":0}]"}}}]}';
+
+      // Act
+      const items = AiService.parseModelResponseForTest(response);
+
+      // Assert
+      expect(items.length).assertEqual(1);
+      expect(items[0].name).assertEqual('museum');
+      expect(items[0].duration).assertEqual(120);
+    });
+
+    it('boundary: parse_model_response_should_fallback_to_choice_text_when_message_empty', 0, () => {
+      // Arrange
+      const response = '{"choices":[{"message":{"content":""},"text":"[{\\"name\\":\\"fallback\\",\\"duration\\":80,\\"ai_reasoning\\":\\"r\\",\\"type\\":1}]"}]}';
+
+      // Act
+      const items = AiService.parseModelResponseForTest(response);
+
+      // Assert
+      expect(items.length).assertEqual(1);
+      expect(items[0].name).assertEqual('fallback');
+      expect(items[0].type).assertEqual(1);
+    });
+
+    it('combined: parse_should_accept_loose_json_object_with_items_and_trailing_commas', 0, () => {
+      // Arrange
+      const content = "```json\n{items:[{name:'gallery',duration:95,ai_reasoning:'r',type:0,},],}\n```";
+
+      // Act
+      const items: AiRawItem[] = AiService.parseItemsForTest(content);
+
+      // Assert
+      expect(items.length).assertEqual(1);
+      expect(items[0].name).assertEqual('gallery');
+      expect(items[0].duration).assertEqual(95);
+    });
+
+    it('combined: parse_should_extract_items_from_line_text_and_infer_item_type', 0, () => {
+      // Arrange
+      const content = [
+        '- name: hotel sunrise | duration: 600 | reason: stay',
+        '- name: dinner restaurant | duration: 45 | reason: eat',
+        '- name: art museum | duration: 90 | reason: visit'
+      ].join('\n');
+
+      // Act
+      const items: AiRawItem[] = AiService.parseItemsForTest(content);
+
+      // Assert
+      expect(items.length).assertEqual(3);
+      expect(items[0].type).assertEqual(2);
+      expect(items[1].type).assertEqual(1);
+      expect(items[2].type).assertEqual(0);
+    });
+
+    it('invalid: parse_should_fail_when_item_name_or_duration_is_invalid_after_extract', 0, () => {
+      // Arrange
+      let message = '';
+
+      // Act
+      try {
+        AiService.parseItemsForTest('[{"name":" ","duration":90,"ai_reasoning":"r","type":0}]');
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
+      }
+
+      // Assert
+      expect(message.includes('index=0')).assertTrue();
     });
 
     it('normal: parse_should_normalize_duration_and_type', 0, () => {
@@ -672,6 +786,577 @@ export default function aiServiceTest() {
       // Assert
       expect(message.length > 0).assertTrue();
       expect(message.indexOf('AI') >= 0).assertTrue();
+    });
+
+    it('boundary: generate_with_strategy_should_accept_long_trip_best_effort_result', 0, async () => {
+      // Arrange
+      let callCount = 0;
+      const bestEffortResult = '{"choices":[{"message":{"content":"[' +
+        '{\\\"name\\\":\\\"spot_1\\\",\\\"duration\\\":90,\\\"ai_reasoning\\\":\\\"r\\\",\\\"type\\\":0},' +
+        '{\\\"name\\\":\\\"spot_2\\\",\\\"duration\\\":60,\\\"ai_reasoning\\\":\\\"r\\\",\\\"type\\\":1},' +
+        '{\\\"name\\\":\\\"spot_3\\\",\\\"duration\\\":100,\\\"ai_reasoning\\\":\\\"r\\\",\\\"type\\\":0},' +
+        '{\\\"name\\\":\\\"spot_4\\\",\\\"duration\\\":70,\\\"ai_reasoning\\\":\\\"r\\\",\\\"type\\\":1},' +
+        '{\\\"name\\\":\\\"spot_5\\\",\\\"duration\\\":110,\\\"ai_reasoning\\\":\\\"r\\\",\\\"type\\\":0},' +
+        '{\\\"name\\\":\\\"spot_6\\\",\\\"duration\\\":80,\\\"ai_reasoning\\\":\\\"r\\\",\\\"type\\\":1}' +
+        ']"}}]}';
+      AiService.setRequesterForTest(async () => {
+        callCount += 1;
+        return {
+          responseCode: 200,
+          result: bestEffortResult
+        };
+      });
+
+      // Act
+      let items: AiRawItem[] = [];
+      try {
+        items = await AiService.generateItineraryWithStrategy({
+          userPrompt: '请帮我规划10天城市深度游，不需要住宿',
+          strategyMode: 0
+        });
+      } finally {
+        AiService.setRequesterForTest(null);
+      }
+
+      // Assert
+      expect(callCount).assertEqual(2);
+      expect(items.length).assertEqual(6);
+      expect(items.some((item: AiRawItem) => item.type === 2)).assertFalse();
+    });
+
+    it('boundary: generate_with_strategy_should_accept_filtered_partial_result_without_accommodation', 0,
+      async () => {
+        // Arrange
+        let callCount = 0;
+        AiService.setRequesterForTest(async () => {
+          callCount += 1;
+          return {
+            responseCode: 200,
+            result: '{"choices":[{"message":{"content":"[' +
+              '{\\\"name\\\":\\\"hotel_x\\\",\\\"duration\\\":600,\\\"ai_reasoning\\\":\\\"r\\\",\\\"type\\\":2},' +
+              '{\\\"name\\\":\\\"spot_1\\\",\\\"duration\\\":90,\\\"ai_reasoning\\\":\\\"r\\\",\\\"type\\\":0},' +
+              '{\\\"name\\\":\\\"spot_2\\\",\\\"duration\\\":60,\\\"ai_reasoning\\\":\\\"r\\\",\\\"type\\\":1}' +
+              ']"}}]}'
+          };
+        });
+
+        // Act
+        let items: AiRawItem[] = [];
+        try {
+          items = await AiService.generateItineraryWithStrategy({
+            userPrompt: '2天景点美食行程，不要住宿',
+            strategyMode: 0,
+            allowPartialResult: true
+          });
+        } finally {
+          AiService.setRequesterForTest(null);
+        }
+
+        // Assert
+        expect(callCount).assertEqual(2);
+        expect(items.length > 0).assertTrue();
+      });
+
+    it('combined: ai_service_private_error_mapping_should_cover_timeout_server_and_default_branches', 0, () => {
+      // Arrange
+      const serviceObject = AiService as Object as Record<string, Object>;
+      const resolveMessage = serviceObject['resolveNon200ErrorMessage'] as
+        ((response: AiServicePrivateResponseLikeTest) => string);
+      const timeoutResponse: AiServicePrivateResponseLikeTest = {
+        responseCode: 499,
+        result: '{"message":"AI_UPSTREAM_TIMEOUT"}'
+      };
+      const serverResponse: AiServicePrivateResponseLikeTest = {
+        responseCode: 504,
+        result: '{"detail":"gateway"}'
+      };
+      const defaultResult: AiServicePrivateResultObjectTest = {
+        detail: 'teapot'
+      };
+      const defaultResponse: AiServicePrivateResponseLikeTest = {
+        responseCode: 418,
+        result: defaultResult as Object
+      };
+
+      // Act
+      const timeoutMessage = resolveMessage(timeoutResponse);
+      const serverMessage = resolveMessage(serverResponse);
+      const defaultMessage = resolveMessage(defaultResponse);
+
+      // Assert
+      expect(timeoutMessage).assertEqual('AI 服务响应超时，请稍后重试');
+      expect(serverMessage).assertEqual('AI 服务暂时不可用，请稍后重试');
+      expect(defaultMessage).assertEqual('网络请求失败');
+    });
+
+    it('combined: ai_service_private_requirement_guards_should_cover_hotel_and_best_effort_paths', 0, () => {
+      // Arrange
+      const serviceObject = AiService as Object as Record<string, Object>;
+      const isSufficient = serviceObject['isSufficientForRequirement'] as
+        ((items: AiRawItem[], requirement: AiServicePrivateRequirementTest) => boolean);
+      const isFallback = serviceObject['isFallbackAcceptableForMultiDay'] as
+        ((items: AiRawItem[], requirement: AiServicePrivateRequirementTest) => boolean);
+      const isBestEffort = serviceObject['isBestEffortAcceptableForLongTrip'] as
+        ((items: AiRawItem[], requirement: AiServicePrivateRequirementTest) => boolean);
+      const noHotelRequirement: AiServicePrivateRequirementTest = {
+        requestedDays: 2,
+        dailyMinItems: 2,
+        dailyMaxItems: 4,
+        totalMinItems: 4,
+        totalMaxItems: 8,
+        allowAccommodation: false
+      };
+      const allowHotelRequirement: AiServicePrivateRequirementTest = {
+        requestedDays: 2,
+        dailyMinItems: 2,
+        dailyMaxItems: 4,
+        totalMinItems: 4,
+        totalMaxItems: 8,
+        allowAccommodation: true
+      };
+      const longTripRequirement: AiServicePrivateRequirementTest = {
+        requestedDays: 10,
+        dailyMinItems: 2,
+        dailyMaxItems: 4,
+        totalMinItems: 20,
+        totalMaxItems: 40,
+        allowAccommodation: false
+      };
+      const itemsWithHotel: AiRawItem[] = [
+        { name: 'hotel_1', duration: 600, ai_reasoning: 'r', type: 2 },
+        { name: 'spot_1', duration: 90, ai_reasoning: 'r', type: 0 },
+        { name: 'spot_2', duration: 60, ai_reasoning: 'r', type: 1 },
+        { name: 'spot_3', duration: 80, ai_reasoning: 'r', type: 0 }
+      ];
+      const tooManyHotels: AiRawItem[] = [
+        { name: 'hotel_1', duration: 600, ai_reasoning: 'r', type: 2 },
+        { name: 'hotel_2', duration: 600, ai_reasoning: 'r', type: 2 },
+        { name: 'hotel_3', duration: 600, ai_reasoning: 'r', type: 2 },
+        { name: 'spot_1', duration: 90, ai_reasoning: 'r', type: 0 }
+      ];
+      const longTripItems: AiRawItem[] = [
+        { name: 'spot_1', duration: 90, ai_reasoning: 'r', type: 0 },
+        { name: 'spot_2', duration: 60, ai_reasoning: 'r', type: 1 },
+        { name: 'spot_3', duration: 80, ai_reasoning: 'r', type: 0 },
+        { name: 'spot_4', duration: 70, ai_reasoning: 'r', type: 1 },
+        { name: 'spot_5', duration: 100, ai_reasoning: 'r', type: 0 },
+        { name: 'spot_6', duration: 65, ai_reasoning: 'r', type: 1 }
+      ];
+
+      // Act
+      const sufficientWithoutHotel = isSufficient(itemsWithHotel, noHotelRequirement);
+      const sufficientWithTooManyHotels = isSufficient(tooManyHotels, allowHotelRequirement);
+      const fallbackWithHotel = isFallback(itemsWithHotel, noHotelRequirement);
+      const bestEffortAccepted = isBestEffort(longTripItems, longTripRequirement);
+
+      // Assert
+      expect(sufficientWithoutHotel).assertFalse();
+      expect(sufficientWithTooManyHotels).assertFalse();
+      expect(fallbackWithHotel).assertFalse();
+      expect(bestEffortAccepted).assertTrue();
+    });
+
+    it('boundary: generate_itinerary_should_accept_success_object_body', 0, async () => {
+      // Arrange
+      const objectBody: AiServiceSuccessObjectBodyTest = {
+        choices: [
+          {
+            message: {
+              content: '[{"name":"object_ok","duration":90,"ai_reasoning":"r","type":0}]'
+            }
+          }
+        ]
+      };
+      AiService.setRequesterForTest(async () => {
+        return {
+          responseCode: 200,
+          result: objectBody as Object
+        };
+      });
+
+      // Act
+      let items: AiRawItem[] = [];
+      try {
+        items = await AiService.generateItinerary('1天城市漫游');
+      } finally {
+        AiService.setRequesterForTest(null);
+      }
+
+      // Assert
+      expect(items.length).assertEqual(1);
+      expect(items[0].name).assertEqual('object_ok');
+      expect(items[0].duration).assertEqual(90);
+    });
+
+    it('boundary: generate_with_strategy_should_accept_success_object_body', 0, async () => {
+      // Arrange
+      const objectBody: AiServiceSuccessObjectBodyTest = {
+        choices: [
+          {
+            message: {
+              content: '[{"name":"strategy_object_ok","duration":100,"ai_reasoning":"r","type":0}]'
+            }
+          }
+        ]
+      };
+      AiService.setRequesterForTest(async () => {
+        return {
+          responseCode: 200,
+          result: objectBody as Object
+        };
+      });
+
+      // Act
+      let items: AiRawItem[] = [];
+      try {
+        items = await AiService.generateItineraryWithStrategy({
+          userPrompt: '1天景点',
+          strategyMode: 0,
+          allowPartialResult: true
+        });
+      } finally {
+        AiService.setRequesterForTest(null);
+      }
+
+      // Assert
+      expect(items.length).assertEqual(1);
+      expect(items[0].name).assertEqual('strategy_object_ok');
+    });
+
+    it('combined: ai_service_private_helpers_should_cover_default_and_acceptance_branches', 0, async () => {
+      // Arrange
+      const serviceObject = AiService as Object as Record<string, Object>;
+      const normalizeDuration = serviceObject['normalizeDurationByType'] as
+        ((duration: number, type: number) => number);
+      const parseZhNumber = serviceObject['parseSimpleChineseNumber'] as
+        ((raw: string) => number);
+      const resolveRequirement = serviceObject['resolveGenerationRequirementForTest'] as
+        ((request: AiGenerateRequest) => number[]);
+      const isSufficient = serviceObject['isSufficientForRequirement'] as
+        ((items: AiRawItem[], requirement: AiServicePrivateRequirementTest) => boolean);
+      const isFallback = serviceObject['isFallbackAcceptableForMultiDay'] as
+        ((items: AiRawItem[], requirement: AiServicePrivateRequirementTest) => boolean);
+      const resolveStatus = serviceObject['resolveErrorHttpStatus'] as
+        ((error: Object) => number);
+      const buildHttpError = serviceObject['buildHttpError'] as
+        ((message: string, httpStatus: number) => Error);
+      const waitBeforeRetry = serviceObject['waitBeforeRetry'] as
+        ((retry: number) => Promise<void>);
+      const getReason = serviceObject['getInsufficientReason'] as
+        ((items: AiRawItem[], requirement: AiServicePrivateRequirementTest) => string);
+
+      const allowHotelRequirement: AiServicePrivateRequirementTest = {
+        requestedDays: 2,
+        dailyMinItems: 2,
+        dailyMaxItems: 4,
+        totalMinItems: 4,
+        totalMaxItems: 8,
+        allowAccommodation: true
+      };
+      const noHotelRequirement: AiServicePrivateRequirementTest = {
+        requestedDays: 2,
+        dailyMinItems: 2,
+        dailyMaxItems: 4,
+        totalMinItems: 4,
+        totalMaxItems: 8,
+        allowAccommodation: false
+      };
+      const acceptableFallbackItems: AiRawItem[] = [
+        { name: 'spot_1', duration: 90, ai_reasoning: 'r', type: 0 },
+        { name: 'spot_2', duration: 60, ai_reasoning: 'r', type: 1 },
+        { name: 'spot_3', duration: 80, ai_reasoning: 'r', type: 0 },
+        { name: 'spot_4', duration: 70, ai_reasoning: 'r', type: 1 }
+      ];
+      const acceptableHotelItems: AiRawItem[] = [
+        { name: 'hotel_1', duration: 600, ai_reasoning: 'r', type: 2 },
+        { name: 'hotel_2', duration: 620, ai_reasoning: 'r', type: 2 },
+        { name: 'spot_1', duration: 90, ai_reasoning: 'r', type: 0 },
+        { name: 'spot_2', duration: 60, ai_reasoning: 'r', type: 1 }
+      ];
+      const aiHttpErrorZero = buildHttpError('zero-status', 0);
+      const plainObjectError: AiServicePrivateResultObjectTest = {
+        detail: 'x'
+      };
+
+      // Act
+      const defaultDuration = normalizeDuration(7, 9);
+      const emptyZhNumber = parseZhNumber('  ');
+      const noHotelRequirementTuple = resolveRequirement({
+        userPrompt: '2天景点美食，不要住宿',
+        strategyMode: 0
+      });
+      const sufficientWithAllowedHotels = isSufficient(acceptableHotelItems, allowHotelRequirement);
+      const acceptableFallback = isFallback(acceptableFallbackItems, noHotelRequirement);
+      const noAccommodationTuple = resolveRequirement({
+        userPrompt: '2天景点美食',
+        strategyMode: 0
+      });
+      const zeroStatus = resolveStatus(aiHttpErrorZero as Object);
+      const plainObjectStatus = resolveStatus(plainObjectError as Object);
+      await waitBeforeRetry(Number.NaN);
+      const noHotelReason = getReason(acceptableFallbackItems, noHotelRequirement);
+
+      // Assert
+      expect(defaultDuration).assertEqual(10);
+      expect(emptyZhNumber).assertEqual(0);
+      expect(noHotelRequirementTuple[5]).assertEqual(1);
+      expect(noAccommodationTuple[5]).assertEqual(0);
+      expect(sufficientWithAllowedHotels).assertTrue();
+      expect(acceptableFallback).assertTrue();
+      expect(zeroStatus).assertEqual(0);
+      expect(plainObjectStatus).assertEqual(0);
+      expect(noHotelReason).assertEqual('unknown');
+    });
+
+    it('boundary: ai_service_private_do_request_should_fallback_to_http_request_helper_when_test_requester_missing', 0, async () => {
+      // Arrange
+      const serviceObject = AiService as Object as Record<string, Object>;
+      const doRequest = serviceObject['doRequest'] as
+        ((url: string, options: Object) => Promise<Object>);
+      const helperObject = HttpRequestHelper as Object as Record<string, Object>;
+      const originalRequest = helperObject['request'];
+      helperObject['request'] = async (_tag: string, _scene: string, url: string): Promise<Object> => {
+        const response: AiServicePrivateDoRequestResponseTest = {
+          responseCode: 200,
+          result: url
+        };
+        return response as Object;
+      };
+      AiService.setRequesterForTest(null);
+      const emptyOptions: Record<string, Object> = {};
+
+      // Act
+      let responseCode = 0;
+      let resultText = '';
+      try {
+        const response = await doRequest('mock://ai', emptyOptions as Object) as Record<string, Object>;
+        responseCode = Number(response['responseCode']);
+        resultText = String(response['result']);
+      } finally {
+        helperObject['request'] = originalRequest;
+      }
+
+      // Assert
+      expect(responseCode).assertEqual(200);
+      expect(resultText).assertEqual('mock://ai');
+    });
+
+    it('boundary: ai_service_private_runtime_range_should_fallback_when_preference_throws_error', 0, async () => {
+      // Arrange
+      const serviceObject = AiService as Object as Record<string, Object>;
+      const resolveRuntime = serviceObject['resolveDailyItemRangeRuntime'] as
+        ((request: AiGenerateRequest) => Promise<Record<string, number>>);
+      const preferenceObject = PreferenceManager as Object as Record<string, Object>;
+      const originalGetInstance = preferenceObject['getInstance'];
+      preferenceObject['getInstance'] = (): Object => {
+        return new AiServiceThrowingPreferenceManagerTest() as Object;
+      };
+
+      // Act
+      let rangeMin = 0;
+      let rangeMax = 0;
+      try {
+        const range = await resolveRuntime({
+          userPrompt: '1天城市漫游',
+          strategyMode: 2
+        });
+        rangeMin = Number(range['min']);
+        rangeMax = Number(range['max']);
+      } finally {
+        preferenceObject['getInstance'] = originalGetInstance;
+      }
+
+      // Assert
+      expect(rangeMin).assertEqual(3);
+      expect(rangeMax).assertEqual(5);
+    });
+
+    it('invalid: ai_service_private_fallback_guard_should_reject_single_day_and_empty_items', 0, () => {
+      // Arrange
+      const serviceObject = AiService as Object as Record<string, Object>;
+      const isFallback = serviceObject['isFallbackAcceptableForMultiDay'] as
+        ((items: AiRawItem[], requirement: AiServicePrivateRequirementTest) => boolean);
+      const requirement: AiServicePrivateRequirementTest = {
+        requestedDays: 1,
+        dailyMinItems: 2,
+        dailyMaxItems: 4,
+        totalMinItems: 2,
+        totalMaxItems: 4,
+        allowAccommodation: false
+      };
+
+      // Act
+      const singleDayResult = isFallback([{
+        name: 'spot',
+        duration: 60,
+        ai_reasoning: 'r',
+        type: 0
+      }], requirement);
+      const emptyItemsResult = isFallback([], {
+        requestedDays: 2,
+        dailyMinItems: 2,
+        dailyMaxItems: 4,
+        totalMinItems: 4,
+        totalMaxItems: 8,
+        allowAccommodation: false
+      });
+
+      // Assert
+      expect(singleDayResult).assertFalse();
+      expect(emptyItemsResult).assertFalse();
+    });
+
+    it('combined: ai_service_private_error_mapping_should_cover_empty_non_object_and_rate_limit_paths', 0, () => {
+      // Arrange
+      const serviceObject = AiService as Object as Record<string, Object>;
+      const resolveStatus = serviceObject['resolveErrorHttpStatus'] as
+        ((error: Object) => number);
+      const resolveMessage = serviceObject['resolveNon200ErrorMessage'] as
+        ((response: AiServicePrivateResponseLikeTest) => string);
+
+      // Act
+      const plainErrorStatus = resolveStatus(new Error('plain_error') as Object);
+      const emptyMessage = resolveMessage({
+        responseCode: 418,
+        result: ''
+      });
+      const nonObjectMessage = resolveMessage({
+        responseCode: 418,
+        result: '123'
+      });
+      const rateLimitMessage = resolveMessage({
+        responseCode: 429,
+        result: ''
+      });
+
+      // Assert
+      expect(plainErrorStatus).assertEqual(0);
+      expect(emptyMessage).assertEqual('网络请求失败');
+      expect(nonObjectMessage).assertEqual('网络请求失败');
+      expect(rateLimitMessage).assertEqual('AI 服务请求过于频繁，请稍后重试');
+    });
+
+    it('normal: generate_itinerary_should_accept_success_string_body', 0, async () => {
+      // Arrange
+      AiService.setRequesterForTest(async () => {
+        return {
+          responseCode: 200,
+          result: '{"choices":[{"message":{"content":"[{\\"name\\":\\"string_ok\\",\\"duration\\":95,\\"ai_reasoning\\":\\"r\\",\\"type\\":0}]"}}]}'
+        };
+      });
+
+      // Act
+      let items: AiRawItem[] = [];
+      try {
+        items = await AiService.generateItinerary('1天轻松游');
+      } finally {
+        AiService.setRequesterForTest(null);
+      }
+
+      // Assert
+      expect(items.length).assertEqual(1);
+      expect(items[0].name).assertEqual('string_ok');
+    });
+
+    it('invalid: generate_itinerary_should_rethrow_request_error_message', 0, async () => {
+      // Arrange
+      AiService.setRequesterForTest(async () => {
+        throw new Error('plain_request_error');
+      });
+
+      // Act
+      let message = '';
+      try {
+        await AiService.generateItinerary('1天');
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
+      } finally {
+        AiService.setRequesterForTest(null);
+      }
+
+      // Assert
+      expect(message).assertEqual('plain_request_error');
+    });
+
+    it('invalid: generate_with_strategy_should_rethrow_request_error_without_retry', 0, async () => {
+      // Arrange
+      let callCount = 0;
+      AiService.setRequesterForTest(async () => {
+        callCount += 1;
+        throw new Error('plain_retry_error');
+      });
+
+      // Act
+      let message = '';
+      try {
+        await AiService.generateItineraryWithStrategy({
+          userPrompt: '1天景点',
+          strategyMode: 0
+        });
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
+      } finally {
+        AiService.setRequesterForTest(null);
+      }
+
+      // Assert
+      expect(callCount).assertEqual(1);
+      expect(message).assertEqual('plain_retry_error');
+    });
+
+    it('invalid: generate_with_strategy_should_use_single_day_insufficient_message', 0, async () => {
+      // Arrange
+      let callCount = 0;
+      AiService.setRequesterForTest(async () => {
+        callCount += 1;
+        return {
+          responseCode: 200,
+          result: '{"choices":[{"message":{"content":"[{\\"name\\":\\"spot_only\\",\\"duration\\":90,\\"ai_reasoning\\":\\"r\\",\\"type\\":0}]"}}]}'
+        };
+      });
+
+      // Act
+      let message = '';
+      try {
+        await AiService.generateItineraryWithStrategy({
+          userPrompt: '1天景点',
+          strategyMode: 0
+        });
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
+      } finally {
+        AiService.setRequesterForTest(null);
+      }
+
+      // Assert
+      expect(callCount).assertEqual(2);
+      expect(message).assertEqual('AI 未返回可用地点，请调整描述后重试');
+    });
+
+    it('invalid: generate_with_strategy_should_map_final_timeout_to_timeout_message', 0, async () => {
+      // Arrange
+      let callCount = 0;
+      AiService.setRequesterForTest(async () => {
+        callCount += 1;
+        throw new Error('[HTTP_TRACE][AiService][generateItinerary] request failed: {"code":2300028,"message":"Operation timeout"}');
+      });
+
+      // Act
+      let message = '';
+      try {
+        await AiService.generateItineraryWithStrategy({
+          userPrompt: '1天城市游',
+          strategyMode: 0
+        });
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
+      } finally {
+        AiService.setRequesterForTest(null);
+      }
+
+      // Assert
+      expect(callCount).assertEqual(2);
+      expect(message).assertEqual('AI 服务响应超时，请稍后重试');
     });
   });
 }
