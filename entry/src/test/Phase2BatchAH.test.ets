@@ -1514,6 +1514,41 @@ export default function phase2BatchAHTest() {
       expect(message.indexOf('rollback_ai_count_mismatch') >= 0).assertTrue();
     });
 
+    it('invalid: timeline_ai_apply_replan_preview_should_rethrow_when_capture_undo_token_fails_before_rollback', 0, async () => {
+      // Arrange
+      const host = new TimelineAiHostForAH();
+      host.events = [createEventForAH(1, 'existing_plain', 0)];
+      const service = new TimelineAiService(host);
+      let restoreCalled = 0;
+      Reflect.set(service as Object, 'captureUndoToken', async (): Promise<AiReplanUndoToken> => {
+        throw new Error('capture_undo_failed_ah');
+      });
+      Reflect.set(service as Object, 'restoreUndoSnapshotUnsafe', async (_token: AiReplanUndoToken): Promise<void> => {
+        restoreCalled += 1;
+      });
+      const preview: AiReplanPreviewResult = {
+        prompt: '北京一日游',
+        strategyMode: 0,
+        generatedAt: Date.now(),
+        itemCount: 1,
+        items: [{ name: 'capture_fail_preview', duration: 60, itemType: 0, aiReasoning: 'r' }]
+      };
+      let message = '';
+
+      // Act
+      try {
+        await service.applyReplanPreview(preview, 'KEEP');
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
+      }
+
+      // Assert
+      expect(message).assertEqual('capture_undo_failed_ah');
+      expect(restoreCalled).assertEqual(0);
+      expect(host.events.length).assertEqual(1);
+      expect(host.events[0].name).assertEqual('existing_plain');
+    });
+
     it('boundary: timeline_ai_apply_replan_preview_overwrite_should_skip_missing_inserted_target', 0, async () => {
       // Arrange
       const eventHooks = new StaticHooksForAH(EventRepositoryImpl as Object, ['deleteEventsBySource', 'updateFields']);
