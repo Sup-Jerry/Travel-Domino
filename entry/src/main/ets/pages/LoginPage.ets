@@ -130,6 +130,35 @@ struct LoginPage {
     return generation === this.loginGeneration;
   }
 
+  private handleAgreementCheckboxChange(value: boolean): void {
+    this.agreementAccepted = value;
+    hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] agreement checkbox changed=${value ? 1 : 0}`);
+  }
+
+  private handleHuaweiButtonError(message: string): void {
+    const traceId = this.createLoginTraceId('button_error');
+    const code = parseHuaweiLoginErrorCodeFromMessage(message);
+    hilog.warn(
+      LoginPage.LOG_DOMAIN,
+      LoginPage.LOG_TAG,
+      `[LOGIN_TRACE][page] button error message=${message}, code=${code}, trace=${traceId}`
+    );
+    if (!this.ensureAgreement()) {
+      hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] block fallback by agreement trace=${traceId}`);
+      return;
+    }
+    if (shouldUseHuaweiApiFallbackByCode(code)) {
+      hilog.info(
+        LoginPage.LOG_DOMAIN,
+        LoginPage.LOG_TAG,
+        `[LOGIN_TRACE][page] trigger api_fallback by code=1001502003, trace=${traceId}`
+      );
+      void this.loginWithHuaweiApiFallback();
+      return;
+    }
+    this.toast(`鍗庝负璐﹀彿鐧诲綍澶辫触锛?{message}`);
+  }
+
   private async loginWithHuaweiButton(credential: HuaweiCredential): Promise<void> {
     const traceId = this.createLoginTraceId('button');
     const generation = this.beginLogin('huawei');
@@ -319,8 +348,7 @@ struct LoginPage {
           Checkbox()
             .select(this.agreementAccepted)
             .onChange((value: boolean) => {
-              this.agreementAccepted = value;
-              hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] agreement checkbox changed=${value ? 1 : 0}`);
+              this.handleAgreementCheckboxChange(value);
             })
           Text('我已阅读并同意《用户协议》《隐私政策》')
             .fontSize(12)
@@ -335,27 +363,7 @@ struct LoginPage {
             void this.loginWithHuaweiButton(credential);
           },
           onError: (message: string) => {
-            const traceId = this.createLoginTraceId('button_error');
-            const code = parseHuaweiLoginErrorCodeFromMessage(message);
-            hilog.warn(
-              LoginPage.LOG_DOMAIN,
-              LoginPage.LOG_TAG,
-              `[LOGIN_TRACE][page] button error message=${message}, code=${code}, trace=${traceId}`
-            );
-            if (!this.ensureAgreement()) {
-              hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] block fallback by agreement trace=${traceId}`);
-              return;
-            }
-            if (shouldUseHuaweiApiFallbackByCode(code)) {
-              hilog.info(
-                LoginPage.LOG_DOMAIN,
-                LoginPage.LOG_TAG,
-                `[LOGIN_TRACE][page] trigger api_fallback by code=1001502003, trace=${traceId}`
-              );
-              void this.loginWithHuaweiApiFallback();
-              return;
-            }
-            this.toast(`华为账号登录失败：${message}`);
+            this.handleHuaweiButtonError(message);
           }
         })
 
