@@ -1,7 +1,14 @@
 import { describe, it, expect } from '@ohos/hypium';
+import { common } from '@kit.AbilityKit';
 import { MapServiceImpl } from '../main/ets/model/acl/MapServiceImpl';
 import { DriveStrategy, LocationInfo } from '../main/ets/model/interface/IMapService';
 import { AmapService, GeoCoordinate } from '../main/ets/infrastructure/services/AmapService';
+import { PreferenceManager } from '../main/ets/common/utils/PreferenceManager';
+
+interface MapServiceImplPrivateTest {
+  canUseAmapRouteApi(traceId?: string): Promise<boolean>;
+  getSearch(): Object;
+}
 
 function buildLocation(name: string, lat: number, lng: number, address: string = ''): LocationInfo {
   return {
@@ -119,6 +126,27 @@ class ThrowDriveSearchStub {
   async calculateDriveRoute(_query: Object): Promise<RouteResultStub> {
     throw new Md5FallbackError();
   }
+}
+
+class RouteResultNullPathsStub {
+  getPaths(): null {
+    return null;
+  }
+}
+
+class PreferenceRouteEnabledStub {
+  async isAmapRouteApiEnabled(): Promise<boolean> {
+    return true;
+  }
+}
+
+class NullPathDriveSearchStub {
+  async calculateDriveRoute(_query: Object): Promise<RouteResultNullPathsStub> {
+    return new RouteResultNullPathsStub();
+  }
+}
+
+class FakeRouteContextStub {
 }
 
 function attachSearchStub(service: MapServiceImpl, searchStub: RouteSearchStub): void {
@@ -761,6 +789,139 @@ export default function mapServiceImplTest() {
       // Assert
       MapServiceImpl.setTestHooks(null);
       expect(minutes).assertEqual(8);
+      done();
+    });
+
+    it('boundary: can_use_amap_route_api_should_read_preference_when_test_hook_missing', 0, async (done: () => void) => {
+      // Arrange
+      const preferenceHooks = new StaticHooksForMapServiceTest(PreferenceManager as Object, ['getInstance']);
+      const fakePreference = new PreferenceRouteEnabledStub();
+      preferenceHooks.set('getInstance', (): Object => fakePreference as Object);
+      MapServiceImpl.setTestHooks(null);
+      const service = new MapServiceImpl(null) as Object as MapServiceImplPrivateTest;
+
+      // Act
+      const enabled = await service.canUseAmapRouteApi('pref_route_test');
+
+      // Assert
+      preferenceHooks.restore();
+      expect(enabled).assertTrue();
+      done();
+    });
+
+    it('boundary: get_search_should_return_cached_route_search_without_context', 0, (done: () => void) => {
+      // Arrange
+      const service = new MapServiceImpl(null) as Object as MapServiceImplPrivateTest;
+      const cachedSearch = new RouteSearchStub();
+      Reflect.set(service as Object, 'routeSearch', cachedSearch as Object);
+
+      // Act
+      const result = service.getSearch();
+
+      // Assert
+      expect(result === (cachedSearch as Object)).assertTrue();
+      done();
+    });
+
+    it('boundary: get_search_should_create_route_search_when_context_exists', 0, (done: () => void) => {
+      // Arrange
+      const service = new MapServiceImpl(new FakeRouteContextStub() as common.UIAbilityContext) as Object as MapServiceImplPrivateTest;
+
+      // Act
+      const result = service.getSearch();
+
+      // Assert
+      expect(!!result).assertTrue();
+      done();
+    });
+
+    it('regression: route_should_use_web_fallback_when_md5_error_occurs_in_duration_mode', 0, async (done: () => void) => {
+      // Arrange
+      const service = new MapServiceImpl(null);
+      Reflect.set(service as Object, 'getSearch', (): ThrowDriveSearchStub => new ThrowDriveSearchStub());
+      Reflect.set(service as Object, 'tryDrivingWebFallback', async (): Promise<number | null> => 9);
+      MapServiceImpl.setTestHooks({
+        routeApiEnabledResolver: async (): Promise<boolean> => true
+      });
+
+      // Act
+      const minutes = await service.getDurationByMode(
+        buildLocation('A', 31.2304, 121.4737),
+        buildLocation('B', 31.2200, 121.4900),
+        2,
+        '09:00'
+      );
+
+      // Assert
+      MapServiceImpl.setTestHooks(null);
+      expect(minutes).assertEqual(9);
+      done();
+    });
+
+    it('invalid: route_should_fallback_when_md5_error_web_fallback_is_empty_in_duration_mode', 0, async (done: () => void) => {
+      // Arrange
+      const service = new MapServiceImpl(null);
+      Reflect.set(service as Object, 'getSearch', (): ThrowDriveSearchStub => new ThrowDriveSearchStub());
+      Reflect.set(service as Object, 'tryDrivingWebFallback', async (): Promise<number | null> => null);
+      MapServiceImpl.setTestHooks({
+        routeApiEnabledResolver: async (): Promise<boolean> => true
+      });
+
+      // Act
+      const minutes = await service.getDurationByMode(
+        buildLocation('A', 31.2304, 121.4737),
+        buildLocation('B', 31.2200, 121.4900),
+        2,
+        '09:00'
+      );
+
+      // Assert
+      MapServiceImpl.setTestHooks(null);
+      expect(minutes).assertEqual(60);
+      done();
+    });
+
+    it('boundary: get_drive_duration_should_use_positive_web_fallback_when_path_is_empty', 0, async (done: () => void) => {
+      // Arrange
+      const service = new MapServiceImpl(null);
+      Reflect.set(service as Object, 'getSearch', (): NullPathDriveSearchStub => new NullPathDriveSearchStub());
+      Reflect.set(service as Object, 'tryDrivingWebFallback', async (): Promise<number | null> => 7);
+      MapServiceImpl.setTestHooks({
+        routeApiEnabledResolver: async (): Promise<boolean> => true
+      });
+
+      // Act
+      const minutes = await service.getDriveDuration(
+        buildLocation('A', 31.2304, 121.4737),
+        buildLocation('B', 31.2200, 121.4900),
+        DriveStrategy.FASTEST
+      );
+
+      // Assert
+      MapServiceImpl.setTestHooks(null);
+      expect(minutes).assertEqual(7);
+      done();
+    });
+
+    it('invalid: get_drive_duration_should_fallback_when_md5_error_web_fallback_is_empty', 0, async (done: () => void) => {
+      // Arrange
+      const service = new MapServiceImpl(null);
+      Reflect.set(service as Object, 'getSearch', (): ThrowDriveSearchStub => new ThrowDriveSearchStub());
+      Reflect.set(service as Object, 'tryDrivingWebFallback', async (): Promise<number | null> => null);
+      MapServiceImpl.setTestHooks({
+        routeApiEnabledResolver: async (): Promise<boolean> => true
+      });
+
+      // Act
+      const minutes = await service.getDriveDuration(
+        buildLocation('A', 31.2304, 121.4737),
+        buildLocation('B', 31.2200, 121.4900),
+        DriveStrategy.FASTEST
+      );
+
+      // Assert
+      MapServiceImpl.setTestHooks(null);
+      expect(minutes).assertEqual(60);
       done();
     });
   });
