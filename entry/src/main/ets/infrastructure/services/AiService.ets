@@ -441,11 +441,6 @@ export class AiService {
       return false;
     }
 
-    const nonHotelCount = items.filter((item: AiRawItem) => item.type !== 2).length;
-    if (nonHotelCount < requirement.requestedDays) {
-      return false;
-    }
-
     if (requirement.allowAccommodation) {
       const hotelCount = items.filter((item: AiRawItem) => item.type === 2).length;
       if (hotelCount > requirement.requestedDays) {
@@ -473,11 +468,6 @@ export class AiService {
     }
 
     if (!requirement.allowAccommodation && items.some((item: AiRawItem) => item.type === 2)) {
-      return false;
-    }
-
-    const nonHotelCount = items.filter((item: AiRawItem) => item.type !== 2).length;
-    if (nonHotelCount < requirement.requestedDays) {
       return false;
     }
 
