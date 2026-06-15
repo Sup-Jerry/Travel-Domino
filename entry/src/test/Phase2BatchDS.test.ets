@@ -434,6 +434,15 @@ class PoiCacheEntryMockDS {
   }
 }
 
+class Md5AuthErrorDS extends Error {
+  errorCode: number;
+
+  constructor(message: string, errorCode: number = 1008) {
+    super(message);
+    this.errorCode = errorCode;
+  }
+}
+
 function buildPoiPayloadDS(pois: string): string {
   return `{"status":"1","pois":[${pois}]}`;
 }
@@ -874,6 +883,30 @@ export default function phase2BatchDSTest() {
       expect(failed === null).assertTrue();
     });
 
+    it('invalid: amap_get_geocode_should_return_null_for_web_invalid_coordinate_pair', 0, async () => {
+      // Arrange
+      const hooks = new AmapWebHooksDS();
+      hooks.setValidateNoop();
+      hooks.setRequest(async (): Promise<Object> => {
+        const response: HttpResponseDS = {
+          responseCode: 200,
+          result: '{"status":"1","geocodes":[{"location":"121.47,95"}]}'
+        };
+        return response as Object;
+      });
+
+      // Act
+      let coordinate: GeoCoordinate | null = new GeoCoordinate(1, 1);
+      try {
+        coordinate = await AmapService.getGeocode('invalid_coordinate_pair_ds');
+      } finally {
+        hooks.restore();
+      }
+
+      // Assert
+      expect(coordinate === null).assertTrue();
+    });
+
     it('boundary: amap_private_scalar_helpers_should_handle_empty_and_mixed_inputs', 0, () => {
       // Arrange
       const api = AmapService as Object as AmapPrivateDS;
@@ -889,6 +922,7 @@ export default function phase2BatchDSTest() {
       const numberSize = api.getListSize(new NumericSizeListMockDS(3) as Object);
       const fnSize = api.getListSize(new FunctionSizeListMockDS(4) as Object);
       const fallbackSize = api.getListSize(new FunctionSizeListMockDS(Number.NaN) as Object);
+      const missingSize = api.getListSize(new EmptyObjectDS() as Object);
 
       // Assert
       expect(emptyNodes.length).assertEqual(0);
@@ -901,6 +935,7 @@ export default function phase2BatchDSTest() {
       expect(numberSize).assertEqual(3);
       expect(fnSize).assertEqual(4);
       expect(fallbackSize).assertEqual(0);
+      expect(missingSize).assertEqual(0);
     });
 
     it('boundary: amap_search_poi_should_query_nationwide_when_nearby_empty', 0, async () => {
@@ -939,7 +974,7 @@ export default function phase2BatchDSTest() {
       const hooks = new AmapStaticHooksDS();
       let fallbackCalls = 0;
       hooks.setSearchPoiBySdk(async (): Promise<PoiSearchItem[]> => {
-        throw new Error('MD5 auth failed ds');
+        throw new Md5AuthErrorDS('sdk auth failed ds');
       });
       hooks.setSearchPoiWithWebFallback(async (): Promise<PoiSearchItem[]> => {
         fallbackCalls += 1;
@@ -1711,6 +1746,36 @@ export default function phase2BatchDSTest() {
 
       // Assert
       expect(place ?? '').assertEqual('Nearby Success DS');
+    });
+
+    it('invalid: amap_get_regeo_by_sdk_nearby_should_return_null_for_blank_top_name', 0, async () => {
+      // Arrange
+      const api = AmapService as Object as AmapPrivateDS;
+      const hooks = new AmapSdkHooksDS();
+      const originExtractPoiItems = Reflect.get(AmapService as Object, 'extractPoiItems') as Object;
+      hooks.setCreateCircleSearchBound((_center: Object, _radius: number, _strict: boolean): Object => {
+        return new BoundMarkerDS() as Object;
+      });
+      hooks.setBound((_bound: Object): void => {
+      });
+      hooks.setSearchPOI(async (): Promise<Object> => {
+        return new EmptyObjectDS() as Object;
+      });
+      Reflect.set(AmapService as Object, 'extractPoiItems', (): PoiSearchItem[] => {
+        return [new PoiSearchItem('   ', 'Road', 31.35, 121.65, 6)];
+      });
+
+      // Act
+      let place: string | null = 'stale';
+      try {
+        place = await api.getRegeoBySdkNearby({} as common.Context, 31.35, 121.65);
+      } finally {
+        Reflect.set(AmapService as Object, 'extractPoiItems', originExtractPoiItems);
+        hooks.restore();
+      }
+
+      // Assert
+      expect(place === null).assertTrue();
     });
 
     it('boundary: amap_get_regeo_sdk_geo_search_should_cover_missing_result_empty_pois_and_poi_title_success', 0, async () => {
