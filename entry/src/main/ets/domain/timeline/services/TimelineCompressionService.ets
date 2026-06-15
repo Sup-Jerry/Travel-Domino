@@ -294,9 +294,6 @@ export class TimelineCompressionService implements ITimelineCompressionService {
   }
 
   private resolveEffectiveTravelMinutes(item: EventEntity): number {
-    if (!item) {
-      return 0;
-    }
     const raw = item.pre_travel_min;
     if (!Number.isFinite(raw) || raw <= 0) {
       return 0;
@@ -305,9 +302,6 @@ export class TimelineCompressionService implements ITimelineCompressionService {
   }
 
   private resolvePlannedStartMinutes(item: EventEntity): number {
-    if (!item) {
-      return 0;
-    }
     const raw = DateUtil.extractPureTime(item.fixed_start_time || item.computed_time || '');
     const minute = raw && DateUtil.isValidTimeString(raw)
       ? DateUtil.timeToMinutes(raw)
@@ -362,9 +356,6 @@ export class TimelineCompressionService implements ITimelineCompressionService {
     for (let i = prevRigidIndex + 1; i < targetIndex; i++) {
       const item = this.host.events[i];
       if (item.status !== 1 || this.host.getEffectiveDayOffset(item) !== targetDayOffset) {
-        continue;
-      }
-      if (item.lock_status === 1) {
         continue;
       }
       const startMin = this.resolvePlannedStartMinutes(item);
@@ -454,20 +445,6 @@ export class TimelineCompressionService implements ITimelineCompressionService {
     const selected: AdvanceAdjustCandidate[] = context.candidates
       .filter((item: AdvanceAdjustCandidate): boolean => selectedIds.has(item.id))
       .sort((a: AdvanceAdjustCandidate, b: AdvanceAdjustCandidate): number => a.index - b.index);
-    if (selected.length === 0) {
-      return {
-        valid: false,
-        message: '请至少选择一个地点',
-        selectedCount: 0,
-        shiftMinutes: 0,
-        requiredGapMinutes: requiredGapMinutes,
-        remainingGapMinutes: requiredGapMinutes,
-        firstNewStartTime: '',
-        lastNewEndTime: '',
-        items: []
-      };
-    }
-
     const firstSelected = selected[0];
     const firstEntity = this.host.events[firstSelected.index];
     const firstCurrentStart = this.resolvePlannedStartMinutes(firstEntity);
@@ -748,18 +725,12 @@ export class TimelineCompressionService implements ITimelineCompressionService {
         activeIds.forEach((id: number) => {
           totalWeight += (weightMap.get(id) ?? 0);
         });
-        if (totalWeight <= 0) {
-          break;
-        }
 
         let allocatedThisRound = 0;
         const nextActiveIds: number[] = [];
         for (let i = 0; i < activeIds.length; i++) {
           const id = activeIds[i];
           const cap = remainingCapMap.get(id) ?? 0;
-          if (cap <= 0) {
-            continue;
-          }
           const share = Math.floor(remainingNeed * ((weightMap.get(id) ?? 0) / totalWeight));
           const grant = Math.min(cap, Math.max(share, 0));
           if (grant > 0) {
@@ -781,16 +752,10 @@ export class TimelineCompressionService implements ITimelineCompressionService {
             }
             const id = sorted[i];
             const cap = remainingCapMap.get(id) ?? 0;
-            if (cap <= 0) {
-              continue;
-            }
             remainingCapMap.set(id, cap - 1);
             reducedMap.set(id, (reducedMap.get(id) ?? 0) + 1);
             remainingNeed -= 1;
             allocatedThisRound += 1;
-          }
-          if (allocatedThisRound === 0) {
-            break;
           }
         }
 
@@ -981,11 +946,7 @@ export class TimelineCompressionService implements ITimelineCompressionService {
 
     let startMinutes = 0;
     const chainStartItem = this.host.events[chainStartIndex];
-    if (chainStartItem) {
-      startMinutes = this.resolvePlannedStartMinutes(chainStartItem);
-    } else {
-      startMinutes = targetDayOffset * 24 * 60 + this.host.resolveEffectiveGlobalStartMinutes();
-    }
+    startMinutes = this.resolvePlannedStartMinutes(chainStartItem);
 
     let currentCursor = startMinutes;
     for (let i = chainStartIndex; i < targetIndex; i++) {
