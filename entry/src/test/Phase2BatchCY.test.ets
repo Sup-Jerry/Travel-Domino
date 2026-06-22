@@ -202,6 +202,46 @@ export default function phase2BatchCYTest() {
       }
     });
 
+    it('combined: load_data_should_keep_defaults_for_missing_or_invalid_plan_fields', 0, async () => {
+      // Arrange
+      const vm = new TimelineViewModel();
+      const pref = new PreferenceStubCY();
+      const hook = new PreferenceHookCY();
+      const persistence = new PersistenceStubCY();
+      const weather = new WeatherCoordinatorStubCY();
+      const recalculation = new RecalculationManagerStubCY();
+      const planState = new PlanStateManagerStubCY();
+      const invalidPlan = new PlanRecordCY();
+      invalidPlan.title = '';
+      invalidPlan.startDate = 0;
+      invalidPlan.strategyMode = 99;
+      const snapshot = new PlanEventsSnapshotCY();
+      snapshot.plan = invalidPlan;
+      persistence.snapshot = snapshot;
+      Reflect.set(vm as Object, 'persistence', persistence as Object);
+      Reflect.set(vm as Object, 'weatherCoordinator', weather as Object);
+      Reflect.set(vm as Object, 'recalculationManager', recalculation as Object);
+      Reflect.set(vm as Object, 'planStateManager', planState as Object);
+      hook.set(pref as Object);
+      try {
+        // Act
+        await vm.loadData(9610);
+        const fallbackName = vm.planName;
+        const fallbackStrategy = vm.currentStrategyMode;
+        const missingPlanSnapshot = new PlanEventsSnapshotCY();
+        persistence.snapshot = missingPlanSnapshot;
+        await vm.loadData(9611);
+
+        // Assert
+        expect(fallbackName).assertEqual('计划 #9610');
+        expect(fallbackStrategy).assertEqual(0);
+        expect(vm.planName).assertEqual('计划 #9611');
+        expect(persistence.calls).assertEqual(2);
+      } finally {
+        hook.restore();
+      }
+    });
+
     it('invalid: preference_failures_should_fallback_without_breaking_route_reload', 0, async () => {
       // Arrange
       const vm = new TimelineViewModel();
