@@ -4,6 +4,9 @@ import {
   getImmersiveNextStationText,
   getImmersivePrimaryActionEnabled,
   getImmersivePrimaryActionLabel,
+  resolveImmersiveCurrentRenderSections,
+  resolveImmersiveNextRenderEvents,
+  resolveImmersivePrimaryActionSlots,
   shouldShowImmersivePrimaryAction,
   ImmersiveSwipePhase
 } from '../main/ets/pages/components/views/companion/CompanionImmersiveView';
@@ -196,6 +199,30 @@ export default function companionImmersiveViewHelperTest() {
       expect(text.startsWith('下一站')).assertTrue();
       expect(text.includes(name)).assertTrue();
       expect(text.includes(forecast)).assertTrue();
+    });
+
+    it('combined: immersive_render_sections_should_cover_current_idle_primary_and_next_visibility', 0, () => {
+      // Arrange
+      const current = buildImmersiveEvent(41, 'museum');
+      const next = buildImmersiveEvent(42, 'station');
+
+      // Act
+      const currentSections = resolveImmersiveCurrentRenderSections(current);
+      const idleSections = resolveImmersiveCurrentRenderSections(null);
+      const visibleActions = resolveImmersivePrimaryActionSlots(true);
+      const hiddenActions = resolveImmersivePrimaryActionSlots(false);
+      const nextEvents = resolveImmersiveNextRenderEvents(next);
+      const noNextEvents = resolveImmersiveNextRenderEvents(null);
+
+      // Assert
+      expect(currentSections.currentEvents.length).assertEqual(1);
+      expect(currentSections.idleSlots.length).assertEqual(0);
+      expect(idleSections.currentEvents.length).assertEqual(0);
+      expect(idleSections.idleSlots.length).assertEqual(1);
+      expect(visibleActions.length).assertEqual(1);
+      expect(hiddenActions.length).assertEqual(0);
+      expect(nextEvents.length).assertEqual(1);
+      expect(noNextEvents.length).assertEqual(0);
     });
 
     it('combined: immersive_view_instance_should_sync_props_and_keep_default_callbacks_stable', 0, async (done: Function) => {

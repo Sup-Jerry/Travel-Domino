@@ -28,6 +28,28 @@ export function getImmersiveNextStationText(name: string, forecastStart: string)
   return `下一站：${name}（${forecastStart}）`;
 }
 
+export interface ImmersiveCurrentRenderSections {
+  currentEvents: EventEntity[];
+  idleSlots: number[];
+}
+
+export function resolveImmersiveCurrentRenderSections(
+  currentEvent: EventEntity | null
+): ImmersiveCurrentRenderSections {
+  if (currentEvent) {
+    return { currentEvents: [currentEvent], idleSlots: [] };
+  }
+  return { currentEvents: [], idleSlots: [1] };
+}
+
+export function resolveImmersivePrimaryActionSlots(visible: boolean): number[] {
+  return visible ? [1] : [];
+}
+
+export function resolveImmersiveNextRenderEvents(nextEvent: EventEntity | null): EventEntity[] {
+  return nextEvent ? [nextEvent] : [];
+}
+
 type ImmersiveTextGetter = () => string;
 type ImmersiveEventTextGetter = (event: EventEntity) => string;
 type ImmersiveStateGetter = () => boolean;
@@ -136,8 +158,8 @@ export struct CompanionImmersiveView {
     Column({ space: 18 }) {
       Blank().layoutWeight(1);
 
-      if (this.hasCurrentEvent()) {
-        Text((this.context.currentEvent as EventEntity).name)
+      ForEach(resolveImmersiveCurrentRenderSections(this.context.currentEvent).currentEvents, (current: EventEntity) => {
+        Text(current.name)
           .fontSize(42)
           .fontWeight(FontWeight.Bold)
           .fontColor(this.getThemePalette().textPrimary)
@@ -145,7 +167,7 @@ export struct CompanionImmersiveView {
           .textAlign(TextAlign.Center)
           .textOverflow({ overflow: TextOverflow.Ellipsis });
 
-        Text(`${this.getRuntimeLabel()} | ${this.getPlannedRange(this.context.currentEvent as EventEntity)}`)
+        Text(`${this.getRuntimeLabel()} | ${this.getPlannedRange(current)}`)
           .fontSize(14)
           .fontColor(this.getThemePalette().textSecondary)
           .padding({ left: 16, right: 16, top: 8, bottom: 8 })
@@ -153,21 +175,21 @@ export struct CompanionImmersiveView {
           .borderRadius(16);
 
         Row({ space: 10 }) {
-          if (this.shouldRenderPrimaryAction()) {
+          ForEach(resolveImmersivePrimaryActionSlots(this.shouldRenderPrimaryAction()), (_slot: number) => {
             Button(getImmersivePrimaryActionLabel(this.isCurrentEventPending()))
               .layoutWeight(2)
               .height(50)
               .enabled(
                 getImmersivePrimaryActionEnabled(
                   this.isCurrentEventPending(),
-                  this.canStartFocused(this.context.currentEvent as EventEntity),
-                  this.canEndFocused(this.context.currentEvent as EventEntity)
+                  this.canStartFocused(current),
+                  this.canEndFocused(current)
                 )
               )
               .backgroundColor(this.getPrimaryActionBackgroundColor())
               .fontColor(Color.White)
               .onClick(async () => this.handlePrimaryActionClick());
-          }
+          });
           Button('导航')
             .layoutWeight(1)
             .height(50)
@@ -176,7 +198,9 @@ export struct CompanionImmersiveView {
             .onClick(() => this.handleNavigateClick());
         }
         .width('78%');
-      } else {
+      });
+
+      ForEach(resolveImmersiveCurrentRenderSections(this.context.currentEvent).idleSlots, (_slot: number) => {
         Text('当前暂无进行中的地点')
           .fontSize(28)
           .fontWeight(FontWeight.Bold)
@@ -186,19 +210,20 @@ export struct CompanionImmersiveView {
           .fontColor(this.getThemePalette().textSecondary)
           .textAlign(TextAlign.Center)
           .padding({ left: 28, right: 28 });
-        if (this.hasNextEvent()) {
+
+        ForEach(resolveImmersiveNextRenderEvents(this.context.nextEvent), (next: EventEntity) => {
           Text(
             getImmersiveNextStationText(
-              (this.context.nextEvent as EventEntity).name,
-              this.getForecastStartText(this.context.nextEvent as EventEntity)
+              next.name,
+              this.getForecastStartText(next)
             )
           )
             .fontSize(14)
             .fontColor(this.getThemePalette().textSecondary)
             .textAlign(TextAlign.Center)
             .padding({ left: 28, right: 28 });
-        }
-      }
+        });
+      });
 
       Text('上滑进入控制页')
         .fontSize(12)
