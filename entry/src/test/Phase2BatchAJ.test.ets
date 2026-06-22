@@ -1371,14 +1371,16 @@ export default function phase2BatchAJTest() {
 
         // Act
         const ok = await vm.backfillCheckinTime(3405, 100, 0);
+        const nanEndOk = await vm.backfillCheckinTime(3405, 120, Number.NaN);
 
         // Assert
         expect(ok).assertTrue();
-        expect(event.actual_start_time).assertEqual(100);
+        expect(nanEndOk).assertTrue();
+        expect(event.actual_start_time).assertEqual(120);
         expect(event.actual_end_time).assertEqual(0);
         expect(event.completion_status).assertEqual(EventEntity.STATE_PENDING);
-        expect(recalculateCalls).assertEqual(1);
-        expect(evaluateCalls).assertEqual(1);
+        expect(recalculateCalls).assertEqual(2);
+        expect(evaluateCalls).assertEqual(2);
       } finally {
         hooks.restore();
       }

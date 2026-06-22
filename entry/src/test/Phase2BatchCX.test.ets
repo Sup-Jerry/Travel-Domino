@@ -427,15 +427,19 @@ export default function phase2BatchCXTest() {
       await vm.regenerateByCurrentStrategy();
       await vm.changeStrategyAndRegenerate(1);
       const preview = await vm.buildAiReplanPreview(2, createStrategyCX(), true);
+      await vm.generateByAi('prompt_default_cx');
+      const defaultPreview = await vm.buildAiReplanPreview(0);
 
       // Assert
       expect(strategy.calls.indexOf('generate:prompt_cx:2') >= 0).assertTrue();
+      expect(strategy.calls.indexOf('generate:prompt_default_cx:0') >= 0).assertTrue();
       expect(strategy.calls.indexOf('switch') >= 0).assertTrue();
       expect(strategy.calls.indexOf('regenCustom') >= 0).assertTrue();
       expect(strategy.calls.indexOf('regenCurrent') >= 0).assertTrue();
       expect(strategy.calls.indexOf('change:1') >= 0).assertTrue();
       expect(preview.items.length).assertEqual(1);
-      expect(refreshCalls).assertEqual(4);
+      expect(defaultPreview.strategyMode).assertEqual(0);
+      expect(refreshCalls).assertEqual(5);
     });
 
     it('regression: execution_facade_should_delegate_checkout_record_actual_time_and_conflict_info', 0, async () => {
