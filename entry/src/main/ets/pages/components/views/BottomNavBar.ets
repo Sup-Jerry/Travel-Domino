@@ -113,6 +113,26 @@ type BottomNavAsyncAction = () => Promise<void>;
 
 function noopBottomNavVoid(): void {}
 
+export function handleBottomNavFabTouch(
+  eventType: number,
+  onPress: BottomNavVoidAction,
+  onRelease: BottomNavVoidAction
+): void {
+  if (eventType === TouchType.Down) {
+    onPress();
+    return;
+  }
+  if (eventType === TouchType.Up || eventType === TouchType.Cancel) {
+    onRelease();
+  }
+}
+
+export function invokeBottomNavActionIfEnabled(enabled: boolean, onTap: BottomNavVoidAction): void {
+  if (enabled) {
+    onTap();
+  }
+}
+
 @Component
 export struct GlobalBottomNavBar {
   @Prop currentTab: AppNavTab = 'home';
@@ -326,17 +346,15 @@ export struct GlobalBottomNavBar {
         .scale({ x: this.fabPressed ? 0.92 : 1, y: this.fabPressed ? 0.92 : 1 })
         .opacity(this.fabPressed ? 0.9 : 1)
         .onTouch((event: TouchEvent) => {
-          if (event.type === TouchType.Down) {
+          handleBottomNavFabTouch(event.type, () => {
             this.getUIContext().animateTo({ duration: 70, curve: Curve.Sharp }, () => {
               this.fabPressed = true;
             });
-            return;
-          }
-          if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+          }, () => {
             this.getUIContext().animateTo({ duration: 130, curve: Curve.Friction }, () => {
               this.fabPressed = false;
             });
-          }
+          });
         })
         .onClick(() => {
           hilog.info(0x0000, NAV_TAG, '[BOTTOM_NAV][fab] tap');
@@ -393,9 +411,7 @@ export struct PlanBottomActionBar {
     .justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Center)
     .onClick(() => {
-      if (enabled) {
-        onTap();
-      }
+      invokeBottomNavActionIfEnabled(enabled, onTap);
     });
   }
 
