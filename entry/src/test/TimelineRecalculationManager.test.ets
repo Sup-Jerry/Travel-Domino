@@ -77,6 +77,10 @@ interface TimelineRecalculationManagerPrivateTest {
   ): TimelineRecalculationApplyResultTest;
 }
 
+interface TimelineRecalculationManagerInvalidInputTest {
+  updateTravelMode(item: EventEntity | undefined, newMode: number): void;
+}
+
 class StaticMethodPatchTimelineRecalc {
   private readonly target: Object;
   private readonly key: string;
@@ -127,6 +131,19 @@ export default function timelineRecalculationManagerTest() {
       const minutes = manager.resolveEffectiveGlobalStartMinutes();
       // Assert
       expect(minutes).assertEqual(480);
+    });
+
+    it('invalid: update_travel_mode_should_ignore_missing_item', 0, () => {
+      // Arrange
+      const host = new FakeTimelineRecalculationHost();
+      const manager = new TimelineRecalculationManager(host) as Object as TimelineRecalculationManagerInvalidInputTest;
+      // Act
+      manager.updateTravelMode(undefined, 3);
+      // Assert
+      expect(host.calculateRealtimeCount).assertEqual(0);
+      expect(host.regenerateGroupsCount).assertEqual(0);
+      expect(host.markScheduleChangedCount).assertEqual(0);
+      expect(host.refreshCount).assertEqual(0);
     });
 
     it('conflict: update_travel_mode_should_keep_first_schedule_manual_pretravel_zero', 0, () => {
