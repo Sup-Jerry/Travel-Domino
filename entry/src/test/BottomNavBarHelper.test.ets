@@ -5,6 +5,8 @@ import {
   CompanionBottomActionBar,
   GlobalBottomNavBar,
   getBottomNavTargetRoute,
+  handleBottomNavFabTouch,
+  invokeBottomNavActionIfEnabled,
   isBottomNavTabPressed,
   isBottomNavVisualActive,
   PlanBottomActionBar,
@@ -194,6 +196,43 @@ export default function bottomNavBarHelperTest() {
       const shouldNavigate = shouldBottomNavTapNavigate(current, target, navLocked);
       // Assert
       expect(shouldNavigate).assertFalse();
+    });
+
+    it('combined: bottom_nav_fab_touch_should_dispatch_press_release_cancel_and_ignore_other_events', 0, () => {
+      // Arrange
+      let pressCount = 0;
+      let releaseCount = 0;
+      const onPress = (): void => {
+        pressCount += 1;
+      };
+      const onRelease = (): void => {
+        releaseCount += 1;
+      };
+
+      // Act
+      handleBottomNavFabTouch(TouchType.Down, onPress, onRelease);
+      handleBottomNavFabTouch(TouchType.Up, onPress, onRelease);
+      handleBottomNavFabTouch(TouchType.Cancel, onPress, onRelease);
+      handleBottomNavFabTouch(-1, onPress, onRelease);
+
+      // Assert
+      expect(pressCount).assertEqual(1);
+      expect(releaseCount).assertEqual(2);
+    });
+
+    it('boundary: bottom_nav_action_should_only_invoke_when_enabled', 0, () => {
+      // Arrange
+      let tapCount = 0;
+      const onTap = (): void => {
+        tapCount += 1;
+      };
+
+      // Act
+      invokeBottomNavActionIfEnabled(false, onTap);
+      invokeBottomNavActionIfEnabled(true, onTap);
+
+      // Assert
+      expect(tapCount).assertEqual(1);
     });
 
     it('regression: td-20260412-bottom-nav-route-map-should-stay-stable', 0, () => {
