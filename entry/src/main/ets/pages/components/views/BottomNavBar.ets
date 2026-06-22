@@ -108,6 +108,31 @@ class RouterUrlOptions {
 
 const NAV_TAG = 'BottomNavBar';
 
+type BottomNavVoidAction = () => void;
+type BottomNavAsyncAction = () => Promise<void>;
+
+function noopBottomNavVoid(): void {}
+
+export function handleBottomNavFabTouch(
+  eventType: number,
+  onPress: BottomNavVoidAction,
+  onRelease: BottomNavVoidAction
+): void {
+  if (eventType === TouchType.Down) {
+    onPress();
+    return;
+  }
+  if (eventType === TouchType.Up || eventType === TouchType.Cancel) {
+    onRelease();
+  }
+}
+
+export function invokeBottomNavActionIfEnabled(enabled: boolean, onTap: BottomNavVoidAction): void {
+  if (enabled) {
+    onTap();
+  }
+}
+
 @Component
 export struct GlobalBottomNavBar {
   @Prop currentTab: AppNavTab = 'home';
@@ -118,8 +143,8 @@ export struct GlobalBottomNavBar {
   @State navLocked: boolean = false;
   @State fabPressed: boolean = false;
 
-  onCenterFabTap: () => void = () => {};
-  onSearchTap: () => Promise<void> = async () => {
+  onCenterFabTap: BottomNavVoidAction = noopBottomNavVoid;
+  onSearchTap: BottomNavAsyncAction = async () => {
     await this.safeReplaceUrl(this.createRouteOptions('pages/PlanSearchPage'), 'pages/PlanSearchPage');
   };
   private readonly tabSwitchDelayMs: number = 110;
@@ -321,17 +346,15 @@ export struct GlobalBottomNavBar {
         .scale({ x: this.fabPressed ? 0.92 : 1, y: this.fabPressed ? 0.92 : 1 })
         .opacity(this.fabPressed ? 0.9 : 1)
         .onTouch((event: TouchEvent) => {
-          if (event.type === TouchType.Down) {
+          handleBottomNavFabTouch(event.type, () => {
             this.getUIContext().animateTo({ duration: 70, curve: Curve.Sharp }, () => {
               this.fabPressed = true;
             });
-            return;
-          }
-          if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+          }, () => {
             this.getUIContext().animateTo({ duration: 130, curve: Curve.Friction }, () => {
               this.fabPressed = false;
             });
-          }
+          });
         })
         .onClick(() => {
           hilog.info(0x0000, NAV_TAG, '[BOTTOM_NAV][fab] tap');
@@ -361,9 +384,9 @@ export struct GlobalBottomNavBar {
 
 @Component
 export struct PlanBottomActionBar {
-  onFilter: () => void = () => {};
-  onAi: () => void = () => {};
-  onAdd: () => void = () => {};
+  onFilter: BottomNavVoidAction = noopBottomNavVoid;
+  onAi: BottomNavVoidAction = noopBottomNavVoid;
+  onAdd: BottomNavVoidAction = noopBottomNavVoid;
   @Prop aiEnabled: boolean = true;
   @Prop addEnabled: boolean = true;
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
@@ -373,7 +396,7 @@ export struct PlanBottomActionBar {
   }
 
   @Builder
-  private ActionCell(label: string, icon: ResourceStr, enabled: boolean, onTap: () => void) {
+  private ActionCell(label: string, icon: ResourceStr, enabled: boolean, onTap: BottomNavVoidAction) {
     Column({ space: 4 }) {
       Image(icon)
         .width(20)
@@ -388,17 +411,15 @@ export struct PlanBottomActionBar {
     .justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Center)
     .onClick(() => {
-      if (enabled) {
-        onTap();
-      }
+      invokeBottomNavActionIfEnabled(enabled, onTap);
     });
   }
 
   build() {
     Row() {
-      this.ActionCell('筛选', $r('app.media.tool_filter'), true, () => this.onFilter());
-      this.ActionCell('新增', $r('app.media.tool_add'), this.addEnabled, () => this.onAdd());
-      this.ActionCell('AI', $r('app.media.tool_ai'), this.aiEnabled, () => this.onAi());
+      this.ActionCell('筛选', $r('app.media.tool_filter'), true, this.onFilter);
+      this.ActionCell('新增', $r('app.media.tool_add'), this.addEnabled, this.onAdd);
+      this.ActionCell('AI', $r('app.media.tool_ai'), this.aiEnabled, this.onAi);
     }
     .width('100%')
     .height(74)
@@ -410,10 +431,10 @@ export struct PlanBottomActionBar {
 
 @Component
 export struct CompanionBottomActionBar {
-  onHistory: () => void = () => {};
-  onImmersive: () => void = () => {};
-  onSearch: () => void = () => {};
-  onFilter: () => void = () => {};
+  onHistory: BottomNavVoidAction = noopBottomNavVoid;
+  onImmersive: BottomNavVoidAction = noopBottomNavVoid;
+  onSearch: BottomNavVoidAction = noopBottomNavVoid;
+  onFilter: BottomNavVoidAction = noopBottomNavVoid;
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
 
   private getPalette() {
@@ -421,7 +442,7 @@ export struct CompanionBottomActionBar {
   }
 
   @Builder
-  private ActionCell(label: string, icon: ResourceStr, onTap: () => void) {
+  private ActionCell(label: string, icon: ResourceStr, onTap: BottomNavVoidAction) {
     Column({ space: 4 }) {
       Image(icon)
         .width(20)
@@ -446,10 +467,10 @@ export struct CompanionBottomActionBar {
 
   build() {
     Row() {
-      this.ActionCell('历史', $r('app.media.tool_history'), () => this.onHistory());
-      this.ActionCell('沉浸模式', $r('app.media.tool_immersive'), () => this.onImmersive());
-      this.ActionCell('搜索', $r('app.media.tool_search'), () => this.onSearch());
-      this.ActionCell('筛选', $r('app.media.tool_filter'), () => this.onFilter());
+      this.ActionCell('历史', $r('app.media.tool_history'), this.onHistory);
+      this.ActionCell('沉浸模式', $r('app.media.tool_immersive'), this.onImmersive);
+      this.ActionCell('搜索', $r('app.media.tool_search'), this.onSearch);
+      this.ActionCell('筛选', $r('app.media.tool_filter'), this.onFilter);
     }
     .width('100%')
     .height(76)

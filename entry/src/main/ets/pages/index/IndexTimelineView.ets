@@ -1,4 +1,4 @@
-import { EventEntity } from '../../model/entity/EventEntity';
+﻿import { EventEntity } from '../../model/entity/EventEntity';
 import { EventItemView } from '../components/views/EventItemView';
 import { DateGroup } from '../../viewmodel/TimelineViewModel';
 import { ConflictActionStrategy } from './IndexEventHandlers';
@@ -9,6 +9,16 @@ export interface IndexTimelineTheme {
   textSecondary: string;
   textTertiary: string;
   warning: string;
+}
+
+interface IndexTimelineSwipeActionItem {
+  builder: IndexTimelineVoidCallback;
+  actionAreaDistance: number;
+}
+
+interface IndexTimelineSwipeActionConfig {
+  start: IndexTimelineSwipeActionItem;
+  end: IndexTimelineSwipeActionItem;
 }
 
 export function resolveIndexTimelineVisiblePlaceCount(placeCount: number): number {
@@ -35,6 +45,28 @@ export function resolveIndexTimelineBottomSpacerHeight(isCompanionMode: boolean)
   return isCompanionMode ? 24 : 100;
 }
 
+type IndexTimelineVoidCallback = () => void;
+
+function defaultIndexTimelineDayCollapsed(_dayOffset: number): boolean {
+  return false;
+}
+
+function noopIndexTimelineVoid(): void {}
+
+function noopIndexTimelineDayToggle(_dayOffset: number): void {}
+
+function noopIndexTimelineEvent(_item: EventEntity): void {}
+
+function noopIndexTimelineTravelMode(_item: EventEntity, _mode: number): void {}
+
+function noopIndexTimelineMinutes(_item: EventEntity, _minutes: number): void {}
+
+function noopIndexTimelineConflict(
+  _item: EventEntity,
+  _strategy: ConflictActionStrategy,
+  _gapMinutes: number
+): void {}
+
 @Component
 export struct IndexTimelineView {
   @Prop groupedEvents: DateGroup[] = [];
@@ -52,21 +84,60 @@ export struct IndexTimelineView {
     warning: '#C58A2A'
   };
 
-  onIsDayCollapsed: (dayOffset: number) => boolean = (_dayOffset: number) => false;
-  onToggleDay: (dayOffset: number) => void = (_dayOffset: number) => {};
-  onRefresh: () => void = () => {};
-  onMoveUp: (item: EventEntity) => void = (_item: EventEntity) => {};
-  onMoveDown: (item: EventEntity) => void = (_item: EventEntity) => {};
-  onMainContentClick: (item: EventEntity) => void = (_item: EventEntity) => {};
-  onTimeClick: (item: EventEntity) => void = (_item: EventEntity) => {};
-  onTravelModeChange: (item: EventEntity, mode: number) => void = (_item: EventEntity, _mode: number) => {};
-  onManualTravelInput: (item: EventEntity, minutes: number) => void = (_item: EventEntity, _minutes: number) => {};
-  onCommuteChange: (item: EventEntity, minutes: number) => void = (_item: EventEntity, _minutes: number) => {};
-  onConflictAction: (item: EventEntity, strategy: ConflictActionStrategy, gapMinutes: number) => void =
-    (_item: EventEntity, _strategy: ConflictActionStrategy, _gapMinutes: number) => {};
-  onMoveToBacklog: (item: EventEntity) => void = (_item: EventEntity) => {};
-  onDeleteEvent: (item: EventEntity) => void = (_item: EventEntity) => {};
-  onOpenGapOptimize: () => void = () => {};
+  onIsDayCollapsed = defaultIndexTimelineDayCollapsed;
+  onToggleDay = noopIndexTimelineDayToggle;
+  onRefresh: IndexTimelineVoidCallback = noopIndexTimelineVoid;
+  onMoveUp = noopIndexTimelineEvent;
+  onMoveDown = noopIndexTimelineEvent;
+  onMainContentClick = noopIndexTimelineEvent;
+  onTimeClick = noopIndexTimelineEvent;
+  onTravelModeChange = noopIndexTimelineTravelMode;
+  onManualTravelInput = noopIndexTimelineMinutes;
+  onCommuteChange = noopIndexTimelineMinutes;
+  onConflictAction = noopIndexTimelineConflict;
+  onMoveToBacklog = noopIndexTimelineEvent;
+  onDeleteEvent = noopIndexTimelineEvent;
+  onOpenGapOptimize: IndexTimelineVoidCallback = noopIndexTimelineVoid;
+
+  private shouldRenderGroupItems(dayOffset: number): boolean {
+    return shouldShowIndexTimelineGroupItems(this.onIsDayCollapsed(dayOffset));
+  }
+
+  private shouldEnableSwipeAction(): boolean {
+    return shouldEnableIndexTimelineItem(this.isArchived);
+  }
+
+  private shouldRenderGapHint(): boolean {
+    return shouldShowIndexTimelineGapHint(this.isArchived, this.gapsCount);
+  }
+
+  private resolveVisibleGroupEvents(group: DateGroup): EventEntity[] {
+    return this.shouldRenderGroupItems(group.dayOffset) ? group.events : [];
+  }
+
+  private resolveSwipeAction(item: EventEntity): IndexTimelineSwipeActionConfig | undefined {
+    if (!this.shouldEnableSwipeAction()) {
+      return undefined;
+    }
+    return {
+      start: {
+        builder: () => {
+          this.swipeStartAction(item);
+        },
+        actionAreaDistance: 60
+      },
+      end: {
+        builder: () => {
+          this.swipeEndAction(item);
+        },
+        actionAreaDistance: 60
+      }
+    };
+  }
+
+  private resolveGapHintCounts(): number[] {
+    return this.shouldRenderGapHint() ? [this.gapsCount] : [];
+  }
 
   @Builder
   private buildDateHeader(text: string, dayOffset: number, placeCount: number) {
@@ -129,57 +200,42 @@ export struct IndexTimelineView {
       List({ space: 0 }) {
         ForEach(this.groupedEvents, (group: DateGroup) => {
           ListItemGroup({ header: this.buildDateHeader(group.dateHeader, group.dayOffset, group.events.length) }) {
-            if (shouldShowIndexTimelineGroupItems(this.onIsDayCollapsed(group.dayOffset))) {
-              ForEach(group.events, (item: EventEntity, dayIndex: number) => {
-                ListItem() {
-                  EventItemView({
-                    event: item,
-                    isCompanionMode: this.isCompanionMode,
-                    showWeather: this.showWeather,
-                    showTravelIndicator: dayIndex > 0,
-                    index: this.allEvents.indexOf(item),
-                    totalCount: this.allEvents.length,
-                    onMoveUp: () => this.onMoveUp(item),
-                    onMoveDown: () => this.onMoveDown(item),
-                    onMainContentClick: () => this.onMainContentClick(item),
-                    onTimeClick: () => this.onTimeClick(item),
-                    onTravelModeChange: (mode: number) => this.onTravelModeChange(item, mode),
-                    onManualTravelInput: (minutes: number) => this.onManualTravelInput(item, minutes),
-                    onCommuteChange: (minutes: number) => this.onCommuteChange(item, minutes),
-                    onConflictAction: (targetItem: EventEntity, strategy: ConflictActionStrategy, gapMinutes: number) => {
-                      this.onConflictAction(targetItem, strategy, gapMinutes);
-                    }
-                  })
-                    .enabled(shouldEnableIndexTimelineItem(this.isArchived));
-                }
-                .swipeAction(!shouldEnableIndexTimelineItem(this.isArchived) ? undefined : {
-                  start: {
-                    builder: () => {
-                      this.swipeStartAction(item);
-                    },
-                    actionAreaDistance: 60
-                  },
-                  end: {
-                    builder: () => {
-                      this.swipeEndAction(item);
-                    },
-                    actionAreaDistance: 60
+            ForEach(this.resolveVisibleGroupEvents(group), (item: EventEntity, dayIndex: number) => {
+              ListItem() {
+                EventItemView({
+                  event: item,
+                  isCompanionMode: this.isCompanionMode,
+                  showWeather: this.showWeather,
+                  showTravelIndicator: dayIndex > 0,
+                  index: this.allEvents.indexOf(item),
+                  totalCount: this.allEvents.length,
+                  onMoveUp: () => this.onMoveUp(item),
+                  onMoveDown: () => this.onMoveDown(item),
+                  onMainContentClick: () => this.onMainContentClick(item),
+                  onTimeClick: () => this.onTimeClick(item),
+                  onTravelModeChange: (mode: number) => this.onTravelModeChange(item, mode),
+                  onManualTravelInput: (minutes: number) => this.onManualTravelInput(item, minutes),
+                  onCommuteChange: (minutes: number) => this.onCommuteChange(item, minutes),
+                  onConflictAction: (targetItem: EventEntity, strategy: ConflictActionStrategy, gapMinutes: number) => {
+                    this.onConflictAction(targetItem, strategy, gapMinutes);
                   }
-                });
-              }, (item: EventEntity) => `${item.id}_${item.sort_order}_${item.status}`);
-            }
+                })
+                  .enabled(shouldEnableIndexTimelineItem(this.isArchived));
+              }
+              .swipeAction(this.resolveSwipeAction(item));
+            }, (item: EventEntity) => `${item.id}_${item.sort_order}_${item.status}`);
           }
           .divider({ strokeWidth: 0 });
         }, (group: DateGroup) => `${group.dayOffset}_${group.actualDateMs}_${group.events.length}`);
 
-        if (shouldShowIndexTimelineGapHint(this.isArchived, this.gapsCount)) {
+        ForEach(this.resolveGapHintCounts(), (gapCount: number) => {
           ListItem() {
             Row() {
               Text('→')
                 .fontSize(14)
                 .fontColor(this.theme.textTertiary);
 
-              Text(`检测到 ${this.gapsCount} 处空闲时间，是否立即优化？`)
+              Text(`检测到 ${gapCount} 处空闲时间，是否立即优化？`)
                 .fontSize(13)
                 .fontColor(this.theme.textSecondary)
                 .layoutWeight(1);
@@ -187,9 +243,9 @@ export struct IndexTimelineView {
             .width('100%')
             .padding({ top: 12, bottom: 12, left: 16, right: 16 })
             .justifyContent(FlexAlign.Center)
-            .onClick(() => this.onOpenGapOptimize());
-          }
-        }
+            .onClick(this.onOpenGapOptimize);
+          };
+        });
 
         ListItem().height(resolveIndexTimelineBottomSpacerHeight(this.isCompanionMode));
       }

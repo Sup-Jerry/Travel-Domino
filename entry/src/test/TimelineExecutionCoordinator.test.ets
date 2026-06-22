@@ -76,6 +76,21 @@ export default function timelineExecutionCoordinatorTest() {
       expect(next?.id || 0).assertEqual(33);
     });
 
+    it('boundary: get_next_executable_event_should_return_null_when_no_later_startable_item_exists', 0, () => {
+      // Arrange
+      const current = createScheduleEvent(34, 0, 100);
+      const active = createScheduleEvent(35, 0, 200);
+      active.actual_start_time = Date.now();
+      const completed = createScheduleEvent(36, 0, 300);
+      completed.completion_status = EventEntity.STATE_COMPLETED;
+      const coordinator = new TimelineExecutionCoordinator({ events: [current, active, completed] });
+      const ordered = coordinator.getOrderedScheduleEvents();
+      // Act
+      const next = coordinator.getNextExecutableEvent(34, ordered);
+      // Assert
+      expect(next === null).assertTrue();
+    });
+
     it('regression: td-20260411-c4-first-scheduled-item-should-detect-day-boundary', 0, () => {
       // Arrange
       const day0 = createScheduleEvent(40, 0, 100);
@@ -88,6 +103,21 @@ export default function timelineExecutionCoordinatorTest() {
       // Assert
       expect(firstOfDay1).assertTrue();
       expect(secondOfDay1).assertFalse();
+    });
+
+    it('boundary: is_first_scheduled_item_of_day_should_handle_first_item_and_invalid_item', 0, () => {
+      // Arrange
+      const first = createScheduleEvent(43, 0, 100);
+      const second = createScheduleEvent(44, 0, 200);
+      const invalid = createScheduleEvent(45, 0, 300);
+      invalid.status = 0;
+      const coordinator = new TimelineExecutionCoordinator({ events: [second, first] });
+      // Act
+      const firstResult = coordinator.isFirstScheduledItemOfDay(first);
+      const invalidResult = coordinator.isFirstScheduledItemOfDay(invalid);
+      // Assert
+      expect(firstResult).assertTrue();
+      expect(invalidResult).assertFalse();
     });
 
     it('combined: build_reflow_hint_should_cover_skip_shift_and_reflow', 0, () => {
@@ -103,6 +133,31 @@ export default function timelineExecutionCoordinatorTest() {
       expect(shiftHint.type).assertEqual('shift');
       expect(shiftHint.minutesDelta).assertEqual(15);
       expect(reflowHint.type).assertEqual('reflow');
+    });
+
+    it('combined: build_reflow_hint_should_cover_skip_without_next_name_and_negative_shift', 0, () => {
+      // Arrange
+      const coordinator = new TimelineExecutionCoordinator({ events: [] });
+      // Act
+      const skipHint = coordinator.buildReflowHint('skip', 0, 0, '故宫', '');
+      const earlierHint = coordinator.buildReflowHint('end', 30 * 60 * 1000, 10 * 60 * 1000, 'A', 'B');
+      // Assert
+      expect(skipHint.type).assertEqual('next_changed');
+      expect(skipHint.message.includes('后续行程已自动重排')).assertTrue();
+      expect(earlierHint.type).assertEqual('shift');
+      expect(earlierHint.minutesDelta).assertEqual(-20);
+      expect(earlierHint.message.includes('提前 20 分钟')).assertTrue();
+    });
+
+    it('boundary: build_reflow_hint_should_fallback_to_reflow_when_positive_timestamps_have_zero_delta', 0, () => {
+      // Arrange
+      const coordinator = new TimelineExecutionCoordinator({ events: [] });
+      // Act
+      const reflowHint = coordinator.buildReflowHint('end', 45 * 60 * 1000, 45 * 60 * 1000, 'A', 'B');
+      // Assert
+      expect(reflowHint.type).assertEqual('reflow');
+      expect(reflowHint.minutesDelta).assertEqual(0);
+      expect(reflowHint.message.length > 0).assertTrue();
     });
   });
 }

@@ -1,6 +1,16 @@
 ﻿import { EventEntity } from '../../../../model/entity/EventEntity';
 import { ThemeCenter } from '../../../../common/utils/ThemeCenter';
 
+function noopCompanionSearchVoid(): void {}
+
+function noopCompanionSearchKeyword(_keyword: string): void {}
+
+function noopCompanionSearchEvent(_item: EventEntity): void {}
+
+function defaultCompanionSearchText(_item: EventEntity): string {
+  return '--';
+}
+
 export function shouldShowCompanionSearchPage(showSearchPage: boolean): boolean {
   return showSearchPage;
 }
@@ -22,11 +32,11 @@ export struct CompanionSearchPage {
   @Prop safeBottomInset: number = 0;
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
 
-  onClose: () => void = () => {};
-  onSearch: (keyword: string) => void = (_keyword: string) => {};
-  onResultClick: (item: EventEntity) => void = (_item: EventEntity) => {};
-  getEventStateLabel: (item: EventEntity) => string = (_item: EventEntity) => '--';
-  getPlannedRange: (item: EventEntity) => string = (_item: EventEntity) => '--';
+  onClose = noopCompanionSearchVoid;
+  onSearch = noopCompanionSearchKeyword;
+  onResultClick = noopCompanionSearchEvent;
+  getEventStateLabel = defaultCompanionSearchText;
+  getPlannedRange = defaultCompanionSearchText;
 
   private getThemePalette() {
     return ThemeCenter.getPalette(this.effectiveTheme);

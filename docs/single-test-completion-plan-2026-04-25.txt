@@ -1,0 +1,142 @@
+﻿单列测试补齐计划（2026-04-25）
+
+一、目标
+1. 覆盖对象
+   - entry/src/main/ets/** 的可执行业务代码
+   - backend/src/** 的可执行业务代码
+2. 覆盖目标
+   - entry：继续提升 Statements / Branches / Functions / Lines，当前优先级最高是 Functions
+   - backend：已达到 100%，后续只做回归守护，不再扩散改动
+3. 单列规范目标
+   - 所有新增或修订单列测试，必须满足：
+     - 6 类 case：normal / boundary / invalid / conflict / regression / combined
+     - AAA 结构：Arrange / Act / Assert
+   - 历史已有单列测试，按批次补齐到同一标准
+
+二、当前基线
+1. 覆盖率基线
+   - entry
+     - Statements：73.81%
+     - Branches：78.25%
+     - Functions：69.16%
+     - Lines：86.05%
+   - backend
+     - Statements / Branches / Functions / Lines = 100%
+2. 单列规范基线
+   - entry/src/test/*.test.ets
+     - 总数：391
+     - 满足 6 类 case：311
+     - 满足 AAA：339
+     - 同时满足 6 类 case + AAA：306
+     - 缺 regression：51
+   - backend/test/*.spec.ts
+     - 总数：25
+     - 同时满足 6 类 case + AAA：18
+
+三、执行原则
+1. 先补真实覆盖缺口，再补单列结构缺口
+2. 不为“看起来有测试”补测试，只做能带来真实 raw coverage 增量或能明确补齐规范缺口的改动
+3. 每一批单列改动都必须先跑通相关门禁
+4. 只有门禁通过的单列批次才允许上传到 GitHub
+5. 存在无关改动时，提交必须使用精确文件范围，避免混入
+
+四、阶段划分
+P0：锁定真实缺口与待修清单
+1. 固定覆盖率统计口径
+   - entry：读取最新 etsCoverageData.json / js_coverage.json
+   - backend：读取本轮 npm test -- --coverage --runInBand 生成的 coverage-final.json / lcov.info
+2. 固定单列规范检查口径
+   - 显式检查 6 类 case 标签
+   - 显式检查 AAA 注释
+3. 产出两张清单
+   - 高缺口覆盖清单
+   - 不符合规范的单列清单
+
+P1：高收益 function 主线补齐
+1. 优先文件
+   - pages/components/dialogs/GapResolutionDialog.ets
+   - pages/components/views/companion/CompanionControlPage.ets
+   - pages/index/IndexPageLayout.ets
+   - pages/components/views/EventItemView.ets
+   - pages/components/views/CompanionView.ets
+   - pages/index/IndexTimelineView.ets
+   - pages/MapPickerPage.ets
+   - pages/index/IndexDialogManager.ets
+2. 策略
+   - 优先补轻方法、纯函数、真实匿名回调、可直接触发的实例方法
+   - 避免在 @Link 依赖不完整、builder 强耦合、接口声明噪声上浪费时间
+3. 验收
+   - 每批必须确认目标函数 raw coverage 真涨
+
+P2：补齐 entry 历史单列规范缺口
+1. 第一批：缺 AAA 的文件
+   - 先补 Arrange / Act / Assert，避免测试风格继续失控
+2. 第二批：缺 regression 的文件
+   - 每个文件至少补 1 个真实回归 case
+3. 第三批：缺 conflict / invalid / boundary / combined 的文件
+   - 按风险高低补齐到 6 类完整结构
+4. 优先顺序
+   - 先修已经参与主线覆盖推进的文件
+   - 再修批次文件（Phase2Batch**）
+
+P3：补齐 backend 历史单测规范缺口
+1. backend 不再追覆盖率，只修测试结构不完整的问题
+2. 先处理
+   - ai.controller.spec.ts
+   - ai.dto.spec.ts
+   - ai.module.spec.ts
+   - ai.service.spec.ts
+   - branch-backfill-ft.spec.ts
+   - branch-backfill-ge.spec.ts
+   - branch-backfill-gf.spec.ts
+3. 目标
+   - 补 AAA
+   - 补 regression
+   - 对缺失的 normal / invalid / conflict / combined 做最小补齐
+
+P4：全量复核
+1. 重新跑 entry 全量门禁
+   - scripts/ci/unit-all.ps1
+2. 重新跑 backend 全量门禁
+   - npm test -- --coverage --runInBand
+3. 重新统计
+   - 覆盖率总表
+   - 单列规范达标率
+4. 输出最终缺口
+   - 剩余未满覆盖文件
+   - 剩余不达标单列文件
+
+五、批次执行规则
+1. 单批大小
+   - 1 到 5 个相关文件为一批
+   - 以“容易验证、容易回滚、容易 review”为原则
+2. 每批固定动作
+   - 写测试或修测试
+   - 跑最快相关门禁
+   - 回读 raw coverage 或结构检查结果
+   - 通过后上传 GitHub
+3. 提交信息
+   - 默认以“单列修复：...”描述该批目标
+4. 上传入口
+   - 必须优先使用 scripts/git-auto-publish.ps1
+
+六、验收标准
+1. 覆盖率验收
+   - backend 维持 100%
+   - entry Functions 持续提升，且每批有真实增量
+2. 规范验收
+   - 新增或修改过的单列测试，必须满足 6 类 case + AAA + regression
+   - 历史文件分批补齐，直到待修清单清空
+3. 质量验收
+   - 禁止只为凑标签写空壳 case
+   - 禁止只过测试但不带来真实覆盖或规范增量的“假推进”
+
+七、风险点
+1. ArkUI builder / @Link / 系统 API 强耦合，容易造成测试脆弱
+2. 匿名函数与接口声明噪声混杂，容易误判为有效 function 缺口
+3. 历史批次文件数量大，规范补齐会消耗较多整理时间
+
+八、下一步执行顺序
+1. 先做 P1：继续冲 entry 的高收益 function 缺口
+2. 并行维护 P2：每碰到一个历史单列文件，就同步补齐 6 类 case + AAA + regression
+3. 当主线 function 提升放缓后，转入 P2 / P3 做结构性收口

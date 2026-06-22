@@ -1,6 +1,9 @@
 ﻿import { ThemeCenter } from '../../../common/utils/ThemeCenter';
 import { NavigationHelper } from '../../../common/utils/NavigationHelper';
 
+function noopSettingToggle(_value: boolean): void {}
+
+function noopSettingClick(): void {}
 
 export function shouldShowSettingSwitchLoading(loading: boolean): boolean {
   return loading;
@@ -63,7 +66,7 @@ export struct SettingSwitchItem {
   @Prop cardBg: ResourceColor = Color.White;
   @Link checked: boolean;
 
-  onToggle: (value: boolean) => void = () => {};
+  onToggle = noopSettingToggle;
 
   build() {
     Row() {
@@ -110,7 +113,7 @@ export struct SettingSelectItem {
   @Prop cardBg: ResourceColor = Color.White;
   @Prop actionColor: ResourceColor = '#007DFF';
 
-  onClickItem: () => void = () => {};
+  onClickItem = noopSettingClick;
 
   build() {
     Row() {
@@ -141,9 +144,7 @@ export struct SettingSelectItem {
     .padding(16)
     .backgroundColor(this.cardBg)
     .borderRadius(12)
-    .onClick(() => {
-      this.onClickItem();
-    });
+    .onClick(this.onClickItem);
   }
 }
 
@@ -153,7 +154,7 @@ export struct SettingCategoryItem {
   @Prop desc: string = '';
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
 
-  onClickItem: () => void = () => {};
+  onClickItem = noopSettingClick;
 
   private getPalette() {
     return ThemeCenter.getPalette(this.effectiveTheme);
@@ -184,7 +185,7 @@ export struct SettingCategoryItem {
     .padding(16)
     .backgroundColor(this.getPalette().cardBg)
     .borderRadius(12)
-    .onClick(() => this.onClickItem());
+    .onClick(this.onClickItem);
   }
 }
 

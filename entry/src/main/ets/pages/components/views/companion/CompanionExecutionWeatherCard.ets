@@ -6,6 +6,11 @@ import {
   CompanionWeatherSuggestionPopupBuilder
 } from './CompanionWeatherPopups';
 
+type ExecutionWeatherVoidAction = () => void;
+type ExecutionWeatherVisibleAction = (visible: boolean) => void;
+type ExecutionWeatherSuggestionAction = (item: WeatherSuggestion) => void;
+type ExecutionWeatherSuggestionIdAction = (suggestionId: string) => void;
+
 export function getExecutionWeatherRefreshText(isLoading: boolean): string {
   return isLoading ? '刷新中...' : '刷新';
 }
@@ -72,19 +77,19 @@ export struct CompanionExecutionWeatherCard {
   @Prop executionWeatherSuggestions: WeatherSuggestion[] = [];
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
 
-  onRefreshWeather: () => void = () => {};
-  onToggleExpanded: () => void = () => {};
-  onToggleScorePopup: () => void = () => {};
-  onToggleHintPopup: () => void = () => {};
-  onToggleSuggestionPopup: () => void = () => {};
-  onScorePopupStateChange: (visible: boolean) => void = (_visible: boolean) => {};
-  onHintPopupStateChange: (visible: boolean) => void = (_visible: boolean) => {};
-  onSuggestionPopupStateChange: (visible: boolean) => void = (_visible: boolean) => {};
-  onOpenSuggestionGuide: () => void = () => {};
-  onOpenSuggestionDetail: (item: WeatherSuggestion) => void = (_item: WeatherSuggestion) => {};
-  onApplySuggestion: (item: WeatherSuggestion) => void = (_item: WeatherSuggestion) => {};
-  onLaterSuggestion: (suggestionId: string) => void = (_suggestionId: string) => {};
-  onIgnoreSuggestion: (suggestionId: string) => void = (_suggestionId: string) => {};
+  onRefreshWeather: ExecutionWeatherVoidAction = () => {};
+  onToggleExpanded: ExecutionWeatherVoidAction = () => {};
+  onToggleScorePopup: ExecutionWeatherVoidAction = () => {};
+  onToggleHintPopup: ExecutionWeatherVoidAction = () => {};
+  onToggleSuggestionPopup: ExecutionWeatherVoidAction = () => {};
+  onScorePopupStateChange: ExecutionWeatherVisibleAction = (_visible: boolean) => {};
+  onHintPopupStateChange: ExecutionWeatherVisibleAction = (_visible: boolean) => {};
+  onSuggestionPopupStateChange: ExecutionWeatherVisibleAction = (_visible: boolean) => {};
+  onOpenSuggestionGuide: ExecutionWeatherVoidAction = () => {};
+  onOpenSuggestionDetail: ExecutionWeatherSuggestionAction = (_item: WeatherSuggestion) => {};
+  onApplySuggestion: ExecutionWeatherSuggestionAction = (_item: WeatherSuggestion) => {};
+  onLaterSuggestion: ExecutionWeatherSuggestionIdAction = (_suggestionId: string) => {};
+  onIgnoreSuggestion: ExecutionWeatherSuggestionIdAction = (_suggestionId: string) => {};
 
   private getThemePalette() {
     return ThemeCenter.getPalette(this.effectiveTheme);

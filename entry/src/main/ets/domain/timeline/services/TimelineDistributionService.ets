@@ -149,10 +149,6 @@ export class TimelineDistributionService implements ITimelineDistributionService
       const item = allSchedule[i];
       if (item.lock_status === 1 && item.fixed_start_time) {
         const eventIdxInEvents = this.host.events.findIndex((event: EventEntity) => event.id === item.id);
-        if (eventIdxInEvents === -1) {
-          continue;
-        }
-
         const naturalArrival = this.host._calculateNaturalArrival(eventIdxInEvents);
         const targetMin = DateUtil.timeToMinutes(item.fixed_start_time);
         const buffer = targetMin - naturalArrival;
@@ -276,9 +272,6 @@ export class TimelineDistributionService implements ITimelineDistributionService
   private isSameDayGapWithPreviousScheduleItem(item: EventEntity): boolean {
     const schedule = this.host.getOrderedScheduleEvents();
     const idx = schedule.findIndex((event: EventEntity) => event.id === item.id);
-    if (idx <= 0) {
-      return false;
-    }
     const prev = schedule[idx - 1];
     return this.host.getEffectiveDayOffset(prev) === this.host.getEffectiveDayOffset(item);
   }

@@ -11,18 +11,61 @@ import { AvatarUploadPort } from './AvatarUploadPort';
 const TAG = 'AvatarUploadApi';
 const LOG_DOMAIN = 0x0000;
 
+export type AvatarAccessTokenGetter = () => string;
+export type AvatarDataUrlEncoder = (fileUriText: string, mimeType: string) => string;
+export type AvatarUpdateGateway = (
+  accessToken: string,
+  imageDataUrl: string,
+  mimeType: string
+) => Promise<AuthApiResponse<UpdateAvatarResult>>;
+export type AvatarNowGetter = () => number;
+
 export interface AvatarUploadApiOptions {
-  getAccessToken?: () => string;
-  encodeFileToDataUrl?: (fileUriText: string, mimeType: string) => string;
-  updateAvatar?: (accessToken: string, imageDataUrl: string, mimeType: string) => Promise<AuthApiResponse<UpdateAvatarResult>>;
-  now?: () => number;
+  getAccessToken?: AvatarAccessTokenGetter;
+  encodeFileToDataUrl?: AvatarDataUrlEncoder;
+  updateAvatar?: AvatarUpdateGateway;
+  now?: AvatarNowGetter;
+}
+
+interface AvatarUploadFileStatLike {
+  size: number;
+}
+
+interface AvatarUploadBase64HelperLike {
+  encodeToStringSync(content: Uint8Array, type: Object): string;
+}
+
+interface AvatarUploadFileUriLike {
+  path: string;
+}
+
+interface AvatarUploadRuntimeDeps {
+  statSync: (path: string) => AvatarUploadFileStatLike;
+  openSync: (path: string, mode: number) => number;
+  readSync: (fd: number, buffer: ArrayBuffer) => number;
+  closeSync: (fd: number) => void;
+  readOnlyMode: number;
+  createFileUri: (raw: string) => AvatarUploadFileUriLike;
+  createBase64Helper: () => AvatarUploadBase64HelperLike;
+  basicType: Object;
 }
 
 export class AvatarUploadApi implements AvatarUploadPort {
-  private readonly getAccessToken: () => string;
-  private readonly encodeFileToDataUrl: (fileUriText: string, mimeType: string) => string;
-  private readonly updateAvatar: (accessToken: string, imageDataUrl: string, mimeType: string) => Promise<AuthApiResponse<UpdateAvatarResult>>;
-  private readonly now: () => number;
+  private static runtimeDeps: AvatarUploadRuntimeDeps = {
+    statSync: (path: string) => fileIo.statSync(path) as AvatarUploadFileStatLike,
+    openSync: (path: string, mode: number) => fileIo.openSync(path, mode).fd,
+    readSync: (fd: number, buffer: ArrayBuffer) => fileIo.readSync(fd, buffer),
+    closeSync: (fd: number) => fileIo.closeSync(fd),
+    readOnlyMode: fileIo.OpenMode.READ_ONLY,
+    createFileUri: (raw: string) => new fileUri.FileUri(raw) as AvatarUploadFileUriLike,
+    createBase64Helper: () => new util.Base64Helper() as AvatarUploadBase64HelperLike,
+    basicType: util.Type.BASIC as Object
+  };
+
+  private readonly getAccessToken: AvatarAccessTokenGetter;
+  private readonly encodeFileToDataUrl: AvatarDataUrlEncoder;
+  private readonly updateAvatar: AvatarUpdateGateway;
+  private readonly now: AvatarNowGetter;
 
   constructor(options?: AvatarUploadApiOptions) {
     this.getAccessToken = options?.getAccessToken || (() => AuthSessionStore.getAccessToken());
@@ -92,27 +135,28 @@ export class AvatarUploadApi implements AvatarUploadPort {
   public static readFileAsDataUrl(fileUriText: string, mimeType: string): string {
     try {
       const path = AvatarUploadApi.resolveFilePath(fileUriText);
-      const stat = fileIo.statSync(path);
+      const deps = AvatarUploadApi.runtimeDeps;
+      const stat = deps.statSync(path);
       const total = Number(stat.size);
       if (!Number.isFinite(total) || total <= 0) {
         throw new Error('avatar_file_empty');
       }
 
-      const file = fileIo.openSync(path, fileIo.OpenMode.READ_ONLY);
+      const fd = deps.openSync(path, deps.readOnlyMode);
       try {
         const buffer = new ArrayBuffer(total);
-        const readSize = fileIo.readSync(file.fd, buffer);
+        const readSize = deps.readSync(fd, buffer);
         if (readSize <= 0) {
           throw new Error('avatar_file_read_empty');
         }
         const source = new Uint8Array(buffer);
         const content = source.slice(0, readSize);
-        const helper = new util.Base64Helper();
-        const base64 = helper.encodeToStringSync(content, util.Type.BASIC);
+        const helper = deps.createBase64Helper();
+        const base64 = helper.encodeToStringSync(content, deps.basicType);
         const safeMime = mimeType && mimeType.trim().length > 0 ? mimeType.trim() : 'image/jpeg';
         return `data:${safeMime};base64,${base64}`;
       } finally {
-        fileIo.closeSync(file);
+        deps.closeSync(fd);
       }
     } catch (error) {
       const msg = AvatarUploadApi.errorMessage(error);
@@ -127,7 +171,7 @@ export class AvatarUploadApi implements AvatarUploadPort {
       throw new Error('avatar_uri_empty');
     }
     if (trimmed.startsWith('file://')) {
-      const uri = new fileUri.FileUri(trimmed);
+      const uri = AvatarUploadApi.runtimeDeps.createFileUri(trimmed);
       return decodeURIComponent(uri.path);
     }
     return trimmed;

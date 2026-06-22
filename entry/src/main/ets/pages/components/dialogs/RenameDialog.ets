@@ -1,5 +1,7 @@
 ﻿// 文件路径: ets/pages/components/RenameDialog.ets
 
+type RenameDialogConfirmAction = (newName: string) => void;
+
 export function normalizeRenameDialogName(input: string): string {
   return (input || '').trim();
 }
@@ -8,11 +10,24 @@ export function canRenameDialogSubmit(input: string): boolean {
   return normalizeRenameDialogName(input).length > 0;
 }
 
+export function confirmRenameDialog(
+  input: string,
+  onConfirm: (newName: string) => void,
+  close: () => void
+): boolean {
+  if (!canRenameDialogSubmit(input)) {
+    return false;
+  }
+  onConfirm(input);
+  close();
+  return true;
+}
+
 @CustomDialog
 export struct RenameDialog {
   controller: CustomDialogController;
   initName: string = '';
-  onConfirm: (newName: string) => void = () => {};
+  onConfirm: RenameDialogConfirmAction = () => {};
 
   @State name: string = '';
 
@@ -49,10 +64,7 @@ export struct RenameDialog {
         Button('确定')
           .width('40%')
           .onClick(() => {
-            if (canRenameDialogSubmit(this.name)) {
-              this.onConfirm(this.name);
-              this.controller.close();
-            }
+            confirmRenameDialog(this.name, this.onConfirm, (): void => this.controller.close());
           })
       }
       .width('100%')
@@ -63,11 +75,3 @@ export struct RenameDialog {
     .width('80%') // 弹窗宽度
   }
 }
-
-
-
-
-
-
-
-

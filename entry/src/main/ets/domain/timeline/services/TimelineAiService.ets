@@ -562,13 +562,9 @@ export class TimelineAiService implements ITimelineAiService {
       hilog.error(
         0x0000,
         TAG,
-        `[AI_DEBUG][timeline_generate_fail] mode=${strategyMode}, reason=${error instanceof Error ? error.message : JSON.stringify(error)}`
+        `[AI_DEBUG][timeline_generate_fail] mode=${strategyMode}, reason=${(error as Error).message}`
       );
-
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error(JSON.stringify(error));
+      throw error as Error;
     }
   }
 
@@ -616,12 +612,9 @@ export class TimelineAiService implements ITimelineAiService {
         items: items
       };
     } catch (error) {
-      const reason = error instanceof Error ? error.message : JSON.stringify(error);
+      const reason = (error as Error).message;
       hilog.error(0x0000, TAG, `[airest]AI_REPLAN_TRACE[service_preview_fail] reason=${reason}`);
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error(reason);
+      throw error as Error;
     } finally {
       this.host.isRegenerating = false;
     }
@@ -751,7 +744,7 @@ export class TimelineAiService implements ITimelineAiService {
       );
       return undoToken;
     } catch (error) {
-      const reason = error instanceof Error ? error.message : JSON.stringify(error);
+      const reason = (error as Error).message;
       hilog.error(
         0x0000,
         TAG,
@@ -768,7 +761,7 @@ export class TimelineAiService implements ITimelineAiService {
             `[airest]AI_REPLAN_TRACE[service_apply_rollback_ok] decision=${decision}, restoredCount=${undoToken.events.length}, restoredAi=${rollbackAiCount}`
           );
         } catch (rollbackError) {
-          const rollbackReason = rollbackError instanceof Error ? rollbackError.message : JSON.stringify(rollbackError);
+          const rollbackReason = (rollbackError as Error).message;
           hilog.error(
             0x0000,
             TAG,
@@ -777,10 +770,7 @@ export class TimelineAiService implements ITimelineAiService {
           throw new Error(`${reason}; 回滚失败: ${rollbackReason}`);
         }
       }
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error(reason);
+      throw error as Error;
     } finally {
       this.host.isRegenerating = false;
     }

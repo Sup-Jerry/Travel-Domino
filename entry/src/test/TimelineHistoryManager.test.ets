@@ -1,5 +1,5 @@
 ﻿import { describe, expect, it } from '@ohos/hypium';
-import { TimelineHistoryManager } from '../main/ets/viewmodel/managers/TimelineHistoryManager';
+import { TimelineHistoryManager, resolveLatestEventSortTs } from '../main/ets/viewmodel/managers/TimelineHistoryManager';
 import { EventEntity } from '../main/ets/model/entity/EventEntity';
 
 function createScheduleEvent(id: number, name: string, dayOffset: number, sortOrder: number): EventEntity {
@@ -28,6 +28,19 @@ export default function timelineHistoryManagerTest() {
       const address = manager.getPlaceAddress('西湖');
       // Assert
       expect(address).assertEqual('杭州市西湖区龙井路');
+    });
+
+    it('boundary: get_place_address_should_fallback_to_dash_when_all_addresses_are_empty', 0, () => {
+      // Arrange
+      const a = createScheduleEvent(3, '外滩', 0, 100);
+      const b = createScheduleEvent(4, '外滩', 1, 100);
+      a.address = ' ';
+      b.address = '';
+      const manager = new TimelineHistoryManager({ events: [a, b], planId: 11, planName: '上海行' });
+      // Act
+      const address = manager.getPlaceAddress('外滩');
+      // Assert
+      expect(address).assertEqual('-');
     });
 
     it('boundary: get_current_plan_history_timeline_items_should_use_default_threshold_when_invalid', 0, () => {
@@ -65,6 +78,23 @@ export default function timelineHistoryManagerTest() {
       // Assert
       expect(latest !== null).assertTrue();
       expect(latest?.id || 0).assertEqual(31);
+    });
+
+    it('boundary: get_latest_event_for_place_should_use_actual_start_time_and_filter_unscheduled_items', 0, () => {
+      // Arrange
+      const unscheduled = createScheduleEvent(32, '城墙', 0, 100);
+      unscheduled.status = 0;
+      unscheduled.actual_end_time = 99_000;
+      const byStartTime = createScheduleEvent(33, '城墙', 0, 200);
+      byStartTime.actual_start_time = 8_000;
+      const byEndTime = createScheduleEvent(34, '城墙', 0, 300);
+      byEndTime.actual_end_time = 7_000;
+      const manager = new TimelineHistoryManager({ events: [unscheduled, byEndTime, byStartTime], planId: 12, planName: '西安行' });
+      // Act
+      const latest = manager.getLatestEventForPlace('城墙');
+      // Assert
+      expect(latest !== null).assertTrue();
+      expect(latest?.id || 0).assertEqual(33);
     });
 
     it('regression: td-20260411-c4-history-items-should-sort-by-display-time', 0, () => {
@@ -115,6 +145,162 @@ export default function timelineHistoryManagerTest() {
       expect(items.some((item) => item.actionType === 'LEAVE')).assertTrue();
       expect(items.some((item) => item.actionType === 'SKIP')).assertTrue();
       expect(items.some((item) => item.actionType === 'ACTIVE')).assertTrue();
+    });
+
+    it('combined: history_items_should_filter_unscheduled_and_keep_normal_arrive_leave_not_abnormal', 0, () => {
+      // Arrange
+      const hidden = createScheduleEvent(60, '隐藏点', 0, 50);
+      hidden.status = 0;
+      hidden.actual_start_time = 2_000;
+      hidden.actual_end_time = 3_000;
+
+      const normal = createScheduleEvent(61, '正常点', 0, 100);
+      normal.dynamic_start_time = 20 * 60 * 1000;
+      normal.actual_start_time = 23 * 60 * 1000;
+      normal.actual_end_time = 53 * 60 * 1000;
+      normal.address = '  ';
+      normal.note = '  ';
+
+      const manager = new TimelineHistoryManager({ events: [hidden, normal], planId: 13, planName: '普通行程' });
+      // Act
+      const items = manager.getCurrentPlanHistoryTimelineItems(10);
+      // Assert
+      expect(items.length).assertEqual(2);
+      expect(items[0].eventId).assertEqual(61);
+      expect(items[0].actionType).assertEqual('ARRIVE');
+      expect(items[1].actionType).assertEqual('LEAVE');
+      expect(items[0].isAbnormal).assertFalse();
+      expect(items[0].address).assertEqual('');
+      expect(items[0].note).assertEqual('');
+    });
+
+    it('boundary: history_items_should_use_unknown_group_key_when_skip_has_no_available_timestamp', 0, () => {
+      // Arrange
+      const skipped = createScheduleEvent(62, '未知跳过点', 0, 100);
+      skipped.completion_status = EventEntity.STATE_SKIPPED;
+      const manager = new TimelineHistoryManager({ events: [skipped], planId: 14, planName: '未知时间行程' });
+      // Act
+      const items = manager.getCurrentPlanHistoryTimelineItems();
+      // Assert
+      expect(items.length).assertEqual(1);
+      expect(items[0].actionType).assertEqual('SKIP');
+      expect(items[0].groupDateKey).assertEqual('未定');
+      expect(items[0].displayTs).assertEqual(0);
+    });
+
+    it('boundary: history_items_should_skip_pending_event_when_no_actual_times_exist', 0, () => {
+      // Arrange
+      const pending = createScheduleEvent(63, '待出发点', 0, 100);
+      pending.dynamic_start_time = 90_000;
+      const manager = new TimelineHistoryManager({ events: [pending], planId: 15, planName: '空历史行程' });
+
+      // Act
+      const items = manager.getCurrentPlanHistoryTimelineItems();
+
+      // Assert
+      expect(items.length).assertEqual(0);
+    });
+
+    it('combined: history_items_should_use_actual_start_for_skip_when_end_and_planned_start_missing', 0, () => {
+      // Arrange
+      const skipped = createScheduleEvent(64, '跳过点', 0, 100);
+      skipped.completion_status = EventEntity.STATE_SKIPPED;
+      skipped.actual_start_time = 123_000;
+      skipped.dynamic_start_time = 0;
+      const manager = new TimelineHistoryManager({ events: [skipped], planId: 16, planName: '跳过行程' });
+
+      // Act
+      const items = manager.getCurrentPlanHistoryTimelineItems();
+
+      // Assert
+      expect(items.length).assertEqual(1);
+      expect(items[0].actionType).assertEqual('SKIP');
+      expect(items[0].displayTs).assertEqual(123_000);
+      expect(items[0].groupDateKey === '未定').assertFalse();
+    });
+
+    it('conflict: latest_event_and_summary_should_fallback_by_id_and_default_plan_name', 0, () => {
+      // Arrange
+      const older = createScheduleEvent(65, '同名点', 0, 100);
+      const newer = createScheduleEvent(66, '同名点', 0, 100);
+      const pending = createScheduleEvent(67, '待定点', 0, 200);
+      const manager = new TimelineHistoryManager({ events: [older, newer, pending], planId: 17, planName: '   ' });
+
+      // Act
+      const latest = manager.getLatestEventForPlace('同名点');
+      const summary = manager.getCurrentPlanHistorySummary();
+
+      // Assert
+      expect(latest !== null).assertTrue();
+      expect(latest?.id || 0).assertEqual(66);
+      expect(summary.planName).assertEqual('计划 #17');
+      expect(summary.activeCount).assertEqual(0);
+    });
+
+    it('conflict: latest_event_should_break_zero_timestamp_tie_by_id_and_history_items_should_sort_equal_display_ts_by_id', 0, () => {
+      // Arrange
+      const older = createScheduleEvent(68, '零时间点', 0, 100);
+      const newer = createScheduleEvent(69, '零时间点', 0, 200);
+      const first = createScheduleEvent(70, '并列到达A', 0, 300);
+      const second = createScheduleEvent(71, '并列到达B', 0, 400);
+      first.actual_start_time = 500_000;
+      second.actual_start_time = 500_000;
+      const manager = new TimelineHistoryManager({ events: [older, newer, second, first], planId: 18, planName: '同时刻行程' });
+
+      // Act
+      const latest = manager.getLatestEventForPlace('零时间点');
+      const items = manager.getCurrentPlanHistoryTimelineItems();
+
+      // Assert
+      expect(latest !== null).assertTrue();
+      expect(latest?.id || 0).assertEqual(69);
+      expect(items.length).assertEqual(2);
+      expect(items[0].eventId).assertEqual(70);
+      expect(items[1].eventId).assertEqual(71);
+    });
+
+    it('combined: latest_event_should_use_actual_end_priority_and_active_item_should_keep_actual_start_group_key', 0, () => {
+      // Arrange
+      const byStart = createScheduleEvent(72, '真实时间点', 0, 100);
+      byStart.actual_start_time = 600_000;
+      const byEnd = createScheduleEvent(73, '真实时间点', 0, 200);
+      byEnd.actual_end_time = 700_000;
+      const active = createScheduleEvent(74, '进行中点', 0, 300);
+      active.dynamic_start_time = 800_000;
+      active.actual_start_time = 810_000;
+      const manager = new TimelineHistoryManager({ events: [byStart, byEnd, active], planId: 19, planName: '真实时间行程' });
+
+      // Act
+      const latest = manager.getLatestEventForPlace('真实时间点');
+      const items = manager.getCurrentPlanHistoryTimelineItems();
+      const activeItem = items.find((item) => item.eventId === 74);
+
+      // Assert
+      expect(latest !== null).assertTrue();
+      expect(latest?.id || 0).assertEqual(73);
+      expect(activeItem !== undefined).assertTrue();
+      expect(activeItem?.actionType || '').assertEqual('ACTIVE');
+      expect(activeItem?.displayTs || 0).assertEqual(810_000);
+      expect(activeItem?.groupDateKey === '未定').assertFalse();
+    });
+
+    it('boundary: latest_event_sort_ts_should_prefer_actual_end_then_actual_start_then_zero', 0, () => {
+      // Arrange
+      const endFirst = createScheduleEvent(75, '排序点A', 0, 100);
+      endFirst.actual_end_time = 920_000;
+      const startOnly = createScheduleEvent(76, '排序点B', 0, 200);
+      startOnly.actual_start_time = 910_000;
+      const empty = createScheduleEvent(77, '排序点C', 0, 300);
+
+      // Act
+      const endTs = resolveLatestEventSortTs(endFirst);
+      const startTs = resolveLatestEventSortTs(startOnly);
+      const emptyTs = resolveLatestEventSortTs(empty);
+
+      // Assert
+      expect(endTs).assertEqual(920_000);
+      expect(startTs).assertEqual(910_000);
+      expect(emptyTs).assertEqual(0);
     });
   });
 }

@@ -130,6 +130,35 @@ struct LoginPage {
     return generation === this.loginGeneration;
   }
 
+  private handleAgreementCheckboxChange(value: boolean): void {
+    this.agreementAccepted = value;
+    hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] agreement checkbox changed=${value ? 1 : 0}`);
+  }
+
+  private handleHuaweiButtonError(message: string): void {
+    const traceId = this.createLoginTraceId('button_error');
+    const code = parseHuaweiLoginErrorCodeFromMessage(message);
+    hilog.warn(
+      LoginPage.LOG_DOMAIN,
+      LoginPage.LOG_TAG,
+      `[LOGIN_TRACE][page] button error message=${message}, code=${code}, trace=${traceId}`
+    );
+    if (!this.ensureAgreement()) {
+      hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] block fallback by agreement trace=${traceId}`);
+      return;
+    }
+    if (shouldUseHuaweiApiFallbackByCode(code)) {
+      hilog.info(
+        LoginPage.LOG_DOMAIN,
+        LoginPage.LOG_TAG,
+        `[LOGIN_TRACE][page] trigger api_fallback by code=1001502003, trace=${traceId}`
+      );
+      void this.loginWithHuaweiApiFallback();
+      return;
+    }
+    this.toast(`鍗庝负璐﹀彿鐧诲綍澶辫触锛?{message}`);
+  }
+
   private async loginWithHuaweiButton(credential: HuaweiCredential): Promise<void> {
     const traceId = this.createLoginTraceId('button');
     const generation = this.beginLogin('huawei');
@@ -229,6 +258,7 @@ struct LoginPage {
 
   private async loginAsGuest(): Promise<void> {
     const traceId = this.createLoginTraceId('guest');
+    const startedAt = Date.now();
     const generation = this.beginLogin('guest', true);
     if (generation < 0) {
       hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] ignore duplicated loginAsGuest trace=${traceId}`);
@@ -243,7 +273,13 @@ struct LoginPage {
     this.authFacade.bindContext(hostContext);
     let result = new AuthResult<UserSession>();
     try {
+      hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] guest_login start trace=${traceId}`);
       result = await this.authFacade.explicitGuestLogin();
+      hilog.info(
+        LoginPage.LOG_DOMAIN,
+        LoginPage.LOG_TAG,
+        `[LOGIN_TRACE][page] guest_login facade_done elapsedMs=${Date.now() - startedAt}, success=${result.success ? 1 : 0}, source=${result.source}, trace=${traceId}`
+      );
     } catch (error) {
       if (!this.isCurrentLogin(generation)) {
         return;
@@ -268,8 +304,15 @@ struct LoginPage {
       return;
     }
     hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] guest_login success source=${result.source}, trace=${traceId}`);
+    const routeStartedAt = Date.now();
+    hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] guest_login route_start elapsedMs=${routeStartedAt - startedAt}, trace=${traceId}`);
     this.toast('游客登录成功');
     await this.replaceUrl('pages/PlanListPage');
+    hilog.info(
+      LoginPage.LOG_DOMAIN,
+      LoginPage.LOG_TAG,
+      `[LOGIN_TRACE][page] guest_login route_done routeMs=${Date.now() - routeStartedAt}, totalMs=${Date.now() - startedAt}, trace=${traceId}`
+    );
   }
 
   build() {
@@ -305,8 +348,7 @@ struct LoginPage {
           Checkbox()
             .select(this.agreementAccepted)
             .onChange((value: boolean) => {
-              this.agreementAccepted = value;
-              hilog.info(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] agreement checkbox changed=${value ? 1 : 0}`);
+              this.handleAgreementCheckboxChange(value);
             })
           Text('我已阅读并同意《用户协议》《隐私政策》')
             .fontSize(12)
@@ -321,27 +363,7 @@ struct LoginPage {
             void this.loginWithHuaweiButton(credential);
           },
           onError: (message: string) => {
-            const traceId = this.createLoginTraceId('button_error');
-            const code = parseHuaweiLoginErrorCodeFromMessage(message);
-            hilog.warn(
-              LoginPage.LOG_DOMAIN,
-              LoginPage.LOG_TAG,
-              `[LOGIN_TRACE][page] button error message=${message}, code=${code}, trace=${traceId}`
-            );
-            if (!this.ensureAgreement()) {
-              hilog.warn(LoginPage.LOG_DOMAIN, LoginPage.LOG_TAG, `[LOGIN_TRACE][page] block fallback by agreement trace=${traceId}`);
-              return;
-            }
-            if (shouldUseHuaweiApiFallbackByCode(code)) {
-              hilog.info(
-                LoginPage.LOG_DOMAIN,
-                LoginPage.LOG_TAG,
-                `[LOGIN_TRACE][page] trigger api_fallback by code=1001502003, trace=${traceId}`
-              );
-              void this.loginWithHuaweiApiFallback();
-              return;
-            }
-            this.toast(`华为账号登录失败：${message}`);
+            this.handleHuaweiButtonError(message);
           }
         })
 

@@ -141,8 +141,7 @@ export class WeatherContextBuilder {
     const bindings: PlanNodeWeatherBinding[] = [];
     const eventMap: Map<number, PlanNodeWeatherBinding> = new Map<number, PlanNodeWeatherBinding>();
     sourceEvents.forEach((event: EventEntity) => {
-      const pointKey = pointKeyByEventId.get(event.id) ??
-        AmapWeatherService.toPointKey(event.latitude, event.longitude, event.dynamic_start_time > 0 ? event.dynamic_start_time : Date.now());
+      const pointKey = pointKeyByEventId.get(event.id) as string;
       const info = weatherMap.get(pointKey);
       const snapshot = info ? this.weatherService.toSnapshotByPoint(pointKey, info) : undefined;
       const risk = this.riskEvaluator.evaluateNodeSuitability(event, snapshot, pref);
@@ -397,7 +396,7 @@ export class WeatherContextBuilder {
           replacementCandidates: replacementCandidates
         }
       });
-    } else if (context.executionRiskTags && context.executionRiskTags.length > 0) {
+    } else {
       suggestions.push({
         suggestionId: `wx_info_${context.generatedAt}`,
         level: 'INFO',
@@ -753,9 +752,6 @@ export class WeatherContextBuilder {
     let prev: WeatherDayWindow | null = null;
     sortedOffsets.forEach((offset: number) => {
       const items = grouped.get(offset) ?? [];
-      if (items.length === 0) {
-        return;
-      }
       const score = Math.round(items.reduce((sum: number, item: PlanNodeWeatherBinding) => sum + item.suitabilityScore, 0) / items.length);
       const riskTagSet = new Set<string>();
       items.forEach((item: PlanNodeWeatherBinding) => item.riskTags.forEach((tag: string) => riskTagSet.add(tag)));

@@ -318,10 +318,7 @@ export class PlanShareImageService {
       if (!buckets.has(day)) {
         buckets.set(day, []);
       }
-      const current = buckets.get(day);
-      if (current) {
-        current.push(eventItem);
-      }
+      buckets.get(day)!.push(eventItem);
     }
 
     const entries = Array.from(buckets.entries()).sort((left, right) => left[0] - right[0]);

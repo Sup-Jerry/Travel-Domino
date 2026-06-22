@@ -9,6 +9,17 @@ export function canStartPlanJsonImport(inputJson: string): boolean {
   return normalizePlanJsonImportInput(inputJson).length > 0;
 }
 
+export function cancelPlanJsonImport(
+  importing: boolean,
+  cancelToken: PlanJsonImportCancelToken | null,
+  close: () => void
+): void {
+  if (importing && cancelToken) {
+    cancelToken.cancel();
+  }
+  close();
+}
+
 @CustomDialog
 export struct PlanJsonImportDialog {
   controller: CustomDialogController;
@@ -79,10 +90,7 @@ export struct PlanJsonImportDialog {
           .fontColor($r('app.color.text_secondary'))
           .width('42%')
           .onClick(() => {
-            if (this.importing && this.importCancelToken) {
-              this.importCancelToken.cancel();
-            }
-            this.controller.close();
+            cancelPlanJsonImport(this.importing, this.importCancelToken, (): void => this.controller.close());
           })
 
         Button('开始导入')

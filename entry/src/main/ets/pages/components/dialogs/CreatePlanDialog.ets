@@ -2,6 +2,9 @@
 import { ThemeCenter } from '../../../common/utils/ThemeCenter';
 import { DomainConstants } from '../../../common/constants/DomainConstants';
 
+type CreatePlanCreatedAction = (planId: number, title: string) => void;
+type CreatePlanAction = (title: string, startDate: number) => Promise<number>;
+
 export function formatCreatePlanDateText(selectedDate: Date): string {
   return `${selectedDate.getFullYear()}/${selectedDate.getMonth() + 1}/${selectedDate.getDate()}`;
 }
@@ -13,8 +16,8 @@ export function canCreatePlanWithTitle(title: string): boolean {
 @CustomDialog
 export struct CreatePlanDialog {
   controller: CustomDialogController;
-  onPlanCreated: (planId: number, title: string) => void = () => {};
-  onCreatePlan: (title: string, startDate: number) => Promise<number> = async (_title: string, _startDate: number) => -1;
+  onPlanCreated: CreatePlanCreatedAction = () => {};
+  onCreatePlan: CreatePlanAction = async (_title: string, _startDate: number) => -1;
 
   @State title: string = '';
   // [Phase 2] 默认为今天
@@ -23,6 +26,17 @@ export struct CreatePlanDialog {
 
   private getPalette() {
     return ThemeCenter.getPalette(this.effectiveTheme);
+  }
+
+  async confirmCreatePlan(): Promise<void> {
+    if (!canCreatePlanWithTitle(this.title)) {
+      return;
+    }
+    const newPlanId = await this.onCreatePlan(this.title, this.selectedDate.getTime());
+    if (newPlanId > 0) {
+      this.onPlanCreated(newPlanId, this.title);
+      this.controller.close();
+    }
   }
 
   build() {
@@ -94,13 +108,7 @@ export struct CreatePlanDialog {
           .backgroundColor(this.getPalette().primary)
           .fontColor(Color.White)
           .onClick(async () => {
-            if (canCreatePlanWithTitle(this.title)) {
-              const newPlanId = await this.onCreatePlan(this.title, this.selectedDate.getTime());
-              if (newPlanId > 0) {
-                this.onPlanCreated(newPlanId, this.title);
-                this.controller.close();
-              }
-            }
+            await this.confirmCreatePlan();
           })
           .width('40%')
       }

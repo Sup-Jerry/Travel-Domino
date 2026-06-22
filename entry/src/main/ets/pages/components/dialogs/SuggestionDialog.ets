@@ -3,6 +3,7 @@
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
 const TAG = 'SuggestionDialog';
+type SuggestionDialogVoidAction = () => void;
 
 
 export function shouldShowSuggestionSummary(summaryText: string): boolean {
@@ -29,9 +30,9 @@ export struct SuggestionDialog {
   summaryText: string = '';
 
   // 回调
-  onConfirm: () => void = () => {};
-  onCancel: () => void = () => {};
-  onBack: () => void = () => {}; // ✅ [新增] 返回上一级菜单
+  onConfirm: SuggestionDialogVoidAction = () => {};
+  onCancel: SuggestionDialogVoidAction = () => {};
+  onBack: SuggestionDialogVoidAction = () => {}; // ✅ [新增] 返回上一级菜单
 
   build() {
     Column() {

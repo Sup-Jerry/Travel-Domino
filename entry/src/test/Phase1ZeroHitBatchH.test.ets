@@ -1,6 +1,25 @@
 import { describe, expect, it } from '@ohos/hypium';
+import { drawing } from '@kit.ArkGraphics2D';
 import { image } from '@kit.ImageKit';
 import { PlanShareImageService, ShareEventItem, ShareImageOptions } from '../main/ets/domain/services/PlanShareImageService';
+
+interface PlanShareImageServicePrivateH {
+  drawEventSection: (canvas: drawing.Canvas, events: ShareEventItem[], startY: number) => number;
+  drawDayBlock: (canvas: drawing.Canvas, dayGroup: Object, startY: number, maxY: number) => number;
+  drawText: (canvas: drawing.Canvas, text: string, x: number, y: number, size: number, color: Object) => void;
+}
+
+interface DayGroupH {
+  dayOffset: number;
+  events: ShareEventItem[];
+}
+
+interface RgbaColorH {
+  alpha: number;
+  red: number;
+  green: number;
+  blue: number;
+}
 
 async function createQrPixelMap(): Promise<image.PixelMap> {
   const width = 8;
@@ -63,14 +82,21 @@ function buildManyEvents(): ShareEventItem[] {
   return events;
 }
 
+async function createCanvasH(): Promise<drawing.Canvas> {
+  const map = await createQrPixelMap();
+  return new drawing.Canvas(map);
+}
+
 export default function phase1ZeroHitBatchHTest() {
   describe('phase1ZeroHitBatchHTest', () => {
     it('normal: plan_share_image_should_render_with_basic_events', 0, async () => {
       // Arrange
       const qr = await createQrPixelMap();
       const options = buildOptions(qr);
+
       // Act
       const rendered = await PlanShareImageService.renderShareImage(options);
+
       // Assert
       expect(rendered !== null).assertTrue();
       expect(rendered === qr).assertFalse();
@@ -85,8 +111,10 @@ export default function phase1ZeroHitBatchHTest() {
       options.totalDays = 0;
       options.totalEvents = -2;
       options.events = [];
+
       // Act
       const rendered = await PlanShareImageService.renderShareImage(options);
+
       // Assert
       expect(rendered !== null).assertTrue();
     });
@@ -96,8 +124,10 @@ export default function phase1ZeroHitBatchHTest() {
       const qr = await createQrPixelMap();
       const options = buildOptions(qr);
       options.events = [createEvent(-5, '07:00', 'negative-day')];
+
       // Act
       const rendered = await PlanShareImageService.renderShareImage(options);
+
       // Assert
       expect(rendered !== null).assertTrue();
     });
@@ -109,8 +139,10 @@ export default function phase1ZeroHitBatchHTest() {
       options.events = buildManyEvents();
       options.totalDays = 10;
       options.totalEvents = options.events.length;
+
       // Act
       const rendered = await PlanShareImageService.renderShareImage(options);
+
       // Assert
       expect(rendered !== null).assertTrue();
     });
@@ -119,8 +151,10 @@ export default function phase1ZeroHitBatchHTest() {
       // Arrange
       const qr = await createQrPixelMap();
       const options = buildOptions(qr);
+
       // Act
       const rendered = await PlanShareImageService.renderShareImage(options);
+
       // Assert
       expect(options.qrCodePixelMap === qr).assertTrue();
       expect(rendered === qr).assertFalse();
@@ -130,13 +164,99 @@ export default function phase1ZeroHitBatchHTest() {
       // Arrange
       const qr = await createQrPixelMap();
       const options = buildOptions(qr);
-      let ok = false;
+
       // Act
       const first = await PlanShareImageService.renderShareImage(options);
       options.authorName = '';
       options.events = [createEvent(0, '12:00', 'single')];
       const second = await PlanShareImageService.renderShareImage(options);
-      ok = first !== null && second !== null;
+
+      // Assert
+      expect(first !== null && second !== null).assertTrue();
+    });
+
+    it('boundary: plan_share_image_should_stop_rendering_days_when_start_y_is_already_near_footer', 0, async () => {
+      // Arrange
+      const privateApi = PlanShareImageService as Object as PlanShareImageServicePrivateH;
+      const canvas = await createCanvasH();
+      const events = [createEvent(0, '09:00', 'first-day')];
+
+      // Act
+      const endY = privateApi.drawEventSection(canvas, events, 1100);
+
+      // Assert
+      expect(endY).assertEqual(1100);
+    });
+
+    it('boundary: plan_share_image_should_render_omitted_hint_when_day_block_is_clipped', 0, async () => {
+      // Arrange
+      const privateApi = PlanShareImageService as Object as PlanShareImageServicePrivateH;
+      const canvas = await createCanvasH();
+      const dayGroup: DayGroupH = {
+        dayOffset: 0,
+        events: buildManyEvents().slice(0, 10)
+      };
+
+      // Act
+      const bottom = privateApi.drawDayBlock(canvas, dayGroup as Object, 0, 690);
+
+      // Assert
+      expect(bottom).assertEqual(690);
+    });
+
+    it('boundary: plan_share_image_should_ignore_blank_text_without_throwing', 0, async () => {
+      // Arrange
+      const privateApi = PlanShareImageService as Object as PlanShareImageServicePrivateH;
+      const canvas = await createCanvasH();
+      const color: RgbaColorH = { alpha: 255, red: 0, green: 0, blue: 0 };
+
+      // Act
+      privateApi.drawText(canvas, '   ', 0, 0, 20, color as Object);
+
+      // Assert
+      expect(true).assertTrue();
+    });
+
+    it('boundary: plan_share_image_should_stop_rendering_days_when_start_y_is_already_near_footer', 0, async () => {
+      // Arrange
+      const privateApi = PlanShareImageService as Object as PlanShareImageServicePrivateH;
+      const canvas = await createCanvasH();
+      const events = [createEvent(0, '09:00', 'first-day')];
+
+      // Act
+      const endY = privateApi.drawEventSection(canvas, events, 1100);
+
+      // Assert
+      expect(endY).assertEqual(1100);
+    });
+
+    it('boundary: plan_share_image_should_render_omitted_hint_when_day_block_is_clipped', 0, async () => {
+      // Arrange
+      const privateApi = PlanShareImageService as Object as PlanShareImageServicePrivateH;
+      const canvas = await createCanvasH();
+      const dayGroup: DayGroupH = {
+        dayOffset: 0,
+        events: buildManyEvents().slice(0, 10)
+      };
+
+      // Act
+      const bottom = privateApi.drawDayBlock(canvas, dayGroup as Object, 0, 690);
+
+      // Assert
+      expect(bottom).assertEqual(690);
+    });
+
+    it('boundary: plan_share_image_should_ignore_blank_text_without_throwing', 0, async () => {
+      // Arrange
+      const privateApi = PlanShareImageService as Object as PlanShareImageServicePrivateH;
+      const canvas = await createCanvasH();
+      const color: RgbaColorH = { alpha: 255, red: 0, green: 0, blue: 0 };
+      let ok = false;
+
+      // Act
+      privateApi.drawText(canvas, '   ', 0, 0, 20, color as Object);
+      ok = true;
+
       // Assert
       expect(ok).assertTrue();
     });

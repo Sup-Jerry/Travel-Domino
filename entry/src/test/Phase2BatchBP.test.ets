@@ -662,6 +662,30 @@ export default function phase2BatchBPTest() {
       expect(gaps[0].id).assertEqual(13);
     });
 
+    it('regression: distribution_service_should_sort_multiple_valid_gaps_by_gap_minutes_desc', 0, () => {
+      // Arrange
+      // Act
+      // Assert
+      const host = new DistributionHostBP();
+      const first = createEventBP(15, 'bp_day0_first_anchor');
+      const smallerGap = createEventBP(16, 'bp_day0_gap_smaller');
+      const largerGap = createEventBP(17, 'bp_day0_gap_larger');
+      first.day_offset = 0;
+      smallerGap.day_offset = 0;
+      largerGap.day_offset = 0;
+      smallerGap.has_gap = true;
+      smallerGap.gap_minutes = 35;
+      largerGap.has_gap = true;
+      largerGap.gap_minutes = 50;
+      host.events = [first, smallerGap, largerGap];
+
+      const gaps = new TimelineDistributionService(host).getSortedGaps();
+
+      expect(gaps.length).assertEqual(2);
+      expect(gaps[0].id).assertEqual(17);
+      expect(gaps[1].id).assertEqual(16);
+    });
+
     it('invalid: distribution_service_should_skip_auto_distribution_when_no_unlocked_candidate', 0, async () => {
       // Arrange
       // Act

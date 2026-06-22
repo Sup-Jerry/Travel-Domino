@@ -14,6 +14,12 @@ import {
   PaceLevel,
   PreferenceType
 } from '../main/ets/domain/strategy/TravelStrategyDimensions';
+import { UserProfileService } from '../main/ets/domain/strategy/UserProfileService';
+
+class DialogControllerMockAiInput {
+  close(): void {
+  }
+}
 
 interface AiInputDialogPaletteTest {
   textPrimary: Object;
@@ -31,6 +37,7 @@ interface AiInputDialogParamsTest {
 }
 
 interface AiInputDialogPrivateTest {
+  controller?: DialogControllerMockAiInput;
   hasAiHistory: boolean;
   currentStrategyMode: number;
   initialPrompt: string;
@@ -54,6 +61,8 @@ interface AiInputDialogPrivateTest {
   aboutToAppear(): void;
   loadRecommendation(): Promise<void>;
   getLoadingText(): string;
+  initialRender(): void;
+  setController(controller: DialogControllerMockAiInput): void;
 }
 
 function buildAiStrategy(
@@ -72,6 +81,20 @@ function buildAiStrategy(
 
 export default function aiInputDialogHelperTest() {
   describe('unit_test_case_generator_autofill_AiInputDialogHelper', () => {
+    it('combined: ai_input_dialog_set_controller_should_replace_controller_reference', 0, () => {
+      // Arrange
+      const page = new AiInputDialog(undefined, {} as LocalStorage) as Object as AiInputDialogPrivateTest;
+      const first = new DialogControllerMockAiInput();
+      const second = new DialogControllerMockAiInput();
+      page.controller = first;
+
+      // Act
+      page.setController(second);
+
+      // Assert
+      expect(page.controller === second).assertTrue();
+    });
+
     it('normal: ai_input_strategy_mode_should_keep_valid_builtin_mode', 0, () => {
       // Arrange
       const mode = 2;
@@ -187,6 +210,249 @@ export default function aiInputDialogHelperTest() {
       expect(palette.textPrimary).assertEqual(ThemeCenter.getPalette('dark').textPrimary);
       expect(palette.primary).assertEqual(ThemeCenter.getPalette('dark').primary);
       expect(palette.cardBgSoft).assertEqual(ThemeCenter.getPalette('dark').cardBgSoft);
+    });
+
+    it('normal: ai_input_dialog_initial_render_should_support_recommendation_and_custom_strategy_branch', 0, () => {
+      // Arrange
+      const page = new AiInputDialog(undefined, {} as LocalStorage) as Object as AiInputDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.inputText = '西安两日游';
+      page.selectedStrategy = -1;
+      page.useCustomStrategy = true;
+      page.strategyTouched = true;
+      page.customStrategy = buildAiStrategy(DensityLevel.HIGH, PaceLevel.COMPACT, PreferenceType.CULTURE, EnergyLevel.HIGH);
+      page.recommendHint = '推荐偏文化路线';
+      page.recommendedStrategy = buildAiStrategy(DensityLevel.MEDIUM, PaceLevel.BALANCED, PreferenceType.FOOD, EnergyLevel.MEDIUM);
+      page.isLoading = false;
+      page.effectiveTheme = 'dark';
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: ai_input_dialog_initial_render_should_support_loading_and_builtin_strategy_branch', 0, () => {
+      // Arrange
+      const page = new AiInputDialog(undefined, {} as LocalStorage) as Object as AiInputDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.inputText = '';
+      page.selectedStrategy = 1;
+      page.useCustomStrategy = false;
+      page.strategyTouched = false;
+      page.recommendHint = '';
+      page.recommendedStrategy = null;
+      page.isLoading = true;
+      page.effectiveTheme = 'light';
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('normal: ai_input_dialog_load_recommendation_should_apply_hint_and_strategy_when_profile_available', 0,
+      async () => {
+        // Arrange
+        const page = new AiInputDialog(undefined, {} as LocalStorage) as Object as AiInputDialogPrivateTest;
+        const recommended = buildAiStrategy(
+          DensityLevel.LOW,
+          PaceLevel.BALANCED,
+          PreferenceType.FOOD,
+          EnergyLevel.MEDIUM
+        );
+        const originalHint = Reflect.get(UserProfileService as Object, 'getRecommendationHint') as () => Promise<string>;
+        const originalStrategy = Reflect.get(UserProfileService as Object, 'getRecommendedStrategy') as
+          () => Promise<ComposableStrategy | null>;
+        Reflect.set(UserProfileService as Object, 'getRecommendationHint', async (): Promise<string> => '偏美食路线');
+        Reflect.set(UserProfileService as Object, 'getRecommendedStrategy', async (): Promise<ComposableStrategy> =>
+          recommended);
+
+        try {
+          // Act
+          await page.loadRecommendation();
+
+          // Assert
+          expect(page.recommendHint).assertEqual('偏美食路线');
+          expect(page.recommendedStrategy !== null).assertTrue();
+          expect((page.recommendedStrategy as ComposableStrategy).preference).assertEqual(PreferenceType.FOOD);
+        } finally {
+          Reflect.set(UserProfileService as Object, 'getRecommendationHint', originalHint);
+          Reflect.set(UserProfileService as Object, 'getRecommendedStrategy', originalStrategy);
+        }
+      });
+
+    it('boundary: ai_input_dialog_load_recommendation_should_clear_state_when_profile_service_fails', 0,
+      async () => {
+        // Arrange
+        const page = new AiInputDialog(undefined, {} as LocalStorage) as Object as AiInputDialogPrivateTest;
+        const originalHint = Reflect.get(UserProfileService as Object, 'getRecommendationHint') as () => Promise<string>;
+        const originalStrategy = Reflect.get(UserProfileService as Object, 'getRecommendedStrategy') as
+          () => Promise<ComposableStrategy | null>;
+        page.recommendHint = '旧提示';
+        page.recommendedStrategy = buildAiStrategy(
+          DensityLevel.HIGH,
+          PaceLevel.COMPACT,
+          PreferenceType.CULTURE,
+          EnergyLevel.HIGH
+        );
+        Reflect.set(UserProfileService as Object, 'getRecommendationHint', async (): Promise<string> => {
+          throw new Error('profile_hint_failed');
+        });
+
+        try {
+          // Act
+          await page.loadRecommendation();
+
+          // Assert
+          expect(page.recommendHint).assertEqual('');
+          expect(page.recommendedStrategy === null).assertTrue();
+        } finally {
+          Reflect.set(UserProfileService as Object, 'getRecommendationHint', originalHint);
+          Reflect.set(UserProfileService as Object, 'getRecommendedStrategy', originalStrategy);
+        }
+      });
+
+    it('boundary: ai_input_dialog_about_to_appear_should_use_current_builtin_mode_when_not_forcing_initial_selection', 0,
+      () => {
+        // Arrange
+        const page = new AiInputDialog(undefined, {} as LocalStorage) as Object as AiInputDialogPrivateTest;
+        page.setInitiallyProvidedValue({
+          forceUseInitialSelection: false,
+          currentStrategyMode: 1,
+          initialPrompt: '   ',
+          initialSelectedStrategyMode: -1
+        });
+
+        // Act
+        page.aboutToAppear();
+
+        // Assert
+        expect(page.selectedStrategy).assertEqual(1);
+        expect(page.useCustomStrategy).assertFalse();
+        expect(page.inputText).assertEqual('');
+      });
+
+    it('combined: ai_input_dialog_about_to_appear_should_enter_custom_mode_when_current_mode_is_custom_without_initial_strategy',
+      0, () => {
+        // Arrange
+        const page = new AiInputDialog(undefined, {} as LocalStorage) as Object as AiInputDialogPrivateTest;
+        page.setInitiallyProvidedValue({
+          forceUseInitialSelection: false,
+          currentStrategyMode: -1,
+          initialPrompt: '  keep custom  ',
+          initialSelectedStrategyMode: 2
+        });
+
+        // Act
+        page.aboutToAppear();
+
+        // Assert
+        expect(page.selectedStrategy).assertEqual(-1);
+        expect(page.useCustomStrategy).assertTrue();
+        expect(page.inputText).assertEqual('keep custom');
+      });
+
+    it('normal: ai_input_dialog_about_to_appear_should_apply_forced_builtin_initial_selection', 0, () => {
+      // Arrange
+      const page = new AiInputDialog(undefined, {} as LocalStorage) as Object as AiInputDialogPrivateTest;
+      page.setInitiallyProvidedValue({
+        forceUseInitialSelection: true,
+        currentStrategyMode: 0,
+        initialPrompt: '  builtin keep  ',
+        initialSelectedStrategyMode: 2
+      });
+
+      // Act
+      page.aboutToAppear();
+
+      // Assert
+      expect(page.selectedStrategy).assertEqual(2);
+      expect(page.useCustomStrategy).assertFalse();
+      expect(page.inputText).assertEqual('builtin keep');
+      expect(page.strategyTouched).assertFalse();
+    });
+
+    it('boundary: ai_input_dialog_about_to_appear_should_keep_default_custom_strategy_when_forced_custom_has_no_payload', 0,
+      () => {
+        // Arrange
+        const page = new AiInputDialog(undefined, {} as LocalStorage) as Object as AiInputDialogPrivateTest;
+        page.setInitiallyProvidedValue({
+          forceUseInitialSelection: true,
+          currentStrategyMode: 1,
+          initialPrompt: '',
+          initialSelectedStrategyMode: -1
+        });
+
+        // Act
+        page.aboutToAppear();
+
+        // Assert
+        expect(page.selectedStrategy).assertEqual(-1);
+        expect(page.useCustomStrategy).assertTrue();
+        expect(page.customStrategy.density).assertEqual(DensityLevel.MEDIUM);
+        expect(page.customStrategy.pace).assertEqual(PaceLevel.BALANCED);
+      });
+
+    it('normal: ai_input_dialog_initial_render_should_support_builtin_history_regenerate_branch', 0, () => {
+      // Arrange
+      const page = new AiInputDialog(undefined, {} as LocalStorage) as Object as AiInputDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.inputText = '继续优化西安三日游';
+      page.selectedStrategy = 1;
+      page.useCustomStrategy = false;
+      page.strategyTouched = false;
+      page.hasAiHistory = true;
+      page.currentStrategyMode = 1;
+      page.recommendHint = '';
+      page.recommendedStrategy = null;
+      page.isLoading = false;
+      page.effectiveTheme = 'dark';
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: ai_input_dialog_initial_render_should_support_non_history_builtin_default_branch', 0, () => {
+      // Arrange
+      const page = new AiInputDialog(undefined, {} as LocalStorage) as Object as AiInputDialogPrivateTest;
+      let threw = false;
+
+      // Act
+      page.inputText = '  ';
+      page.selectedStrategy = 0;
+      page.useCustomStrategy = false;
+      page.strategyTouched = false;
+      page.hasAiHistory = false;
+      page.recommendHint = '';
+      page.recommendedStrategy = null;
+      page.isLoading = false;
+      page.effectiveTheme = 'light';
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
     });
   });
 }

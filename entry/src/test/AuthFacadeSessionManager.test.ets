@@ -56,37 +56,117 @@ export default function authFacadeSessionManagerTest() {
     });
   });
   describe('unit_test_case_generator_autofill_AuthFacadeSessionManager', () => {
-    it('boundary: td-20260411-auto-AuthFacadeSessionManager', 0, () => {
+    it('boundary: session_manager_should_trim_current_account_id_and_preserve_guest_session', 0, () => {
       // Arrange
-      const actual = true;
+      const manager = SessionManager.getInstance();
+      manager.clear();
+
+      const session = new UserSession();
+      session.accountId = '  guest_acc  ';
+      session.userId = 'guest_user';
+      session.isGuest = true;
+      session.loginMethod = 'guest';
+      session.accessToken = '';
+      session.refreshToken = '';
+      session.sessionId = '';
+      session.expireAt = Date.now() + 60_000;
+
       // Act
-      const passed = actual;
+      manager.saveSession(session);
+      const loaded = manager.restoreSession();
+
       // Assert
-      expect(passed).assertTrue();
+      expect(loaded !== null).assertTrue();
+      expect(loaded?.isGuest).assertTrue();
+      expect(String(loaded?.loginType || '')).assertEqual('guest');
+      expect(manager.getCurrentAccountId()).assertEqual('guest_acc');
+      manager.clearSession();
     });
-    it('conflict: td-20260411-auto-AuthFacadeSessionManager', 0, () => {
+
+    it('conflict: session_manager_should_hide_expired_session_even_when_payload_exists', 0, () => {
       // Arrange
-      const actual = true;
+      const manager = SessionManager.getInstance();
+      manager.clear();
+
+      const session = new UserSession();
+      session.accountId = 'expired_acc';
+      session.userId = 'expired_user';
+      session.accessToken = 'expired_token';
+      session.refreshToken = 'expired_refresh';
+      session.sessionId = 'expired_session';
+      session.expireAt = Date.now() - 1_000;
+      manager.saveSession(session);
+
       // Act
-      const passed = actual;
+      const loaded = manager.restoreSession();
+
       // Assert
-      expect(passed).assertTrue();
+      expect(loaded === null).assertTrue();
+      expect(manager.isLoggedIn()).assertFalse();
+      expect(manager.getCurrentAccountId()).assertEqual('');
+      manager.clearSession();
     });
-    it('regression: td-20260411-auto-AuthFacadeSessionManager', 0, () => {
+
+    it('regression: session_manager_should_keep_latest_session_after_overwrite', 0, () => {
       // Arrange
-      const actual = true;
+      const manager = SessionManager.getInstance();
+      manager.clear();
+
+      const first = new UserSession();
+      first.accountId = 'first_acc';
+      first.userId = 'first_user';
+      first.accessToken = 'first_token';
+      first.refreshToken = 'first_refresh';
+      first.sessionId = 'first_session';
+      first.expireAt = Date.now() + 60_000;
+
+      const second = new UserSession();
+      second.accountId = 'second_acc';
+      second.userId = 'second_user';
+      second.accessToken = 'second_token';
+      second.refreshToken = 'second_refresh';
+      second.sessionId = 'second_session';
+      second.expireAt = Date.now() + 120_000;
+
       // Act
-      const passed = actual;
+      manager.saveSession(first);
+      manager.saveSession(second);
+      const loaded = manager.restoreSession();
+
       // Assert
-      expect(passed).assertTrue();
+      expect(loaded !== null).assertTrue();
+      expect(String(loaded?.accountId || '')).assertEqual('second_acc');
+      expect(String(loaded?.accessToken || '')).assertEqual('second_token');
+      expect(String(loaded?.sessionId || '')).assertEqual('second_session');
+      manager.clearSession();
     });
-    it('combined: td-20260411-auto-AuthFacadeSessionManager', 0, () => {
+
+    it('combined: session_manager_should_reset_login_state_after_save_and_clear_sequence', 0, () => {
       // Arrange
-      const actual = true;
+      const manager = SessionManager.getInstance();
+      manager.clear();
+
+      const session = new UserSession();
+      session.accountId = 'combo_acc';
+      session.userId = 'combo_user';
+      session.accessToken = 'combo_token';
+      session.refreshToken = 'combo_refresh';
+      session.sessionId = 'combo_session';
+      session.expireAt = Date.now() + 60_000;
+
       // Act
-      const passed = actual;
+      manager.saveSession(session);
+      const loggedInBeforeClear = manager.isLoggedIn();
+      const accountBeforeClear = manager.getCurrentAccountId();
+      manager.clearSession();
+      const loggedInAfterClear = manager.isLoggedIn();
+      const accountAfterClear = manager.getCurrentAccountId();
+
       // Assert
-      expect(passed).assertTrue();
+      expect(loggedInBeforeClear).assertTrue();
+      expect(accountBeforeClear).assertEqual('combo_acc');
+      expect(loggedInAfterClear).assertFalse();
+      expect(accountAfterClear).assertEqual('');
     });
   });
 }

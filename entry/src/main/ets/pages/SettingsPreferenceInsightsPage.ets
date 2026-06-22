@@ -708,3 +708,7 @@ struct SettingsPreferenceInsightsPage {
     .backgroundColor(this.getThemePalette().pageBg);
   }
 }
+
+export function createSettingsPreferenceInsightsPageForTest(): Object {
+  return new SettingsPreferenceInsightsPage(undefined, {} as LocalStorage);
+}

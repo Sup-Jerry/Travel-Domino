@@ -6,6 +6,8 @@ export interface IndexUnsavedActionTheme {
   cardBg: string;
 }
 
+type IndexUnsavedActionBarVoidAction = () => void;
+
 export function getDefaultIndexUnsavedActionTheme(): IndexUnsavedActionTheme {
   return {
     textPrimary: '#1F2937',
@@ -26,8 +28,8 @@ export struct IndexUnsavedActionBar {
   @Prop marginBottom: number = 96;
   @Prop theme: IndexUnsavedActionTheme = getDefaultIndexUnsavedActionTheme();
 
-  onUndo: () => void = () => {};
-  onSave: () => void = () => {};
+  onUndo: IndexUnsavedActionBarVoidAction = () => {};
+  onSave: IndexUnsavedActionBarVoidAction = () => {};
 
   build() {
     if (shouldShowIndexUnsavedActionBar(this.isVisible)) {
@@ -46,7 +48,7 @@ export struct IndexUnsavedActionBar {
             .fontSize(14)
             .fontColor(this.theme.textSecondary)
             .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-            .onClick(() => this.onUndo());
+            .onClick(this.onUndo);
 
           Line()
             .width(1)
@@ -59,7 +61,7 @@ export struct IndexUnsavedActionBar {
             .fontColor(this.theme.primary)
             .fontWeight(FontWeight.Bold)
             .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-            .onClick(() => this.onSave());
+            .onClick(this.onSave);
         }
       }
       .width('90%')

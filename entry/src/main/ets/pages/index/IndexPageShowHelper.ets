@@ -4,15 +4,21 @@ import { PageDraftRecovery } from '../../common/utils/PageDraftRecovery';
 import { InitDialogData } from './IndexTypes';
 import { TimelineViewModel } from '../../viewmodel/TimelineViewModel';
 
+export type IndexPageShowVoidCallback = () => void;
+export type IndexPageShowReadDraftCallback = (key: string) => string;
+export type IndexPageShowOpenDialogCallback = (initData?: InitDialogData) => void;
+export type IndexPageShowToastCallback = (message: string) => void;
+export type IndexPageShowSanitizeCallback = (error: Object) => string;
+
 export interface IndexPageShowParams {
   vm: TimelineViewModel;
-  onStartArrivalReminderEngine: () => void;
-  onRefreshUnsavedFlag: () => void;
-  onReadDraftStorage: (key: string) => string;
-  onClearDraftStorage: () => void;
-  onOpenDialog: (initData?: InitDialogData) => void;
-  onSafeToast: (message: string) => void;
-  onSanitizeError: (error: Object) => string;
+  onStartArrivalReminderEngine: IndexPageShowVoidCallback;
+  onRefreshUnsavedFlag: IndexPageShowVoidCallback;
+  onReadDraftStorage: IndexPageShowReadDraftCallback;
+  onClearDraftStorage: IndexPageShowVoidCallback;
+  onOpenDialog: IndexPageShowOpenDialogCallback;
+  onSafeToast: IndexPageShowToastCallback;
+  onSanitizeError: IndexPageShowSanitizeCallback;
 }
 
 export class IndexPageShowHelper {

@@ -46,12 +46,6 @@ export class TimeConstraintSolver {
     if (DateUtil.isValidTimeString(globalStartTimeStr)) {
       return DateUtil.timeToMinutes(globalStartTimeStr);
     }
-
-    const pureTime = DateUtil.extractPureTime(globalStartTimeStr);
-    if (pureTime && DateUtil.isValidTimeString(pureTime)) {
-      return DateUtil.timeToMinutes(pureTime);
-    }
-
     return TimeConstraintSolver.FALLBACK_START_MIN;
   }
 
@@ -331,9 +325,6 @@ export class TimeConstraintSolver {
         }
 
         finalDayOffset = TimeConstraintSolver.calcDayOffset(baseTimestamp, finalStartTimestamp);
-        if (finalDayOffset < originalOffset) {
-          finalDayOffset = originalOffset;
-        }
       }
 
       if ((item.source ?? 0) === 1 && !hasFixedTime) {

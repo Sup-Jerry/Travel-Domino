@@ -5,6 +5,59 @@ import { IndexBottomBar } from './IndexBottomBar';
 import { IndexTimelineTheme, IndexTimelineView } from './IndexTimelineView';
 import { IndexUnsavedActionBar, IndexUnsavedActionTheme } from './IndexUnsavedActionBar';
 
+export type IndexScheduleVoidCallback = () => void;
+export type IndexScheduleDayCollapsedCallback = (dayOffset: number) => boolean;
+export type IndexScheduleDayToggleCallback = (dayOffset: number) => void;
+export type IndexScheduleEventCallback = (item: EventEntity) => void;
+export type IndexScheduleTravelModeCallback = (item: EventEntity, mode: number) => void;
+export type IndexScheduleMinutesCallback = (item: EventEntity, minutes: number) => void;
+export type IndexScheduleConflictActionCallback = (
+  item: EventEntity,
+  strategy: ConflictActionStrategy,
+  gapMinutes: number
+) => void;
+
+export interface IndexScheduleTimelineViewProps {
+  groupedEvents: DateGroup[];
+  allEvents: EventEntity[];
+  isArchived: boolean;
+  isCompanionMode: boolean;
+  showWeather: boolean;
+  isPageRefreshing: boolean;
+  gapsCount: number;
+  theme: IndexTimelineTheme;
+  onIsDayCollapsed: IndexScheduleDayCollapsedCallback;
+  onToggleDay: IndexScheduleDayToggleCallback;
+  onRefresh: IndexScheduleVoidCallback;
+  onMoveUp: IndexScheduleEventCallback;
+  onMoveDown: IndexScheduleEventCallback;
+  onMainContentClick: IndexScheduleEventCallback;
+  onTimeClick: IndexScheduleEventCallback;
+  onTravelModeChange: IndexScheduleTravelModeCallback;
+  onManualTravelInput: IndexScheduleMinutesCallback;
+  onCommuteChange: IndexScheduleMinutesCallback;
+  onConflictAction: IndexScheduleConflictActionCallback;
+  onMoveToBacklog: IndexScheduleEventCallback;
+  onDeleteEvent: IndexScheduleEventCallback;
+  onOpenGapOptimize: IndexScheduleVoidCallback;
+}
+
+export interface IndexScheduleBottomBarProps {
+  onFilter: IndexScheduleVoidCallback;
+  onAi: IndexScheduleVoidCallback;
+  onAdd: IndexScheduleVoidCallback;
+  aiEnabled: boolean;
+  addEnabled: boolean;
+}
+
+export interface IndexScheduleUnsavedActionBarProps {
+  isVisible: boolean;
+  marginBottom: number;
+  theme: IndexUnsavedActionTheme;
+  onUndo: IndexScheduleVoidCallback;
+  onSave: IndexScheduleVoidCallback;
+}
+
 export function shouldShowIndexScheduleBottomBar(isCompanionMode: boolean): boolean {
   return !isCompanionMode;
 }
@@ -47,101 +100,113 @@ export struct IndexScheduleArea {
     cardBg: '#FFFFFF'
   };
 
-  onIsDayCollapsed: (dayOffset: number) => boolean = (_dayOffset: number) => false;
-  onToggleDay: (dayOffset: number) => void = (_dayOffset: number) => {};
-  onRefresh: () => void = () => {};
-  onOpenEditDialog: (item: EventEntity) => void = (_item: EventEntity) => {};
-  onOpenTimeEditDialog: (item: EventEntity) => void = (_item: EventEntity) => {};
-  onGapFound: (item: EventEntity) => void = (_item: EventEntity) => {};
-  onResolveConflictAction: (item: EventEntity, strategy: ConflictActionStrategy, gapMinutes: number) => void =
+  onIsDayCollapsed: IndexScheduleDayCollapsedCallback = (_dayOffset: number) => false;
+  onToggleDay: IndexScheduleDayToggleCallback = (_dayOffset: number) => {};
+  onRefresh: IndexScheduleVoidCallback = () => {};
+  onOpenEditDialog: IndexScheduleEventCallback = (_item: EventEntity) => {};
+  onOpenTimeEditDialog: IndexScheduleEventCallback = (_item: EventEntity) => {};
+  onGapFound: IndexScheduleEventCallback = (_item: EventEntity) => {};
+  onResolveConflictAction: IndexScheduleConflictActionCallback =
     (_item: EventEntity, _strategy: ConflictActionStrategy, _gapMinutes: number) => {};
-  onConfirmMoveToBacklog: (item: EventEntity) => void = (_item: EventEntity) => {};
-  onConfirmDeleteEvent: (item: EventEntity) => void = (_item: EventEntity) => {};
-  onOpenGapOptimize: () => void = () => {};
-  onFilter: () => void = () => {};
-  onAi: () => void = () => {};
-  onAdd: () => void = () => {};
-  onUndo: () => void = () => {};
-  onSave: () => void = () => {};
+  onConfirmMoveToBacklog: IndexScheduleEventCallback = (_item: EventEntity) => {};
+  onConfirmDeleteEvent: IndexScheduleEventCallback = (_item: EventEntity) => {};
+  onOpenGapOptimize: IndexScheduleVoidCallback = () => {};
+  onFilter: IndexScheduleVoidCallback = () => {};
+  onAi: IndexScheduleVoidCallback = () => {};
+  onAdd: IndexScheduleVoidCallback = () => {};
+  onUndo: IndexScheduleVoidCallback = () => {};
+  onSave: IndexScheduleVoidCallback = () => {};
+
+  buildTimelineViewProps(): IndexScheduleTimelineViewProps {
+    return {
+      groupedEvents: this.groupedEvents,
+      allEvents: this.allEvents,
+      isArchived: this.isArchived,
+      isCompanionMode: this.isCompanionMode,
+      showWeather: this.showWeather,
+      isPageRefreshing: this.isPageRefreshing,
+      gapsCount: this.gapsCount,
+      theme: this.timelineTheme,
+      onIsDayCollapsed: this.onIsDayCollapsed,
+      onToggleDay: this.onToggleDay,
+      onRefresh: this.onRefresh,
+      onMoveUp: (item: EventEntity) => IndexEventHandlers.handleMoveUp(this.vm, item),
+      onMoveDown: (item: EventEntity) => IndexEventHandlers.handleMoveDown(this.vm, item),
+      onMainContentClick: (item: EventEntity) => {
+        IndexEventHandlers.handleEditItem(this.isArchived, item, (event: EventEntity) => {
+          this.onOpenEditDialog(event);
+        });
+      },
+      onTimeClick: (item: EventEntity) => {
+        IndexEventHandlers.handleTimeClick(this.isArchived, item, (event: EventEntity) => {
+          this.onOpenTimeEditDialog(event);
+        });
+      },
+      onTravelModeChange: (item: EventEntity, mode: number) => IndexEventHandlers.handleTravelModeChange(this.vm, item, mode),
+      onManualTravelInput: (item: EventEntity, minutes: number) => IndexEventHandlers.handleManualTravelInput(this.vm, item, minutes),
+      onCommuteChange: (item: EventEntity, minutes: number) => {
+        IndexEventHandlers.handleCommuteChange(this.vm, item, minutes, this.onGapFound);
+      },
+      onConflictAction: (item: EventEntity, strategy: ConflictActionStrategy, gapMinutes: number) => {
+        IndexEventHandlers.handleDateConflict(
+          this.isArchived,
+          item,
+          strategy,
+          gapMinutes,
+          (event: EventEntity, action: ConflictActionStrategy, gap: number) => {
+            this.onResolveConflictAction(event, action, gap);
+          }
+        );
+      },
+      onMoveToBacklog: (item: EventEntity) => {
+        IndexEventHandlers.handleMoveToBacklog(item, (event: EventEntity) => {
+          this.onConfirmMoveToBacklog(event);
+        });
+      },
+      onDeleteEvent: (item: EventEntity) => {
+        IndexEventHandlers.handleDeleteItem(item, (event: EventEntity) => {
+          this.onConfirmDeleteEvent(event);
+        });
+      },
+      onOpenGapOptimize: this.onOpenGapOptimize
+    };
+  }
+
+  buildBottomBarProps(): IndexScheduleBottomBarProps {
+    return {
+      onFilter: this.onFilter,
+      onAi: this.onAi,
+      onAdd: this.onAdd,
+      aiEnabled: resolveIndexScheduleBottomBarAiEnabled(this.isArchived),
+      addEnabled: resolveIndexScheduleBottomBarAddEnabled(this.isArchived)
+    };
+  }
+
+  buildUnsavedActionBarProps(): IndexScheduleUnsavedActionBarProps {
+    return {
+      isVisible: this.hasUnsavedChanges,
+      marginBottom: resolveIndexScheduleUnsavedMarginBottom(this.isCompanionMode),
+      theme: this.unsavedTheme,
+      onUndo: this.onUndo,
+      onSave: this.onSave
+    };
+  }
 
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
       Column() {
-        IndexTimelineView({
-          groupedEvents: this.groupedEvents,
-          allEvents: this.allEvents,
-          isArchived: this.isArchived,
-          isCompanionMode: this.isCompanionMode,
-          showWeather: this.showWeather,
-          isPageRefreshing: this.isPageRefreshing,
-          gapsCount: this.gapsCount,
-          theme: this.timelineTheme,
-          onIsDayCollapsed: (dayOffset: number) => this.onIsDayCollapsed(dayOffset),
-          onToggleDay: (dayOffset: number) => this.onToggleDay(dayOffset),
-          onRefresh: () => this.onRefresh(),
-          onMoveUp: (item: EventEntity) => IndexEventHandlers.handleMoveUp(this.vm, item),
-          onMoveDown: (item: EventEntity) => IndexEventHandlers.handleMoveDown(this.vm, item),
-          onMainContentClick: (item: EventEntity) => {
-            IndexEventHandlers.handleEditItem(this.isArchived, item, (event: EventEntity) => {
-              this.onOpenEditDialog(event);
-            });
-          },
-          onTimeClick: (item: EventEntity) => {
-            IndexEventHandlers.handleTimeClick(this.isArchived, item, (event: EventEntity) => {
-              this.onOpenTimeEditDialog(event);
-            });
-          },
-          onTravelModeChange: (item: EventEntity, mode: number) => IndexEventHandlers.handleTravelModeChange(this.vm, item, mode),
-          onManualTravelInput: (item: EventEntity, minutes: number) => IndexEventHandlers.handleManualTravelInput(this.vm, item, minutes),
-          onCommuteChange: (item: EventEntity, minutes: number) => {
-            IndexEventHandlers.handleCommuteChange(this.vm, item, minutes, this.onGapFound);
-          },
-          onConflictAction: (item: EventEntity, strategy: ConflictActionStrategy, gapMinutes: number) => {
-            IndexEventHandlers.handleDateConflict(
-              this.isArchived,
-              item,
-              strategy,
-              gapMinutes,
-              (event: EventEntity, action: ConflictActionStrategy, gap: number) => {
-                this.onResolveConflictAction(event, action, gap);
-              }
-            );
-          },
-          onMoveToBacklog: (item: EventEntity) => {
-            IndexEventHandlers.handleMoveToBacklog(item, (event: EventEntity) => {
-              this.onConfirmMoveToBacklog(event);
-            });
-          },
-          onDeleteEvent: (item: EventEntity) => {
-            IndexEventHandlers.handleDeleteItem(item, (event: EventEntity) => {
-              this.onConfirmDeleteEvent(event);
-            });
-          },
-          onOpenGapOptimize: () => this.onOpenGapOptimize()
-        })
+        IndexTimelineView(this.buildTimelineViewProps())
       }
       .width('100%')
       .height('100%')
       .backgroundColor(this.timelineTheme.pageBg)
 
       if (shouldShowIndexScheduleBottomBar(this.isCompanionMode)) {
-        IndexBottomBar({
-          onFilter: () => this.onFilter(),
-          onAi: () => this.onAi(),
-          onAdd: () => this.onAdd(),
-          aiEnabled: resolveIndexScheduleBottomBarAiEnabled(this.isArchived),
-          addEnabled: resolveIndexScheduleBottomBarAddEnabled(this.isArchived)
-        })
+        IndexBottomBar(this.buildBottomBarProps())
           .zIndex(8)
       }
 
-      IndexUnsavedActionBar({
-        isVisible: this.hasUnsavedChanges,
-        marginBottom: resolveIndexScheduleUnsavedMarginBottom(this.isCompanionMode),
-        theme: this.unsavedTheme,
-        onUndo: () => this.onUndo(),
-        onSave: () => this.onSave()
-      })
+      IndexUnsavedActionBar(this.buildUnsavedActionBarProps())
     }
   }
 }

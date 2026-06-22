@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from '@ohos/hypium';
+import { describe, expect, it } from '@ohos/hypium';
 import {
   AiReplanPreviewItem,
   AiReplanPreviewResult,
@@ -41,6 +41,9 @@ import {
   TimelineDistributionService
 } from '../main/ets/domain/timeline/services/TimelineDistributionService';
 import {
+  AdvanceAdjustPreview,
+  AdvanceAdjustPreviewItem,
+  CompressionSelectionContext,
   ITimelineCompressionHost,
   TimelineCompressionService
 } from '../main/ets/domain/timeline/services/TimelineCompressionService';
@@ -806,7 +809,7 @@ export default function phase2BatchATTest() {
         return idSeed;
       });
       profileHooks.set('recordStrategyUsage', async (): Promise<void> => {
-        return;
+        throw new Error('profile_usage_fail_at');
       });
       const service = new TimelineAiService(host);
 
@@ -1124,6 +1127,143 @@ export default function phase2BatchATTest() {
       expect(target.duration).assertEqual(60);
     });
 
+    it('boundary: timeline_distribution_resolve_gap_by_distribution_should_skip_when_capped_add_is_zero', 0, async () => {
+      // Arrange
+      const updateHooks = new StaticHooksForAT(EventRepositoryImpl as Object, ['updateSingleField']);
+      const host = new TimelineDistributionHostForAT();
+      const candidate = createEventForAT(24, 'full');
+      candidate.duration = 240;
+      const gap = createEventForAT(25, 'gap');
+      gap.has_gap = true;
+      gap.gap_minutes = 15;
+      host.events = [candidate, gap];
+      let updateCalls = 0;
+      updateHooks.set('updateSingleField', async (): Promise<void> => {
+        updateCalls += 1;
+      });
+      const service = new TimelineDistributionService(host);
+
+      // Act
+      await service.resolveGapByDistribution(gap);
+
+      // Assert
+      updateHooks.restore();
+      expect(candidate.duration).assertEqual(240);
+      expect(updateCalls).assertEqual(0);
+      expect(host.recalculateFromIndexCalls.length).assertEqual(1);
+      expect(host.recalculateFromIndexCalls[0]).assertEqual(0);
+    });
+
+    it('boundary: timeline_distribution_resolve_gap_by_distribution_should_skip_repository_update_when_item_id_is_zero', 0, async () => {
+      // Arrange
+      const updateHooks = new StaticHooksForAT(EventRepositoryImpl as Object, ['updateSingleField']);
+      const host = new TimelineDistributionHostForAT();
+      const candidate = createEventForAT(0, 'temp');
+      const gap = createEventForAT(26, 'gap');
+      gap.has_gap = true;
+      gap.gap_minutes = 10;
+      host.events = [candidate, gap];
+      let updateCalls = 0;
+      updateHooks.set('updateSingleField', async (): Promise<void> => {
+        updateCalls += 1;
+      });
+      const service = new TimelineDistributionService(host);
+
+      // Act
+      await service.resolveGapByDistribution(gap);
+
+      // Assert
+      updateHooks.restore();
+      expect(candidate.duration).assertEqual(70);
+      expect(updateCalls).assertEqual(0);
+    });
+
+    it('boundary: timeline_distribution_get_safety_cap_should_keep_min_buffer_when_locked_item_buffer_is_larger', 0, () => {
+      // Arrange
+      const host = new TimelineDistributionHostForAT();
+      const candidate = createEventForAT(27, 'cand');
+      const locked = createEventForAT(28, 'locked');
+      const gap = createEventForAT(29, 'gap');
+      locked.lock_status = 1;
+      locked.fixed_start_time = '12:00';
+      gap.gap_minutes = 30;
+      host.events = [candidate, locked, gap];
+      host.naturalArrivalMap.set(1, 10 * 60);
+      const service = new TimelineDistributionService(host);
+
+      // Act
+      const cap = service.getSafetyCap(candidate, gap);
+
+      // Assert
+      expect(cap).assertEqual(30);
+    });
+
+    it('boundary: timeline_distribution_get_sorted_gaps_should_skip_first_item_of_day', 0, () => {
+      // Arrange
+      const host = new TimelineDistributionHostForAT();
+      const item = createEventForAT(30, 'first-gap');
+      item.status = 1;
+      item.has_gap = true;
+      item.gap_minutes = 30;
+      host.events = [item];
+      const service = new TimelineDistributionService(host);
+
+      // Act
+      const gaps = service.getSortedGaps();
+
+      // Assert
+      expect(gaps.length).assertEqual(0);
+    });
+
+    it('boundary: timeline_distribution_apply_distribution_should_skip_when_capped_add_is_zero', 0, async () => {
+      // Arrange
+      const updateHooks = new StaticHooksForAT(EventRepositoryImpl as Object, ['updateSingleField']);
+      const host = new TimelineDistributionHostForAT();
+      const item = createEventForAT(31, 'full-apply');
+      item.duration = 240;
+      host.events = [item];
+      let updateCalls = 0;
+      updateHooks.set('updateSingleField', async (): Promise<void> => {
+        updateCalls += 1;
+      });
+      const service = new TimelineDistributionService(host);
+      const distribution = new Map<number, number>();
+      distribution.set(31, 12);
+
+      // Act
+      await service.applyDistribution(distribution);
+
+      // Assert
+      updateHooks.restore();
+      expect(item.duration).assertEqual(240);
+      expect(updateCalls).assertEqual(0);
+      expect(host.recalculateFromIndexCalls.length).assertEqual(0);
+    });
+
+    it('boundary: timeline_distribution_apply_distribution_should_skip_unknown_event_id_entries', 0, async () => {
+      // Arrange
+      const updateHooks = new StaticHooksForAT(EventRepositoryImpl as Object, ['updateSingleField']);
+      const host = new TimelineDistributionHostForAT();
+      const item = createEventForAT(41, 'known');
+      host.events = [item];
+      let updateCalls = 0;
+      updateHooks.set('updateSingleField', async (): Promise<void> => {
+        updateCalls += 1;
+      });
+      const service = new TimelineDistributionService(host);
+      const distribution = new Map<number, number>();
+      distribution.set(999, 20);
+
+      // Act
+      await service.applyDistribution(distribution);
+
+      // Assert
+      updateHooks.restore();
+      expect(item.duration).assertEqual(60);
+      expect(updateCalls).assertEqual(0);
+      expect(host.recalculateFromIndexCalls.length).assertEqual(0);
+    });
+
     it('conflict: timeline_distribution_calculate_preview_should_break_when_total_weight_is_zero', 0, () => {
       // Arrange
       const host = new TimelineDistributionHostForAT();
@@ -1224,6 +1364,421 @@ export default function phase2BatchATTest() {
       expect(context !== null).assertTrue();
       expect(context?.candidates.length ?? 0).assertEqual(1);
       expect(context?.candidates[0].id ?? 0).assertEqual(32);
+    });
+
+    it('boundary: timeline_compression_build_advance_adjust_context_should_skip_rigid_candidate_inside_same_day_chain', 0, () => {
+      // Arrange
+      const host = new TimelineCompressionHostForAT();
+      const pivot = createEventForAT(34, 'pivot');
+      pivot.lock_status = 1;
+      pivot.fixed_start_time = '08:00';
+      const rigid = createEventForAT(35, 'rigid_middle');
+      rigid.lock_status = 1;
+      rigid.fixed_start_time = '09:00';
+      const movable = createEventForAT(36, 'movable');
+      movable.fixed_start_time = '10:00';
+      const target = createEventForAT(37, 'target');
+      target.fixed_start_time = '11:30';
+      host.events = [pivot, rigid, movable, target];
+      const service = new TimelineCompressionService(host);
+
+      // Act
+      const context = service.buildAdvanceAdjustContext(3);
+
+      // Assert
+      expect(context !== null).assertTrue();
+      expect(context?.candidates.length ?? 0).assertEqual(1);
+      expect(context?.candidates[0].id ?? 0).assertEqual(36);
+    });
+
+    it('normal: timeline_compression_calculate_plan_should_skip_unselectable_candidates', 0, () => {
+      // Arrange
+      const host = new TimelineCompressionHostForAT();
+      const rigid = createEventForAT(41, 'rigid');
+      rigid.lock_status = 1;
+      rigid.fixed_start_time = '08:30';
+      rigid.duration = 90;
+      const flexible = createEventForAT(42, 'flexible');
+      flexible.duration = 120;
+      const target = createEventForAT(43, 'target');
+      target.pre_travel_min = 60;
+      host.events = [rigid, flexible, target];
+      const service = new TimelineCompressionService(host);
+
+      // Act
+      const plan = service.calculateCompressionPlan(2, '08:00', 30);
+
+      // Assert
+      expect(plan.status).assertEqual('OVERLOAD');
+      expect(plan.affectedItems.length).assertEqual(1);
+      expect(plan.affectedItems[0].name).assertEqual('flexible');
+      expect(plan.remainingGapMinutes! > 0).assertTrue();
+    });
+
+    it('boundary: timeline_compression_build_advance_adjust_context_should_fallback_to_global_start_for_invalid_time', 0, () => {
+      // Arrange
+      const host = new TimelineCompressionHostForAT();
+      const invalid = createEventForAT(51, 'invalid_time');
+      invalid.computed_time = 'invalid';
+      invalid.fixed_start_time = '';
+      invalid.duration = 45;
+      const target = createEventForAT(52, 'target');
+      host.events = [invalid, target];
+      const service = new TimelineCompressionService(host);
+
+      // Act
+      const context = service.buildAdvanceAdjustContext(1);
+
+      // Assert
+      expect(context !== null).assertTrue();
+      expect(context?.candidates.length ?? 0).assertEqual(1);
+      expect(context?.candidates[0].currentStartTime ?? '').assertEqual('08:00');
+      expect(context?.candidates[0].currentEndTime ?? '').assertEqual('08:45');
+    });
+
+    it('boundary: timeline_compression_preview_advance_adjust_should_return_forced_gap_when_target_missing', 0, () => {
+      // Arrange
+      const host = new TimelineCompressionHostForAT();
+      const service = new TimelineCompressionService(host);
+
+      // Act
+      const preview = service.previewAdvanceAdjust(0, new Set<number>(), '09:00', 17);
+
+      // Assert
+      expect(preview.valid).assertFalse();
+      expect(preview.requiredGapMinutes).assertEqual(17);
+      expect(preview.remainingGapMinutes).assertEqual(17);
+    });
+
+    it('boundary: timeline_compression_calculate_plan_by_selection_should_return_no_action_when_gap_not_needed', 0, () => {
+      // Arrange
+      const host = new TimelineCompressionHostForAT();
+      const first = createEventForAT(61, 'first');
+      first.duration = 30;
+      const target = createEventForAT(62, 'target');
+      target.pre_travel_min = 0;
+      host.events = [first, target];
+      const service = new TimelineCompressionService(host);
+
+      // Act
+      const plan = service.calculateCompressionPlanBySelection(1, '10:30', new Set<number>([61]), 'RATIO');
+
+      // Assert
+      expect(plan.status).assertEqual('NO_ACTION');
+      expect(plan.affectedItems.length).assertEqual(0);
+    });
+
+    it('boundary: timeline_compression_calculate_plan_by_selection_equal_should_break_after_need_is_consumed', 0, () => {
+      // Arrange
+      const host = new TimelineCompressionHostForAT();
+      const first = createEventForAT(71, 'first');
+      first.duration = 80;
+      const second = createEventForAT(72, 'second');
+      second.duration = 80;
+      const target = createEventForAT(73, 'target');
+      target.pre_travel_min = 0;
+      host.events = [first, second, target];
+      const service = new TimelineCompressionService(host);
+
+      // Act
+      const plan = service.calculateCompressionPlanBySelection(2, '23:00', new Set<number>([71, 72]), 'EQUAL', 1);
+
+      // Assert
+      expect(plan.status).assertEqual('COMPRESS_CONFIRM');
+      expect(plan.affectedItems.length).assertEqual(1);
+      expect(plan.affectedItems[0].name).assertEqual('first');
+      expect(plan.affectedItems[0].newVal).assertEqual(79);
+    });
+
+    it('boundary: timeline_compression_calculate_plan_by_selection_equal_should_skip_exhausted_candidate_on_next_round', 0, () => {
+      // Arrange
+      const host = new TimelineCompressionHostForAT();
+      const almostMin = createEventForAT(74, 'almost_min');
+      almostMin.duration = 21;
+      const flexible = createEventForAT(75, 'flexible');
+      flexible.duration = 80;
+      const target = createEventForAT(76, 'target');
+      host.events = [almostMin, flexible, target];
+      const service = new TimelineCompressionService(host);
+
+      // Act
+      const plan = service.calculateCompressionPlanBySelection(2, '23:00', new Set<number>([74, 75]), 'EQUAL', 3);
+
+      // Assert
+      expect(plan.status).assertEqual('COMPRESS_CONFIRM');
+      expect(plan.affectedItems.length).assertEqual(2);
+      const first = plan.affectedItems.find((item) => item.name === 'almost_min');
+      const second = plan.affectedItems.find((item) => item.name === 'flexible');
+      expect(first?.newVal ?? 0).assertEqual(20);
+      expect(second?.newVal ?? 0).assertEqual(78);
+    });
+
+    it('normal: timeline_compression_apply_advance_adjust_should_skip_zero_id_update_and_recalculate_from_min_index', 0, async () => {
+      // Arrange
+      const updateHooks = new StaticHooksForAT(EventRepositoryImpl as Object, ['updateSingleField']);
+      let updateCalls = 0;
+      updateHooks.set('updateSingleField', async (): Promise<void> => {
+        updateCalls += 1;
+      });
+      const host = new TimelineCompressionHostForAT();
+      const first = createEventForAT(0, 'first_zero');
+      first.fixed_start_time = '10:00';
+      first.computed_time = '10:00';
+      const second = createEventForAT(82, 'second');
+      second.fixed_start_time = '11:10';
+      second.computed_time = '11:10';
+      second.pre_travel_min = 10;
+      const target = createEventForAT(0, 'target_zero');
+      target.fixed_start_time = '13:00';
+      target.computed_time = '13:00';
+      target.lock_status = 1;
+      host.events = [first, second, target];
+      const service = new TimelineCompressionService(host);
+
+      // Act
+      const result = await service.applyAdvanceAdjust(2, new Set<number>([0, 82]), '09:00', 20);
+
+      // Assert
+      updateHooks.restore();
+      expect(result.success).assertTrue();
+      expect(updateCalls).assertEqual(1);
+      expect(host.recalculateFromIndexCalls.length).assertEqual(1);
+      expect(host.recalculateFromIndexCalls[0]).assertEqual(0);
+      expect(first.fixed_start_time).assertEqual('09:00');
+      expect(second.fixed_start_time.length > 0).assertTrue();
+    });
+
+    it('boundary: timeline_compression_apply_advance_adjust_should_skip_invalid_items_and_zero_id_updates', 0, async () => {
+      // Arrange
+      const updateHooks = new StaticHooksForAT(EventRepositoryImpl as Object, ['updateSingleField']);
+      let updateCalls = 0;
+      updateHooks.set('updateSingleField', async (): Promise<void> => {
+        updateCalls += 1;
+      });
+      const host = new TimelineCompressionHostForAT();
+      const target = createEventForAT(91, 'target');
+      target.gap_minutes = 25;
+      target.status = 0;
+      const zeroId = createEventForAT(0, 'zero_id');
+      zeroId.fixed_start_time = '10:10';
+      zeroId.computed_time = '10:10';
+      const persisted = createEventForAT(92, 'persisted');
+      persisted.fixed_start_time = '11:20';
+      persisted.computed_time = '11:20';
+      persisted.gap_minutes = 5;
+      host.events = [target, zeroId, persisted];
+      const service = new TimelineCompressionService(host);
+      Reflect.set(service as Object, 'previewAdvanceAdjust', (
+        _targetIndex: number,
+        _selectedIds: Set<number>,
+        _targetStartTime: string,
+        _forcedGapMinutes?: number
+      ): AdvanceAdjustPreview => {
+        const items: AdvanceAdjustPreviewItem[] = [{
+          id: 91,
+          index: 0,
+          name: 'target',
+          oldStartTime: '10:00',
+          oldEndTime: '11:00',
+          newStartTime: '09:00',
+          newEndTime: '10:00'
+        }, {
+          id: 0,
+          index: 1,
+          name: 'zero_id',
+          oldStartTime: '10:10',
+          oldEndTime: '11:10',
+          newStartTime: '09:10',
+          newEndTime: '10:10'
+        }, {
+          id: 92,
+          index: 2,
+          name: 'persisted',
+          oldStartTime: '11:20',
+          oldEndTime: '12:20',
+          newStartTime: '10:20',
+          newEndTime: '11:20'
+        }];
+        const preview: AdvanceAdjustPreview = {
+          valid: true,
+          message: 'patched-success',
+          selectedCount: 2,
+          shiftMinutes: 15,
+          requiredGapMinutes: 25,
+          remainingGapMinutes: 5,
+          firstNewStartTime: '09:10',
+          lastNewEndTime: '11:20',
+          items: items
+        };
+        return preview;
+      });
+
+      // Act
+      const result = await service.applyAdvanceAdjust(0, new Set<number>([0, 92]), '09:00', 25);
+
+      // Assert
+      updateHooks.restore();
+      expect(result.success).assertTrue();
+      expect(updateCalls).assertEqual(1);
+      expect(result.remainingGapMinutes).assertEqual(25);
+      expect(host.recalculateFromIndexCalls.length).assertEqual(1);
+      expect(host.recalculateFromIndexCalls[0]).assertEqual(0);
+      expect(zeroId.fixed_start_time).assertEqual('09:10');
+      expect(persisted.fixed_start_time).assertEqual('10:20');
+    });
+
+    it('boundary: timeline_compression_apply_advance_adjust_should_skip_recalculate_when_no_valid_scheduled_item_applied', 0, async () => {
+      // Arrange
+      const updateHooks = new StaticHooksForAT(EventRepositoryImpl as Object, ['updateSingleField']);
+      let updateCalls = 0;
+      updateHooks.set('updateSingleField', async (): Promise<void> => {
+        updateCalls += 1;
+      });
+      const host = new TimelineCompressionHostForAT();
+      const target = createEventForAT(101, 'target');
+      target.gap_minutes = 12;
+      host.events = [target];
+      const service = new TimelineCompressionService(host);
+      Reflect.set(service as Object, 'previewAdvanceAdjust', (
+        _targetIndex: number,
+        _selectedIds: Set<number>,
+        _targetStartTime: string,
+        _forcedGapMinutes?: number
+      ): AdvanceAdjustPreview => {
+        return {
+          valid: true,
+          message: 'patched-noop',
+          selectedCount: 1,
+          shiftMinutes: 8,
+          requiredGapMinutes: 12,
+          remainingGapMinutes: 4,
+          firstNewStartTime: '09:00',
+          lastNewEndTime: '10:00',
+          items: [{
+            id: 999,
+            index: 9,
+            name: 'ghost',
+            oldStartTime: '10:00',
+            oldEndTime: '11:00',
+            newStartTime: '09:00',
+            newEndTime: '10:00'
+          }]
+        };
+      });
+
+      // Act
+      const result = await service.applyAdvanceAdjust(0, new Set<number>([999]), '09:00', 12);
+
+      // Assert
+      updateHooks.restore();
+      expect(result.success).assertTrue();
+      expect(updateCalls).assertEqual(0);
+      expect(host.recalculateFromIndexCalls.length).assertEqual(0);
+      expect(result.remainingGapMinutes).assertEqual(12);
+    });
+
+    it('boundary: timeline_compression_calculate_plan_by_selection_equal_should_skip_zero_cap_candidate', 0, () => {
+      // Arrange
+      const host = new TimelineCompressionHostForAT();
+      const minStay = createEventForAT(111, 'min_stay');
+      minStay.duration = 20;
+      const flexible = createEventForAT(112, 'flexible');
+      flexible.duration = 80;
+      const target = createEventForAT(113, 'target');
+      host.events = [minStay, flexible, target];
+      const service = new TimelineCompressionService(host);
+
+      // Act
+      const plan = service.calculateCompressionPlanBySelection(2, '23:00', new Set<number>([111, 112]), 'EQUAL', 1);
+
+      // Assert
+      expect(plan.status).assertEqual('COMPRESS_CONFIRM');
+      expect(plan.affectedItems.length).assertEqual(1);
+      expect(plan.affectedItems[0].name).assertEqual('flexible');
+      expect(plan.affectedItems[0].newVal).assertEqual(79);
+    });
+
+    it('boundary: timeline_compression_calculate_plan_by_selection_ratio_should_break_when_total_weight_is_zero', 0, () => {
+      // Arrange
+      const host = new TimelineCompressionHostForAT();
+      const zeroWeight = createEventForAT(121, 'zero_weight');
+      zeroWeight.duration = 0;
+      const target = createEventForAT(122, 'target');
+      host.events = [zeroWeight, target];
+      const service = new TimelineCompressionService(host);
+
+      // Act
+      const plan = service.calculateCompressionPlanBySelection(1, '23:00', new Set<number>([121]), 'RATIO', 5);
+
+      // Assert
+      expect(plan.status).assertEqual('OVERLOAD');
+      expect(plan.capacityMinutes).assertEqual(0);
+      expect(plan.remainingGapMinutes).assertEqual(5);
+    });
+
+    it('boundary: timeline_compression_calculate_plan_by_selection_ratio_should_skip_zero_cap_active_id', 0, () => {
+      // Arrange
+      const host = new TimelineCompressionHostForAT();
+      const minStay = createEventForAT(131, 'min_stay');
+      minStay.duration = 20;
+      const weighted = createEventForAT(132, 'weighted');
+      weighted.duration = 80;
+      const target = createEventForAT(133, 'target');
+      host.events = [minStay, weighted, target];
+      const service = new TimelineCompressionService(host);
+
+      // Act
+      const plan = service.calculateCompressionPlanBySelection(2, '23:00', new Set<number>([131, 132]), 'RATIO', 5);
+
+      // Assert
+      expect(plan.status).assertEqual('COMPRESS_CONFIRM');
+      expect(plan.affectedItems.length).assertEqual(1);
+      expect(plan.affectedItems[0].name).assertEqual('weighted');
+      expect(plan.affectedItems[0].newVal).assertEqual(75);
+    });
+
+    it('boundary: timeline_compression_calculate_plan_by_selection_ratio_should_break_when_fallback_still_cannot_allocate', 0, () => {
+      // Arrange
+      const host = new TimelineCompressionHostForAT();
+      const candidate = createEventForAT(141, 'candidate');
+      candidate.duration = 20;
+      const target = createEventForAT(142, 'target');
+      host.events = [candidate, target];
+      const service = new TimelineCompressionService(host);
+      Reflect.set(service as Object, 'buildCompressionSelectionContextInternal', (
+        _targetIndex: number,
+        _targetTime: string,
+        _forcedGapMinutes?: number
+      ): CompressionSelectionContext => {
+        const context: CompressionSelectionContext = {
+          targetIndex: 1,
+          targetTime: '23:00',
+          neededGapMinutes: 2,
+          naturalArrivalMinutes: 23 * 60,
+          chainStartIndex: 0,
+          candidates: [{
+            index: 0,
+            id: 141,
+            name: 'candidate',
+            oldVal: 20,
+            minAllowed: 20,
+            maxReducible: 1,
+            isRigid: false,
+            selectable: true,
+            disabledReason: ''
+          }]
+        };
+        return context;
+      });
+
+      // Act
+      const plan = service.calculateCompressionPlanBySelection(1, '23:00', new Set<number>([141]), 'RATIO', 2);
+
+      // Assert
+      expect(plan.status).assertEqual('OVERLOAD');
+      expect(plan.remainingGapMinutes).assertEqual(1);
+      expect(plan.affectedItems.length).assertEqual(1);
+      expect(plan.affectedItems[0].newVal).assertEqual(19);
     });
   });
 }

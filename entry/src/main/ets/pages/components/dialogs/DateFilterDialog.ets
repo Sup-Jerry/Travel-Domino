@@ -1,6 +1,7 @@
 ﻿// 文件路径: ets/pages/components/DateFilterDialog.ets
 
 export type DateFilterDialogAction = 'show_all' | 'select_date' | 'select_range';
+type DateFilterDialogVoidAction = () => void;
 
 export interface DateFilterDialogOption {
   action: DateFilterDialogAction;
@@ -41,10 +42,10 @@ export struct DateFilterDialog {
   controller: CustomDialogController;
 
   // 回调
-  onShowAll: () => void = () => {};
-  onSelectDate: () => void = () => {};
+  onShowAll: DateFilterDialogVoidAction = () => {};
+  onSelectDate: DateFilterDialogVoidAction = () => {};
   // ✅ [新增] 范围选择回调
-  onSelectRange: () => void = () => {};
+  onSelectRange: DateFilterDialogVoidAction = () => {};
 
   build() {
     Column() {

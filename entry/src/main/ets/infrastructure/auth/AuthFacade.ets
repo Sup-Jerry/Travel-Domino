@@ -43,6 +43,9 @@ export class AuthFacade {
     if (!session) {
       return defaultName;
     }
+    if (session.isGuest) {
+      return defaultName;
+    }
     const me = await AuthGateway.me(session.accessToken);
     if (me.code !== 0) {
       return defaultName;
@@ -52,12 +55,36 @@ export class AuthFacade {
   }
 
   public async getCurrentUserProfile(defaultName: string): Promise<CurrentUserBasicProfile> {
+    const startedAt = Date.now();
     const profile = new CurrentUserBasicProfile();
     const session = this.sessionManager.load();
+    hilog.info(
+      AuthFacade.LOG_DOMAIN,
+      AuthFacade.LOG_TAG,
+      `[LOGIN_TRACE][facade] getCurrentUserProfile start hasSession=${session ? 1 : 0}, sessionGuest=${session?.isGuest ? 1 : 0}`
+    );
     if (!session) {
       profile.userId = 'guest_local';
       profile.nickname = defaultName;
       profile.isGuest = true;
+      hilog.info(
+        AuthFacade.LOG_DOMAIN,
+        AuthFacade.LOG_TAG,
+        `[LOGIN_TRACE][facade] getCurrentUserProfile local_guest_no_session elapsedMs=${Date.now() - startedAt}`
+      );
+      return profile;
+    }
+    if (session.isGuest) {
+      const fallbackId = session.accountId || session.userId || 'guest_local';
+      profile.accountId = session.accountId || '';
+      profile.userId = fallbackId;
+      profile.nickname = defaultName;
+      profile.isGuest = true;
+      hilog.info(
+        AuthFacade.LOG_DOMAIN,
+        AuthFacade.LOG_TAG,
+        `[LOGIN_TRACE][facade] getCurrentUserProfile local_guest_session elapsedMs=${Date.now() - startedAt}, userId=${profile.userId}`
+      );
       return profile;
     }
     const me = await AuthGateway.me(session.accessToken);
@@ -76,6 +103,11 @@ export class AuthFacade {
     profile.nickname = String((me.data.nickname || '').trim() || defaultName);
     profile.avatarUrl = String(me.data.avatarUrl || '');
     profile.isGuest = Boolean(me.data.isGuest);
+    hilog.info(
+      AuthFacade.LOG_DOMAIN,
+      AuthFacade.LOG_TAG,
+      `[LOGIN_TRACE][facade] getCurrentUserProfile remote_success elapsedMs=${Date.now() - startedAt}, isGuest=${profile.isGuest ? 1 : 0}`
+    );
     return profile;
   }
 
@@ -208,26 +240,19 @@ export class AuthFacade {
   }
 
   public async explicitGuestLogin(): Promise<AuthResult<UserSession>> {
-    try {
-      const result = await this.tryGuestFallback();
-      if (result.success && result.data) {
-        return result;
-      }
-      hilog.warn(
-        AuthFacade.LOG_DOMAIN,
-        AuthFacade.LOG_TAG,
-        `[LOGIN_TRACE][facade] explicitGuestLogin force_local_fallback message=${result.message}`
-      );
-      return await this.forceLocalGuestSuccess('guest_result_failure', result.message);
-    } catch (error) {
-      const normalized = this.normalizeError(error);
-      hilog.error(
-        AuthFacade.LOG_DOMAIN,
-        AuthFacade.LOG_TAG,
-        `[LOGIN_TRACE][facade] explicitGuestLogin force_local_exception message=${normalized}`
-      );
-      return await this.forceLocalGuestSuccess('guest_exception', normalized);
-    }
+    const startedAt = Date.now();
+    hilog.info(
+      AuthFacade.LOG_DOMAIN,
+      AuthFacade.LOG_TAG,
+      '[LOGIN_TRACE][facade] explicitGuestLogin local_first_start'
+    );
+    const result = await this.forceLocalGuestSuccess('explicit_guest_local_first', 'remote_guest_skipped', 'GUEST_LOCAL_FIRST');
+    hilog.info(
+      AuthFacade.LOG_DOMAIN,
+      AuthFacade.LOG_TAG,
+      `[LOGIN_TRACE][facade] explicitGuestLogin local_first_done elapsedMs=${Date.now() - startedAt}, success=${result.success ? 1 : 0}`
+    );
+    return result;
   }
 
   public async logout(): Promise<void> {
@@ -418,8 +443,12 @@ export class AuthFacade {
     return this.success(session, 'GUEST_FALLBACK');
   }
 
-  private async forceLocalGuestSuccess(reason: string, detail: string): Promise<AuthResult<UserSession>> {
-    const session = this.buildLocalGuestSession('GUEST_HARD_FALLBACK');
+  private async forceLocalGuestSuccess(
+    reason: string,
+    detail: string,
+    loginMethod: string = 'GUEST_HARD_FALLBACK'
+  ): Promise<AuthResult<UserSession>> {
+    const session = this.buildLocalGuestSession(loginMethod);
     return await this.finalizeGuestSuccess(session, reason, detail);
   }
 

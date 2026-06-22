@@ -71,6 +71,10 @@ export function resolvePlanSearchResultText(searching: boolean, loadingMore: boo
   return `结果 ${safeCount} 条`;
 }
 
+export function shouldPlanSearchTriggerLoadMoreOnScroll(end: number, resultCount: number): boolean {
+  return end >= resultCount - 1;
+}
+
 @Entry
 @Component
 struct PlanSearchPage {
@@ -207,6 +211,12 @@ struct PlanSearchPage {
       if (token === this.queryToken) {
         this.loadingMore = false;
       }
+    }
+  }
+
+  private handleScrollIndexEnd(end: number): void {
+    if (shouldPlanSearchTriggerLoadMoreOnScroll(end, this.resultList.length)) {
+      void this.loadMoreIfNeeded();
     }
   }
 
@@ -347,9 +357,7 @@ struct PlanSearchPage {
           .layoutWeight(1)
           .padding({ left: 16, right: 16, top: 8, bottom: 90 })
           .onScrollIndex((start: number, end: number, _center: number) => {
-            if (end >= this.resultList.length - 1) {
-              void this.loadMoreIfNeeded();
-            }
+            this.handleScrollIndexEnd(end);
           });
         }
       }
@@ -367,6 +375,10 @@ struct PlanSearchPage {
     .height('100%')
     .backgroundColor(this.getThemePalette().pageBg);
   }
+}
+
+export function createPlanSearchPageForTest(): Object {
+  return new PlanSearchPage(undefined, {} as LocalStorage);
 }
 
 

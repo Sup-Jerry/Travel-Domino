@@ -54,29 +54,57 @@ export default function arrivalReminderEngineTest() {
     });
   });
   describe('unit_test_case_generator_autofill_ArrivalReminderEngine', () => {
-    it('boundary: td-20260411-auto-ArrivalReminderEngine', 0, () => {
+    it('boundary: location_filter_should_accept_samples_at_accuracy_and_speed_limits', 0, () => {
       // Arrange
-      const actual = true;
+      const latitude = 31.23;
+      const longitude = 121.47;
+
       // Act
-      const passed = actual;
+      const accepted = ArrivalReminderEngine.isLocationSampleAccepted(
+        latitude,
+        longitude,
+        400,
+        20,
+        400,
+        20
+      );
+
       // Assert
-      expect(passed).assertTrue();
+      expect(accepted).assertTrue();
     });
-    it('regression: td-20260411-auto-ArrivalReminderEngine', 0, () => {
+
+    it('regression: candidate_time_delta_should_prefer_non_negative_cached_value', 0, () => {
       // Arrange
-      const actual = true;
+      const now = 1_700_000_000_000;
+      const dynamicStartTime = now + 5 * 60_000;
+
       // Act
-      const passed = actual;
+      const cachedDelta = ArrivalReminderEngine.resolveCandidateTimeDelta(90_000, dynamicStartTime, now);
+      const recalculatedDelta = ArrivalReminderEngine.resolveCandidateTimeDelta(-1, dynamicStartTime, now);
+      const fallbackDelta = ArrivalReminderEngine.resolveCandidateTimeDelta(undefined, 0, now);
+
       // Assert
-      expect(passed).assertTrue();
+      expect(cachedDelta).assertEqual(90_000);
+      expect(recalculatedDelta).assertEqual(300_000);
+      expect(fallbackDelta).assertEqual(Number.MAX_SAFE_INTEGER);
     });
-    it('combined: td-20260411-auto-ArrivalReminderEngine', 0, () => {
+
+    it('combined: singleton_and_cooldown_checks_should_coordinate_with_live_time_delta_evaluation', 0, () => {
       // Arrange
-      const actual = true;
+      const now = 2_000_000;
+
       // Act
-      const passed = actual;
+      const first = ArrivalReminderEngine.getInstance();
+      const second = ArrivalReminderEngine.getInstance();
+      const cooldownBlocked = ArrivalReminderEngine.isEventOutOfCooldown(now - 500, now, 1000);
+      const cooldownReleased = ArrivalReminderEngine.isEventOutOfCooldown(now - 2000, now, 1000);
+      const liveDelta = ArrivalReminderEngine.resolveCandidateTimeDelta(undefined, now + 60_000, now);
+
       // Assert
-      expect(passed).assertTrue();
+      expect(first === second).assertTrue();
+      expect(cooldownBlocked).assertFalse();
+      expect(cooldownReleased).assertTrue();
+      expect(liveDelta).assertEqual(60_000);
     });
   });
 }

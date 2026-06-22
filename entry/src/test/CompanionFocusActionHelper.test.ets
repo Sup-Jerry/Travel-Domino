@@ -150,6 +150,42 @@ export default function companionFocusActionHelperTest() {
       done();
     });
 
+    it('normal: skip_should_focus_next_startable_after_current_index', 0, async (done: Function) => {
+      // Arrange
+      const focused = buildEvent(12, 'PENDING');
+      const active = buildEvent(13, 'ACTIVE');
+      const nextStartable = buildEvent(14, 'PENDING');
+      const mock = createSkipMock(focused, [focused, active, nextStartable]);
+
+      // Act
+      await handleCompanionFocusedSkip({
+        focusedEvent: mock.focusedEvent,
+        skipEvent: async (_event: EventEntity): Promise<void> => {
+          mock.skipCalls += 1;
+        },
+        refreshContext: (): void => {
+          mock.refreshCalls += 1;
+        },
+        getScheduledEvents: () => mock.schedule,
+        getScheduleIndexById: (_id: number): number => 0,
+        applyFocusById: (id: number): void => {
+          mock.applyFocusIds.push(id);
+        },
+        showToast: (message: string): void => {
+          mock.toasts.push(message);
+        }
+      });
+      await new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => {
+        setTimeout(() => resolve(), 150);
+      });
+
+      // Assert
+      expect(mock.skipCalls).assertEqual(1);
+      expect(mock.refreshCalls).assertEqual(1);
+      expect(mock.applyFocusIds[0]).assertEqual(14);
+      done();
+    });
+
     it('invalid: skip_should_show_toast_when_focused_event_is_not_pending', 0, async (done: Function) => {
       // Arrange
       const focused = buildEvent(4, 'ACTIVE');
@@ -186,6 +222,45 @@ export default function companionFocusActionHelperTest() {
       const focused = buildEvent(5, 'SKIPPED');
       const active = buildEvent(6, 'ACTIVE');
       const mock = createReopenMock(focused, [focused, active]);
+
+      // Act
+      await handleCompanionFocusedReopen({
+        focusedEvent: mock.focusedEvent,
+        getScheduledEvents: () => mock.schedule,
+        reopenSkippedEvent: async (_eventId: number): Promise<boolean> => {
+          mock.reopenCalls += 1;
+          return mock.reopenResult;
+        },
+        updateActualStart: async (_eventId: number, _nowTs: number): Promise<boolean> => {
+          mock.updateCalls += 1;
+          return mock.updateStartResult;
+        },
+        showGlobalActiveConflictDialog: async (_excludeEventId: number): Promise<boolean> => mock.conflictDialogResult,
+        refreshContext: (): void => {
+          mock.refreshCalls += 1;
+        },
+        applyFocusById: (id: number): void => {
+          mock.applyFocusIds.push(id);
+        },
+        enterImmersiveMode: (): void => {
+          mock.immersiveCalls += 1;
+        },
+        showToast: (message: string): void => {
+          mock.toasts.push(message);
+        }
+      });
+
+      // Assert
+      expect(mock.reopenCalls).assertEqual(0);
+      expect(mock.updateCalls).assertEqual(0);
+      expect(mock.toasts.length).assertEqual(1);
+      done();
+    });
+
+    it('invalid: reopen_should_show_toast_when_focused_event_is_not_skipped', 0, async (done: Function) => {
+      // Arrange
+      const focused = buildEvent(15, 'PENDING');
+      const mock = createReopenMock(focused, [focused]);
 
       // Act
       await handleCompanionFocusedReopen({
@@ -445,6 +520,121 @@ export default function companionFocusActionHelperTest() {
       expect(mock.reopenCalls).assertEqual(1);
       expect(mock.updateCalls).assertEqual(1);
       expect(mock.refreshCalls).assertEqual(0);
+      expect(mock.toasts.length).assertEqual(0);
+      done();
+    });
+
+    it('combined: skip_should_fallback_to_earlier_startable_when_no_later_event_can_start', 0, async (done: Function) => {
+      // Arrange
+      const earlierStartable = buildEvent(21, 'PENDING');
+      const focused = buildEvent(22, 'PENDING');
+      const laterBlocked = buildEvent(23, 'ACTIVE');
+      const mock = createSkipMock(focused, [earlierStartable, focused, laterBlocked]);
+
+      // Act
+      await handleCompanionFocusedSkip({
+        focusedEvent: mock.focusedEvent,
+        skipEvent: async (_event: EventEntity): Promise<void> => {
+          mock.skipCalls += 1;
+        },
+        refreshContext: (): void => {
+          mock.refreshCalls += 1;
+        },
+        getScheduledEvents: () => mock.schedule,
+        getScheduleIndexById: (_id: number): number => 1,
+        applyFocusById: (id: number): void => {
+          mock.applyFocusIds.push(id);
+        },
+        showToast: (message: string): void => {
+          mock.toasts.push(message);
+        }
+      });
+      await new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => {
+        setTimeout(() => resolve(), 150);
+      });
+
+      // Assert
+      expect(mock.skipCalls).assertEqual(1);
+      expect(mock.refreshCalls).assertEqual(1);
+      expect(mock.applyFocusIds.length).assertEqual(1);
+      expect(mock.applyFocusIds[0]).assertEqual(21);
+      done();
+    });
+
+    it('regression: reopen_should_pass_positive_timestamp_to_update_actual_start', 0, async (done: Function) => {
+      // Arrange
+      const focused = buildEvent(24, 'SKIPPED');
+      const mock = createReopenMock(focused, [focused]);
+      let capturedNowTs = -1;
+
+      // Act
+      await handleCompanionFocusedReopen({
+        focusedEvent: mock.focusedEvent,
+        getScheduledEvents: () => mock.schedule,
+        reopenSkippedEvent: async (_eventId: number): Promise<boolean> => {
+          mock.reopenCalls += 1;
+          return mock.reopenResult;
+        },
+        updateActualStart: async (_eventId: number, nowTs: number): Promise<boolean> => {
+          capturedNowTs = nowTs;
+          mock.updateCalls += 1;
+          return mock.updateStartResult;
+        },
+        showGlobalActiveConflictDialog: async (_excludeEventId: number): Promise<boolean> => mock.conflictDialogResult,
+        refreshContext: (): void => {
+          mock.refreshCalls += 1;
+        },
+        applyFocusById: (id: number): void => {
+          mock.applyFocusIds.push(id);
+        },
+        enterImmersiveMode: (): void => {
+          mock.immersiveCalls += 1;
+        },
+        showToast: (message: string): void => {
+          mock.toasts.push(message);
+        }
+      });
+
+      // Assert
+      expect(mock.reopenCalls).assertEqual(1);
+      expect(mock.updateCalls).assertEqual(1);
+      expect(capturedNowTs > 0).assertTrue();
+      done();
+    });
+
+    it('boundary: skip_should_leave_focus_empty_when_schedule_has_no_startable_event', 0, async (done: Function) => {
+      // Arrange
+      const focused = buildEvent(30, 'PENDING');
+      const blockedA = buildEvent(31, 'ACTIVE');
+      const blockedB = buildEvent(32, 'SKIPPED');
+      const mock = createSkipMock(focused, [blockedA, blockedB]);
+
+      // Act
+      await handleCompanionFocusedSkip({
+        focusedEvent: mock.focusedEvent,
+        skipEvent: async (_event: EventEntity): Promise<void> => {
+          mock.skipCalls += 1;
+        },
+        refreshContext: (): void => {
+          mock.refreshCalls += 1;
+        },
+        getScheduledEvents: () => mock.schedule,
+        getScheduleIndexById: (_id: number): number => -1,
+        applyFocusById: (id: number): void => {
+          mock.applyFocusIds.push(id);
+        },
+        showToast: (message: string): void => {
+          mock.toasts.push(message);
+        }
+      });
+      await new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => {
+        setTimeout(() => resolve(), 150);
+      });
+
+      // Assert
+      expect(mock.skipCalls).assertEqual(1);
+      expect(mock.refreshCalls).assertEqual(1);
+      expect(mock.applyFocusIds.length).assertEqual(0);
       expect(mock.toasts.length).assertEqual(0);
       done();
     });

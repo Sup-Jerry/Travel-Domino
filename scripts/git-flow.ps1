@@ -35,6 +35,42 @@ function Fail {
   exit 1
 }
 
+function Invoke-WithRetry {
+  param(
+    [Parameter(Mandatory = $true)]
+    [scriptblock]$Action,
+
+    [Parameter(Mandatory = $true)]
+    [string]$Description,
+
+    [int]$MaxAttempts = 4,
+    [int]$InitialDelaySeconds = 2
+  )
+
+  $lastError = $null
+  for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+    try {
+      & $Action
+      if ($LASTEXITCODE -eq 0) {
+        return
+      }
+      $lastError = "退出码: $LASTEXITCODE"
+    } catch {
+      $lastError = $_.Exception.Message
+    }
+
+    if ($attempt -ge $MaxAttempts) {
+      break
+    }
+
+    $delaySeconds = $InitialDelaySeconds * $attempt
+    Write-Warn ("{0} 失败，第 {1}/{2} 次，{3} 秒后重试。原因: {4}" -f $Description, $attempt, $MaxAttempts, $delaySeconds, $lastError)
+    Start-Sleep -Seconds $delaySeconds
+  }
+
+  Fail ("{0} 失败，已重试 {1} 次。最后错误: {2}" -f $Description, $MaxAttempts, $lastError)
+}
+
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
   Fail 'git 未安装或不在 PATH 中。'
 }
@@ -86,7 +122,9 @@ try {
     if (-not $branch) {
       Fail '无法获取当前分支名。'
     }
-    git push -u origin $branch
+    Invoke-WithRetry -Description "推送到 origin/$branch" -Action {
+      git push -u origin $branch
+    }
     Write-Ok "已推送到 origin/$branch"
   } else {
     Write-Warn '已跳过推送（-NoPush）。'

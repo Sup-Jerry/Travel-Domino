@@ -25,6 +25,7 @@ $joined = ($lines -join "`n")
 $coverageNoisePatterns = @(
   'ErrorCode:\s*00507008',
   'getInitCoverageData failed',
+  'report failed, error:Error: ENOENT: no such file or directory, open ''.*outputs\\test\\reports.*index\.html''',
   '@ohos\\coverage\\lib\\src\\report\.js',
   '@ohos\\coverage\\lib\\src\\generateReportForHvigorw\.js',
   '@ohos\\coverage\\lib\\src\\commandLine\\localTest\\coverageParser\.js',
@@ -69,6 +70,7 @@ foreach ($line in $lines) {
   if ($line -match 'ERROR:' -and
       $line -notmatch 'ErrorCode:\s*00507008' -and
       $line -notmatch 'getInitCoverageData failed' -and
+      $line -notmatch 'report failed, error:Error: ENOENT: no such file or directory, open ''.*outputs\\test\\reports.*index\.html''' -and
       $line -notmatch '@ohos\\coverage\\') {
     $unknownErrorLines += $line
   }

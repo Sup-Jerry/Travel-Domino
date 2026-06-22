@@ -6,11 +6,13 @@ import { TimelineViewModel } from '../main/ets/viewmodel/TimelineViewModel';
 interface TimelineActionVm {
   refreshTimelineView(): void;
   moveToBacklog(item: EventEntity): Promise<void>;
+  hardDelete(item: EventEntity): Promise<void>;
 }
 
 class TimelineActionVmMock implements TimelineActionVm {
   public refreshCount: number = 0;
   public moveItemId: number = -1;
+  public hardDeleteItemId: number = -1;
   private readonly shouldRejectMove: boolean;
 
   constructor(shouldRejectMove: boolean) {
@@ -27,6 +29,33 @@ class TimelineActionVmMock implements TimelineActionVm {
       return Promise.reject(new Error('move_failed'));
     }
     return Promise.resolve();
+  }
+
+  hardDelete(item: EventEntity): Promise<void> {
+    this.hardDeleteItemId = item.id;
+    return Promise.resolve();
+  }
+}
+
+class TimelineActionAlertButtonTest {
+  value: string = '';
+  action: () => void = () => {};
+}
+
+class TimelineActionAlertOptionsTest {
+  title: string = '';
+  message: string = '';
+  primaryButton: TimelineActionAlertButtonTest = new TimelineActionAlertButtonTest();
+  secondaryButton: TimelineActionAlertButtonTest = new TimelineActionAlertButtonTest();
+}
+
+class TimelineActionUiContextMockTest {
+  alertCount: number = 0;
+  lastAlert: TimelineActionAlertOptionsTest | null = null;
+
+  showAlertDialog(options: TimelineActionAlertOptionsTest): void {
+    this.alertCount += 1;
+    this.lastAlert = options;
   }
 }
 
@@ -153,6 +182,31 @@ export default function indexTimelineActionHelperTest() {
       expect(data.fixedTime).assertEqual('');
       expect(data.lat).assertEqual(0);
       expect(data.lng).assertEqual(0);
+    });
+
+    it('combined: confirm_delete_timeline_event_should_keep_cancel_noop_and_execute_delete_confirm', 0, async (done: Function) => {
+      // Arrange
+      const event = buildTimelineEvent(7);
+      const vm = new TimelineActionVmMock(false);
+      const uiContext = new TimelineActionUiContextMockTest();
+
+      // Act
+      IndexTimelineActionHelper.confirmDeleteTimelineEvent(
+        uiContext as Object as UIContext,
+        vm as Object as TimelineViewModel,
+        event
+      );
+      (uiContext.lastAlert as TimelineActionAlertOptionsTest).primaryButton.action();
+      (uiContext.lastAlert as TimelineActionAlertOptionsTest).secondaryButton.action();
+      await new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => {
+        setTimeout(() => resolve(), 30);
+      });
+
+      // Assert
+      expect(uiContext.alertCount).assertEqual(1);
+      expect(vm.refreshCount).assertEqual(2);
+      expect(vm.hardDeleteItemId).assertEqual(7);
+      done();
     });
   });
 }

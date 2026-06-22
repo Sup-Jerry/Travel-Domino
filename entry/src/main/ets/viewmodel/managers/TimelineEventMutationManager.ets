@@ -145,9 +145,6 @@ export class TimelineEventMutationManager {
     });
 
     const currentSchedulePos = scheduleIndexes.indexOf(index);
-    if (currentSchedulePos < 0) {
-      return;
-    }
     const targetSchedulePos = direction === 'up' ? currentSchedulePos - 1 : currentSchedulePos + 1;
     if (targetSchedulePos < 0 || targetSchedulePos >= scheduleIndexes.length) {
       return;

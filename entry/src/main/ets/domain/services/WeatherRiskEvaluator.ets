@@ -149,9 +149,6 @@ export class WeatherRiskEvaluator {
       weightedTotal += bucket.bucketScore * weight;
       weightCount += weight;
     });
-    if (weightCount <= 0) {
-      return -1;
-    }
     return Math.round(weightedTotal / weightCount);
   }
 

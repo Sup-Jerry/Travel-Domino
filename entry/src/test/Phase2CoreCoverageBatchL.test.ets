@@ -195,6 +195,28 @@ export default function phase2CoreCoverageBatchLTest() {
       hooks.restore();
     });
 
+    it('boundary: timeline_weather_service_apply_soft_shorten_should_return_false_when_no_target_needs_change', 0, async () => {
+      // Arrange
+      const bundle = createBundleForL();
+      const hooks = new StaticHooksForL();
+      let updateSingleCalls = 0;
+      hooks.setUpdateSingleField(async (_id: number, _column: string, _value: Object, _planIdHint?: number): Promise<void> => {
+        updateSingleCalls += 1;
+        return;
+      });
+      const target = createEventForL(11, 1, 30);
+      bundle.host.minEventDurationLimit = 20;
+      bundle.host.events = [target];
+      // Act
+      const ok = await bundle.service.applySoftShorten([11, 999], 45);
+      // Assert
+      expect(ok).assertFalse();
+      expect(target.duration).assertEqual(30);
+      expect(updateSingleCalls).assertEqual(0);
+      expect(bundle.host.recalculateFromIndexCalls.length).assertEqual(0);
+      hooks.restore();
+    });
+
     it('invalid: timeline_weather_service_apply_soft_reorder_should_return_false_when_target_count_lt_two', 0, async () => {
       // Arrange
       const bundle = createBundleForL();
@@ -242,4 +264,3 @@ export default function phase2CoreCoverageBatchLTest() {
     });
   });
 }
-

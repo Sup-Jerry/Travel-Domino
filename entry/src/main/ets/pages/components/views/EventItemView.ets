@@ -13,6 +13,20 @@ export interface EventItemTimeRangeMeta {
   isEstimated: boolean;
 }
 
+type EventItemConflictStrategy = 'delay' | 'compress' | 'advance' | 'smart';
+
+function noopEventItemVoid(): void {}
+
+function noopEventItemMinutes(_minutes: number): void {}
+
+function noopEventItemTravelMode(_mode: number): void {}
+
+function noopEventItemConflictAction(
+  _item: EventEntity,
+  _strategy: EventItemConflictStrategy,
+  _gapMinutes: number
+): void {}
+
 export function getEventItemTravelModeIcon(mode: number): string {
   switch (mode) {
     case 0:
@@ -204,15 +218,15 @@ export struct EventItemView {
   @Prop companionCurrentEventId: number = -1;
   @Prop showWeather: boolean = true;
 
-  onMoveUp: () => void = () => {};
-  onMoveDown: () => void = () => {};
-  onMainContentClick: () => void = () => {}; // 点击中间：完整编辑
-  onTimeClick: () => void = () => {};        // 点击左侧：时间编辑
-  onCommuteChange: (minutes: number) => void = () => {};
-  onEditClick: () => void = () => {};
-  onTravelModeChange: (mode: number) => void = () => {};
-  onManualTravelInput: (minutes: number) => void = () => {};
-  onConflictAction: (item: EventEntity, strategy: 'delay' | 'compress' | 'advance' | 'smart', gapMinutes: number) => void = () => {};
+  onMoveUp = noopEventItemVoid;
+  onMoveDown = noopEventItemVoid;
+  onMainContentClick = noopEventItemVoid; // 点击中间：完整编辑
+  onTimeClick = noopEventItemVoid;        // 点击左侧：时间编辑
+  onCommuteChange = noopEventItemMinutes;
+  onEditClick = noopEventItemVoid;
+  onTravelModeChange = noopEventItemTravelMode;
+  onManualTravelInput = noopEventItemMinutes;
+  onConflictAction = noopEventItemConflictAction;
   private conflictSelectionController: CustomDialogController | null = null;
   @State isReasonPopupShow: boolean = false;
   @State tempCommuteVal: string = '';
@@ -842,7 +856,7 @@ export struct EventItemView {
           .layoutWeight(1).alignItems(HorizontalAlign.Start)
         }
         .layoutWeight(1) // 占满剩余空间
-        .onClick(() => this.onMainContentClick()) // 绑定主内容点击事件
+        .onClick(this.onMainContentClick) // 绑定主内容点击事件
 
 
         // ✅ [区域 3] 最右侧：仅保留排序箭头
@@ -853,7 +867,7 @@ export struct EventItemView {
                 Text("▼").fontSize(12).fontColor(this.getPalette().textSecondary)
               }
               .backgroundColor(Color.Transparent).width(36).height(24)
-              .onClick(() => this.onMoveDown())
+              .onClick(this.onMoveDown)
             }
 
             if (this.index > 0) {
@@ -861,7 +875,7 @@ export struct EventItemView {
                 Text("▲").fontSize(12).fontColor(this.getPalette().textSecondary)
               }
               .backgroundColor(Color.Transparent).width(36).height(24)
-              .onClick(() => this.onMoveUp())
+              .onClick(this.onMoveUp)
             }
           }
         }

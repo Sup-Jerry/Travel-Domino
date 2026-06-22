@@ -12,6 +12,9 @@ import { AvatarUploadApi } from './AvatarUploadApi';
 
 const TAG = 'AvatarService';
 
+export type AvatarCompressor = (context: common.Context, srcUri: string, userId: string) => Promise<string>;
+export type AvatarServiceNowGetter = () => number;
+
 export interface AvatarStorePort {
   loadAvatarProfile(userId: string): Promise<AvatarProfile>;
   saveAvatarProfile(profile: AvatarProfile): Promise<void>;
@@ -25,8 +28,49 @@ export interface AvatarServiceOptions {
   picker?: AvatarPickerPort;
   store?: AvatarStorePort;
   uploader?: AvatarUploadPort;
-  compressor?: (context: common.Context, srcUri: string, userId: string) => Promise<string>;
-  now?: () => number;
+  compressor?: AvatarCompressor;
+  now?: AvatarServiceNowGetter;
+}
+
+interface AvatarFileFdLike {
+  fd: number;
+}
+
+interface AvatarImagePackerLike {
+  packToData(source: image.ImageSource, options: Object): Promise<ArrayBuffer>;
+}
+
+class AvatarImagePackingOptions {
+  format: string = 'image/jpeg';
+  quality: number = 80;
+}
+
+interface AvatarPhotoFetchResultLike {
+  getCount(): number;
+  getFirstObject(): Promise<photoAccessHelper.PhotoAsset>;
+  close(): void;
+}
+
+interface AvatarPhotoHelperLike {
+  getAssets(options: photoAccessHelper.FetchOptions): Promise<AvatarPhotoFetchResultLike>;
+}
+
+interface AvatarPhotoPredicatesLike {
+  equalTo(key: string, value: string): void;
+}
+
+interface AvatarServiceRuntimeDeps {
+  createImagePacker: () => AvatarImagePackerLike | null;
+  createImageSourceFromUri: (srcUri: string) => image.ImageSource | null;
+  createImageSourceFromData: (data: ArrayBuffer) => image.ImageSource | null;
+  accessSync: (path: string) => boolean;
+  mkdirSync: (path: string, recursive: boolean) => void;
+  openWriteSync: (path: string) => number;
+  writeSync: (fd: number, data: ArrayBuffer) => void;
+  closeSync: (fd: number) => void;
+  getUriFromPath: (path: string) => string;
+  getPhotoHelper: (context: common.Context) => AvatarPhotoHelperLike;
+  createPhotoPredicates: () => AvatarPhotoPredicatesLike;
 }
 
 class PreferenceAvatarStore implements AvatarStorePort {
@@ -69,11 +113,31 @@ class InMemoryAvatarStore implements AvatarStorePort {
 }
 
 export class AvatarService {
+  private static runtimeDeps: AvatarServiceRuntimeDeps = {
+    createImagePacker: () => image.createImagePacker() as AvatarImagePackerLike | null,
+    createImageSourceFromUri: (srcUri: string) => image.createImageSource(srcUri),
+    createImageSourceFromData: (data: ArrayBuffer) => image.createImageSource(data),
+    accessSync: (path: string) => fileIo.accessSync(path),
+    mkdirSync: (path: string, recursive: boolean) => fileIo.mkdirSync(path, recursive),
+    openWriteSync: (path: string) => {
+      const file = fileIo.openSync(
+        path,
+        fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC
+      ) as AvatarFileFdLike;
+      return file.fd;
+    },
+    writeSync: (fd: number, data: ArrayBuffer) => fileIo.writeSync(fd, data),
+    closeSync: (fd: number) => fileIo.closeSync(fd),
+    getUriFromPath: (path: string) => fileUri.getUriFromPath(path),
+    getPhotoHelper: (context: common.Context) => photoAccessHelper.getPhotoAccessHelper(context) as AvatarPhotoHelperLike,
+    createPhotoPredicates: () => new dataSharePredicates.DataSharePredicates() as AvatarPhotoPredicatesLike
+  };
+
   private readonly picker: AvatarPickerPort;
   private readonly store: AvatarStorePort;
   private readonly uploader: AvatarUploadPort;
-  private readonly compressor: (context: common.Context, srcUri: string, userId: string) => Promise<string>;
-  private readonly now: () => number;
+  private readonly compressor: AvatarCompressor;
+  private readonly now: AvatarServiceNowGetter;
 
   constructor(options: AvatarServiceOptions) {
     this.picker = options.picker || new photoAccessHelper.PhotoViewPicker();
@@ -84,11 +148,11 @@ export class AvatarService {
   }
 
   private static getPhotoHelper(context: common.Context): photoAccessHelper.PhotoAccessHelper {
-    return photoAccessHelper.getPhotoAccessHelper(context);
+    return AvatarService.runtimeDeps.getPhotoHelper(context) as photoAccessHelper.PhotoAccessHelper;
   }
 
   private static createPhotoPredicates(): dataSharePredicates.DataSharePredicates {
-    return new dataSharePredicates.DataSharePredicates();
+    return AvatarService.runtimeDeps.createPhotoPredicates() as dataSharePredicates.DataSharePredicates;
   }
 
   private static requestPhotoImageData(
@@ -197,30 +261,25 @@ export class AvatarService {
   public static async compressToJpegInCache(context: common.Context, srcUri: string, userId: string): Promise<string> {
     try {
       const imgSource = await AvatarService.resolveCompressImageSource(context, srcUri, userId);
-      const packer = image.createImagePacker();
+      const deps = AvatarService.runtimeDeps;
+      const packer = deps.createImagePacker();
       if (!packer) {
         throw new Error('avatar_image_packer_unavailable');
       }
-      const packed = await packer.packToData(imgSource, {
-        format: 'image/jpeg',
-        quality: 80
-      });
+      const packed = await packer.packToData(imgSource, new AvatarImagePackingOptions() as Object);
 
       const cacheDir = `${context.cacheDir}/avatar`;
-      if (!fileIo.accessSync(cacheDir)) {
-        fileIo.mkdirSync(cacheDir, true);
+      if (!deps.accessSync(cacheDir)) {
+        deps.mkdirSync(cacheDir, true);
       }
       const filePath = `${cacheDir}/avatar_${userId}_${Date.now()}.jpg`;
-      const file = fileIo.openSync(
-        filePath,
-        fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC
-      );
+      const fd = deps.openWriteSync(filePath);
       try {
-        fileIo.writeSync(file.fd, packed);
+        deps.writeSync(fd, packed);
       } finally {
-        fileIo.closeSync(file);
+        deps.closeSync(fd);
       }
-      return fileUri.getUriFromPath(filePath);
+      return deps.getUriFromPath(filePath);
     } catch (error) {
       const msg = AvatarService.errorMessage(error);
       hilog.error(0x0000, 'AvatarService', `compressToJpegInCache failed: ${msg}`);
@@ -233,7 +292,8 @@ export class AvatarService {
     srcUri: string,
     userId: string
   ): Promise<image.ImageSource> {
-    const directSource = image.createImageSource(srcUri);
+    const deps = AvatarService.runtimeDeps;
+    const directSource = deps.createImageSourceFromUri(srcUri);
     if (directSource) {
       return directSource;
     }
@@ -246,7 +306,7 @@ export class AvatarService {
 
     const photoAsset = await AvatarService.loadPhotoAssetByUri(context, srcUri);
     const imageBuffer = await AvatarService.requestImageBuffer(context, photoAsset, userId, srcUri);
-    const bufferSource = image.createImageSource(imageBuffer);
+    const bufferSource = deps.createImageSourceFromData(imageBuffer);
     if (bufferSource) {
       return bufferSource;
     }

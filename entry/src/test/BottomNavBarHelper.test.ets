@@ -5,6 +5,8 @@ import {
   CompanionBottomActionBar,
   GlobalBottomNavBar,
   getBottomNavTargetRoute,
+  handleBottomNavFabTouch,
+  invokeBottomNavActionIfEnabled,
   isBottomNavTabPressed,
   isBottomNavVisualActive,
   PlanBottomActionBar,
@@ -67,6 +69,20 @@ class GlobalBottomNavUIContextImplTest implements GlobalBottomNavUIContextTest {
   }
 }
 
+class GlobalBottomNavRouterThrowingImplTest implements GlobalBottomNavRouterTest {
+  async replaceUrl(_options: BottomNavRouteOptionsTest): Promise<void> {
+    throw new Error('route_failed');
+  }
+}
+
+class BottomNavTouchEventTest {
+  type: TouchType = TouchType.Down;
+
+  constructor(type: TouchType) {
+    this.type = type;
+  }
+}
+
 interface GlobalBottomNavBarParamsTest {
   currentTab?: AppNavTab;
   showCenterFab?: boolean;
@@ -94,7 +110,9 @@ interface GlobalBottomNavBarPrivateTest {
   safeReplaceUrl(options: BottomNavRouteOptionsTest, routeLabel: string): Promise<void>;
   navigateTo(tab: AppNavTab): Promise<void>;
   setTabPressed(tab: AppNavTab, pressed: boolean): void;
+  onTabTouch(tab: AppNavTab, event: BottomNavTouchEventTest): void;
   handleTabTap(tab: AppNavTab): void;
+  build(): void;
   initialRender(): void;
 }
 
@@ -116,6 +134,7 @@ interface PlanBottomActionBarPrivateTest {
   setInitiallyProvidedValue(params: PlanBottomActionBarParamsTest): void;
   updateStateVars(params: PlanBottomActionBarParamsTest): void;
   getPalette(): BottomNavPaletteTest;
+  build(): void;
   initialRender(): void;
 }
 
@@ -177,6 +196,43 @@ export default function bottomNavBarHelperTest() {
       const shouldNavigate = shouldBottomNavTapNavigate(current, target, navLocked);
       // Assert
       expect(shouldNavigate).assertFalse();
+    });
+
+    it('combined: bottom_nav_fab_touch_should_dispatch_press_release_cancel_and_ignore_other_events', 0, () => {
+      // Arrange
+      let pressCount = 0;
+      let releaseCount = 0;
+      const onPress = (): void => {
+        pressCount += 1;
+      };
+      const onRelease = (): void => {
+        releaseCount += 1;
+      };
+
+      // Act
+      handleBottomNavFabTouch(TouchType.Down, onPress, onRelease);
+      handleBottomNavFabTouch(TouchType.Up, onPress, onRelease);
+      handleBottomNavFabTouch(TouchType.Cancel, onPress, onRelease);
+      handleBottomNavFabTouch(-1, onPress, onRelease);
+
+      // Assert
+      expect(pressCount).assertEqual(1);
+      expect(releaseCount).assertEqual(2);
+    });
+
+    it('boundary: bottom_nav_action_should_only_invoke_when_enabled', 0, () => {
+      // Arrange
+      let tapCount = 0;
+      const onTap = (): void => {
+        tapCount += 1;
+      };
+
+      // Act
+      invokeBottomNavActionIfEnabled(false, onTap);
+      invokeBottomNavActionIfEnabled(true, onTap);
+
+      // Assert
+      expect(tapCount).assertEqual(1);
     });
 
     it('regression: td-20260412-bottom-nav-route-map-should-stay-stable', 0, () => {
@@ -478,6 +534,328 @@ export default function bottomNavBarHelperTest() {
 
       // Assert
       expect(threw).assertFalse();
+    });
+
+    it('boundary: bottom_nav_tap_plan_should_clear_transition_and_unlock_on_same_tab', 0, () => {
+      // Arrange
+      const current: AppNavTab = 'archive';
+      const target: AppNavTab = 'archive';
+
+      // Act
+      const plan = resolveBottomNavTapPlan(current, target, true);
+
+      // Assert
+      expect(plan.shouldNavigate).assertFalse();
+      expect(plan.nextTransitionTab).assertEqual('');
+      expect(plan.nextNavLocked).assertFalse();
+    });
+
+    it('combined: bottom_nav_tap_plan_should_keep_lock_when_blocked_by_nav_locked', 0, () => {
+      // Arrange
+      const current: AppNavTab = 'home';
+      const target: AppNavTab = 'trash';
+
+      // Act
+      const plan = resolveBottomNavTapPlan(current, target, true);
+
+      // Assert
+      expect(plan.shouldNavigate).assertFalse();
+      expect(plan.nextTransitionTab).assertEqual('');
+      expect(plan.nextNavLocked).assertTrue();
+    });
+
+    it('boundary: global_bottom_nav_on_tab_touch_should_press_and_release_tab', 0, () => {
+      // Arrange
+      const page = new GlobalBottomNavBar(undefined, {} as LocalStorage) as Object as GlobalBottomNavBarPrivateTest;
+      const routedUrls: string[] = [];
+      const fakeRouter = new GlobalBottomNavRouterImplTest(routedUrls);
+      const fakeUiContext = new GlobalBottomNavUIContextImplTest(fakeRouter);
+      page.getUIContext = (): GlobalBottomNavUIContextTest => fakeUiContext;
+
+      // Act
+      page.onTabTouch('trash', new BottomNavTouchEventTest(TouchType.Down));
+      const pressed = page.pressedTab;
+      page.onTabTouch('trash', new BottomNavTouchEventTest(TouchType.Up));
+      const released = page.pressedTab;
+
+      // Assert
+      expect(pressed).assertEqual('trash');
+      expect(released).assertEqual('');
+    });
+
+    it('boundary: global_bottom_nav_navigate_to_should_noop_for_current_tab', 0, async () => {
+      // Arrange
+      const page = new GlobalBottomNavBar(undefined, {} as LocalStorage) as Object as GlobalBottomNavBarPrivateTest;
+      const routedUrls: string[] = [];
+      const fakeRouter = new GlobalBottomNavRouterImplTest(routedUrls);
+      const fakeUiContext = new GlobalBottomNavUIContextImplTest(fakeRouter);
+      page.getUIContext = (): GlobalBottomNavUIContextTest => fakeUiContext;
+      page.currentTab = 'home';
+      let searchCount = 0;
+      page.onSearchTap = async (): Promise<void> => {
+        searchCount += 1;
+      };
+
+      // Act
+      await page.navigateTo('home');
+
+      // Assert
+      expect(routedUrls.length).assertEqual(0);
+      expect(searchCount).assertEqual(0);
+    });
+
+    it('combined: global_bottom_nav_on_tab_touch_should_release_pressed_tab_on_cancel', 0, () => {
+      // Arrange
+      const page = new GlobalBottomNavBar(undefined, {} as LocalStorage) as Object as GlobalBottomNavBarPrivateTest;
+      const routedUrls: string[] = [];
+      const fakeRouter = new GlobalBottomNavRouterImplTest(routedUrls);
+      const fakeUiContext = new GlobalBottomNavUIContextImplTest(fakeRouter);
+      page.getUIContext = (): GlobalBottomNavUIContextTest => fakeUiContext;
+
+      // Act
+      page.onTabTouch('archive', new BottomNavTouchEventTest(TouchType.Down));
+      const pressed = page.pressedTab;
+      page.onTabTouch('archive', new BottomNavTouchEventTest(TouchType.Cancel));
+      const released = page.pressedTab;
+
+      // Assert
+      expect(pressed).assertEqual('archive');
+      expect(released).assertEqual('');
+    });
+
+    it('invalid: global_bottom_nav_safe_replace_url_should_swallow_router_failure', 0, async (done: () => void) => {
+      // Arrange
+      const page = new GlobalBottomNavBar(undefined, {} as LocalStorage) as Object as GlobalBottomNavBarPrivateTest;
+      const fakeRouter = new GlobalBottomNavRouterThrowingImplTest();
+      const fakeUiContext = new GlobalBottomNavUIContextImplTest(fakeRouter);
+      page.getUIContext = (): GlobalBottomNavUIContextTest => fakeUiContext;
+      let threw = false;
+
+      // Act
+      try {
+        await page.safeReplaceUrl(page.createRouteOptions('pages/ArchivePage'), 'pages/ArchivePage');
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      done();
+    });
+
+    it('boundary: global_bottom_nav_handle_tab_tap_should_clear_lock_for_same_tab', 0, () => {
+      // Arrange
+      const page = new GlobalBottomNavBar(undefined, {} as LocalStorage) as Object as GlobalBottomNavBarPrivateTest;
+      page.currentTab = 'home';
+      page.transitionTab = 'archive';
+      page.navLocked = true;
+
+      // Act
+      page.handleTabTap('home');
+
+      // Assert
+      expect(page.transitionTab).assertEqual('');
+      expect(page.navLocked).assertFalse();
+    });
+
+    it('boundary: global_bottom_nav_set_tab_pressed_should_noop_when_state_is_unchanged', 0, () => {
+      // Arrange
+      const page = new GlobalBottomNavBar(undefined, {} as LocalStorage) as Object as GlobalBottomNavBarPrivateTest;
+      const routedUrls: string[] = [];
+      const fakeRouter = new GlobalBottomNavRouterImplTest(routedUrls);
+      const fakeUiContext = new GlobalBottomNavUIContextImplTest(fakeRouter);
+      page.getUIContext = (): GlobalBottomNavUIContextTest => fakeUiContext;
+      page.pressedTab = 'search';
+
+      // Act
+      page.setTabPressed('search', true);
+
+      // Assert
+      expect(page.pressedTab).assertEqual('search');
+    });
+
+    it('boundary: global_bottom_nav_on_tab_touch_should_ignore_unhandled_move_event', 0, () => {
+      // Arrange
+      const page = new GlobalBottomNavBar(undefined, {} as LocalStorage) as Object as GlobalBottomNavBarPrivateTest;
+      const routedUrls: string[] = [];
+      const fakeRouter = new GlobalBottomNavRouterImplTest(routedUrls);
+      const fakeUiContext = new GlobalBottomNavUIContextImplTest(fakeRouter);
+      page.getUIContext = (): GlobalBottomNavUIContextTest => fakeUiContext;
+      page.pressedTab = 'archive';
+
+      // Act
+      page.onTabTouch('archive', new BottomNavTouchEventTest(TouchType.Move));
+
+      // Assert
+      expect(page.pressedTab).assertEqual('archive');
+    });
+
+    it('combined: global_bottom_nav_navigate_to_should_use_search_callback_without_router_replace', 0, async (done: () => void) => {
+      // Arrange
+      const page = new GlobalBottomNavBar(undefined, {} as LocalStorage) as Object as GlobalBottomNavBarPrivateTest;
+      const routedUrls: string[] = [];
+      const fakeRouter = new GlobalBottomNavRouterImplTest(routedUrls);
+      const fakeUiContext = new GlobalBottomNavUIContextImplTest(fakeRouter);
+      page.getUIContext = (): GlobalBottomNavUIContextTest => fakeUiContext;
+      page.currentTab = 'home';
+      let searchCount = 0;
+      page.onSearchTap = async (): Promise<void> => {
+        searchCount += 1;
+      };
+
+      // Act
+      await page.navigateTo('search');
+
+      // Assert
+      expect(searchCount).assertEqual(1);
+      expect(routedUrls.length).assertEqual(0);
+      done();
+    });
+
+    it('combined: global_bottom_nav_handle_tab_tap_should_route_and_auto_unlock_after_delay', 0, async (done: () => void) => {
+      // Arrange
+      const page = new GlobalBottomNavBar(undefined, {} as LocalStorage) as Object as GlobalBottomNavBarPrivateTest;
+      const routedUrls: string[] = [];
+      const fakeRouter = new GlobalBottomNavRouterImplTest(routedUrls);
+      const fakeUiContext = new GlobalBottomNavUIContextImplTest(fakeRouter);
+      page.getUIContext = (): GlobalBottomNavUIContextTest => fakeUiContext;
+      page.currentTab = 'home';
+      page.navLocked = false;
+      page.transitionTab = '';
+
+      // Act
+      page.handleTabTap('archive');
+      const lockedDuringTransition = page.navLocked;
+      const transitionDuringAnimation = page.transitionTab;
+      await new Promise<void>((resolve: () => void) => {
+        setTimeout(() => {
+          resolve();
+        }, 360);
+      });
+
+      // Assert
+      expect(lockedDuringTransition).assertTrue();
+      expect(transitionDuringAnimation).assertEqual('archive');
+      expect(routedUrls.includes('pages/ArchivePage')).assertTrue();
+      expect(page.transitionTab).assertEqual('');
+      expect(page.navLocked).assertFalse();
+      done();
+    });
+
+    it('combined: plan_bottom_action_bar_should_keep_disabled_actions_and_dark_palette_consistent', 0, () => {
+      // Arrange
+      const page = new PlanBottomActionBar(undefined, {} as LocalStorage) as Object as PlanBottomActionBarPrivateTest;
+      page.effectiveTheme = 'dark';
+      page.aiEnabled = false;
+      page.addEnabled = false;
+
+      // Act
+      const palette = page.getPalette();
+
+      // Assert
+      expect(page.aiEnabled).assertFalse();
+      expect(page.addEnabled).assertFalse();
+      expect(palette.textTertiary).assertEqual(ThemeCenter.getPalette('dark').textTertiary);
+    });
+
+    it('combined: global_bottom_nav_initial_render_should_cover_archive_active_and_pressed_visual_branches', 0, () => {
+      // Arrange
+      const activePage = new GlobalBottomNavBar(undefined, {} as LocalStorage) as Object as GlobalBottomNavBarPrivateTest;
+      const pressedPage = new GlobalBottomNavBar(undefined, {} as LocalStorage) as Object as GlobalBottomNavBarPrivateTest;
+      const routedUrls: string[] = [];
+      const fakeRouter = new GlobalBottomNavRouterImplTest(routedUrls);
+      const fakeUiContext = new GlobalBottomNavUIContextImplTest(fakeRouter);
+      activePage.getUIContext = (): GlobalBottomNavUIContextTest => fakeUiContext;
+      pressedPage.getUIContext = (): GlobalBottomNavUIContextTest => fakeUiContext;
+      activePage.currentTab = 'archive';
+      activePage.transitionTab = 'archive';
+      activePage.pressedTab = '';
+      activePage.showCenterFab = false;
+      pressedPage.currentTab = 'home';
+      pressedPage.transitionTab = '';
+      pressedPage.pressedTab = 'archive';
+      pressedPage.showCenterFab = false;
+      let activeThrew = false;
+      let pressedThrew = false;
+
+      // Act
+      try {
+        activePage.initialRender();
+      } catch (_error) {
+        activeThrew = true;
+      }
+      try {
+        pressedPage.initialRender();
+      } catch (_error) {
+        pressedThrew = true;
+      }
+
+      // Assert
+      expect(activeThrew).assertFalse();
+      expect(pressedThrew).assertFalse();
+      expect(activePage.isVisualActive('archive')).assertTrue();
+      expect(pressedPage.isTabPressed('archive')).assertTrue();
+    });
+
+    it('combined: global_bottom_nav_initial_render_should_cover_home_active_pressed_and_fab_visual_branches', 0, () => {
+      // Arrange
+      const activePage = new GlobalBottomNavBar(undefined, {} as LocalStorage) as Object as GlobalBottomNavBarPrivateTest;
+      const pressedFabPage = new GlobalBottomNavBar(undefined, {} as LocalStorage) as Object as GlobalBottomNavBarPrivateTest;
+      const routedUrls: string[] = [];
+      const fakeRouter = new GlobalBottomNavRouterImplTest(routedUrls);
+      const fakeUiContext = new GlobalBottomNavUIContextImplTest(fakeRouter);
+      activePage.getUIContext = (): GlobalBottomNavUIContextTest => fakeUiContext;
+      pressedFabPage.getUIContext = (): GlobalBottomNavUIContextTest => fakeUiContext;
+      activePage.currentTab = 'home';
+      activePage.pressedTab = '';
+      activePage.showCenterFab = true;
+      activePage.fabPressed = false;
+      pressedFabPage.currentTab = 'profile';
+      pressedFabPage.pressedTab = 'home';
+      pressedFabPage.showCenterFab = true;
+      pressedFabPage.fabPressed = true;
+      let activeThrew = false;
+      let pressedFabThrew = false;
+
+      // Act
+      try {
+        activePage.initialRender();
+      } catch (_error) {
+        activeThrew = true;
+      }
+      try {
+        pressedFabPage.initialRender();
+      } catch (_error) {
+        pressedFabThrew = true;
+      }
+
+      // Assert
+      expect(activeThrew).assertFalse();
+      expect(pressedFabThrew).assertFalse();
+      expect(activePage.isVisualActive('home')).assertTrue();
+      expect(pressedFabPage.isTabPressed('home')).assertTrue();
+      expect(pressedFabPage.fabPressed).assertTrue();
+    });
+
+    it('boundary: plan_bottom_action_bar_initial_render_should_cover_disabled_ai_and_add_visual_branches', 0, () => {
+      // Arrange
+      const page = new PlanBottomActionBar(undefined, {} as LocalStorage) as Object as PlanBottomActionBarPrivateTest;
+      page.effectiveTheme = 'dark';
+      page.aiEnabled = false;
+      page.addEnabled = false;
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.aiEnabled).assertFalse();
+      expect(page.addEnabled).assertFalse();
     });
   });
 }

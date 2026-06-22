@@ -262,6 +262,28 @@ class AppStartupCoordinatorHooksAP {
   }
 }
 
+class TimerHooksAP {
+  private readonly globalObj: Object;
+  private readonly originSetTimeout: Object;
+  private readonly originClearTimeout: Object;
+
+  constructor() {
+    this.globalObj = globalThis as Object;
+    this.originSetTimeout = Reflect.get(this.globalObj, 'setTimeout') as Object;
+    this.originClearTimeout = Reflect.get(this.globalObj, 'clearTimeout') as Object;
+  }
+
+  public setHooks(setTimeoutImpl: Object, clearTimeoutImpl: Object): void {
+    Reflect.set(this.globalObj, 'setTimeout', setTimeoutImpl);
+    Reflect.set(this.globalObj, 'clearTimeout', clearTimeoutImpl);
+  }
+
+  public restore(): void {
+    Reflect.set(this.globalObj, 'setTimeout', this.originSetTimeout);
+    Reflect.set(this.globalObj, 'clearTimeout', this.originClearTimeout);
+  }
+}
+
 class HuaweiAccountProviderHooksAP {
   private readonly provider: HuaweiAccountProvider;
   private readonly originExecuteLoginRequest: Object;
@@ -319,7 +341,7 @@ class AuthenticationControllerStubAP {
   public async executeRequest(request: Object): Promise<Object> {
     AuthenticationControllerStubAP.lastRequest = request;
     if (AuthenticationControllerStubAP.error) {
-      throw new Error(String(AuthenticationControllerStubAP.error));
+      return Promise.reject(AuthenticationControllerStubAP.error);
     }
     return AuthenticationControllerStubAP.response as Object;
   }
@@ -339,34 +361,23 @@ class AccountKitNamespaceMockAP {
 }
 
 class AccountKitHooksAP {
-  private readonly authObj: Object;
   private readonly originProvider: Object;
   private readonly originController: Object;
 
   constructor() {
-    const globalObj = globalThis as Object;
-    let authObj = Reflect.get(globalObj, 'authentication') as Object | null;
-    if (!authObj) {
-      const authMock = new AccountKitNamespaceMockAP();
-      authMock.HuaweiIDProvider = authentication.HuaweiIDProvider as Object;
-      authMock.AuthenticationController = authentication.AuthenticationController as Object;
-      authObj = authMock as Object;
-      Reflect.set(globalObj, 'authentication', authObj);
-    }
-    this.authObj = authObj;
-    this.originProvider = Reflect.get(this.authObj, 'HuaweiIDProvider') as Object;
-    this.originController = Reflect.get(this.authObj, 'AuthenticationController') as Object;
+    this.originProvider = authentication.HuaweiIDProvider as Object;
+    this.originController = authentication.AuthenticationController as Object;
   }
 
   public useStubs(): void {
-    Reflect.set(this.authObj, 'HuaweiIDProvider', HuaweiIDProviderStubAP as Object);
-    Reflect.set(this.authObj, 'AuthenticationController', AuthenticationControllerStubAP as Object);
+    authentication.HuaweiIDProvider = HuaweiIDProviderStubAP as never;
+    authentication.AuthenticationController = AuthenticationControllerStubAP as never;
     AuthenticationControllerStubAP.reset();
   }
 
   public restore(): void {
-    Reflect.set(this.authObj, 'HuaweiIDProvider', this.originProvider);
-    Reflect.set(this.authObj, 'AuthenticationController', this.originController);
+    authentication.HuaweiIDProvider = this.originProvider as never;
+    authentication.AuthenticationController = this.originController as never;
     AuthenticationControllerStubAP.reset();
   }
 }
@@ -733,6 +744,27 @@ export default function phase2BatchAPTest() {
       done();
     });
 
+    it('boundary: has_guest_chosen_persisted_should_keep_memory_false_when_preference_returns_false', 0, async (done: () => void) => {
+      // Arrange
+      // Act
+      // Assert
+      resetAuthStorageAP();
+      const hooks = new PreferenceManagerHooksAP();
+      const pref = new PreferenceManagerStubAP();
+      pref.guestChosenValue = false;
+      hooks.setInstance(pref);
+      try {
+        const chosen = await AuthSessionStore.hasGuestChosenPersisted(fakeContextAP());
+
+        expect(chosen).assertFalse();
+        expect(AuthSessionStore.hasGuestChosen()).assertFalse();
+        expect(pref.initCount).assertEqual(1);
+      } finally {
+        hooks.restore();
+      }
+      done();
+    });
+
     it('invalid: mark_guest_chosen_persisted_should_keep_memory_flag_when_init_fails', 0, async (done: () => void) => {
       // Arrange
       // Act
@@ -830,6 +862,27 @@ export default function phase2BatchAPTest() {
 
         expect(blocked).assertTrue();
         expect(AuthSessionStore.isSilentLoginBlockedAfterLogout()).assertTrue();
+      } finally {
+        hooks.restore();
+      }
+      done();
+    });
+
+    it('boundary: is_silent_block_persisted_should_keep_memory_false_when_preference_returns_false', 0, async (done: () => void) => {
+      // Arrange
+      // Act
+      // Assert
+      resetAuthStorageAP();
+      const hooks = new PreferenceManagerHooksAP();
+      const pref = new PreferenceManagerStubAP();
+      pref.blockedValue = false;
+      hooks.setInstance(pref);
+      try {
+        const blocked = await AuthSessionStore.isSilentLoginBlockedAfterLogoutPersisted(fakeContextAP());
+
+        expect(blocked).assertFalse();
+        expect(AuthSessionStore.isSilentLoginBlockedAfterLogout()).assertFalse();
+        expect(pref.initCount).assertEqual(1);
       } finally {
         hooks.restore();
       }
@@ -1081,9 +1134,10 @@ export default function phase2BatchAPTest() {
       const hooks = new AppStartupCoordinatorHooksAP();
       const coordinator = AppStartupCoordinator.getInstance();
       const internal = coordinator as Object as AppStartupCoordinatorInternalAP;
+      const originSilentWithTimeout = internal.silentLoginWithTimeout;
       const fake = new FakeAuthFacadeAP();
       fake.result = buildAuthResultAP(true, 0, 'ok', LoginStatus.AUTHENTICATED);
-      Reflect.set(coordinator as Object, 'authFacade', fake);
+      Reflect.set(internal as Object, 'silentLoginWithTimeout', async (): Promise<AuthResult<UserSession>> => fake.silentLogin());
       internal.startupAuthInFlight = null;
       try {
         const result = await coordinator.checkStartupAuth();
@@ -1091,6 +1145,7 @@ export default function phase2BatchAPTest() {
         expect(result.success).assertTrue();
         expect(result.status).assertEqual(LoginStatus.AUTHENTICATED);
       } finally {
+        Reflect.set(internal as Object, 'silentLoginWithTimeout', originSilentWithTimeout);
         hooks.restore();
       }
       done();
@@ -1203,6 +1258,41 @@ export default function phase2BatchAPTest() {
         expect(result.status).assertEqual(LoginStatus.AUTHENTICATED);
       } finally {
         Reflect.set(facadeObj, 'silentLogin', originSilentLogin);
+        hooks.restore();
+      }
+      done();
+    });
+
+    it('boundary: silent_login_with_timeout_should_skip_clear_when_timer_id_is_zero', 0, async (done: () => void) => {
+      // Arrange
+      // Act
+      // Assert
+      const hooks = new AppStartupCoordinatorHooksAP();
+      const timerHooks = new TimerHooksAP();
+      const coordinator = AppStartupCoordinator.getInstance();
+      const internal = coordinator as Object as AppStartupCoordinatorInternalAP;
+      const facadeObj = internal.authFacade;
+      const originSilentLogin = Reflect.get(facadeObj, 'silentLogin') as Object;
+      let clearTimeoutCount = 0;
+      timerHooks.setHooks(
+        ((_callback: Object, _delay: number): number => {
+          return 0;
+        }) as Object,
+        ((_timerId: number): void => {
+          clearTimeoutCount += 1;
+        }) as Object
+      );
+      try {
+        Reflect.set(facadeObj, 'silentLogin', async (): Promise<AuthResult<UserSession>> => {
+          return buildAuthResultAP(true, 0, 'ok', LoginStatus.AUTHENTICATED);
+        });
+        const result = await internal.silentLoginWithTimeout();
+
+        expect(result.success).assertTrue();
+        expect(clearTimeoutCount).assertEqual(0);
+      } finally {
+        Reflect.set(facadeObj, 'silentLogin', originSilentLogin);
+        timerHooks.restore();
         hooks.restore();
       }
       done();
@@ -1335,6 +1425,72 @@ export default function phase2BatchAPTest() {
       done();
     });
 
+    it('boundary: explicit_login_should_mark_force_login_and_preserve_context_in_real_request', 0, async (done: () => void) => {
+      // Arrange
+      // Act
+      // Assert
+      const accountKitHooks = new AccountKitHooksAP();
+      const provider = HuaweiAccountProvider.getInstance();
+      const response = new LoginResponseMockAP();
+      const credential = new LoginCredentialMockAP();
+      credential.authorizationCode = 'code_real_explicit';
+      response.data = credential;
+      accountKitHooks.useStubs();
+      AuthenticationControllerStubAP.response = response;
+      try {
+        const context = fakeContextAP();
+        const normalized = await provider.explicitLogin(context);
+
+        expect(normalized.authorizationCode).assertEqual('code_real_explicit');
+        expect(AuthenticationControllerStubAP.lastContext === context as Object).assertTrue();
+        expect(AuthenticationControllerStubAP.lastCreatedRequest?.forceLogin ?? false).assertTrue();
+      } finally {
+        accountKitHooks.restore();
+      }
+      done();
+    });
+
+    it('invalid: explicit_login_should_throw_when_real_response_has_no_credential_data', 0, async (done: () => void) => {
+      // Arrange
+      // Act
+      // Assert
+      const accountKitHooks = new AccountKitHooksAP();
+      const provider = HuaweiAccountProvider.getInstance();
+      const response = new LoginResponseMockAP();
+      let message = '';
+      accountKitHooks.useStubs();
+      AuthenticationControllerStubAP.response = response;
+      try {
+        await provider.explicitLogin(fakeContextAP());
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
+      } finally {
+        accountKitHooks.restore();
+      }
+      expect(message).assertEqual('HUAWEI_CREDENTIAL_EMPTY');
+      done();
+    });
+
+    it('invalid: silent_login_should_treat_falsy_real_response_as_empty_credential', 0, async (done: () => void) => {
+      // Arrange
+      // Act
+      // Assert
+      const accountKitHooks = new AccountKitHooksAP();
+      const provider = HuaweiAccountProvider.getInstance();
+      let message = '';
+      accountKitHooks.useStubs();
+      AuthenticationControllerStubAP.response = '' as never;
+      try {
+        await provider.silentLogin(fakeContextAP());
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
+      } finally {
+        accountKitHooks.restore();
+      }
+      expect(message).assertEqual('HUAWEI_CREDENTIAL_EMPTY');
+      done();
+    });
+
     it('invalid: silent_login_should_map_non_error_throwable_to_provider_error', 0, async (done: () => void) => {
       // Arrange
       // Act
@@ -1351,6 +1507,26 @@ export default function phase2BatchAPTest() {
         message = error instanceof Error ? error.message : '';
       } finally {
         hooks.restore();
+      }
+      expect(message).assertEqual('auth_provider_error');
+      done();
+    });
+
+    it('invalid: silent_login_should_wrap_non_error_throwable_in_real_request', 0, async (done: () => void) => {
+      // Arrange
+      // Act
+      // Assert
+      const accountKitHooks = new AccountKitHooksAP();
+      const provider = HuaweiAccountProvider.getInstance();
+      let message = '';
+      accountKitHooks.useStubs();
+      AuthenticationControllerStubAP.error = '403';
+      try {
+        await provider.silentLogin(fakeContextAP());
+      } catch (error) {
+        message = error instanceof Error ? error.message : '';
+      } finally {
+        accountKitHooks.restore();
       }
       expect(message).assertEqual('auth_provider_error');
       done();

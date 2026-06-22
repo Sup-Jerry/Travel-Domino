@@ -281,15 +281,13 @@ export class ArrivalReminderEngine {
       if (refreshPlanIds.length > 0) {
         const planMap: Map<number, PlanItem> = new Map<number, PlanItem>();
         const activePlanIds = activePlanIdsForLoop;
-        if (activePlanIds.length > 0) {
-          const activePlanRows: (PlanItem | undefined)[] = await Promise.all(activePlanIds.map((planId: number): Promise<PlanItem | undefined> => PlanRepositoryImpl.getPlanById(planId)));
-          for (let i = 0; i < activePlanRows.length; i++) {
-            const plan = activePlanRows[i];
-            if (!plan || !this.isPlanActiveForReminder(plan)) {
-              continue;
-            }
-            planMap.set(plan.id, plan);
+        const activePlanRows: (PlanItem | undefined)[] = await Promise.all(activePlanIds.map((planId: number): Promise<PlanItem | undefined> => PlanRepositoryImpl.getPlanById(planId)));
+        for (let i = 0; i < activePlanRows.length; i++) {
+          const plan = activePlanRows[i];
+          if (!plan || !this.isPlanActiveForReminder(plan)) {
+            continue;
           }
+          planMap.set(plan.id, plan);
         }
         const refreshedEvents = await Promise.all(refreshPlanIds.map((planId: number) => EventRepositoryImpl.getAllEvents(planId)));
         for (let i = 0; i < refreshPlanIds.length; i++) {

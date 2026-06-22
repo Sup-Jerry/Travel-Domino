@@ -1,6 +1,32 @@
 ﻿import { EventEntity } from '../../../../model/entity/EventEntity';
 import { ThemeCenter } from '../../../../common/utils/ThemeCenter';
 
+function defaultTimelineDotColor(_event: EventEntity): ResourceColor {
+  return '#999';
+}
+
+function defaultTimelineTextColor(_event: EventEntity): ResourceColor {
+  return '#666';
+}
+
+function defaultTimelineBackgroundColor(_event: EventEntity): ResourceColor {
+  return '#F5F5F5';
+}
+
+function defaultTimelineBorderColor(_event: EventEntity): ResourceColor {
+  return '#DDD';
+}
+
+function defaultTimelineText(_event: EventEntity): string {
+  return '--';
+}
+
+function noopTimelineItemTap(_event: EventEntity, _index: number): void {}
+
+function noopTimelineScrollIndex(_start: number, _end: number, _center: number): void {}
+
+function noopTimelineVoid(): void {}
+
 export function isCompanionTimelineFocused(itemId: number, focusedEventId: number): boolean {
   return itemId === focusedEventId;
 }
@@ -27,16 +53,16 @@ export struct CompanionTimelineSection {
   timelineScroller: Scroller = new Scroller();
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
 
-  getStateDotColor: (event: EventEntity) => ResourceColor = (_event: EventEntity) => '#999';
-  getEventStateLabel: (event: EventEntity) => string = (_event: EventEntity) => '--';
-  getStateTagTextColor: (event: EventEntity) => ResourceColor = (_event: EventEntity) => '#666';
-  getStateTagBackgroundColor: (event: EventEntity) => ResourceColor = (_event: EventEntity) => '#F5F5F5';
-  getStateBorderColor: (event: EventEntity) => ResourceColor = (_event: EventEntity) => '#DDD';
-  getTimelineSupplement: (event: EventEntity) => string = (_event: EventEntity) => '--';
+  getStateDotColor = defaultTimelineDotColor;
+  getEventStateLabel = defaultTimelineText;
+  getStateTagTextColor = defaultTimelineTextColor;
+  getStateTagBackgroundColor = defaultTimelineBackgroundColor;
+  getStateBorderColor = defaultTimelineBorderColor;
+  getTimelineSupplement = defaultTimelineText;
 
-  onItemTap: (event: EventEntity, index: number) => void = (_event: EventEntity, _index: number) => {};
-  onScrollIndex: (start: number, end: number, center: number) => void = (_start: number, _end: number, _center: number) => {};
-  onScrollStop: () => void = () => {};
+  onItemTap = noopTimelineItemTap;
+  onScrollIndex = noopTimelineScrollIndex;
+  onScrollStop = noopTimelineVoid;
 
   private getThemePalette() {
     return ThemeCenter.getPalette(this.effectiveTheme);

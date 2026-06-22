@@ -23,6 +23,17 @@ export function canStartPlanImport(rawInput: string): boolean {
   return classifyPlanImportPayload(rawInput) !== 'empty';
 }
 
+export function cancelPlanImport(
+  importing: boolean,
+  cancelToken: PlanJsonImportCancelToken | null,
+  close: () => void
+): void {
+  if (importing && cancelToken) {
+    cancelToken.cancel();
+  }
+  close();
+}
+
 @CustomDialog
 export struct PlanImportDialog {
   controller: CustomDialogController;
@@ -119,10 +130,7 @@ export struct PlanImportDialog {
           .fontColor($r('app.color.text_secondary'))
           .width('42%')
           .onClick(() => {
-            if (this.importing && this.importCancelToken) {
-              this.importCancelToken.cancel();
-            }
-            this.controller.close();
+            cancelPlanImport(this.importing, this.importCancelToken, (): void => this.controller.close());
           })
 
         Button('开始导入')

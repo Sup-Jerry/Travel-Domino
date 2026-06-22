@@ -1,8 +1,10 @@
 import { describe, it, expect } from '@ohos/hypium';
+import { abilityAccessCtrl, bundleManager, common } from '@kit.AbilityKit';
 import { ThemeCenter } from '../main/ets/common/utils/ThemeCenter';
 import { AppConfig } from '../main/ets/common/utils/AppConfig';
 import {
   AddItemDialog,
+  MapPickerRouteParams,
   isAddItemMapPickerEnabled,
   isAddItemCoordinateValid,
   resolveAddItemScopedStorageKey,
@@ -73,6 +75,7 @@ interface AddItemDialogPrivateTest {
     preTravel?: number, isHardLock?: boolean, note?: string, isMustVisit?: boolean, lat?: number,
     lng?: number) => Promise<void>;
   onDateChangedRecommendTime: (dayOffset: number, currentTime: string) => string;
+  setController(controller: Object): void;
   setInitiallyProvidedValue(params: AddItemDialogParamsTest): void;
   updateStateVars(params: AddItemDialogParamsTest): void;
   getPalette(): AddItemDialogPaletteTest;
@@ -86,11 +89,153 @@ interface AddItemDialogPrivateTest {
   scopedStorageKey(base: string): string;
   canUseMapPicker(): boolean;
   isMapNativeRuntimeReady(): Promise<boolean>;
+  checkAndRequestPermission(): Promise<boolean>;
+  getUIContext(): AddItemDialogUiContextTest;
   initialRender(): void;
 }
 
 class AddItemDialogControllerMockTest {
   close(): void {}
+}
+
+interface AddItemDialogPermissionResultTest {
+  authResults: number[];
+}
+
+interface AddItemDialogPermissionManagerTest {
+  checkAccessToken(tokenId: number, permissionName: string): Promise<number>;
+  requestPermissionsFromUser(
+    hostContext: common.UIAbilityContext,
+    permissions: string[]
+  ): Promise<AddItemDialogPermissionResultTest>;
+}
+
+interface AddItemDialogAlertButtonTest {
+  value: string;
+  action: () => void | Promise<void>;
+}
+
+interface AddItemDialogAlertOptionsTest {
+  title: string;
+  message: string;
+  primaryButton: AddItemDialogAlertButtonTest;
+  secondaryButton: AddItemDialogAlertButtonTest;
+}
+
+interface AddItemDialogUiContextTest {
+  showAlertDialog(options: AddItemDialogAlertOptionsTest): void;
+  getHostContext(): Object;
+}
+
+interface AddItemDialogAppInfoTest {
+  accessTokenId: number;
+}
+
+interface AddItemDialogBundleInfoTest {
+  appInfo: AddItemDialogAppInfoTest;
+}
+
+class AddItemDialogBundleInfoMockTest implements AddItemDialogBundleInfoTest {
+  appInfo: AddItemDialogAppInfoTest;
+
+  constructor(tokenId: number) {
+    this.appInfo = new AddItemDialogAppInfoMockTest(tokenId);
+  }
+}
+
+class AddItemDialogAppInfoMockTest implements AddItemDialogAppInfoTest {
+  accessTokenId: number;
+
+  constructor(tokenId: number) {
+    this.accessTokenId = tokenId;
+  }
+}
+
+class AddItemDialogUiContextMockTest implements AddItemDialogUiContextTest {
+  public alertCount: number = 0;
+  public lastAlert?: AddItemDialogAlertOptionsTest;
+  private readonly hostContext: common.UIAbilityContext = {} as common.UIAbilityContext;
+
+  showAlertDialog(options: AddItemDialogAlertOptionsTest): void {
+    this.alertCount += 1;
+    this.lastAlert = options;
+  }
+
+  getHostContext(): Object {
+    return this.hostContext;
+  }
+}
+
+class AddItemDialogPermissionManagerMockTest implements AddItemDialogPermissionManagerTest {
+  public checkResult: number = abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED;
+  public requestResults: number[] = [0];
+  public throwOnCheck: boolean = false;
+  public throwOnRequest: boolean = false;
+
+  async checkAccessToken(_tokenId: number, _permissionName: string): Promise<number> {
+    if (this.throwOnCheck) {
+      throw new Error('add_item_check_failed');
+    }
+    return this.checkResult;
+  }
+
+  async requestPermissionsFromUser(
+    _hostContext: common.UIAbilityContext,
+    _permissions: string[]
+  ): Promise<AddItemDialogPermissionResultTest> {
+    if (this.throwOnRequest) {
+      throw new Error('add_item_request_failed');
+    }
+    return {
+      authResults: this.requestResults
+    };
+  }
+}
+
+class AddItemDialogAbilityHooksTest {
+  private readonly originCreateAtManager: Object;
+  private readonly originGetBundleInfoForSelf: Object;
+
+  constructor() {
+    const aacObj: Object = Reflect.get(globalThis, 'abilityAccessCtrl') as Object;
+    const bmObj: Object = Reflect.get(globalThis, 'bundleManager') as Object;
+    this.originCreateAtManager = Reflect.get(aacObj, 'createAtManager') as Object;
+    this.originGetBundleInfoForSelf = Reflect.get(bmObj, 'getBundleInfoForSelf') as Object;
+  }
+
+  setAtManager(manager: Object): void {
+    const aacObj: Object = Reflect.get(globalThis, 'abilityAccessCtrl') as Object;
+    Reflect.set(aacObj, 'createAtManager', (): Object => manager);
+  }
+
+  setBundleInfo(tokenId: number): void {
+    const bmObj: Object = Reflect.get(globalThis, 'bundleManager') as Object;
+    Reflect.set(bmObj, 'getBundleInfoForSelf', async (): Promise<AddItemDialogBundleInfoTest> => {
+      return new AddItemDialogBundleInfoMockTest(tokenId);
+    });
+  }
+
+  setBundleInfoThrow(): void {
+    const bmObj: Object = Reflect.get(globalThis, 'bundleManager') as Object;
+    Reflect.set(bmObj, 'getBundleInfoForSelf', async (): Promise<AddItemDialogBundleInfoTest> => {
+      throw new Error('add_item_bundle_failed');
+    });
+  }
+
+  restore(): void {
+    const aacObj: Object = Reflect.get(globalThis, 'abilityAccessCtrl') as Object;
+    const bmObj: Object = Reflect.get(globalThis, 'bundleManager') as Object;
+    Reflect.set(aacObj, 'createAtManager', this.originCreateAtManager);
+    Reflect.set(bmObj, 'getBundleInfoForSelf', this.originGetBundleInfoForSelf);
+  }
+}
+
+async function flushAddItemDialogMicrotasks(rounds: number = 4): Promise<void> {
+  let index = 0;
+  while (index < rounds) {
+    await Promise.resolve();
+    index += 1;
+  }
 }
 
 export default function addItemDialogHelperTest() {
@@ -183,6 +328,25 @@ export default function addItemDialogHelperTest() {
       // Assert
       expect(enabled).assertTrue();
       expect(disabled).assertFalse();
+    });
+
+    it('normal: map_picker_route_params_constructor_should_assign_all_fields', 0, () => {
+      // Arrange
+      const lat = 34.3416;
+      const lng = 108.9398;
+      const planId = 18;
+      const centerSource = 'existing';
+      const queryName = 'Clock Tower';
+
+      // Act
+      const params = new MapPickerRouteParams(lat, lng, planId, centerSource, queryName);
+
+      // Assert
+      expect(params.lat).assertEqual(lat);
+      expect(params.lng).assertEqual(lng);
+      expect(params.planId).assertEqual(planId);
+      expect(params.centerSource).assertEqual(centerSource);
+      expect(params.queryName).assertEqual(queryName);
     });
   });
 
@@ -366,6 +530,305 @@ export default function addItemDialogHelperTest() {
       expect(currentSchedule).assertTrue();
       expect(currentGeocoding).assertTrue();
       expect(threw).assertFalse();
+    });
+
+    it('regression: td-20260426-add_item_dialog_set_controller_should_replace_reference', 0, () => {
+      // Arrange
+      const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateTest;
+      const first = new AddItemDialogControllerMockTest() as Object;
+      const second = new AddItemDialogControllerMockTest() as Object;
+      page.controller = first;
+
+      // Act
+      page.setController(second);
+
+      // Assert
+      expect(page.controller).assertEqual(second);
+    });
+
+    it('boundary: add_item_mode_should_treat_whitespace_name_as_new_schedule_item', 0, () => {
+      // Arrange
+      const initName = '   ';
+      const initIsSchedule = false;
+      // Act
+      const mode = resolveAddItemMode(initName, initIsSchedule);
+      // Assert
+      expect(mode).assertEqual(1);
+    });
+
+    it('normal: add_item_duration_should_prefer_positive_initial_duration_over_default', 0, () => {
+      // Arrange
+      const initDuration = 25;
+      const defaultDuration = 90;
+      // Act
+      const duration = resolveAddItemDuration(initDuration, defaultDuration);
+      // Assert
+      expect(duration).assertEqual(25);
+    });
+
+    it('invalid: add_item_coordinate_should_reject_latitude_and_longitude_out_of_world_range', 0, () => {
+      // Act
+      // Arrange
+      const invalidLat = isAddItemCoordinateValid(90.1, 120);
+      const invalidLng = isAddItemCoordinateValid(30, 180.1);
+      // Assert
+      expect(invalidLat).assertFalse();
+      expect(invalidLng).assertFalse();
+    });
+
+    it('boundary: add_item_dialog_calculate_duration_should_keep_previous_duration_when_end_not_after_start', 0, () => {
+      // Arrange
+      const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateTest;
+      page.duration = 45;
+      page.startTime = new Date(2026, 5, 10, 10, 0, 0, 0);
+      page.endTime = new Date(2026, 5, 10, 9, 50, 0, 0);
+
+      // Act
+      page.calculateDuration();
+
+      // Assert
+      expect(page.duration).assertEqual(45);
+    });
+
+    it('boundary: add_item_dialog_about_to_appear_should_keep_default_time_when_initial_time_format_invalid', 0, () => {
+      // Arrange
+      const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateTest;
+      page.setInitiallyProvidedValue({
+        initName: 'Museum',
+        initIsSchedule: true,
+        initDuration: 50,
+        initSuggestedTime: 'bad-value',
+        initFixedTime: '',
+        initDayOffset: 1,
+        initPreTravel: 0,
+        initPriority: 0,
+        planStartDate: new Date(2026, 5, 10, 0, 0, 0, 0).getTime()
+      });
+
+      // Act
+      page.aboutToAppear();
+      const startText = page.formatTime(page.startTime);
+
+      // Assert
+      expect(page.mode).assertEqual(1);
+      expect(page.preTravel).assertEqual(0);
+      expect(page.isMustVisit).assertFalse();
+      expect(startText).assertEqual('00:00');
+    });
+
+    it('normal: add_item_dialog_about_to_appear_should_prefer_fixed_time_and_positive_pretravel_for_named_schedule', 0, () => {
+      // Arrange
+      const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateTest;
+      page.setInitiallyProvidedValue({
+        initName: 'Gallery',
+        initIsSchedule: true,
+        initDuration: 40,
+        initSuggestedTime: '09:15',
+        initFixedTime: '11:45',
+        initDayOffset: 2,
+        initPreTravel: 18,
+        initPriority: 1,
+        planStartDate: new Date(2026, 5, 10, 0, 0, 0, 0).getTime()
+      });
+
+      // Act
+      page.aboutToAppear();
+      const startText = page.formatTime(page.startTime);
+      const endText = page.formatTime(page.endTime);
+
+      // Assert
+      expect(page.mode).assertEqual(1);
+      expect(page.preTravel).assertEqual(18);
+      expect(page.isMustVisit).assertTrue();
+      expect(startText).assertEqual('11:45');
+      expect(endText).assertEqual('12:25');
+    });
+
+    it('normal: add_item_permission_should_return_true_when_location_already_granted', 0, async () => {
+      // Arrange
+      const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateTest;
+      const hooks = new AddItemDialogAbilityHooksTest();
+      const manager = new AddItemDialogPermissionManagerMockTest();
+      const uiContext = new AddItemDialogUiContextMockTest();
+      manager.checkResult = abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED;
+      hooks.setAtManager(manager as Object);
+      hooks.setBundleInfo(101);
+      Reflect.set(page as Object, 'getUIContext', (): AddItemDialogUiContextTest => uiContext);
+
+      try {
+        // Act
+        const granted = await page.checkAndRequestPermission();
+
+        // Assert
+        expect(granted).assertTrue();
+        expect(uiContext.alertCount).assertEqual(0);
+      } finally {
+        hooks.restore();
+      }
+    });
+
+    it('boundary: add_item_permission_should_return_false_when_bundle_lookup_fails', 0, async () => {
+      // Arrange
+      const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateTest;
+      const hooks = new AddItemDialogAbilityHooksTest();
+      const manager = new AddItemDialogPermissionManagerMockTest();
+      const uiContext = new AddItemDialogUiContextMockTest();
+      hooks.setAtManager(manager as Object);
+      hooks.setBundleInfoThrow();
+      Reflect.set(page as Object, 'getUIContext', (): AddItemDialogUiContextTest => uiContext);
+
+      try {
+        // Act
+        const granted = await page.checkAndRequestPermission();
+
+        // Assert
+        expect(granted).assertFalse();
+        expect(uiContext.alertCount).assertEqual(0);
+      } finally {
+        hooks.restore();
+      }
+    });
+
+    it('boundary: add_item_permission_should_return_false_when_user_cancels_explanation_dialog', 0,
+      async () => {
+        // Arrange
+        const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateTest;
+        const hooks = new AddItemDialogAbilityHooksTest();
+        const manager = new AddItemDialogPermissionManagerMockTest();
+        const uiContext = new AddItemDialogUiContextMockTest();
+        manager.checkResult = abilityAccessCtrl.GrantStatus.PERMISSION_DENIED;
+        hooks.setAtManager(manager as Object);
+        hooks.setBundleInfo(202);
+        Reflect.set(page as Object, 'getUIContext', (): AddItemDialogUiContextTest => uiContext);
+
+        try {
+          // Act
+          const cancelPromise = page.checkAndRequestPermission();
+          await flushAddItemDialogMicrotasks();
+          const firstAlert = uiContext.lastAlert;
+          if (firstAlert) {
+            firstAlert.primaryButton.action();
+          }
+          const cancelResult = await cancelPromise;
+
+          // Assert
+          expect(uiContext.alertCount).assertEqual(1);
+          expect(cancelResult).assertFalse();
+        } finally {
+          hooks.restore();
+        }
+      });
+
+    it('combined: add_item_permission_should_return_true_when_system_permission_request_is_denied', 0,
+      async () => {
+        // Arrange
+        const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateTest;
+        const hooks = new AddItemDialogAbilityHooksTest();
+        const manager = new AddItemDialogPermissionManagerMockTest();
+        const uiContext = new AddItemDialogUiContextMockTest();
+        manager.checkResult = abilityAccessCtrl.GrantStatus.PERMISSION_DENIED;
+        manager.requestResults = [1];
+        hooks.setAtManager(manager as Object);
+        hooks.setBundleInfo(203);
+        Reflect.set(page as Object, 'getUIContext', (): AddItemDialogUiContextTest => uiContext);
+
+        try {
+          // Act
+          const deniedPromise = page.checkAndRequestPermission();
+          await flushAddItemDialogMicrotasks();
+          const alert = uiContext.lastAlert;
+          if (alert) {
+            await alert.secondaryButton.action();
+          }
+          const deniedResult = await deniedPromise;
+
+          // Assert
+          expect(uiContext.alertCount).assertEqual(1);
+          expect(deniedResult).assertTrue();
+        } finally {
+          hooks.restore();
+        }
+      });
+
+    it('normal: add_item_permission_should_return_true_when_system_permission_request_succeeds', 0,
+      async () => {
+        // Arrange
+        const page = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateTest;
+        const hooks = new AddItemDialogAbilityHooksTest();
+        const manager = new AddItemDialogPermissionManagerMockTest();
+        const uiContext = new AddItemDialogUiContextMockTest();
+        manager.checkResult = abilityAccessCtrl.GrantStatus.PERMISSION_DENIED;
+        manager.requestResults = [0];
+        hooks.setAtManager(manager as Object);
+        hooks.setBundleInfo(204);
+        Reflect.set(page as Object, 'getUIContext', (): AddItemDialogUiContextTest => uiContext);
+
+        try {
+          // Act
+          const grantedPromise = page.checkAndRequestPermission();
+          await flushAddItemDialogMicrotasks();
+          const alert = uiContext.lastAlert;
+          if (alert) {
+            await alert.secondaryButton.action();
+          }
+          const granted = await grantedPromise;
+
+          // Assert
+          expect(uiContext.alertCount).assertEqual(1);
+          expect(granted).assertTrue();
+        } finally {
+          hooks.restore();
+        }
+      });
+
+    it('combined: add_item_dialog_initial_render_should_support_schedule_and_backlog_visual_branches', 0, () => {
+      // Arrange
+      const schedulePage = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateTest;
+      const backlogPage = new AddItemDialog(undefined, {} as LocalStorage) as Object as AddItemDialogPrivateTest;
+      let scheduleThrew = false;
+      let backlogThrew = false;
+
+      schedulePage.controller = new AddItemDialogControllerMockTest() as Object;
+      schedulePage.mode = 1;
+      schedulePage.name = 'Schedule Spot';
+      schedulePage.note = 'fixed route';
+      schedulePage.duration = 55;
+      schedulePage.isSchedule = true;
+      schedulePage.isAnchor = true;
+      schedulePage.isMustVisit = true;
+      schedulePage.showTip = true;
+      schedulePage.effectiveTheme = 'dark';
+      schedulePage.startTime = new Date(2026, 5, 12, 10, 20, 0, 0);
+      schedulePage.endTime = new Date(2026, 5, 12, 11, 15, 0, 0);
+
+      backlogPage.controller = new AddItemDialogControllerMockTest() as Object;
+      backlogPage.mode = 0;
+      backlogPage.name = 'Backlog Spot';
+      backlogPage.note = '';
+      backlogPage.duration = 30;
+      backlogPage.isSchedule = false;
+      backlogPage.isAnchor = false;
+      backlogPage.isMustVisit = false;
+      backlogPage.showTip = false;
+      backlogPage.effectiveTheme = 'light';
+      backlogPage.startTime = new Date(2026, 5, 12, 8, 0, 0, 0);
+      backlogPage.endTime = new Date(2026, 5, 12, 8, 30, 0, 0);
+
+      // Act
+      try {
+        schedulePage.initialRender();
+      } catch (_error) {
+        scheduleThrew = true;
+      }
+      try {
+        backlogPage.initialRender();
+      } catch (_error) {
+        backlogThrew = true;
+      }
+
+      // Assert
+      expect(scheduleThrew).assertFalse();
+      expect(backlogThrew).assertFalse();
     });
   });
 }

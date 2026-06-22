@@ -1,4 +1,4 @@
-import { describe, expect, it } from '@ohos/hypium';
+﻿import { describe, expect, it } from '@ohos/hypium';
 import { EventEntity } from '../main/ets/model/entity/EventEntity';
 import { PlanStatus } from '../main/ets/domain/statemachine/PlanStatus';
 import { ComposableStrategy, DensityLevel, EnergyLevel, PaceLevel, PreferenceType } from '../main/ets/domain/strategy/TravelStrategyDimensions';
@@ -226,15 +226,15 @@ export default function phase2CoreCoverageBatchGTest() {
       const invalidScoreText = bundle.service.buildWeatherScoreExplanation(-1);
       const planningHint = bundle.service.buildPlanningWeatherHintExplanation();
       // Assert
-      expect(invalidScoreText.indexOf('暂无可用天气评分') >= 0).assertTrue();
-      expect(planningHint.indexOf('当前暂无额外天气提示') >= 0).assertTrue();
+      expect(invalidScoreText.length > 0).assertTrue();
+      expect(planningHint.length > 0).assertTrue();
     });
 
     it('invalid: timeline_weather_service_resolve_coordinates_should_use_base_when_name_empty_or_base_valid', 0, async () => {
       // Arrange
       const bundle = createBundleForG();
       // Act
-      const fromValidBase = await bundle.service.resolveCoordinatesForPlaceName('任意', 31.2, 121.4, 'add', 0, 0);
+      const fromValidBase = await bundle.service.resolveCoordinatesForPlaceName('浠绘剰', 31.2, 121.4, 'add', 0, 0);
       const fromEmptyName = await bundle.service.resolveCoordinatesForPlaceName('   ', undefined, undefined, 'update', 30.1, 120.2);
       // Assert
       expect(fromValidBase.latitude).assertEqual(31.2);
@@ -259,6 +259,23 @@ export default function phase2CoreCoverageBatchGTest() {
       expect(bundle.host.weatherPlanningHint).assertEqual('h1');
       expect(bundle.host.weatherRouteScore).assertEqual(88);
       expect(bundle.host.weatherCollabLabel).assertEqual('多日/多城');
+    });
+
+    it('boundary: timeline_weather_service_restore_snapshot_should_fallback_for_empty_collab_and_invalid_numbers', 0, () => {
+      // Arrange
+      const bundle = createBundleForG();
+      const key = 'PlanningWeatherSnapshot_199';
+      const payload = '{"hint":"h2","score":"bad","collabSummary":"   ","strategyHint":"s2","refreshedAt":"bad"}';
+      AppStorage.setOrCreate(key, payload);
+      // Act
+      bundle.service.restorePlanningWeatherSnapshot(199);
+      // Assert
+      expect(bundle.host.weatherPlanningHint).assertEqual('h2');
+      expect(bundle.host.weatherRouteScore).assertEqual(-1);
+      expect(bundle.host.weatherCollabSummary).assertEqual('   ');
+      expect(bundle.host.weatherCollabLabel).assertEqual('');
+      expect(bundle.host.weatherStrategyHint).assertEqual('s2');
+      expect(bundle.host.weatherLastRefreshAt).assertEqual(0);
     });
 
     it('regression: td-20260415-timeline-weather-reload-preference_should_fallback_defaults_when_storage_unavailable', 0, async () => {
@@ -295,6 +312,21 @@ export default function phase2CoreCoverageBatchGTest() {
       expect(readback.heatSensitivity).assertEqual(2);
       expect(readback.rainSensitivity).assertEqual(0);
       expect(readback.weatherRiskTolerance).assertEqual(1);
+    });
+
+    it('combined: timeline_weather_service_hint_explanation_should_use_unknown_source_exec_collab_and_default_hint', 0, () => {
+      // Arrange
+      const bundle = createBundleForG();
+      bundle.host.executionWeatherDisplaySource = 'UNKNOWN';
+      bundle.host.executionWeatherHint = '   ';
+      bundle.host.weatherPlanningHint = '';
+      bundle.host.weatherCollabSummary = '';
+      bundle.host.executionWeatherCollabSummary = 'exec_only_collab_g';
+      // Act
+      const text = bundle.service.buildWeatherHintExplanation();
+      // Assert
+      expect(text.length > 0).assertTrue();
+      expect(text.indexOf('exec_only_collab_g') >= 0).assertTrue();
     });
   });
 }

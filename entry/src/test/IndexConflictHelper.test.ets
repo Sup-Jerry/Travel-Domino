@@ -223,6 +223,17 @@ export default function indexConflictHelperTest() {
       expect(gap).assertEqual(0);
     });
 
+    it('boundary: resolve_conflict_gap_should_fallback_when_message_number_is_not_positive', 0, () => {
+      // Arrange
+      const event = buildConflictEvent(40);
+      event.gap_minutes = 0;
+      event.conflict_msg = '冲突剩余 0 分钟';
+      // Act
+      const gap = IndexConflictHelper.resolveConflictGapMinutes(event, 7);
+      // Assert
+      expect(gap).assertEqual(7);
+    });
+
     it('conflict: get_conflict_target_time_should_use_default_when_time_invalid', 0, () => {
       // Arrange
       const event = buildConflictEvent(4);
@@ -795,6 +806,77 @@ export default function indexConflictHelperTest() {
       expect(blockedCalls).assertEqual(1);
       expect(previewCalls >= 1).assertTrue();
       expect(compressFactoryCalls >= 2).assertTrue();
+      done();
+    });
+
+    it('boundary: save_conflict_time_should_only_run_on_done_when_new_time_missing', 0, async (done: Function) => {
+      // Arrange
+      const event = buildConflictEvent(38);
+      const vm = new SaveConflictVmMock(event);
+      let doneCalled = false;
+
+      // Act
+      await IndexConflictHelper.saveConflictTime(
+        vm as Object as TimelineViewModel,
+        event,
+        undefined,
+        () => {
+          doneCalled = true;
+        }
+      );
+
+      // Assert
+      expect(vm.called).assertFalse();
+      expect(doneCalled).assertTrue();
+      done();
+    });
+
+    it('boundary: save_conflict_time_should_skip_on_done_when_callback_missing', 0, async (done: Function) => {
+      // Arrange
+      const event = buildConflictEvent(41);
+      const vm = new SaveConflictVmMock(event);
+      // Act
+      await IndexConflictHelper.saveConflictTime(vm as Object as TimelineViewModel, event, '10:20');
+      // Assert
+      expect(vm.called).assertTrue();
+      done();
+    });
+
+    it('combined: request_plan_date_update_should_open_conflict_menu_and_apply_date_after_save', 0, async (done: Function) => {
+      // Arrange
+      const vm = new DateShiftVmMock();
+      const event = buildConflictEvent(39);
+      vm.events = [event];
+      vm.preview.hasRigidConflict = true;
+      vm.preview.conflictItemId = 39;
+      vm.preview.gapMinutes = 17;
+      const targetDateMs = new Date('2026-01-03T13:45:00.000Z').getTime();
+      let menuCalls = 0;
+      let capturedIndex = -1;
+      let capturedGap = -1;
+      let capturedTargetTime = '';
+
+      // Act
+      IndexConflictHelper.requestPlanDateUpdate(
+        vm as Object as TimelineViewModel,
+        targetDateMs,
+        (index: number, _item: EventEntity, targetTime: string, gap: number, saveCallback: (t?: string) => void) => {
+          menuCalls += 1;
+          capturedIndex = index;
+          capturedGap = gap;
+          capturedTargetTime = targetTime;
+          void saveCallback('11:30');
+        }
+      );
+      await new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => setTimeout(() => resolve(), 30));
+
+      // Assert
+      expect(menuCalls).assertEqual(1);
+      expect(capturedIndex).assertEqual(0);
+      expect(capturedGap).assertEqual(17);
+      expect(capturedTargetTime).assertEqual('09:00');
+      expect(vm.updateEventInfoCalls).assertEqual(1);
+      expect(vm.updatePlanDateCalls).assertEqual(1);
       done();
     });
   });

@@ -28,7 +28,7 @@ interface GeneratedObjectLiteralInterface_1 {
   lng: number;
 }
 
-class MapPickerRouteParams {
+export class MapPickerRouteParams {
   lat: number;
   lng: number;
   planId: number;
@@ -87,7 +87,7 @@ export struct AddItemDialog {
     preTravel?: number, isHardLock?: boolean, note?: string, isMustVisit?: boolean, lat?: number,
     lng?: number) => Promise<void> = async () => {
   };
-  onDateChangedRecommendTime: (dayOffset: number, currentTime: string) => string = (_dayOffset: number, currentTime: string): string => currentTime;
+  onDateChangedRecommendTime = (_dayOffset: number, currentTime: string): string => currentTime;
   @StorageProp('defaultDuration') globalDefaultDuration: number = 60;
   @State showTip: boolean = false;
   // =================== 地图选点回传监听 ===================

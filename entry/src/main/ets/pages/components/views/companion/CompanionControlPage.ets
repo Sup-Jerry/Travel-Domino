@@ -61,6 +61,30 @@ export function resolveCompanionControlCardScale(
   return getCompanionCardScale(isCardSwitching, cardSwitchProgress, phase);
 }
 
+function noopCompanionControlVoid(): void {}
+
+function noopCompanionControlVisible(_visible: boolean): void {}
+
+function noopCompanionControlSuggestion(_item: WeatherSuggestion): void {}
+
+function noopCompanionControlSuggestionId(_suggestionId: string): void {}
+
+function noopCompanionControlEvent(_event: EventEntity): void {}
+
+function noopCompanionControlTimelineTap(_event: EventEntity, _index: number): void {}
+
+function noopCompanionControlTimelineScroll(_start: number, _end: number, _center: number): void {}
+
+type CompanionControlVoidCallback = () => void;
+type CompanionControlVisibleCallback = (visible: boolean) => void;
+type CompanionControlSuggestionCallback = (item: WeatherSuggestion) => void;
+type CompanionControlSuggestionIdCallback = (suggestionId: string) => void;
+type CompanionControlEventCallback = (event: EventEntity) => void;
+type CompanionControlAsyncVoidCallback = () => Promise<void> | void;
+type CompanionControlAsyncEventCallback = (event: EventEntity) => Promise<void> | void;
+type CompanionControlTimelineTapCallback = (event: EventEntity, index: number) => void;
+type CompanionControlTimelineScrollCallback = (start: number, end: number, center: number) => void;
+
 @Component
 export struct CompanionControlPage {
   @Prop context: CompanionContext = {
@@ -118,39 +142,39 @@ export struct CompanionControlPage {
 
   @StorageLink('EffectiveTheme') effectiveTheme: string = 'light';
 
-  onExit: () => void = () => {};
+  onExit: CompanionControlVoidCallback = noopCompanionControlVoid;
 
-  onRefreshWeather: () => void = () => {};
-  onToggleExpanded: () => void = () => {};
-  onToggleScorePopup: () => void = () => {};
-  onToggleHintPopup: () => void = () => {};
-  onToggleSuggestionPopup: () => void = () => {};
-  onScorePopupStateChange: (visible: boolean) => void = (_visible: boolean) => {};
-  onHintPopupStateChange: (visible: boolean) => void = (_visible: boolean) => {};
-  onSuggestionPopupStateChange: (visible: boolean) => void = (_visible: boolean) => {};
-  onOpenSuggestionGuide: () => void = () => {};
-  onOpenSuggestionDetail: (item: WeatherSuggestion) => void = (_item: WeatherSuggestion) => {};
-  onApplySuggestion: (item: WeatherSuggestion) => void = (_item: WeatherSuggestion) => {};
-  onLaterSuggestion: (suggestionId: string) => void = (_suggestionId: string) => {};
-  onIgnoreSuggestion: (suggestionId: string) => void = (_suggestionId: string) => {};
+  onRefreshWeather: CompanionControlVoidCallback = noopCompanionControlVoid;
+  onToggleExpanded: CompanionControlVoidCallback = noopCompanionControlVoid;
+  onToggleScorePopup: CompanionControlVoidCallback = noopCompanionControlVoid;
+  onToggleHintPopup: CompanionControlVoidCallback = noopCompanionControlVoid;
+  onToggleSuggestionPopup: CompanionControlVoidCallback = noopCompanionControlVoid;
+  onScorePopupStateChange: CompanionControlVisibleCallback = noopCompanionControlVisible;
+  onHintPopupStateChange: CompanionControlVisibleCallback = noopCompanionControlVisible;
+  onSuggestionPopupStateChange: CompanionControlVisibleCallback = noopCompanionControlVisible;
+  onOpenSuggestionGuide: CompanionControlVoidCallback = noopCompanionControlVoid;
+  onOpenSuggestionDetail: CompanionControlSuggestionCallback = noopCompanionControlSuggestion;
+  onApplySuggestion: CompanionControlSuggestionCallback = noopCompanionControlSuggestion;
+  onLaterSuggestion: CompanionControlSuggestionIdCallback = noopCompanionControlSuggestionId;
+  onIgnoreSuggestion: CompanionControlSuggestionIdCallback = noopCompanionControlSuggestionId;
 
-  onNavigate: (event: EventEntity) => void = (_event: EventEntity) => {};
-  onStartFocused: () => Promise<void> | void = () => {};
-  onSkipFocused: () => Promise<void> | void = () => {};
-  onEndFocused: (event: EventEntity) => Promise<void> | void = (_event: EventEntity) => {};
-  onReopenFocused: () => Promise<void> | void = () => {};
-  onAdjustFocused: (event: EventEntity) => Promise<void> | void = (_event: EventEntity) => {};
-  onSkipDisabledTap: () => void = () => {};
-  onEnterImmersive: () => void = () => {};
+  onNavigate: CompanionControlEventCallback = noopCompanionControlEvent;
+  onStartFocused: CompanionControlAsyncVoidCallback = noopCompanionControlVoid;
+  onSkipFocused: CompanionControlAsyncVoidCallback = noopCompanionControlVoid;
+  onEndFocused: CompanionControlAsyncEventCallback = noopCompanionControlEvent;
+  onReopenFocused: CompanionControlAsyncVoidCallback = noopCompanionControlVoid;
+  onAdjustFocused: CompanionControlAsyncEventCallback = noopCompanionControlEvent;
+  onSkipDisabledTap: CompanionControlVoidCallback = noopCompanionControlVoid;
+  onEnterImmersive: CompanionControlVoidCallback = noopCompanionControlVoid;
 
-  onTimelineItemTap: (event: EventEntity, index: number) => void = (_event: EventEntity, _index: number) => {};
-  onTimelineScrollIndex: (start: number, end: number, center: number) => void = (_start: number, _end: number, _center: number) => {};
-  onTimelineScrollStop: () => void = () => {};
+  onTimelineItemTap: CompanionControlTimelineTapCallback = noopCompanionControlTimelineTap;
+  onTimelineScrollIndex: CompanionControlTimelineScrollCallback = noopCompanionControlTimelineScroll;
+  onTimelineScrollStop: CompanionControlVoidCallback = noopCompanionControlVoid;
 
-  onHistory: () => void = () => {};
-  onImmersive: () => void = () => {};
-  onSearch: () => void = () => {};
-  onFilter: () => void = () => {};
+  onHistory: CompanionControlVoidCallback = noopCompanionControlVoid;
+  onImmersive: CompanionControlVoidCallback = noopCompanionControlVoid;
+  onSearch: CompanionControlVoidCallback = noopCompanionControlVoid;
+  onFilter: CompanionControlVoidCallback = noopCompanionControlVoid;
 
   private getThemePalette() {
     return ThemeCenter.getPalette(this.effectiveTheme);
@@ -174,9 +198,7 @@ export struct CompanionControlPage {
         CompanionControlTopBar({
           safeTopInset: this.safeTopInset,
           runtimeDescription: getCompanionRuntimeDescription(this.context, Date.now()),
-          onExit: () => {
-            this.onExit();
-          }
+          onExit: this.onExit
         });
 
         if (shouldShowCompanionWeatherCard(this.isWeatherFeatureEnabled)) {
@@ -199,45 +221,19 @@ export struct CompanionControlPage {
             executionWeatherCollabSummary: this.executionWeatherCollabSummary,
             executionWeatherAppliedSummary: this.executionWeatherAppliedSummary,
             executionWeatherSuggestions: this.executionWeatherSuggestions,
-            onRefreshWeather: () => {
-              this.onRefreshWeather();
-            },
-            onToggleExpanded: () => {
-              this.onToggleExpanded();
-            },
-            onToggleScorePopup: () => {
-              this.onToggleScorePopup();
-            },
-            onToggleHintPopup: () => {
-              this.onToggleHintPopup();
-            },
-            onToggleSuggestionPopup: () => {
-              this.onToggleSuggestionPopup();
-            },
-            onScorePopupStateChange: (visible: boolean) => {
-              this.onScorePopupStateChange(visible);
-            },
-            onHintPopupStateChange: (visible: boolean) => {
-              this.onHintPopupStateChange(visible);
-            },
-            onSuggestionPopupStateChange: (visible: boolean) => {
-              this.onSuggestionPopupStateChange(visible);
-            },
-            onOpenSuggestionGuide: () => {
-              this.onOpenSuggestionGuide();
-            },
-            onOpenSuggestionDetail: (item: WeatherSuggestion) => {
-              this.onOpenSuggestionDetail(item);
-            },
-            onApplySuggestion: (item: WeatherSuggestion) => {
-              this.onApplySuggestion(item);
-            },
-            onLaterSuggestion: (suggestionId: string) => {
-              this.onLaterSuggestion(suggestionId);
-            },
-            onIgnoreSuggestion: (suggestionId: string) => {
-              this.onIgnoreSuggestion(suggestionId);
-            }
+            onRefreshWeather: this.onRefreshWeather,
+            onToggleExpanded: this.onToggleExpanded,
+            onToggleScorePopup: this.onToggleScorePopup,
+            onToggleHintPopup: this.onToggleHintPopup,
+            onToggleSuggestionPopup: this.onToggleSuggestionPopup,
+            onScorePopupStateChange: this.onScorePopupStateChange,
+            onHintPopupStateChange: this.onHintPopupStateChange,
+            onSuggestionPopupStateChange: this.onSuggestionPopupStateChange,
+            onOpenSuggestionGuide: this.onOpenSuggestionGuide,
+            onOpenSuggestionDetail: this.onOpenSuggestionDetail,
+            onApplySuggestion: this.onApplySuggestion,
+            onLaterSuggestion: this.onLaterSuggestion,
+            onIgnoreSuggestion: this.onIgnoreSuggestion
           });
         }
 
@@ -248,42 +244,32 @@ export struct CompanionControlPage {
           stableEvent: this.stableEvent,
           runtimeState: this.context.runtimeState,
           currentEventId: getCompanionControlCurrentEventId(this.context.currentEvent),
-          getEventStateLabel: (event: EventEntity) => getCompanionEventStateLabel(event),
+          getEventStateLabel: getCompanionEventStateLabel,
           getStateTagTextColor: (event: EventEntity) => getCompanionStateCoreColor(event, this.getThemePalette()),
-          getStateTagBackgroundColor: (event: EventEntity) => getCompanionStateTagBackgroundColor(event),
+          getStateTagBackgroundColor: getCompanionStateTagBackgroundColor,
           getStateBorderColor: (event: EventEntity) => getCompanionStateCoreColor(event, this.getThemePalette()),
-          getMainCardTimeText: (event: EventEntity) => getCompanionMainCardTimeText(event),
-          getPlannedRange: (event: EventEntity) => getCompanionPlannedRange(event),
-          getEventState: (event: EventEntity) => getCompanionEventState(event),
+          getMainCardTimeText: getCompanionMainCardTimeText,
+          getPlannedRange: getCompanionPlannedRange,
+          getEventState: getCompanionEventState,
           canStartFocused: (event: EventEntity) => canCompanionStartFocused(event, this.scheduledEvents),
           canEndFocused: (event: EventEntity) => canCompanionEndFocused(event, this.context),
           getCardTranslateX: (phase: CompanionCardPhase) => this.getCardTranslateX(phase),
           getCardOpacity: (phase: CompanionCardPhase) => this.getCardOpacity(phase),
           getCardScale: (phase: CompanionCardPhase) => this.getCardScale(phase),
-          onNavigate: (event: EventEntity) => {
-            this.onNavigate(event);
-          },
+          onNavigate: this.onNavigate,
           onStart: async (_event: EventEntity) => {
             await this.onStartFocused();
           },
           onSkip: async (_event: EventEntity) => {
             await this.onSkipFocused();
           },
-          onEnd: async (event: EventEntity) => {
-            await this.onEndFocused(event);
-          },
+          onEnd: this.onEndFocused,
           onReopen: async (_event: EventEntity) => {
             await this.onReopenFocused();
           },
-          onAdjust: async (event: EventEntity) => {
-            await this.onAdjustFocused(event);
-          },
-          onSkipDisabledTap: () => {
-            this.onSkipDisabledTap();
-          },
-          onEnterImmersive: () => {
-            this.onEnterImmersive();
-          }
+          onAdjust: this.onAdjustFocused,
+          onSkipDisabledTap: this.onSkipDisabledTap,
+          onEnterImmersive: this.onEnterImmersive
         });
 
         CompanionTimelineSection({
@@ -294,20 +280,14 @@ export struct CompanionControlPage {
           events: this.timelineEvents,
           timelineScroller: this.timelineScroller,
           getStateDotColor: (event: EventEntity) => getCompanionStateCoreColor(event, this.getThemePalette()),
-          getEventStateLabel: (event: EventEntity) => getCompanionEventStateLabel(event),
+          getEventStateLabel: getCompanionEventStateLabel,
           getStateTagTextColor: (event: EventEntity) => getCompanionStateCoreColor(event, this.getThemePalette()),
-          getStateTagBackgroundColor: (event: EventEntity) => getCompanionStateTagBackgroundColor(event),
+          getStateTagBackgroundColor: getCompanionStateTagBackgroundColor,
           getStateBorderColor: (event: EventEntity) => getCompanionStateCoreColor(event, this.getThemePalette()),
-          getTimelineSupplement: (event: EventEntity) => getCompanionTimelineSupplement(event),
-          onItemTap: (event: EventEntity, index: number) => {
-            this.onTimelineItemTap(event, index);
-          },
-          onScrollIndex: (start: number, end: number, center: number) => {
-            this.onTimelineScrollIndex(start, end, center);
-          },
-          onScrollStop: () => {
-            this.onTimelineScrollStop();
-          }
+          getTimelineSupplement: getCompanionTimelineSupplement,
+          onItemTap: this.onTimelineItemTap,
+          onScrollIndex: this.onTimelineScrollIndex,
+          onScrollStop: this.onTimelineScrollStop
         });
       }
       .width('100%')
@@ -316,18 +296,10 @@ export struct CompanionControlPage {
       .backgroundColor(this.getThemePalette().companionBg);
 
       CompanionBottomActionBar({
-        onHistory: () => {
-          this.onHistory();
-        },
-        onImmersive: () => {
-          this.onImmersive();
-        },
-        onSearch: () => {
-          this.onSearch();
-        },
-        onFilter: () => {
-          this.onFilter();
-        }
+        onHistory: this.onHistory,
+        onImmersive: this.onImmersive,
+        onSearch: this.onSearch,
+        onFilter: this.onFilter
       })
         .zIndex(20);
     }

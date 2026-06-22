@@ -5,6 +5,8 @@ export interface IndexToolbarTheme {
   textPrimary: string;
 }
 
+type IndexToolbarVoidAction = () => void;
+
 export function resolveIndexToolbarDisplayTitle(planTitle: string, maxLength: number = 7): string {
   return planTitle.length > maxLength ? `${planTitle.substring(0, maxLength)}...` : planTitle;
 }
@@ -19,6 +21,14 @@ export function shouldShowIndexToolbarModeExplanation(strategyMode: number, curr
 
 export function shouldShowIndexToolbarWeatherAction(isCompanionMode: boolean, weatherFeatureEnabled: boolean): boolean {
   return !isCompanionMode && weatherFeatureEnabled;
+}
+
+export function handleIndexToolbarSettingsClick(isArchived: boolean, onOpenSettings: () => void): boolean {
+  if (isArchived) {
+    return false;
+  }
+  onOpenSettings();
+  return true;
 }
 
 export function resolveIndexToolbarModeLabel(strategyMode: number): string {
@@ -63,10 +73,10 @@ export struct IndexToolbar {
     textPrimary: '#1F1F1F'
   };
 
-  onBack: () => void = () => {};
-  onOpenSettings: () => void = () => {};
-  onEnterCompanion: () => void = () => {};
-  onRefreshWeather: () => void = () => {};
+  onBack: IndexToolbarVoidAction = () => {};
+  onOpenSettings: IndexToolbarVoidAction = () => {};
+  onEnterCompanion: IndexToolbarVoidAction = () => {};
+  onRefreshWeather: IndexToolbarVoidAction = () => {};
 
   build() {
     Row() {
@@ -78,7 +88,7 @@ export struct IndexToolbar {
       .backgroundColor(Color.Transparent)
       .padding({ left: 10, right: 10, top: 6, bottom: 6 })
       .borderRadius(8)
-      .onClick(() => this.onBack())
+      .onClick(this.onBack)
 
       Column() {
         Text(resolveIndexToolbarDisplayTitle(this.planTitle))
@@ -111,19 +121,14 @@ export struct IndexToolbar {
       }
       .layoutWeight(1)
       .justifyContent(FlexAlign.Center)
-      .onClick(() => {
-        if (this.isArchived) {
-          return;
-        }
-        this.onOpenSettings();
-      })
+      .onClick(() => handleIndexToolbarSettingsClick(this.isArchived, this.onOpenSettings))
 
       Row() {
         Text('🚀').fontSize(18)
       }
       .padding(8)
       .margin({ right: 4 })
-      .onClick(() => this.onEnterCompanion())
+      .onClick(this.onEnterCompanion)
 
       if (shouldShowIndexToolbarWeatherAction(this.isCompanionMode, this.weatherFeatureEnabled)) {
         Button(this.weatherLoading ? '⏳' : '🌤️')
@@ -133,7 +138,7 @@ export struct IndexToolbar {
           .backgroundColor(this.theme.cardBgSoft)
           .fontColor(this.theme.textPrimary)
           .enabled(!this.weatherLoading)
-          .onClick(() => this.onRefreshWeather())
+          .onClick(this.onRefreshWeather)
       }
     }
     .width('100%')

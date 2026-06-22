@@ -385,6 +385,23 @@ export default function phase2BatchASTest() {
       expect(idleGapMinutes).assertEqual(720);
     });
 
+    it('boundary: preference_manager_setters_should_cover_dark_system_theme_and_low_duration_paths', 0, async () => {
+      // Arrange
+      const store = new PreferenceStoreMockAS();
+      const manager = attachPreferenceStoreAS(store);
+      // Act
+      await manager.setThemeMode('dark');
+      const darkSaved = String(store.getRaw(PreferenceManager.KEY_THEME_MODE));
+      await manager.setThemeMode('system');
+      const systemSaved = String(store.getRaw(PreferenceManager.KEY_THEME_MODE));
+      await manager.setMinEventDuration(-10);
+      const minDurationSaved = Number(store.getRaw(PreferenceManager.KEY_MIN_EVENT_DURATION));
+      // Assert
+      expect(darkSaved).assertEqual('dark');
+      expect(systemSaved).assertEqual('system');
+      expect(minDurationSaved).assertEqual(1);
+    });
+
     it('normal: preference_manager_ai_poi_and_weather_preferences_should_roundtrip_with_clamp_and_swap', 0, async () => {
       // Arrange
       const store = new PreferenceStoreMockAS();
@@ -484,6 +501,62 @@ export default function phase2BatchASTest() {
       expect(avatarProfile.localUri).assertEqual('');
       expect(strategyProfile.avgDensity).assertEqual(DEFAULT_USER_PROFILE.avgDensity);
       expect(strategyProfile.modeFrequency).assertEqual(DEFAULT_USER_PROFILE.modeFrequency);
+    });
+
+    it('boundary: preference_manager_strategy_and_avatar_fallbacks_should_cover_non_string_state_and_non_positive_defaults', 0, async () => {
+      // Arrange
+      const store = new PreferenceStoreMockAS();
+      const manager = attachPreferenceStoreAS(store);
+      const originalMatch = DEFAULT_USER_PROFILE.consistencyMatchCount;
+      const originalMismatch = DEFAULT_USER_PROFILE.consistencyMismatchCount;
+      const originalLastCheck = DEFAULT_USER_PROFILE.lastConsistencyCheckAt;
+      DEFAULT_USER_PROFILE.consistencyMatchCount = 0;
+      DEFAULT_USER_PROFILE.consistencyMismatchCount = -2;
+      DEFAULT_USER_PROFILE.lastConsistencyCheckAt = 0;
+      store.setRaw(
+        PreferenceManager.buildAvatarProfileKey('user_non_string_state_as'),
+        JSON.stringify({
+          userId: 'user_non_string_state_as',
+          localUri: 'local://avatar',
+          compressedUri: '',
+          cloudUrl: '',
+          uploadState: 123,
+          updatedAt: 50
+        }) as Object
+      );
+      store.setRaw(
+        PreferenceManager.KEY_USER_STRATEGY_PROFILE,
+        JSON.stringify({
+          avgDensity: 1,
+          avgPace: 1,
+          avgPreference: 'bad',
+          avgEnergy: 1,
+          modeFrequency: 'm',
+          sampleCount: 3,
+          updatedAt: 4,
+          manualOverrideEnabled: false,
+          consistencyMatchCount: 'bad',
+          consistencyMismatchCount: 'bad',
+          lastConsistencyCheckAt: 'bad'
+        }) as Object
+      );
+      // Act
+      const avatarProfile = await manager.getAvatarProfile('user_non_string_state_as');
+      const strategyProfile = await manager.getUserStrategyProfile();
+      store.setRaw(PreferenceManager.KEY_USER_STRATEGY_PROFILE, '' as Object);
+      const defaultProfile = await manager.getUserStrategyProfile();
+      DEFAULT_USER_PROFILE.consistencyMatchCount = originalMatch;
+      DEFAULT_USER_PROFILE.consistencyMismatchCount = originalMismatch;
+      DEFAULT_USER_PROFILE.lastConsistencyCheckAt = originalLastCheck;
+      // Assert
+      expect(avatarProfile.uploadState).assertEqual('EMPTY');
+      expect(strategyProfile.avgPreference).assertEqual(DEFAULT_USER_PROFILE.avgPreference);
+      expect(strategyProfile.consistencyMatchCount).assertEqual(0);
+      expect(strategyProfile.consistencyMismatchCount).assertEqual(0);
+      expect(strategyProfile.lastConsistencyCheckAt).assertEqual(0);
+      expect(defaultProfile.consistencyMatchCount).assertEqual(0);
+      expect(defaultProfile.consistencyMismatchCount).assertEqual(0);
+      expect(defaultProfile.lastConsistencyCheckAt).assertEqual(0);
     });
 
     it('combined: preference_manager_cache_avatar_and_strategy_setters_should_roundtrip_sanitized_payloads', 0, async () => {

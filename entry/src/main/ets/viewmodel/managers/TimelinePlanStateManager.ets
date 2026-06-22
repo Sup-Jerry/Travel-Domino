@@ -168,12 +168,10 @@ export class TimelinePlanStateManager {
       this.host.startExecutionWeatherScheduler(this.host.planId, stage);
       return;
     }
-    if (status === PlanStatus.COMPLETED || status === PlanStatus.CANCELLED || status === PlanStatus.EXPIRED || status === PlanStatus.DRAFT) {
-      this.host.stopExecutionWeatherScheduler();
-      if (status === PlanStatus.COMPLETED || status === PlanStatus.CANCELLED || status === PlanStatus.EXPIRED) {
-        this.host.executionWeatherHint = '';
-        this.host.executionWeatherSuggestions = [];
-      }
+    this.host.stopExecutionWeatherScheduler();
+    if (status === PlanStatus.COMPLETED || status === PlanStatus.CANCELLED || status === PlanStatus.EXPIRED) {
+      this.host.executionWeatherHint = '';
+      this.host.executionWeatherSuggestions = [];
     }
   }
 

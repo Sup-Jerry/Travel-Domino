@@ -4,6 +4,9 @@ import {
   getImmersiveNextStationText,
   getImmersivePrimaryActionEnabled,
   getImmersivePrimaryActionLabel,
+  resolveImmersiveCurrentRenderSections,
+  resolveImmersiveNextRenderEvents,
+  resolveImmersivePrimaryActionSlots,
   shouldShowImmersivePrimaryAction,
   ImmersiveSwipePhase
 } from '../main/ets/pages/components/views/companion/CompanionImmersiveView';
@@ -44,6 +47,15 @@ interface CompanionImmersiveViewPrivateTest {
   onEndEvent: (event: EventEntity) => Promise<void> | void;
   onNavigate: (event?: EventEntity) => void;
   onSwipeGesture: (phase: ImmersiveSwipePhase, event?: GestureEvent) => void;
+  hasCurrentEvent(): boolean;
+  shouldRenderPrimaryAction(): boolean;
+  getPrimaryActionBackgroundColor(): Object;
+  hasNextEvent(): boolean;
+  handlePrimaryActionClick(): Promise<void>;
+  handleNavigateClick(): void;
+  handleSwipeStart(event: GestureEvent): void;
+  handleSwipeUpdate(event: GestureEvent): void;
+  handleSwipeEnd(event: GestureEvent): void;
   setInitiallyProvidedValue(params: CompanionImmersiveViewParamsTest): void;
   updateStateVars(params: CompanionImmersiveViewParamsTest): void;
   getThemePalette(): CompanionImmersivePaletteTest;
@@ -189,6 +201,30 @@ export default function companionImmersiveViewHelperTest() {
       expect(text.includes(forecast)).assertTrue();
     });
 
+    it('combined: immersive_render_sections_should_cover_current_idle_primary_and_next_visibility', 0, () => {
+      // Arrange
+      const current = buildImmersiveEvent(41, 'museum');
+      const next = buildImmersiveEvent(42, 'station');
+
+      // Act
+      const currentSections = resolveImmersiveCurrentRenderSections(current);
+      const idleSections = resolveImmersiveCurrentRenderSections(null);
+      const visibleActions = resolveImmersivePrimaryActionSlots(true);
+      const hiddenActions = resolveImmersivePrimaryActionSlots(false);
+      const nextEvents = resolveImmersiveNextRenderEvents(next);
+      const noNextEvents = resolveImmersiveNextRenderEvents(null);
+
+      // Assert
+      expect(currentSections.currentEvents.length).assertEqual(1);
+      expect(currentSections.idleSlots.length).assertEqual(0);
+      expect(idleSections.currentEvents.length).assertEqual(0);
+      expect(idleSections.idleSlots.length).assertEqual(1);
+      expect(visibleActions.length).assertEqual(1);
+      expect(hiddenActions.length).assertEqual(0);
+      expect(nextEvents.length).assertEqual(1);
+      expect(noNextEvents.length).assertEqual(0);
+    });
+
     it('combined: immersive_view_instance_should_sync_props_and_keep_default_callbacks_stable', 0, async (done: Function) => {
       // Arrange
       const page = new CompanionImmersiveView(undefined, {} as LocalStorage) as Object as CompanionImmersiveViewPrivateTest;
@@ -244,6 +280,101 @@ export default function companionImmersiveViewHelperTest() {
       expect(palette.immersiveBg).assertEqual(ThemeCenter.getPalette('dark').immersiveBg);
       expect(palette.primary).assertEqual(ThemeCenter.getPalette('dark').primary);
       done();
+    });
+
+    it('combined: private_action_handlers_should_cover_start_end_and_empty_current_paths', 0, async (done: Function) => {
+      // Arrange
+      const page = new CompanionImmersiveView(undefined, {} as LocalStorage) as Object as CompanionImmersiveViewPrivateTest;
+      const current = buildImmersiveEvent(10, 'museum');
+      let startId = -1;
+      let endId = -1;
+
+      page.context = buildImmersiveContext('READY', current, null);
+      page.onStartEvent = async (event: EventEntity): Promise<void> => {
+        startId = event.id;
+      };
+      page.onEndEvent = async (event: EventEntity): Promise<void> => {
+        endId = event.id;
+      };
+      page.isCurrentEventPending = (): boolean => true;
+
+      // Act
+      await page.handlePrimaryActionClick();
+      page.isCurrentEventPending = (): boolean => false;
+      await page.handlePrimaryActionClick();
+      page.context = buildImmersiveContext('READY', null, null);
+      await page.handlePrimaryActionClick();
+
+      // Assert
+      expect(startId).assertEqual(10);
+      expect(endId).assertEqual(10);
+      done();
+    });
+
+    it('combined: private_navigation_and_swipe_handlers_should_forward_current_event_and_phase', 0, () => {
+      // Arrange
+      const page = new CompanionImmersiveView(undefined, {} as LocalStorage) as Object as CompanionImmersiveViewPrivateTest;
+      const current = buildImmersiveEvent(20, 'station');
+      const phases: string[] = [];
+      let navigateId = -1;
+      const gesture = { offsetY: -80 } as GestureEvent;
+
+      page.context = buildImmersiveContext('ACTIVE', current, null);
+      page.onNavigate = (event?: EventEntity): void => {
+        navigateId = event?.id ?? -1;
+      };
+      page.onSwipeGesture = (phase: ImmersiveSwipePhase, event?: GestureEvent): void => {
+        phases.push(`${phase}:${event ? 'event' : 'none'}`);
+      };
+
+      // Act
+      page.handleNavigateClick();
+      page.handleSwipeStart(gesture);
+      page.handleSwipeUpdate(gesture);
+      page.handleSwipeEnd(gesture);
+      page.context = buildImmersiveContext('ACTIVE', null, null);
+      page.handleNavigateClick();
+
+      // Assert
+      expect(navigateId).assertEqual(-1);
+      expect(phases.length).assertEqual(3);
+      expect(phases[0]).assertEqual('start:event');
+      expect(phases[1]).assertEqual('update:event');
+      expect(phases[2]).assertEqual('end:event');
+    });
+
+    it('combined: private_view_state_helpers_should_cover_current_next_and_primary_action_branches', 0, () => {
+      // Arrange
+      const page = new CompanionImmersiveView(undefined, {} as LocalStorage) as Object as CompanionImmersiveViewPrivateTest;
+      const current = buildImmersiveEvent(30, 'airport');
+      const next = buildImmersiveEvent(31, 'hotel');
+
+      page.context = buildImmersiveContext('PAUSED', current, next);
+      page.effectiveTheme = 'dark';
+      page.isCurrentEventPending = (): boolean => true;
+      page.isCurrentEventActive = (): boolean => false;
+      const successColor = ThemeCenter.getPalette('dark').success;
+      const warningColor = ThemeCenter.getPalette('dark').warning;
+
+      // Act
+      const hasCurrent = page.hasCurrentEvent();
+      const hasNext = page.hasNextEvent();
+      const pausedVisible = page.shouldRenderPrimaryAction();
+      const pendingColor = page.getPrimaryActionBackgroundColor();
+      page.isCurrentEventPending = (): boolean => false;
+      page.context = buildImmersiveContext('READY', null, null);
+      const idleVisible = page.shouldRenderPrimaryAction();
+      const endingColor = page.getPrimaryActionBackgroundColor();
+
+      // Assert
+      expect(hasCurrent).assertTrue();
+      expect(hasNext).assertTrue();
+      expect(pausedVisible).assertTrue();
+      expect(idleVisible).assertFalse();
+      expect(pendingColor).assertEqual(successColor);
+      expect(endingColor).assertEqual(warningColor);
+      expect(page.hasCurrentEvent()).assertFalse();
+      expect(page.hasNextEvent()).assertFalse();
     });
   });
 }

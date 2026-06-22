@@ -2,16 +2,21 @@
 import { PlanStateMachine } from '../../domain/statemachine/PlanStateMachine';
 import { PlanStatus } from '../../domain/statemachine/PlanStatus';
 
+export type WeatherReminderShowCallback = (payload: WeatherReminderPayload) => void;
+export type WeatherReminderDialogStateGetter = () => boolean;
+export type WeatherReminderVoidCallback = () => void;
+export type WeatherReminderUnsubscribeCallback = () => void;
+
 export interface PlanWeatherConsumeInput {
   isDialogOpen: boolean;
   currentPlanId: number;
-  onShow: (payload: WeatherReminderPayload) => void;
+  onShow: WeatherReminderShowCallback;
 }
 
 export interface WeatherReminderSubscriptionHandlers {
-  isDialogOpen: () => boolean;
-  onShow: (payload: WeatherReminderPayload) => void;
-  onClear?: () => void;
+  isDialogOpen: WeatherReminderDialogStateGetter;
+  onShow: WeatherReminderShowCallback;
+  onClear?: WeatherReminderVoidCallback;
   pollIntervalMs?: number;
 }
 
@@ -26,7 +31,7 @@ export class WeatherReminderCoordinator {
     return WeatherReminderCoordinator.instance;
   }
 
-  public subscribePlan(planId: number, handlers: WeatherReminderSubscriptionHandlers): () => void {
+  public subscribePlan(planId: number, handlers: WeatherReminderSubscriptionHandlers): WeatherReminderUnsubscribeCallback {
     const normalizedPlanId = planId > 0 ? planId : -1;
     if (normalizedPlanId <= 0) {
       return () => {

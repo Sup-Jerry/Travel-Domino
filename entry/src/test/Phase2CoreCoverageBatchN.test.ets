@@ -11,7 +11,7 @@ import {
   DeviceInfo,
   SocialCredential
 } from '../main/ets/domain/auth/AuthModels';
-import { HuaweiCredential, LoginStatus, UserSession } from '../main/ets/domain/auth/AuthTypes';
+import { AuthResult, HuaweiCredential, LoginStatus, UserSession } from '../main/ets/domain/auth/AuthTypes';
 
 class SessionManagerMockForN {
   session: UserSession | null = null;
@@ -144,6 +144,11 @@ class BundleForN {
 
 class AppContextForN {
   tag: string = 'ctx_n';
+}
+
+interface AuthFacadePrivateForN {
+  forceLocalGuestSuccess(reason: string, detail: string, loginMethod?: string): Promise<AuthResult<UserSession>>;
+  tryGuestFallback(): Promise<AuthResult<UserSession>>;
 }
 
 function createBundleForN(): BundleForN {
@@ -290,6 +295,29 @@ export default function phase2CoreCoverageBatchNTest() {
       expect(message).assertEqual('auth_error');
     });
 
+    it('boundary: auth_facade_normalize_expire_at_should_expand_seconds_timestamp', 0, () => {
+      // Arrange
+      const bundle = createBundleForN();
+      const normalize = Reflect.get(bundle.facade as Object, 'normalizeExpireAt') as (rawExpireAt: number | string) => number;
+      // Act
+      const expireAt = normalize(1_717_171_717);
+      // Assert
+      expect(expireAt).assertEqual(1_717_171_717_000);
+    });
+
+    it('boundary: auth_facade_normalize_expire_at_should_fallback_to_future_when_value_invalid', 0, () => {
+      // Arrange
+      const bundle = createBundleForN();
+      const normalize = Reflect.get(bundle.facade as Object, 'normalizeExpireAt') as (rawExpireAt: number | string) => number;
+      const before = Date.now();
+      // Act
+      const expireAt = normalize('invalid_expire_at_n');
+      const after = Date.now();
+      // Assert
+      expect(expireAt >= before + 2 * 60 * 60 * 1000).assertTrue();
+      expect(expireAt <= after + 2 * 60 * 60 * 1000 + 1000).assertTrue();
+    });
+
     it('conflict: auth_facade_explicit_login_should_fail_with_social_login_failed_when_gateway_returns_nonzero', 0, async () => {
       // Arrange
       const bundle = createBundleForN();
@@ -326,11 +354,13 @@ export default function phase2CoreCoverageBatchNTest() {
       hooks.restore();
     });
 
-    it('combined: auth_facade_guest_fallback_should_cover_session_empty_offline_success_and_exception_force_local_success', 0, async () => {
+    it('combined: auth_facade_explicit_guest_login_should_skip_remote_guest_gateway', 0, async () => {
       // Arrange
       const bundle = createBundleForN();
       const hooks = new HooksForN();
+      let createGuestCalls = 0;
       hooks.setCreateGuest(async (_device: DeviceInfo): Promise<AuthApiResponse<AuthLoginResult>> => {
+        createGuestCalls += 1;
         const payload = createLoginPayloadForN(true);
         Reflect.set(payload as Object, 'session', null);
         return createLoginResponseForN(0, payload, 'ok');
@@ -345,15 +375,16 @@ export default function phase2CoreCoverageBatchNTest() {
       // Assert
       expect(fallbackOnSessionEmpty.success).assertTrue();
       expect(fallbackOnSessionEmpty.data !== null).assertTrue();
-      expect(fallbackOnSessionEmpty.data!.loginMethod).assertEqual('GUEST_OFFLINE');
+      expect(fallbackOnSessionEmpty.data!.loginMethod).assertEqual('GUEST_LOCAL_FIRST');
       expect(failureOnException.success).assertTrue();
       expect(failureOnException.data !== null).assertTrue();
       expect(failureOnException.data!.isGuest).assertTrue();
-      expect(failureOnException.data!.loginMethod).assertEqual('GUEST_HARD_FALLBACK');
+      expect(failureOnException.data!.loginMethod).assertEqual('GUEST_LOCAL_FIRST');
+      expect(createGuestCalls).assertEqual(0);
       hooks.restore();
     });
 
-    it('conflict: auth_facade_guest_fallback_should_force_local_success_when_session_empty_and_offline_fallback_disabled', 0, async () => {
+    it('conflict: auth_facade_explicit_guest_login_should_ignore_offline_fallback_override', 0, async () => {
       // Arrange
       const bundle = createBundleForN();
       const hooks = new HooksForN();
@@ -369,7 +400,7 @@ export default function phase2CoreCoverageBatchNTest() {
       expect(result.success).assertTrue();
       expect(result.data !== null).assertTrue();
       expect(result.data!.isGuest).assertTrue();
-      expect(result.data!.loginMethod).assertEqual('GUEST_HARD_FALLBACK');
+      expect(result.data!.loginMethod).assertEqual('GUEST_LOCAL_FIRST');
       expect(result.status).assertEqual(LoginStatus.AUTHENTICATED);
       hooks.restore();
     });
@@ -388,6 +419,91 @@ export default function phase2CoreCoverageBatchNTest() {
       expect(result.success).assertTrue();
       expect(bundle.session.guestChosenCalls).assertEqual(1);
       hooks.restore();
+    });
+
+    it('boundary: auth_facade_explicit_guest_login_should_propagate_failed_local_guest_result', 0, async () => {
+      // Arrange
+      const bundle = createBundleForN();
+      Reflect.set(bundle.facade as Object, 'forceLocalGuestSuccess', async (_reason: string, _detail: string, _loginMethod?: string): Promise<AuthResult<UserSession>> => {
+        const result = new AuthResult<UserSession>();
+        result.success = false;
+        result.code = -9;
+        result.message = 'guest_local_failed_n';
+        result.source = 'GUEST_FALLBACK';
+        result.status = LoginStatus.LOGIN_FAILED;
+        result.data = null;
+        return result;
+      });
+
+      // Act
+      const result = await bundle.facade.explicitGuestLogin();
+
+      // Assert
+      expect(result.success).assertFalse();
+      expect(result.code).assertEqual(-9);
+      expect(result.message).assertEqual('guest_local_failed_n');
+    });
+
+    it('combined: auth_facade_try_guest_fallback_should_return_offline_result_for_gateway_code_session_empty_and_exception', 0, async () => {
+      // Arrange
+      const bundle = createBundleForN();
+      const privateFacade = bundle.facade as Object as AuthFacadePrivateForN;
+      const hooks = new HooksForN();
+      hooks.setCreateGuest(async (_device: DeviceInfo): Promise<AuthApiResponse<AuthLoginResult>> => {
+        return createLoginResponseForN(4001, createLoginPayloadForN(true), 'guest_gateway_code_n');
+      });
+
+      // Act
+      const gatewayCodeResult = await privateFacade.tryGuestFallback();
+      hooks.setCreateGuest(async (_device: DeviceInfo): Promise<AuthApiResponse<AuthLoginResult>> => {
+        const payload = createLoginPayloadForN(true);
+        Reflect.set(payload as Object, 'session', null);
+        return createLoginResponseForN(0, payload, 'ok');
+      });
+      const sessionEmptyResult = await privateFacade.tryGuestFallback();
+      hooks.setCreateGuest(async (_device: DeviceInfo): Promise<AuthApiResponse<AuthLoginResult>> => {
+        throw new Error('guest_gateway_exception_n');
+      });
+      const exceptionResult = await privateFacade.tryGuestFallback();
+      hooks.restore();
+
+      // Assert
+      expect(gatewayCodeResult.success).assertTrue();
+      expect(gatewayCodeResult.data !== null).assertTrue();
+      expect(gatewayCodeResult.data!.loginMethod).assertEqual('GUEST_OFFLINE');
+      expect(sessionEmptyResult.success).assertTrue();
+      expect(sessionEmptyResult.data !== null).assertTrue();
+      expect(sessionEmptyResult.data!.loginMethod).assertEqual('GUEST_OFFLINE');
+      expect(exceptionResult.success).assertTrue();
+      expect(exceptionResult.data !== null).assertTrue();
+      expect(exceptionResult.data!.loginMethod).assertEqual('GUEST_OFFLINE');
+    });
+
+    it('boundary: auth_facade_try_guest_fallback_should_fail_when_offline_fallback_returns_null', 0, async () => {
+      // Arrange
+      const bundle = createBundleForN();
+      const privateFacade = bundle.facade as Object as AuthFacadePrivateForN;
+      const hooks = new HooksForN();
+      Reflect.set(bundle.facade as Object, 'tryOfflineGuestFallback', async (_reason: string, _detail: string): Promise<Object | null> => null);
+      hooks.setCreateGuest(async (_device: DeviceInfo): Promise<AuthApiResponse<AuthLoginResult>> => {
+        const payload = createLoginPayloadForN(true);
+        Reflect.set(payload as Object, 'session', null);
+        return createLoginResponseForN(0, payload, 'ok');
+      });
+
+      // Act
+      const sessionEmptyResult = await privateFacade.tryGuestFallback();
+      hooks.setCreateGuest(async (_device: DeviceInfo): Promise<AuthApiResponse<AuthLoginResult>> => {
+        throw new Error('guest_gateway_exception_null_n');
+      });
+      const exceptionResult = await privateFacade.tryGuestFallback();
+      hooks.restore();
+
+      // Assert
+      expect(sessionEmptyResult.success).assertFalse();
+      expect(sessionEmptyResult.message).assertEqual('guest_session_empty');
+      expect(exceptionResult.success).assertFalse();
+      expect(exceptionResult.message).assertEqual('guest_gateway_exception_null_n');
     });
 
     it('boundary: auth_facade_update_username_should_reject_too_long_value', 0, async () => {

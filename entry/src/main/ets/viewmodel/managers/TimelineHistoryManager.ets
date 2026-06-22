@@ -11,6 +11,10 @@ export interface ITimelineHistoryHost {
   planName: string;
 }
 
+export function resolveLatestEventSortTs(event: EventEntity): number {
+  return event.actual_end_time > 0 ? event.actual_end_time : (event.actual_start_time > 0 ? event.actual_start_time : 0);
+}
+
 export class TimelineHistoryManager {
   private host: ITimelineHistoryHost;
 
@@ -44,8 +48,8 @@ export class TimelineHistoryManager {
       return null;
     }
     events.sort((a: EventEntity, b: EventEntity) => {
-      const aTs = a.actual_end_time > 0 ? a.actual_end_time : (a.actual_start_time > 0 ? a.actual_start_time : 0);
-      const bTs = b.actual_end_time > 0 ? b.actual_end_time : (b.actual_start_time > 0 ? b.actual_start_time : 0);
+      const aTs = resolveLatestEventSortTs(a);
+      const bTs = resolveLatestEventSortTs(b);
       if (bTs !== aTs) {
         return bTs - aTs;
       }
@@ -65,10 +69,6 @@ export class TimelineHistoryManager {
     const items: HistoryTimelineItem[] = [];
     for (let i = 0; i < schedule.length; i++) {
       const event = schedule[i];
-      if (!TimelineExecutionState.isScheduled(event)) {
-        continue;
-      }
-
       const plannedStart = event.dynamic_start_time > 0 ? event.dynamic_start_time : 0;
       const actualStart = event.actual_start_time > 0 ? event.actual_start_time : 0;
       const actualEnd = event.actual_end_time > 0 ? event.actual_end_time : 0;
@@ -106,7 +106,7 @@ export class TimelineHistoryManager {
       }
 
       if (TimelineExecutionState.isActive(event)) {
-        const activeTs = actualStart > 0 ? actualStart : plannedStart;
+        const activeTs = actualStart;
         items.push({
           id: event.id * 10 + 4,
           eventId: event.id,

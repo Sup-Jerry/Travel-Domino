@@ -7,6 +7,8 @@ import {
 } from './CompanionDisplayHelper';
 
 export type CompanionWeatherSuggestionDismissMode = 'later' | 'ignore';
+type CompanionWeatherToastAction = (message: string) => void;
+type CompanionWeatherConfirmAction = (title: string, message: string, onConfirm: () => void) => void;
 
 export function getCompanionWeatherGuidePopupText(): string {
   return '调整建议（用途）\n在天气不利时，尽量保持计划可执行并降低中断概率。\n可做动作\n重排顺序、缩短停留、跳过高风险点、替代节点。\n按钮说明\n可选应用=立即尝试调整；稍后=先不处理，下次可再看；忽略=移除该建议。\n仅作为建议，不会自动改行程。';
@@ -23,8 +25,8 @@ export function getCompanionDismissSuggestionToast(mode: CompanionWeatherSuggest
 interface CompanionApplyWeatherSuggestionParams {
   vm: TimelineViewModel;
   item: WeatherSuggestion;
-  showToast: (message: string) => void;
-  showApplyConfirm: (title: string, message: string, onConfirm: () => void) => void;
+  showToast: CompanionWeatherToastAction;
+  showApplyConfirm: CompanionWeatherConfirmAction;
 }
 
 export function applyCompanionWeatherSuggestion(params: CompanionApplyWeatherSuggestionParams): void {

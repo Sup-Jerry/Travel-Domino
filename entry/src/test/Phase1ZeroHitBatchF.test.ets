@@ -3,6 +3,36 @@ import { EventEntity } from '../main/ets/model/entity/EventEntity';
 import { ArrivalReminderStore } from '../main/ets/common/utils/arrival/ArrivalReminderStore';
 import { ArrivalReminderCoordinator } from '../main/ets/infrastructure/services/ArrivalReminderCoordinator';
 import { ArrivalReminderPayload } from '../main/ets/infrastructure/services/ArrivalReminderEngine';
+import { PlanStatus } from '../main/ets/domain/statemachine/PlanStatus';
+
+interface PlanTransitionEventForF {
+  planId: string;
+  toStatus: PlanStatus;
+}
+
+interface PlanStatusSnapshotForF {
+  status: PlanStatus;
+}
+
+class FakePlanStateMachineForF {
+  public status: PlanStatus = PlanStatus.READY;
+  private listener: ((event: PlanTransitionEventForF) => void) | null = null;
+
+  public subscribePlanTransition(_planId: string, handler: (event: PlanTransitionEventForF) => void): () => void {
+    this.listener = handler;
+    return (): void => {
+      this.listener = null;
+    };
+  }
+
+  public getPlanStatus(_planId: string): PlanStatusSnapshotForF {
+    return { status: this.status };
+  }
+
+  public emit(planId: number, toStatus: PlanStatus): void {
+    this.listener?.({ planId: `${planId}`, toStatus: toStatus });
+  }
+}
 
 function buildPayload(planId: number, eventId: number, seq: number, placeName: string): ArrivalReminderPayload {
   return {
@@ -148,6 +178,272 @@ export default function phase1ZeroHitBatchFTest() {
       reached = true;
       // Assert
       expect(reached).assertTrue();
+    });
+
+    it('invalid: coordinator_consume_on_plan_should_ignore_when_payload_absent', 0, () => {
+      // Arrange
+      const coordinator = ArrivalReminderCoordinator.getInstance();
+      ArrivalReminderStore.clearPayload(94);
+      let showCount = 0;
+
+      // Act
+      coordinator.consumeOnPlan({
+        isDialogOpen: false,
+        currentPlanId: 94,
+        events: [buildStartableEvent(940)],
+        onShow: (_nextPayload): void => {
+          showCount += 1;
+        }
+      });
+
+      // Assert
+      expect(showCount).assertEqual(0);
+    });
+
+    it('invalid: coordinator_consume_on_plan_should_dismiss_when_target_event_missing', 0, () => {
+      // Arrange
+      const coordinator = ArrivalReminderCoordinator.getInstance();
+      const payload = buildPayload(95, 950, 7, 'missing-target');
+      ArrivalReminderStore.writePayload(payload);
+      let showCount = 0;
+
+      // Act
+      coordinator.consumeOnPlan({
+        isDialogOpen: false,
+        currentPlanId: 95,
+        events: [buildStartableEvent(951)],
+        onShow: (_nextPayload): void => {
+          showCount += 1;
+        }
+      });
+      const after = ArrivalReminderStore.readPayload(95);
+
+      // Assert
+      expect(showCount).assertEqual(0);
+      expect(after === null).assertTrue();
+    });
+
+    it('boundary: coordinator_subscribe_plan_should_skip_home_show_when_resolve_title_missing', 0, () => {
+      // Arrange
+      const coordinator = ArrivalReminderCoordinator.getInstance();
+      const machine = new FakePlanStateMachineForF();
+      Reflect.set(coordinator as Object, 'planStateMachine', machine);
+      const payload = buildPayload(96, 960, 8, 'title-missing');
+      ArrivalReminderStore.writePayload(payload);
+      let showCount = 0;
+
+      // Act
+      const unsubscribe = coordinator.subscribePlan('*', {
+        isDialogOpen: (): boolean => false,
+        onShowHome: (_nextPayload: ArrivalReminderPayload, _planTitle: string): void => {
+          showCount += 1;
+        },
+        pollIntervalMs: 1000
+      });
+      unsubscribe();
+
+      // Assert
+      expect(showCount).assertEqual(0);
+      expect(ArrivalReminderStore.readPayload(96) !== null).assertTrue();
+    });
+
+    it('boundary: coordinator_subscribe_plan_should_skip_plan_show_when_event_resolver_missing', 0, () => {
+      // Arrange
+      const coordinator = ArrivalReminderCoordinator.getInstance();
+      const machine = new FakePlanStateMachineForF();
+      Reflect.set(coordinator as Object, 'planStateMachine', machine);
+      const payload = buildPayload(97, 970, 9, 'resolver-missing');
+      ArrivalReminderStore.writePayload(payload);
+      let showCount = 0;
+
+      // Act
+      const unsubscribe = coordinator.subscribePlan(97, {
+        isDialogOpen: (): boolean => false,
+        onShowPlan: (_nextPayload: ArrivalReminderPayload): void => {
+          showCount += 1;
+        },
+        pollIntervalMs: 1000
+      });
+      unsubscribe();
+
+      // Assert
+      expect(showCount).assertEqual(0);
+      expect(ArrivalReminderStore.readPayload(97) !== null).assertTrue();
+    });
+
+    it('regression: coordinator_subscribe_plan_should_ignore_non_terminal_transition', 0, () => {
+      // Arrange
+      const coordinator = ArrivalReminderCoordinator.getInstance();
+      const machine = new FakePlanStateMachineForF();
+      Reflect.set(coordinator as Object, 'planStateMachine', machine);
+      const payload = buildPayload(98, 980, 10, 'non-terminal');
+      ArrivalReminderStore.writePayload(payload);
+
+      // Act
+      const unsubscribe = coordinator.subscribePlan(98, {
+        isDialogOpen: (): boolean => true,
+        resolveEvents: (): EventEntity[] => [buildStartableEvent(980)],
+        onShowPlan: (_nextPayload: ArrivalReminderPayload): void => {},
+        pollIntervalMs: 1000
+      });
+      machine.emit(98, PlanStatus.READY);
+      const after = ArrivalReminderStore.readPayload(98);
+      unsubscribe();
+
+      // Assert
+      expect(after === null).assertFalse();
+    });
+
+    it('boundary: coordinator_subscribe_plan_should_clear_payload_without_ack_when_terminal_event_has_no_payload', 0, () => {
+      // Arrange
+      const coordinator = ArrivalReminderCoordinator.getInstance();
+      const machine = new FakePlanStateMachineForF();
+      Reflect.set(coordinator as Object, 'planStateMachine', machine);
+      ArrivalReminderStore.clearPayload(199);
+
+      // Act
+      const unsubscribe = coordinator.subscribePlan(199, {
+        isDialogOpen: (): boolean => false,
+        resolveEvents: (): EventEntity[] => [buildStartableEvent(1990)],
+        onShowPlan: (_nextPayload: ArrivalReminderPayload): void => {},
+        pollIntervalMs: 1000
+      });
+      machine.emit(199, PlanStatus.COMPLETED);
+      const after = ArrivalReminderStore.readPayload(199);
+      unsubscribe();
+
+      // Assert
+      expect(after === null).assertTrue();
+    });
+
+    it('boundary: coordinator_subscribe_plan_should_skip_when_payload_missing', 0, () => {
+      // Arrange
+      const coordinator = ArrivalReminderCoordinator.getInstance();
+      const machine = new FakePlanStateMachineForF();
+      Reflect.set(coordinator as Object, 'planStateMachine', machine);
+      ArrivalReminderStore.clearPayload(200);
+      let showCount = 0;
+
+      // Act
+      const unsubscribe = coordinator.subscribePlan(200, {
+        isDialogOpen: (): boolean => false,
+        resolveEvents: (): EventEntity[] => [buildStartableEvent(2000)],
+        onShowPlan: (_nextPayload: ArrivalReminderPayload): void => {
+          showCount += 1;
+        },
+        pollIntervalMs: 1000
+      });
+      unsubscribe();
+
+      // Assert
+      expect(showCount).assertEqual(0);
+    });
+
+    it('combined: coordinator_subscribe_plan_should_dedupe_duplicate_key_and_ignore_other_plan_payload', 0, () => {
+      // Arrange
+      const coordinator = ArrivalReminderCoordinator.getInstance();
+      const machine = new FakePlanStateMachineForF();
+      Reflect.set(coordinator as Object, 'planStateMachine', machine);
+      const wildcardPayload = buildPayload(201, 2010, 1, 'dup-home');
+      ArrivalReminderStore.writePayload(wildcardPayload);
+      let homeShowCount = 0;
+
+      // Act
+      const wildcardUnsubscribe = coordinator.subscribePlan('*', {
+        isDialogOpen: (): boolean => false,
+        resolvePlanTitle: (_planId: number): string => 'dup-title',
+        onShowHome: (_nextPayload: ArrivalReminderPayload, _planTitle: string): void => {
+          homeShowCount += 1;
+        },
+        pollIntervalMs: 1000
+      });
+      const planPayload = buildPayload(203, 2030, 3, 'other-plan');
+      ArrivalReminderStore.writePayload(planPayload);
+      let planShowCount = 0;
+      const planUnsubscribe = coordinator.subscribePlan(202, {
+        isDialogOpen: (): boolean => false,
+        resolveEvents: (): EventEntity[] => [buildStartableEvent(2030)],
+        onShowPlan: (_nextPayload: ArrivalReminderPayload): void => {
+          planShowCount += 1;
+        },
+        pollIntervalMs: 1000
+      });
+      wildcardUnsubscribe();
+      planUnsubscribe();
+
+      // Assert
+      expect(homeShowCount).assertEqual(1);
+      expect(planShowCount).assertEqual(0);
+    });
+
+    it('boundary: coordinator_subscribe_plan_should_ignore_duplicate_key_and_allow_double_unsubscribe', 0, () => {
+      // Arrange
+      const coordinator = ArrivalReminderCoordinator.getInstance();
+      const machine = new FakePlanStateMachineForF();
+      Reflect.set(coordinator as Object, 'planStateMachine', machine);
+      const payload = buildPayload(205, 2050, 5, 'dup-plan');
+      ArrivalReminderStore.writePayload(payload);
+      let showCount = 0;
+      const ticks: Array<() => void> = [];
+      const originSetInterval = Reflect.get(globalThis, 'setInterval') as Object;
+      const originClearInterval = Reflect.get(globalThis, 'clearInterval') as Object;
+      Reflect.set(globalThis, 'setInterval', (callback: () => void, _intervalMs: number): number => {
+        ticks.push(callback);
+        return 205;
+      });
+      Reflect.set(globalThis, 'clearInterval', (_timerId: number): void => {
+        return;
+      });
+
+      // Act
+      const unsubscribe = coordinator.subscribePlan(205, {
+        isDialogOpen: (): boolean => false,
+        resolveEvents: (): EventEntity[] => [buildStartableEvent(2050)],
+        onShowPlan: (_nextPayload: ArrivalReminderPayload): void => {
+          showCount += 1;
+        },
+        pollIntervalMs: 1000
+      });
+      if (ticks.length > 0) {
+        ticks[0]();
+      }
+      const after = ArrivalReminderStore.readPayload(205);
+      unsubscribe();
+      unsubscribe();
+      Reflect.set(globalThis, 'setInterval', originSetInterval);
+      Reflect.set(globalThis, 'clearInterval', originClearInterval);
+
+      // Assert
+      expect(showCount).assertEqual(1);
+      expect(after !== null).assertTrue();
+    });
+
+    it('invalid: coordinator_subscribe_plan_should_dismiss_when_target_not_startable', 0, () => {
+      // Arrange
+      const coordinator = ArrivalReminderCoordinator.getInstance();
+      const machine = new FakePlanStateMachineForF();
+      Reflect.set(coordinator as Object, 'planStateMachine', machine);
+      const payload = buildPayload(204, 2040, 4, 'not-startable');
+      ArrivalReminderStore.writePayload(payload);
+      const target = buildStartableEvent(2040);
+      target.completion_status = EventEntity.STATE_COMPLETED;
+      let showCount = 0;
+
+      // Act
+      const unsubscribe = coordinator.subscribePlan(204, {
+        isDialogOpen: (): boolean => false,
+        resolveEvents: (): EventEntity[] => [target],
+        onShowPlan: (_nextPayload: ArrivalReminderPayload): void => {
+          showCount += 1;
+        },
+        pollIntervalMs: 1000
+      });
+      const after = ArrivalReminderStore.readPayload(204);
+      unsubscribe();
+
+      // Assert
+      expect(showCount).assertEqual(0);
+      expect(after === null).assertTrue();
     });
   });
 }

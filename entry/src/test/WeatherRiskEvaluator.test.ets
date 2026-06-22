@@ -2,6 +2,7 @@ import { describe, it, expect } from '@ohos/hypium';
 import { WeatherRiskEvaluator } from '../main/ets/domain/services/WeatherRiskEvaluator';
 import { EventEntity } from '../main/ets/model/entity/EventEntity';
 import {
+  PlanNodeWeatherBinding,
   WeatherCollabContext,
   WeatherSnapshot,
   WeatherUserPreference
@@ -233,6 +234,169 @@ export default function weatherRiskEvaluatorTest() {
       expect(route.riskTags.includes('RAIN')).assertEqual(true);
       expect(route.riskTags.includes('HEAT')).assertEqual(true);
       expect(route.summaryText.length > 0).assertEqual(true);
+    });
+
+    it('boundary: cold_outdoor_weather_should_add_cold_tag_and_reduce_score', 0, () => {
+      // Arrange
+      const evaluator = new WeatherRiskEvaluator();
+      const event = buildEvent(0);
+      const weather: WeatherSnapshot = {
+        locationKey: 'cold',
+        sourceType: 'PLAN_LOCATION',
+        weatherTime: Date.now(),
+        fetchTime: Date.now(),
+        conditionCode: 'CLEAR',
+        conditionText: 'clear',
+        temperatureCelsius: 3
+      };
+      // Act
+      const result = evaluator.evaluateNodeSuitability(event, weather);
+      // Assert
+      expect(result.riskTags.includes('COLD')).assertEqual(true);
+      expect(result.score < 100).assertEqual(true);
+    });
+
+    it('regression: td-20260528-route_score_should_use_medium_risk_summary_when_score_between_70_and_84', 0, () => {
+      // Arrange
+      const evaluator = new WeatherRiskEvaluator();
+      const collab: WeatherCollabContext = {
+        dayWindows: [],
+        cityBuckets: [],
+        collabSummary: '   ',
+        dayWindowCount: 0,
+        cityGroupCount: 0,
+        cityCappedCount: 0,
+        cityMissCount: 0,
+        trendTag: 'STABLE',
+        fallbackPath: ''
+      };
+      // Act
+      const route = evaluator.evaluateRouteSuitability([
+        { nodeId: 'm1', eventId: 1, suitabilityScore: 80, riskTags: [] }
+      ], undefined, collab);
+      // Assert
+      expect(route.routeScore).assertEqual(80);
+      expect(route.summaryText.length > 0).assertEqual(true);
+      expect(route.riskTags.length).assertEqual(0);
+    });
+
+    it('combined: route_score_should_clamp_negative_value_after_trend_adjustment', 0, () => {
+      // Arrange
+      const evaluator = new WeatherRiskEvaluator();
+      const collab: WeatherCollabContext = {
+        dayWindows: [
+          { dayOffset: 0, windowScore: 1, riskTags: ['RAIN'], trendTag: 'RAIN_PERSIST' },
+          { dayOffset: 1, windowScore: 1, riskTags: ['HEAT'], trendTag: 'WARMING' }
+        ],
+        cityBuckets: [],
+        collabSummary: '',
+        dayWindowCount: 2,
+        cityGroupCount: 0,
+        cityCappedCount: 0,
+        cityMissCount: 0,
+        trendTag: 'RAIN_PERSIST',
+        fallbackPath: ''
+      };
+      // Act
+      const route = evaluator.evaluateRouteSuitability([
+        { nodeId: 'c1', eventId: 1, suitabilityScore: 1, riskTags: [] }
+      ], undefined, collab);
+      // Assert
+      expect(route.routeScore).assertEqual(0);
+      expect(route.riskTags.includes('RAIN')).assertEqual(true);
+      expect(route.riskTags.includes('HEAT')).assertEqual(true);
+    });
+
+    it('combined: public_node_suitability_should_skip_outdoor_penalties_for_indoor_event_even_under_rain_and_heat', 0, () => {
+      // Arrange
+      const evaluator = new WeatherRiskEvaluator();
+      const event = buildEvent(2);
+      const weather: WeatherSnapshot = {
+        locationKey: 'indoor-safe',
+        sourceType: 'PLAN_LOCATION',
+        weatherTime: Date.now(),
+        fetchTime: Date.now(),
+        conditionCode: 'RAIN',
+        conditionText: 'rain',
+        temperatureCelsius: 38
+      };
+      // Act
+      const result = evaluator.evaluateNodeSuitability(event, weather);
+      // Assert
+      expect(result.score).assertEqual(100);
+      expect(result.riskTags.length).assertEqual(0);
+    });
+
+    it('regression: route_summary_should_change_across_high_low_and_medium_preference_hints', 0, () => {
+      // Arrange
+      const evaluator = new WeatherRiskEvaluator();
+      const binding: PlanNodeWeatherBinding = {
+        nodeId: 'pref-1',
+        eventId: 1,
+        suitabilityScore: 80,
+        riskTags: []
+      };
+      const bindings: PlanNodeWeatherBinding[] = [binding];
+      const highPref: WeatherUserPreference = {
+        heatSensitivity: 2,
+        rainSensitivity: 2,
+        weatherRiskTolerance: 2
+      };
+      const lowPref: WeatherUserPreference = {
+        heatSensitivity: 0,
+        rainSensitivity: 0,
+        weatherRiskTolerance: 0
+      };
+      const mediumPref: WeatherUserPreference = {
+        heatSensitivity: 1,
+        rainSensitivity: 1,
+        weatherRiskTolerance: 1
+      };
+      // Act
+      const highSummary = evaluator.evaluateRouteSuitability(bindings, highPref).summaryText;
+      const lowSummary = evaluator.evaluateRouteSuitability(bindings, lowPref).summaryText;
+      const mediumSummary = evaluator.evaluateRouteSuitability(bindings, mediumPref).summaryText;
+      // Assert
+      expect(highSummary.length > 0).assertTrue();
+      expect(lowSummary.length > 0).assertTrue();
+      expect(mediumSummary.length > 0).assertTrue();
+      expect(highSummary === lowSummary).assertFalse();
+      expect(lowSummary === mediumSummary).assertFalse();
+    });
+
+    it('combined: public_node_suitability_should_clamp_invalid_rain_sensitivity_levels_into_supported_range', 0, () => {
+      // Arrange
+      const evaluator = new WeatherRiskEvaluator();
+      const event = buildEvent(0);
+      const weather: WeatherSnapshot = {
+        locationKey: 'rain-invalid-level',
+        sourceType: 'PLAN_LOCATION',
+        weatherTime: Date.now(),
+        fetchTime: Date.now(),
+        conditionCode: 'SNOW',
+        conditionText: 'snow',
+        temperatureCelsius: 20
+      };
+      const negativePref: WeatherUserPreference = {
+        heatSensitivity: 1,
+        rainSensitivity: 1,
+        weatherRiskTolerance: 1
+      };
+      const overflowPref: WeatherUserPreference = {
+        heatSensitivity: 1,
+        rainSensitivity: 1,
+        weatherRiskTolerance: 1
+      };
+      Reflect.set(negativePref as Object, 'rainSensitivity', -3);
+      Reflect.set(overflowPref as Object, 'rainSensitivity', 9);
+      // Act
+      const negativeLevel = evaluator.evaluateNodeSuitability(event, weather, negativePref);
+      const overflowLevel = evaluator.evaluateNodeSuitability(event, weather, overflowPref);
+      // Assert
+      expect(negativeLevel.score).assertEqual(79);
+      expect(overflowLevel.score).assertEqual(59);
+      expect(negativeLevel.riskTags.includes('RAIN')).assertTrue();
+      expect(overflowLevel.riskTags.includes('RAIN')).assertTrue();
     });
   });
 }

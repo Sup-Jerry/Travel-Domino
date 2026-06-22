@@ -1,6 +1,8 @@
 ﻿// 文件路径: ets/pages/components/TipDialog.ets
 import { PreferenceManager } from '../../../common/utils/PreferenceManager'; // 修改点：引入管理器
 
+type TipDialogVoidAction = () => void;
+
 export function toggleTipDialogChecked(current: boolean): boolean {
   return !current;
 }
@@ -9,13 +11,28 @@ export function shouldPersistTipDialogChoice(isChecked: boolean): boolean {
   return isChecked;
 }
 
+export async function confirmTipDialog(
+  isChecked: boolean,
+  storageKey: string,
+  onConfirm: () => void,
+  close: () => void,
+  persistChoice: (key: string, value: boolean) => Promise<void>
+): Promise<boolean> {
+  if (shouldPersistTipDialogChoice(isChecked)) {
+    await persistChoice(storageKey, true);
+  }
+  onConfirm();
+  close();
+  return true;
+}
+
 @CustomDialog
 export struct TipDialog {
   controller: CustomDialogController;
   title: string = '';
   message: string = '';
   storageKey: string = ''; // 对应的持久化 Key
-  onConfirm: () => void = () => {};
+  onConfirm: TipDialogVoidAction = () => {};
 
   @State isChecked: boolean = false;
 
@@ -42,19 +59,21 @@ export struct TipDialog {
         Button('确定')
           .backgroundColor($r('app.color.accent_primary')).fontColor(Color.White).layoutWeight(1).margin({ left: 12 })
           .onClick(async () => { // 修改点：异步回调
-            if (shouldPersistTipDialogChoice(this.isChecked)) {
-              // 修改点：强制物理落盘，确保状态 100% 写入磁盘
-              await PreferenceManager.getInstance().setValue(this.storageKey, true);
-            }
-            this.onConfirm();
-            this.controller.close();
+            await confirmTipDialog(
+              this.isChecked,
+              this.storageKey,
+              this.onConfirm,
+              (): void => this.controller.close(),
+              async (key: string, value: boolean): Promise<void> => {
+                await PreferenceManager.getInstance().setValue(key, value);
+              }
+            );
           })
       }.width('100%')
     }
     .padding(24).backgroundColor($r('app.color.card_bg')).borderRadius(16).width('90%')
   }
 }
-
 
 
 

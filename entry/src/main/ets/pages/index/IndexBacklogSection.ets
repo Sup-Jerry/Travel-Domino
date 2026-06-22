@@ -1,6 +1,9 @@
 import { BacklogView } from '../components/views/BacklogView';
 import { TravelPlanItem } from '../../model/interface/IStandardEvent';
 
+type IndexBacklogVoidAction = () => void;
+type IndexBacklogMoveAction = (item: TravelPlanItem) => void;
+
 export function resolveIndexBacklogSectionMaxHeight(): string {
   return '30%';
 }
@@ -15,18 +18,18 @@ export struct IndexBacklogSection {
   @Prop isExpanded: boolean = false;
   @Prop dividerColor: string = getDefaultIndexBacklogSectionDividerColor();
 
-  onToggleExpand: () => void = () => {};
-  onMoveToSchedule: (item: TravelPlanItem) => void = () => {};
-  onMoveAllToSchedule: () => void = () => {};
+  onToggleExpand: IndexBacklogVoidAction = () => {};
+  onMoveToSchedule: IndexBacklogMoveAction = () => {};
+  onMoveAllToSchedule: IndexBacklogVoidAction = () => {};
 
   build() {
     Column() {
       BacklogView({
         items: this.items,
         isExpanded: this.isExpanded,
-        onToggleExpand: () => this.onToggleExpand(),
-        onMoveToSchedule: (item: TravelPlanItem) => this.onMoveToSchedule(item),
-        onMoveAllToSchedule: () => this.onMoveAllToSchedule()
+        onToggleExpand: this.onToggleExpand,
+    onMoveToSchedule: this.onMoveToSchedule,
+        onMoveAllToSchedule: this.onMoveAllToSchedule
       })
         .constraintSize({ maxHeight: resolveIndexBacklogSectionMaxHeight() })
         .zIndex(1);

@@ -1,6 +1,7 @@
 import { describe, it, expect } from '@ohos/hypium';
 import {
   buildHuaweiLoginErrorToken,
+  createHuaweiAccountLoginButtonForTest,
   hasHuaweiCredentialData,
   resolveHuaweiLoginErrorCode,
   resolveHuaweiLoginErrorMessage
@@ -15,8 +16,29 @@ class MockHuaweiCredentialData {
   authorizationCode: string = '';
 }
 
+interface HuaweiAccountLoginButtonPrivateTest {
+  agreementAccepted: boolean;
+  updateStateVars(params: HuaweiAccountLoginButtonParamsTest): void;
+}
+
+interface HuaweiAccountLoginButtonParamsTest {
+  agreementAccepted?: boolean;
+}
+
 export default function huaweiAccountLoginButtonHelperTest() {
   describe('unit_test_case_generator_autofill_HuaweiAccountLoginButtonHelper', () => {
+    it('combined: huawei_login_button_update_state_vars_should_replace_agreement_flag', 0, () => {
+      // Arrange
+      const button = createHuaweiAccountLoginButtonForTest() as Object as HuaweiAccountLoginButtonPrivateTest;
+      button.agreementAccepted = false;
+
+      // Act
+      button.updateStateVars({ agreementAccepted: true });
+
+      // Assert
+      expect(button.agreementAccepted).assertTrue();
+    });
+
     it('normal: huawei_login_should_extract_error_code_and_message', 0, () => {
       // Arrange
       const err = new MockHuaweiLoginError();

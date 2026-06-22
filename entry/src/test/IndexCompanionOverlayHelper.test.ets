@@ -1,8 +1,23 @@
 import { describe, it, expect } from '@ohos/hypium';
+import { TimelineViewModel } from '../main/ets/viewmodel/TimelineViewModel';
+import { IndexCompanionOverlay } from '../main/ets/pages/index/IndexCompanionOverlay';
 import {
   resolveIndexCompanionOverlayZIndex,
   shouldShowIndexCompanionOverlay
 } from '../main/ets/pages/index/IndexCompanionOverlay';
+
+interface IndexCompanionOverlayParamsTest {
+  vm?: TimelineViewModel;
+  isVisible?: boolean;
+  overlayZIndex?: number;
+}
+
+interface IndexCompanionOverlayPrivateTest {
+  isVisible: boolean;
+  overlayZIndex: number;
+  initialRender(): void;
+  updateStateVars(params: IndexCompanionOverlayParamsTest): void;
+}
 
 export default function indexCompanionOverlayHelperTest() {
   describe('unit_test_case_generator_autofill_IndexCompanionOverlayHelper', () => {
@@ -78,6 +93,71 @@ export default function indexCompanionOverlayHelperTest() {
       // Assert
       expect(visibleCount).assertEqual(2);
       expect(zSum).assertEqual(15);
+    });
+
+    it('boundary: companion_overlay_z_index_should_keep_negative_value', 0, () => {
+      // Arrange
+      const zIndex = -3;
+
+      // Act
+      const actual = resolveIndexCompanionOverlayZIndex(zIndex);
+
+      // Assert
+      expect(actual).assertEqual(-3);
+    });
+
+    it('combined: companion_overlay_helpers_should_keep_identity_for_repeated_inputs', 0, () => {
+      // Arrange
+      const visible = true;
+      const zIndex = 12;
+
+      // Act
+      const firstShow = shouldShowIndexCompanionOverlay(visible);
+      const secondShow = shouldShowIndexCompanionOverlay(visible);
+      const firstZ = resolveIndexCompanionOverlayZIndex(zIndex);
+      const secondZ = resolveIndexCompanionOverlayZIndex(zIndex);
+
+      // Assert
+      expect(firstShow).assertEqual(secondShow);
+      expect(firstZ).assertEqual(secondZ);
+    });
+
+    it('combined: companion_overlay_update_state_vars_should_replace_visibility_and_z_index', 0, () => {
+      // Arrange
+      const page = new IndexCompanionOverlay(undefined, {} as LocalStorage) as Object as IndexCompanionOverlayPrivateTest;
+      page.isVisible = false;
+      page.overlayZIndex = 10;
+
+      // Act
+      page.updateStateVars({
+        isVisible: true,
+        overlayZIndex: 24
+      });
+
+      // Assert
+      expect(page.isVisible).assertTrue();
+      expect(page.overlayZIndex).assertEqual(24);
+    });
+
+    it('boundary: companion_overlay_initial_render_should_allow_hidden_overlay', 0, () => {
+      // Arrange
+      const page = new IndexCompanionOverlay(undefined, {} as LocalStorage) as Object as IndexCompanionOverlayPrivateTest;
+      page.updateStateVars({
+        isVisible: false,
+        overlayZIndex: 10
+      });
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.isVisible).assertFalse();
     });
   });
 }

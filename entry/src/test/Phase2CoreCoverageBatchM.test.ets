@@ -206,6 +206,109 @@ export default function phase2CoreCoverageBatchMTest() {
       hooks.restore();
     });
 
+    it('regression: auth_facade_get_profile_should_return_local_guest_without_me_request', 0, async () => {
+      // Arrange
+      const bundle = createBundleForM();
+      const hooks = new HooksForM();
+      let meCalls = 0;
+      bundle.session.session = createSessionForM('', true);
+      hooks.setMe(async (_token: string): Promise<AuthApiResponse<AuthMeResult>> => {
+        meCalls += 1;
+        return createMeResponseForM();
+      });
+      // Act
+      const profile = await bundle.facade.getCurrentUserProfile('default_guest_m');
+      // Assert
+      expect(profile.isGuest).assertTrue();
+      expect(profile.userId).assertEqual('acc_m');
+      expect(profile.nickname).assertEqual('default_guest_m');
+      expect(meCalls).assertEqual(0);
+      hooks.restore();
+    });
+
+    it('boundary: auth_facade_get_profile_should_fallback_to_default_name_when_remote_nickname_blank', 0, async () => {
+      // Arrange
+      const bundle = createBundleForM();
+      const hooks = new HooksForM();
+      const session = createSessionForM('token_profile_blank_m');
+      session.accountId = '';
+      session.userId = 'user_session_blank_m';
+      bundle.session.session = session;
+      hooks.setMe(async (_token: string): Promise<AuthApiResponse<AuthMeResult>> => {
+        const data = new AuthMeResult();
+        data.accountId = '';
+        data.userId = '';
+        data.nickname = '   ';
+        data.avatarUrl = 'http://avatar.blank.m';
+        data.isGuest = false;
+        const response = new AuthApiResponse<AuthMeResult>(data);
+        response.code = 0;
+        response.message = 'ok';
+        return response;
+      });
+      // Act
+      const profile = await bundle.facade.getCurrentUserProfile('default_profile_m');
+      // Assert
+      expect(profile.accountId).assertEqual('');
+      expect(profile.userId).assertEqual('user_session_blank_m');
+      expect(profile.nickname).assertEqual('default_profile_m');
+      expect(profile.avatarUrl).assertEqual('http://avatar.blank.m');
+      expect(profile.isGuest).assertFalse();
+      hooks.restore();
+    });
+
+    it('invalid: auth_facade_get_profile_should_fallback_to_session_when_remote_me_failed', 0, async () => {
+      // Arrange
+      const bundle = createBundleForM();
+      const hooks = new HooksForM();
+      const session = createSessionForM('token_profile_fail_m');
+      session.accountId = '';
+      session.userId = 'user_session_fail_m';
+      session.isGuest = false;
+      bundle.session.session = session;
+      hooks.setMe(async (_token: string): Promise<AuthApiResponse<AuthMeResult>> => {
+        const response = new AuthApiResponse<AuthMeResult>(new AuthMeResult());
+        response.code = 503;
+        response.message = 'me_failed_profile_m';
+        return response;
+      });
+      // Act
+      const profile = await bundle.facade.getCurrentUserProfile('default_failed_profile_m');
+      // Assert
+      expect(profile.accountId).assertEqual('');
+      expect(profile.userId).assertEqual('user_session_fail_m');
+      expect(profile.nickname).assertEqual('default_failed_profile_m');
+      expect(profile.isGuest).assertFalse();
+      hooks.restore();
+    });
+
+    it('boundary: auth_facade_get_profile_should_keep_remote_guest_flag_when_me_success', 0, async () => {
+      // Arrange
+      const bundle = createBundleForM();
+      const hooks = new HooksForM();
+      bundle.session.session = createSessionForM('token_profile_guest_flag_m');
+      hooks.setMe(async (_token: string): Promise<AuthApiResponse<AuthMeResult>> => {
+        const data = new AuthMeResult();
+        data.accountId = 'acc_remote_guest_flag_m';
+        data.userId = 'user_remote_guest_flag_m';
+        data.nickname = 'GuestFlagM';
+        data.avatarUrl = 'http://avatar.guest.flag.m';
+        data.isGuest = true;
+        const response = new AuthApiResponse<AuthMeResult>(data);
+        response.code = 0;
+        response.message = 'ok';
+        return response;
+      });
+      // Act
+      const profile = await bundle.facade.getCurrentUserProfile('default_guest_flag_m');
+      // Assert
+      expect(profile.accountId).assertEqual('acc_remote_guest_flag_m');
+      expect(profile.userId).assertEqual('acc_remote_guest_flag_m');
+      expect(profile.nickname).assertEqual('GuestFlagM');
+      expect(profile.isGuest).assertTrue();
+      hooks.restore();
+    });
+
     it('boundary: auth_facade_update_username_should_return_profile_when_gateway_success', 0, async () => {
       // Arrange
       const bundle = createBundleForM();
@@ -294,21 +397,19 @@ export default function phase2CoreCoverageBatchMTest() {
       hooks.restore();
     });
 
-    it('combined: auth_facade_guest_fallback_exception_should_return_offline_guest_and_mark_guest_chosen', 0, async () => {
+    it('combined: auth_facade_explicit_guest_login_should_return_local_guest_and_mark_guest_chosen', 0, async () => {
       // Arrange
       const bundle = createBundleForM();
       const hooks = new HooksForM();
       const ctx = new AppContextForM();
       bundle.facade.bindContext(ctx as never);
-      hooks.setCreateGuest(async (_device: DeviceInfo): Promise<AuthApiResponse<AuthLoginResult>> => {
-        throw new Error('guest_gateway_exception_m');
-      });
       // Act
       const result = await bundle.facade.explicitGuestLogin();
       // Assert
       expect(result.success).assertTrue();
       expect(result.data !== null).assertTrue();
       expect(result.data!.isGuest).assertTrue();
+      expect(result.data!.loginMethod).assertEqual('GUEST_LOCAL_FIRST');
       expect(bundle.session.guestChosenCalls).assertEqual(1);
       hooks.restore();
     });
@@ -330,7 +431,7 @@ export default function phase2CoreCoverageBatchMTest() {
       expect(result.success).assertTrue();
       expect(result.data !== null).assertTrue();
       expect(result.data!.isGuest).assertTrue();
-      expect(result.data!.loginMethod).assertEqual('GUEST_OFFLINE');
+      expect(result.data!.loginMethod).assertEqual('GUEST_LOCAL_FIRST');
       expect(bundle.session.saveCalls > 0).assertTrue();
       expect(bundle.session.savePersistedCalls).assertEqual(1);
       expect(bundle.session.guestChosenCalls).assertEqual(1);

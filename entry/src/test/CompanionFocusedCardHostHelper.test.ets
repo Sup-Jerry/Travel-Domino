@@ -56,6 +56,7 @@ interface CompanionFocusedCardHostPrivateTest {
   setInitiallyProvidedValue(params: CompanionFocusedCardHostParamsTest): void;
   updateStateVars(params: CompanionFocusedCardHostParamsTest): void;
   getThemePalette(): CompanionFocusedCardHostPaletteTest;
+  FocusedCardBody(event: EventEntity, phase: CompanionFocusedCardPhaseTest): void;
   initialRender(): void;
 }
 
@@ -369,6 +370,291 @@ export default function companionFocusedCardHostHelperTest() {
       // Assert
       expect(pausedThrew).assertFalse();
       expect(emptyThrew).assertFalse();
+    });
+
+    it('boundary: focused_card_host_initial_render_should_cover_switch_cards_build_branch_via_direct_props', 0, () => {
+      // Arrange
+      const page = new CompanionFocusedCardHost(undefined, {} as LocalStorage) as Object as CompanionFocusedCardHostPrivateTest;
+      page.canRenderSwitchCards = true;
+      page.outgoingEvent = buildEvent(72);
+      page.incomingEvent = buildEvent(73);
+      page.stableEvent = null;
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('boundary: focused_card_host_initial_render_should_cover_stable_build_branch_via_direct_props', 0, () => {
+      // Arrange
+      const page = new CompanionFocusedCardHost(undefined, {} as LocalStorage) as Object as CompanionFocusedCardHostPrivateTest;
+      page.canRenderSwitchCards = false;
+      page.outgoingEvent = null;
+      page.incomingEvent = null;
+      page.stableEvent = buildEvent(74);
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+    });
+
+    it('normal: focused_card_host_initial_render_should_support_active_action_branch_with_custom_getters', 0, () => {
+      // Arrange
+      const page = new CompanionFocusedCardHost(undefined, {} as LocalStorage) as Object as CompanionFocusedCardHostPrivateTest;
+      const stable = buildEvent(81);
+      page.getEventStateLabel = (event: EventEntity) => `label_${event.id}`;
+      page.getStateTagTextColor = (_event: EventEntity) => '#111111';
+      page.getStateTagBackgroundColor = (_event: EventEntity) => '#EEEEEE';
+      page.getStateBorderColor = (_event: EventEntity) => '#123456';
+      page.getMainCardTimeText = (event: EventEntity) => `time_${event.id}`;
+      page.getPlannedRange = (event: EventEntity) => `range_${event.id}`;
+      page.getEventState = (_event: EventEntity) => 'ACTIVE';
+      page.canEndFocused = (_event: EventEntity) => true;
+      page.getCardTranslateX = (phase: CompanionFocusedCardPhaseTest) => phase === 'stable' ? 4 : 0;
+      page.getCardOpacity = (phase: CompanionFocusedCardPhaseTest) => phase === 'stable' ? 0.88 : 1;
+      page.getCardScale = (phase: CompanionFocusedCardPhaseTest) => phase === 'stable' ? 0.97 : 1;
+      page.setInitiallyProvidedValue({
+        canRenderSwitchCards: false,
+        outgoingEvent: null,
+        incomingEvent: null,
+        stableEvent: stable,
+        runtimeState: 'ACTIVE',
+        currentEventId: stable.id
+      });
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.getEventStateLabel(stable)).assertEqual('label_81');
+      expect(page.getMainCardTimeText(stable)).assertEqual('time_81');
+      expect(page.getPlannedRange(stable)).assertEqual('range_81');
+      expect(page.getStateBorderColor(stable)).assertEqual('#123456');
+      expect(page.getCardTranslateX('stable')).assertEqual(4);
+      expect(page.getCardOpacity('stable')).assertEqual(0.88);
+      expect(page.getCardScale('stable')).assertEqual(0.97);
+      expect(page.canEndFocused(stable)).assertTrue();
+    });
+
+    it('combined: focused_card_host_initial_render_should_support_paused_active_and_hidden_planned_range_branch', 0, () => {
+      // Arrange
+      const page = new CompanionFocusedCardHost(undefined, {} as LocalStorage) as Object as CompanionFocusedCardHostPrivateTest;
+      const stable = buildEvent(91);
+      page.getEventState = (_event: EventEntity) => 'COMPLETED';
+      page.canEndFocused = (_event: EventEntity) => false;
+      page.setInitiallyProvidedValue({
+        canRenderSwitchCards: false,
+        outgoingEvent: null,
+        incomingEvent: null,
+        stableEvent: stable,
+        runtimeState: 'PAUSED',
+        currentEventId: stable.id
+      });
+      const pendingVisible = shouldShowFocusedPlannedRange('PENDING');
+      const pausedMode = resolveCompanionFocusedActionMode('COMPLETED', 'PAUSED', stable.id, stable.id);
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(pendingVisible).assertFalse();
+      expect(pausedMode).assertEqual('PAUSED_ACTIVE');
+      expect(page.canEndFocused(stable)).assertFalse();
+    });
+
+    it('regression: focused_card_host_focused_card_body_should_support_direct_builder_invocation_for_stable_phase', 0, () => {
+      // Arrange
+      const page = new CompanionFocusedCardHost(undefined, {} as LocalStorage) as Object as CompanionFocusedCardHostPrivateTest;
+      const stable = buildEvent(101);
+      page.getEventState = (_event: EventEntity) => 'ACTIVE';
+      page.canEndFocused = (_event: EventEntity) => true;
+      page.getEventStateLabel = (_event: EventEntity) => '进行中';
+      page.getMainCardTimeText = (_event: EventEntity) => '10:00-10:30';
+      page.getPlannedRange = (_event: EventEntity) => '10:00-11:00';
+      page.runtimeState = 'ACTIVE';
+      page.currentEventId = stable.id;
+      let threw = false;
+
+      // Act
+      try {
+        page.FocusedCardBody(stable, 'stable');
+      } catch (_error) {
+        threw = true;
+      }
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(page.getEventStateLabel(stable)).assertEqual('进行中');
+      expect(page.getMainCardTimeText(stable)).assertEqual('10:00-10:30');
+      expect(page.getPlannedRange(stable)).assertEqual('10:00-11:00');
+      expect(page.canEndFocused(stable)).assertTrue();
+    });
+
+    it('boundary: focused_card_body_should_support_direct_pending_and_skipped_action_modes', 0, () => {
+      // Arrange
+      const page = new CompanionFocusedCardHost(undefined, {} as LocalStorage) as Object as CompanionFocusedCardHostPrivateTest;
+      const pending = buildEvent(111);
+      const skipped = buildEvent(112);
+      page.canStartFocused = (_event: EventEntity) => true;
+      page.getEventStateLabel = (event: EventEntity) => `state_${event.id}`;
+      page.getMainCardTimeText = (event: EventEntity) => `time_${event.id}`;
+      page.getPlannedRange = (event: EventEntity) => `plan_${event.id}`;
+      let pendingThrew = false;
+      let skippedThrew = false;
+
+      // Act
+      page.getEventState = (_event: EventEntity) => 'PENDING';
+      try {
+        page.FocusedCardBody(pending, 'outgoing');
+      } catch (_error) {
+        pendingThrew = true;
+      }
+      page.getEventState = (_event: EventEntity) => 'SKIPPED';
+      try {
+        page.FocusedCardBody(skipped, 'incoming');
+      } catch (_error) {
+        skippedThrew = true;
+      }
+
+      // Assert
+      expect(pendingThrew).assertFalse();
+      expect(skippedThrew).assertFalse();
+      expect(page.canStartFocused(pending)).assertTrue();
+      expect(page.getEventStateLabel(skipped)).assertEqual('state_112');
+      expect(page.getMainCardTimeText(pending)).assertEqual('time_111');
+      expect(page.getPlannedRange(skipped)).assertEqual('plan_112');
+    });
+
+    it('combined: focused_card_body_should_support_paused_active_and_disabled_modes_with_phase_styles', 0, () => {
+      // Arrange
+      const page = new CompanionFocusedCardHost(undefined, {} as LocalStorage) as Object as CompanionFocusedCardHostPrivateTest;
+      const pausedActive = buildEvent(121);
+      const disabled = buildEvent(122);
+      page.runtimeState = 'PAUSED';
+      page.currentEventId = pausedActive.id;
+      page.getEventState = (event: EventEntity) => event.id === pausedActive.id ? 'COMPLETED' : 'DONE';
+      page.getCardTranslateX = (phase: CompanionFocusedCardPhaseTest) => phase === 'incoming' ? 6 : 2;
+      page.getCardOpacity = (phase: CompanionFocusedCardPhaseTest) => phase === 'incoming' ? 0.76 : 0.9;
+      page.getCardScale = (phase: CompanionFocusedCardPhaseTest) => phase === 'incoming' ? 0.94 : 0.98;
+      let pausedThrew = false;
+      let disabledThrew = false;
+
+      // Act
+      try {
+        page.FocusedCardBody(pausedActive, 'incoming');
+      } catch (_error) {
+        pausedThrew = true;
+      }
+      try {
+        page.FocusedCardBody(disabled, 'stable');
+      } catch (_error) {
+        disabledThrew = true;
+      }
+
+      // Assert
+      expect(pausedThrew).assertFalse();
+      expect(disabledThrew).assertFalse();
+      expect(resolveCompanionFocusedActionMode('COMPLETED', 'PAUSED', pausedActive.id, pausedActive.id)).assertEqual('PAUSED_ACTIVE');
+      expect(resolveCompanionFocusedActionMode('DONE', 'IDLE', -1, disabled.id)).assertEqual('DISABLED');
+      expect(page.getCardTranslateX('incoming')).assertEqual(6);
+      expect(page.getCardOpacity('incoming')).assertEqual(0.76);
+      expect(page.getCardScale('incoming')).assertEqual(0.94);
+    });
+
+    it('boundary: focused_helpers_should_hide_pending_range_and_reject_switch_cards_when_flag_is_false', 0, () => {
+      // Arrange
+      const outgoing = buildEvent(131);
+      const incoming = buildEvent(132);
+
+      // Act
+      const pendingVisible = shouldShowFocusedPlannedRange('PENDING');
+      const renderable = shouldRenderFocusedSwitchCards(false, outgoing, incoming);
+
+      // Assert
+      expect(pendingVisible).assertFalse();
+      expect(renderable).assertFalse();
+    });
+
+    it('conflict: focused_action_mode_should_keep_skipped_when_runtime_is_paused_but_event_is_not_current', 0, () => {
+      // Arrange
+      const state = 'SKIPPED';
+
+      // Act
+      const mode = resolveCompanionFocusedActionMode(state, 'PAUSED', 201, 202);
+
+      // Assert
+      expect(mode).assertEqual('SKIPPED');
+    });
+
+    it('combined: focused_card_host_initial_render_should_support_switch_cards_branch_with_dark_palette', 0, () => {
+      // Arrange
+      const page = new CompanionFocusedCardHost(undefined, {} as LocalStorage) as Object as CompanionFocusedCardHostPrivateTest;
+      const outgoing = buildEvent(141);
+      const incoming = buildEvent(142);
+      page.getEventState = (event: EventEntity) => event.id === outgoing.id ? 'PENDING' : 'ACTIVE';
+      page.getEventStateLabel = (event: EventEntity) => `focused_${event.id}`;
+      page.getMainCardTimeText = (event: EventEntity) => `time_${event.id}`;
+      page.getPlannedRange = (event: EventEntity) => `range_${event.id}`;
+      page.getCardTranslateX = (phase: CompanionFocusedCardPhaseTest) => phase === 'outgoing' ? -8 : 8;
+      page.getCardOpacity = (phase: CompanionFocusedCardPhaseTest) => phase === 'outgoing' ? 0.72 : 0.95;
+      page.getCardScale = (phase: CompanionFocusedCardPhaseTest) => phase === 'outgoing' ? 0.92 : 0.98;
+      page.setInitiallyProvidedValue({
+        canRenderSwitchCards: true,
+        outgoingEvent: outgoing,
+        incomingEvent: incoming,
+        stableEvent: null,
+        runtimeState: 'ACTIVE',
+        currentEventId: incoming.id
+      });
+      page.effectiveTheme = 'dark';
+      let threw = false;
+
+      // Act
+      try {
+        page.initialRender();
+      } catch (_error) {
+        threw = true;
+      }
+      const palette = page.getThemePalette();
+      const renderable = shouldRenderFocusedSwitchCards(true, outgoing, incoming);
+
+      // Assert
+      expect(threw).assertFalse();
+      expect(renderable).assertTrue();
+      expect(page.getEventStateLabel(outgoing)).assertEqual('focused_141');
+      expect(page.getMainCardTimeText(incoming)).assertEqual('time_142');
+      expect(page.getPlannedRange(incoming)).assertEqual('range_142');
+      expect(page.getCardTranslateX('outgoing')).assertEqual(-8);
+      expect(page.getCardOpacity('incoming')).assertEqual(0.95);
+      expect(page.getCardScale('outgoing')).assertEqual(0.92);
+      expect(palette.primary).assertEqual(ThemeCenter.getPalette('dark').primary);
+      expect(palette.companionCardBg).assertEqual(ThemeCenter.getPalette('dark').companionCardBg);
     });
   });
 }

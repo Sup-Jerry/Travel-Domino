@@ -5,25 +5,32 @@ import { TimelineExecutionState } from '../../domain/policy/TimelineExecutionSta
 import { PlanStateMachine } from '../../domain/statemachine/PlanStateMachine';
 import { PlanStatus } from '../../domain/statemachine/PlanStatus';
 
+export type ArrivalPlanTitleResolver = (planId: number) => string;
+export type ArrivalHomeShowCallback = (payload: ArrivalReminderPayload, planTitle: string) => void;
+export type ArrivalPlanShowCallback = (payload: ArrivalReminderPayload) => void;
+export type ArrivalDialogStateGetter = () => boolean;
+export type ArrivalEventsResolver = () => EventEntity[];
+export type ArrivalUnsubscribeCallback = () => void;
+
 export interface HomeArrivalConsumeInput {
   isDialogOpen: boolean;
-  resolvePlanTitle: (planId: number) => string;
-  onShow: (payload: ArrivalReminderPayload, planTitle: string) => void;
+  resolvePlanTitle: ArrivalPlanTitleResolver;
+  onShow: ArrivalHomeShowCallback;
 }
 
 export interface PlanArrivalConsumeInput {
   isDialogOpen: boolean;
   currentPlanId: number;
   events: EventEntity[];
-  onShow: (payload: ArrivalReminderPayload) => void;
+  onShow: ArrivalPlanShowCallback;
 }
 
 export interface ArrivalReminderSubscriptionHandlers {
-  isDialogOpen: () => boolean;
-  resolveEvents?: () => EventEntity[];
-  resolvePlanTitle?: (planId: number) => string;
-  onShowPlan?: (payload: ArrivalReminderPayload) => void;
-  onShowHome?: (payload: ArrivalReminderPayload, planTitle: string) => void;
+  isDialogOpen: ArrivalDialogStateGetter;
+  resolveEvents?: ArrivalEventsResolver;
+  resolvePlanTitle?: ArrivalPlanTitleResolver;
+  onShowPlan?: ArrivalPlanShowCallback;
+  onShowHome?: ArrivalHomeShowCallback;
   pollIntervalMs?: number;
 }
 
@@ -38,7 +45,7 @@ export class ArrivalReminderCoordinator {
     return ArrivalReminderCoordinator.instance;
   }
 
-  public subscribePlan(planId: number | '*', handlers: ArrivalReminderSubscriptionHandlers): () => void {
+  public subscribePlan(planId: number | '*', handlers: ArrivalReminderSubscriptionHandlers): ArrivalUnsubscribeCallback {
     const isWildcard = planId === '*';
     let disposed = false;
     let lastConsumeKey = '';

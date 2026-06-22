@@ -76,9 +76,26 @@ interface CompanionExecutionWeatherCardPrivateTest {
   setInitiallyProvidedValue(params: CompanionExecutionWeatherCardParamsTest): void;
   updateStateVars(params: CompanionExecutionWeatherCardParamsTest): void;
   getThemePalette(): CompanionExecutionWeatherPaletteTest;
+  initialRender(): void;
 }
 
 class WeatherSuggestionPlaceholderTest {}
+
+class WeatherSuggestionRenderTest {
+  suggestionId: string = 'weather_s1';
+  level: string = 'NOTICE';
+  triggerType: string = 'RAIN';
+  actionType: string = 'SHIFT_TIME';
+  title: string = 'move indoor';
+  message: string = 'rain is coming';
+  relatedNodeIds: string[] = ['n1'];
+  createdAt: number = 1;
+  reason: string = 'rain';
+  expectedBenefit: string = 'less risk';
+  canRollback: boolean = true;
+  cooldownKey: string = 'weather_s1';
+  expiresAt: number = 2;
+}
 
 export default function companionExecutionWeatherCardHelperTest() {
   describe('unit_test_case_generator_autofill_CompanionExecutionWeatherCardHelper', () => {
@@ -375,6 +392,99 @@ export default function companionExecutionWeatherCardHelperTest() {
       expect(collabSummary).assertEqual('跨城联动');
       expect(appliedSummary).assertEqual('已顺延');
       expect(suggestionCount).assertEqual(1);
+    });
+
+    it('normal: weather_card_initial_render_should_cover_collapsed_summary_branch', 0, () => {
+      // Arrange
+      const page = new CompanionExecutionWeatherCard(undefined, {} as LocalStorage) as Object as CompanionExecutionWeatherCardPrivateTest;
+      page.weatherExpanded = false;
+      page.weatherScoreSummary = 'score ready';
+      page.executionWeatherHint = '  ';
+      page.executionWeatherLoading = false;
+      page.effectiveTheme = 'light';
+
+      // Act
+      page.initialRender();
+
+      // Assert
+      expect(page.weatherExpanded).assertFalse();
+      expect(page.weatherScoreSummary).assertEqual('score ready');
+    });
+
+    it('boundary: weather_card_initial_render_should_cover_expanded_empty_optional_sections', 0, () => {
+      // Arrange
+      const page = new CompanionExecutionWeatherCard(undefined, {} as LocalStorage) as Object as CompanionExecutionWeatherCardPrivateTest;
+      page.weatherExpanded = true;
+      page.executionWeatherCurrentText = '';
+      page.executionWeatherNextText = '';
+      page.executionWeatherScore = -1;
+      page.executionWeatherHint = '';
+      page.executionWeatherCollabSummary = '';
+      page.executionWeatherAppliedSummary = '';
+      page.executionWeatherSuggestions = [];
+      page.effectiveTheme = 'dark';
+
+      // Act
+      page.initialRender();
+
+      // Assert
+      expect(page.weatherExpanded).assertTrue();
+      expect(page.executionWeatherSuggestions.length).assertEqual(0);
+    });
+
+    it('combined: weather_card_initial_render_should_cover_expanded_score_hint_and_suggestions', 0, () => {
+      // Arrange
+      const page = new CompanionExecutionWeatherCard(undefined, {} as LocalStorage) as Object as CompanionExecutionWeatherCardPrivateTest;
+      const suggestion = new WeatherSuggestionRenderTest() as Object;
+      page.weatherExpanded = true;
+      page.showWeatherScorePopup = false;
+      page.showWeatherHintPopup = false;
+      page.showWeatherSuggestionPopup = false;
+      page.weatherSuggestionPopupText = 'line1\nline2';
+      page.weatherScoreLines = ['score line'];
+      page.weatherHintLines = ['hint line'];
+      page.executionWeatherCollabBadge = 'badge';
+      page.executionWeatherLoading = true;
+      page.executionWeatherHint = 'rain warning';
+      page.executionWeatherLevel = 'WARNING';
+      page.executionWeatherCurrentText = 'sunny';
+      page.executionWeatherNextText = 'rain';
+      page.executionWeatherScore = 88;
+      page.executionWeatherCollabSummary = 'city sync';
+      page.executionWeatherAppliedSummary = 'shifted';
+      page.executionWeatherSuggestions = [suggestion];
+      page.effectiveTheme = 'light';
+
+      // Act
+      page.initialRender();
+
+      // Assert
+      expect(page.executionWeatherScore).assertEqual(88);
+      expect(page.executionWeatherSuggestions.length).assertEqual(1);
+      expect(page.showWeatherSuggestionPopup).assertFalse();
+    });
+
+    it('combined: weather_card_initial_render_should_cover_notice_and_info_hint_colors', 0, () => {
+      // Arrange
+      const noticePage = new CompanionExecutionWeatherCard(undefined, {} as LocalStorage) as Object as CompanionExecutionWeatherCardPrivateTest;
+      const infoPage = new CompanionExecutionWeatherCard(undefined, {} as LocalStorage) as Object as CompanionExecutionWeatherCardPrivateTest;
+
+      // Act
+      noticePage.weatherExpanded = true;
+      noticePage.executionWeatherHint = '阵雨临近';
+      noticePage.executionWeatherLevel = 'NOTICE';
+      noticePage.effectiveTheme = 'light';
+      noticePage.initialRender();
+
+      infoPage.weatherExpanded = true;
+      infoPage.executionWeatherHint = '轻微波动';
+      infoPage.executionWeatherLevel = 'INFO';
+      infoPage.effectiveTheme = 'light';
+      infoPage.initialRender();
+
+      // Assert
+      expect(noticePage.executionWeatherLevel).assertEqual('NOTICE');
+      expect(infoPage.executionWeatherLevel).assertEqual('INFO');
     });
   });
 }

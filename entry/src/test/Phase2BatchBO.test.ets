@@ -1665,7 +1665,11 @@ export default function phase2BatchBOTest() {
       vm.planId = -1;
       await vm.save();
       vm.planId = 12;
-      vm.events = [createEventBO(81, 'save_a_bo', 1), createEventBO(82, 'save_b_bo', 0)];
+      const manyEvents: EventEntity[] = [];
+      for (let index = 0; index < 21; index++) {
+        manyEvents.push(createEventBO(81 + index, `save_${index}_bo`, index % 2));
+      }
+      vm.events = manyEvents;
       await Promise.all([vm.save(), vm.save()]);
       // Assert
       patch.restore();
